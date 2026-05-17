@@ -33,6 +33,9 @@ class OutboxService {
 
   /// How often to retry sending undelivered messages.
   static const _tick = Duration(seconds: 7);
+  static final RegExp _publicKeyHex = RegExp(r'^[0-9a-fA-F]{64}$');
+
+  bool _isPublicKeyPeer(String peerId) => _publicKeyHex.hasMatch(peerId.trim());
 
   Future<void> init() async {
     if (_disposed) return;
@@ -75,7 +78,8 @@ class OutboxService {
       final mode = AppSettings.instance.connectionMode;
       final allowBle = mode != 1; // 1 = internet-only mode disables BLE mesh
 
-      final pending = await ChatStorageService.instance.getUndeliveredOutgoingMessages();
+      final pending =
+          await ChatStorageService.instance.getUndeliveredOutgoingMessages();
       if (pending.isEmpty) return;
 
       for (final msg in pending) {
@@ -83,8 +87,10 @@ class OutboxService {
         if (_inflight.contains(msg.id)) continue;
 
         final peerId = msg.peerId;
+        if (!_isPublicKeyPeer(peerId)) continue;
         final canTry =
-            hasRelay || (allowBle && BleService.instance.isPeerConnected(peerId));
+            (hasRelay && !RelayService.instance.isPeerKnownOffline(peerId)) ||
+                (allowBle && BleService.instance.isPeerConnected(peerId));
         if (!canTry) continue;
 
         _inflight.add(msg.id);
@@ -104,6 +110,7 @@ class OutboxService {
     final myId = CryptoService.instance.publicKeyHex;
     if (myId.isEmpty) return;
     if (msg.isOutgoing != true) return;
+    if (!_isPublicKeyPeer(msg.peerId)) return;
     if (msg.status == MessageStatus.delivered) return;
     // Only text messages here. Media is handled by MediaUploadQueue / img_chunk.
     if (msg.imagePath != null ||
@@ -170,4 +177,3 @@ class OutboxService {
     }
   }
 }
-

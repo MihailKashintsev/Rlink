@@ -71,7 +71,7 @@ Future<String?> showSharedTodoComposeDialog(BuildContext context) async {
   );
 
   if (ok != true) return null;
-  final uuid = const Uuid();
+  const uuid = Uuid();
   final items = <SharedTodoItem>[];
   for (final c in lines) {
     final t = c.text.trim();

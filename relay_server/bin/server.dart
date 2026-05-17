@@ -6,7 +6,6 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart';
-import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_web_socket/shelf_web_socket.dart';
@@ -106,30 +105,14 @@ const _rateMax =
 /// аккаунта — клиент шифрует, relay не читает содержимое).
 final Map<String, String> _accountBlobs = {};
 
-/// Offline mailbox: recipientPublicKey -> relayMsgId -> envelope
-/// Envelope is the exact JSON map we would send to recipient.
-final Map<String, Map<String, Map<String, dynamic>>> _mailbox = {};
-
-const _mailboxFile = 'relay_mailbox.json';
-const _mailboxMaxPerRecipient = 300; // ~150 KB per recipient at ~500 B/msg
-
-/// Debounce timer for mailbox persistence — avoids writing to disk on
-/// every packet (which caused 97%+ CPU and 37 GB/hour block I/O).
-Timer? _mailboxPersistTimer;
-
 /// Stored Web Push subscriptions by recipient public key.
 final Map<String, List<Map<String, dynamic>>> _pushSubscriptions = {};
 const _pushSubsFile = 'push_subscriptions.json';
-const _pushCooldownSeconds = 12;
-final Map<String, DateTime> _lastPushForRecipient = {};
 
 final String _vapidPublicKey =
     (Platform.environment['VAPID_PUBLIC_KEY'] ?? '').trim();
 final String _vapidPrivateKeyPem =
     (Platform.environment['VAPID_PRIVATE_KEY_PEM'] ?? '').trim();
-final String _vapidSubject =
-    (Platform.environment['VAPID_SUBJECT'] ?? 'mailto:admin@rlink.local')
-        .trim();
 
 // ── Публичный каталог каналов (подпись админа, персистентность) ──
 
@@ -421,8 +404,8 @@ void _loadBotDirectory() {
       final m = Map<String, dynamic>.from(item);
       final id = (m['botId'] as String?)?.toLowerCase();
       if (id == null || !RegExp(r'^[0-9a-f]{64}$').hasMatch(id)) continue;
-      m['commands'] = _parseBotCommandsInput(m['commands']) ??
-          <Map<String, dynamic>>[];
+      m['commands'] =
+          _parseBotCommandsInput(m['commands']) ?? <Map<String, dynamic>>[];
       _botDirectory[id] = m;
     }
     stdout.writeln(
@@ -554,7 +537,11 @@ void _handleBotInfoGet(_User user, Map<String, dynamic> msg) {
 
   final hNorm = _normalizeBotHandleQuery(_jsonString(msg['handle']));
   if (hNorm == null) {
-    send({'ok': false, 'error': 'bad_handle', 'handle': _jsonString(msg['handle'])});
+    send({
+      'ok': false,
+      'error': 'bad_handle',
+      'handle': _jsonString(msg['handle'])
+    });
     return;
   }
   final row = _botRowByHandleNorm(hNorm);
@@ -678,7 +665,8 @@ Future<void> _handleBotCommandsSetAsync(
     row['updatedAt'] = nowMs;
     _persistBotDirectory();
     _broadcastBotDirSnapshotToAll();
-    stdout.writeln('[RLINK][Relay] bot_commands_set owner=$owner bot=$botId n=${parsed.length}');
+    stdout.writeln(
+        '[RLINK][Relay] bot_commands_set owner=$owner bot=$botId n=${parsed.length}');
     ack(true, '', rid);
     return;
   }
@@ -723,7 +711,8 @@ Future<void> _handleBotCommandsSetAsync(
   row['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
   _persistBotDirectory();
   _broadcastBotDirSnapshotToAll();
-  stdout.writeln('[RLINK][Relay] bot_commands_set apiToken bot=$botId n=${parsed.length}');
+  stdout.writeln(
+      '[RLINK][Relay] bot_commands_set apiToken bot=$botId n=${parsed.length}');
   ack(true, '', reqId);
 }
 
@@ -1474,87 +1463,6 @@ void _loadAccountBlobs() {
   }
 }
 
-void _loadMailbox() {
-  try {
-    final f = File(_mailboxFile);
-    if (!f.existsSync()) return;
-    final decoded = jsonDecode(f.readAsStringSync());
-    if (decoded is! Map) return;
-    decoded.forEach((recipient, value) {
-      if (recipient is! String || value is! Map) return;
-      final byId = <String, Map<String, dynamic>>{};
-      value.forEach((msgId, envelope) {
-        if (msgId is String && envelope is Map) {
-          byId[msgId] = Map<String, dynamic>.from(envelope);
-        }
-      });
-      if (byId.isNotEmpty) {
-        _mailbox[recipient] = byId;
-      }
-    });
-    stdout.writeln(
-        '[RLINK][Relay] Loaded mailbox for ${_mailbox.length} recipients');
-  } catch (e) {
-    stdout.writeln('[RLINK][Relay] mailbox load: $e');
-  }
-}
-
-/// Schedule a mailbox write 3 seconds after the last change.
-/// Multiple rapid changes collapse into a single disk write.
-void _persistMailbox() {
-  _mailboxPersistTimer?.cancel();
-  _mailboxPersistTimer = Timer(const Duration(seconds: 3), () async {
-    try {
-      final data = jsonEncode(_mailbox);
-      await File(_mailboxFile).writeAsString(data);
-    } catch (e) {
-      stdout.writeln('[RLINK][Relay] mailbox save: $e');
-    }
-  });
-}
-
-void _queueForRecipient(
-  String recipientKey,
-  String relayMsgId,
-  Map<String, dynamic> envelope,
-) {
-  final bucket = _mailbox.putIfAbsent(
-    recipientKey,
-    () => <String, Map<String, dynamic>>{},
-  );
-  bucket[relayMsgId] = envelope;
-  // Keep bounded size: drop oldest inserted entries.
-  while (bucket.length > _mailboxMaxPerRecipient) {
-    final firstKey = bucket.keys.first;
-    bucket.remove(firstKey);
-  }
-  _persistMailbox();
-}
-
-void _ackRecipientMessage(String recipientKey, String relayMsgId) {
-  final bucket = _mailbox[recipientKey];
-  if (bucket == null) return;
-  bucket.remove(relayMsgId);
-  if (bucket.isEmpty) {
-    _mailbox.remove(recipientKey);
-  }
-  _persistMailbox();
-}
-
-void _sendMailboxSnapshot(_User user) {
-  final bucket = _mailbox[user.publicKey];
-  if (bucket == null || bucket.isEmpty) return;
-  var sent = 0;
-  for (final env in bucket.values) {
-    try {
-      user.ws.sink.add(jsonEncode(env));
-      sent++;
-    } catch (_) {}
-  }
-  stdout.writeln(
-      '[RLINK][Relay] mailbox replay → ${user.shortId}: $sent queued packets');
-}
-
 bool get _webPushConfigured =>
     _vapidPublicKey.isNotEmpty && _vapidPrivateKeyPem.isNotEmpty;
 
@@ -1616,87 +1524,6 @@ String _normalizeB64Url(String value) {
     normalized += '=';
   }
   return base64Url.encode(base64Decode(normalized)).replaceAll('=', '');
-}
-
-String _vapidAuthHeader(String endpoint) {
-  final aud = '${Uri.parse(endpoint).scheme}://${Uri.parse(endpoint).host}';
-  final jwt = JWT(
-    {'aud': aud, 'sub': _vapidSubject},
-  ).sign(
-    ECPrivateKey(_vapidPrivateKeyPem),
-    algorithm: JWTAlgorithm.ES256,
-    expiresIn: const Duration(hours: 12),
-  );
-  return 'vapid t=$jwt, k=$_vapidPublicKey';
-}
-
-Future<void> _notifyRecipientQueued({
-  required String recipientKey,
-  required String senderKey,
-  String kind = 'message',
-}) async {
-  if (!_webPushConfigured) return;
-  final now = DateTime.now();
-  final prev = _lastPushForRecipient[recipientKey];
-  if (prev != null && now.difference(prev).inSeconds < _pushCooldownSeconds) {
-    return;
-  }
-  final subs = _pushSubscriptions[recipientKey];
-  if (subs == null || subs.isEmpty) return;
-
-  final payload = utf8.encode(jsonEncode({
-    'title': 'Rlink',
-    'body': kind == 'call'
-        ? 'Входящий звонок'
-        : 'Новое сообщение в очереди доставки',
-    'tag': 'rlink-${senderKey.substring(0, senderKey.length.clamp(0, 8))}',
-    'data': {'recipient': recipientKey, 'kind': kind},
-  }));
-  final toRemoveEndpoints = <String>{};
-  final client = HttpClient();
-  try {
-    for (final sub in subs) {
-      final endpoint = (sub['endpoint'] as String?)?.trim() ?? '';
-      if (endpoint.isEmpty) continue;
-      try {
-        final req = await client.postUrl(Uri.parse(endpoint));
-        req.headers.set('TTL', '60');
-        req.headers.set('Authorization', _vapidAuthHeader(endpoint));
-        req.headers.set('Urgency', 'high');
-        req.headers.set('Content-Type', 'application/json');
-        req.add(payload);
-        final resp = await req.close();
-        if (resp.statusCode == 404 || resp.statusCode == 410) {
-          toRemoveEndpoints.add(endpoint);
-        }
-      } catch (_) {}
-    }
-  } finally {
-    client.close(force: true);
-  }
-  if (toRemoveEndpoints.isNotEmpty) {
-    subs.removeWhere(
-      (s) => toRemoveEndpoints.contains((s['endpoint'] as String?) ?? ''),
-    );
-    if (subs.isEmpty) _pushSubscriptions.remove(recipientKey);
-    _persistPushSubscriptions();
-  }
-  _lastPushForRecipient[recipientKey] = now;
-}
-
-String _queuedKindFromPacketData(String dataB64) {
-  try {
-    final decoded = utf8.decode(base64Decode(dataB64));
-    final obj = jsonDecode(decoded);
-    if (obj is! Map) return 'message';
-    final t = obj['t'];
-    if (t != 'call_sig') return 'message';
-    final p = obj['p'];
-    if (p is! Map) return 'message';
-    final st = p['st'];
-    if (st == 'invite') return 'call';
-  } catch (_) {}
-  return 'message';
 }
 
 void _persistAccountBlobs() {
@@ -1804,7 +1631,8 @@ void _handleMessage(_User user, dynamic raw) {
       _handleAdminBotUpdate(user, msg);
       break;
     case 'relay_ack':
-      _handleRelayAck(user, msg);
+      // Kept for backward-compatible clients. Relay no longer stores DM
+      // packets or media, so there is nothing to acknowledge server-side.
       break;
   }
 }
@@ -1914,12 +1742,6 @@ void _handleAdminBotUpdate(_User user, Map<String, dynamic> msg) {
   ack({'ok': true});
 }
 
-void _handleRelayAck(_User user, Map<String, dynamic> msg) {
-  final relayMsgId = msg['msgId'] as String?;
-  if (relayMsgId == null || relayMsgId.isEmpty) return;
-  _ackRecipientMessage(user.publicKey, relayMsgId);
-}
-
 /// Клиент кладёт зашифрованный JSON (n/ct/m от ChaCha20), тот же формат что admin_cfg2.
 void _handleAccountSyncPut(_User user, Map<String, dynamic> msg) {
   final data = msg['data'] as String?;
@@ -1937,8 +1759,9 @@ void _handlePacket(_User sender, Map<String, dynamic> msg) {
   final toRaw = msg['to'] as String?;
   final data = msg['data'] as String?; // base64-encoded encrypted packet
   if (toRaw == null || data == null) return;
-  if (data.length > 262144)
+  if (data.length > 262144) {
     return; // 256 KB max (blob chunks double-base64 ~90 KB each)
+  }
   final to = toRaw.toLowerCase();
   final relayMsgId = (msg['msgId'] as String?) ??
       'pkt_${DateTime.now().microsecondsSinceEpoch}';
@@ -1949,20 +1772,13 @@ void _handlePacket(_User sender, Map<String, dynamic> msg) {
     'data': data,
     'relayMsgId': relayMsgId,
   };
-  _queueForRecipient(to, relayMsgId, envelope);
 
   final recipient = _users[to];
   if (recipient == null) {
-    final kind = _queuedKindFromPacketData(data);
-    unawaited(_notifyRecipientQueued(
-      recipientKey: to,
-      senderKey: sender.publicKey,
-      kind: kind,
-    ));
     sender.ws.sink.add(jsonEncode({
       'type': 'delivery_status',
       'to': to,
-      'status': 'queued_offline',
+      'status': 'offline',
     }));
     return;
   }
@@ -2007,8 +1823,26 @@ void _handleBlob(_User sender, Map<String, dynamic> msg) {
   final toRaw = msg['to'] as String?;
   if (toRaw == null) return;
   final to = toRaw.toLowerCase();
+  final fullTo = (msg['fullTo'] as String?)?.toLowerCase();
+  // Use fullTo (full public key) for routing when available;
+  // fall back to 'to' (may be short key from older clients).
+  final routeKey = (fullTo != null && fullTo.length == 64) ? fullTo : to;
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(routeKey)) {
+    sender.ws.sink.add(jsonEncode({
+      'type': 'delivery_status',
+      'to': routeKey,
+      'status': 'error',
+    }));
+    return;
+  }
   final relayMsgId = msg['msgId'] as String?;
   if (relayMsgId == null || relayMsgId.isEmpty) return;
+  final data = msg['data'] as String?;
+  if (data == null || data.isEmpty) return;
+  if (data.length > 10485760) {
+    // 10 MB max for blobs (base64)
+    return;
+  }
 
   // Forward the entire blob as-is, replacing 'to' with 'from'
   final forwarded = Map<String, dynamic>.from(msg);
@@ -2016,16 +1850,13 @@ void _handleBlob(_User sender, Map<String, dynamic> msg) {
   forwarded['from'] = sender.publicKey;
   forwarded['type'] = 'blob';
   forwarded['relayMsgId'] = relayMsgId;
-  _queueForRecipient(to, relayMsgId, forwarded);
 
-  final recipient = _users[to];
+  final recipient = _users[routeKey];
   if (recipient == null) {
-    unawaited(
-        _notifyRecipientQueued(recipientKey: to, senderKey: sender.publicKey));
     sender.ws.sink.add(jsonEncode({
       'type': 'delivery_status',
-      'to': to,
-      'status': 'queued_offline',
+      'to': routeKey,
+      'status': 'offline',
     }));
     return;
   }
@@ -2034,12 +1865,12 @@ void _handleBlob(_User sender, Map<String, dynamic> msg) {
     recipient.ws.sink.add(jsonEncode(forwarded));
     final dataLen = (msg['data'] as String?)?.length ?? 0;
     print(
-        '[RLINK][Relay] Blob forwarded: ${sender.publicKey.substring(0, 8)} → ${to.substring(0, 8)} ($dataLen chars)');
+        '[RLINK][Relay] Blob forwarded: ${sender.publicKey.substring(0, 8)} → ${routeKey.substring(0, 8)} ($dataLen chars)');
   } catch (e) {
     print('[RLINK][Relay] Blob forward failed: $e');
     sender.ws.sink.add(jsonEncode({
       'type': 'delivery_status',
-      'to': to,
+      'to': routeKey,
       'status': 'error',
     }));
   }
@@ -2189,8 +2020,6 @@ shelf.Handler _wsHandler() {
 
             _sendChannelDirSnapshot(ws);
             _sendBotDirSnapshot(ws);
-            _sendMailboxSnapshot(user!);
-
             // Send currently online peers to the new user
             for (final other in _users.values) {
               if (other.publicKey == publicKey) continue;
@@ -2222,7 +2051,8 @@ shelf.Handler _wsHandler() {
           final cc = ws.closeCode;
           final cr = ws.closeReason;
           _users.remove(user!.publicKey);
-          _rateLimits.remove(user!.publicKey); // free rate-limit memory on disconnect
+          _rateLimits
+              .remove(user!.publicKey); // free rate-limit memory on disconnect
           _broadcastPresence(user!.publicKey, false);
           final id = user!.nick.isEmpty ? user!.shortId : user!.nick;
           final detail = cc == null
@@ -2477,7 +2307,6 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
 Future<void> main() async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 8080;
   _loadAccountBlobs();
-  _loadMailbox();
   _loadPushSubscriptions();
   _loadChannelDirectory();
   _loadBotDirectory();
@@ -2501,4 +2330,18 @@ Future<void> main() async {
     stdout.writeln('  Admin bot panel: enabled');
   }
   stdout.writeln('══════════════════════════════════════════════');
+
+  // Periodic tombstone cleanup: remove entries older than 7 days.
+  Timer.periodic(const Duration(hours: 1), (_) {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    _channelDirTombstones
+        .removeWhere((k, v) => v < cutoff.millisecondsSinceEpoch);
+  });
+
+  // Periodic stats: log connection count and memory usage.
+  Timer.periodic(const Duration(minutes: 5), (_) {
+    stdout.writeln('[stats] online=${_users.length} '
+        'channel_dir=${_channelDirectory.length} '
+        'bots=${_botDirectory.length}');
+  });
 }

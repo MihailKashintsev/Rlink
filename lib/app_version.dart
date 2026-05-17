@@ -2,8 +2,8 @@
 class AppVersion {
   AppVersion._();
 
-  static const String version = '0.0.8';
-  static const String buildNumber = '14';
+  static const String version = '0.0.9';
+  static const String buildNumber = '15';
 
   static String get label => '$version ($buildNumber)';
 }

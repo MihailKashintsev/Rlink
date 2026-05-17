@@ -20,6 +20,11 @@ class TelegramMediaRecordButton extends StatefulWidget {
   /// Пауза/продолжение записи видео только в закреплённом режиме.
   final Future<void> Function()? onLockedVideoPauseToggle;
   final ValueListenable<bool>? lockedVideoPausedListenable;
+  /// Пауза/продолжение записи голоса только в закреплённом режиме.
+  final Future<void> Function()? onLockedVoicePauseToggle;
+  final ValueListenable<bool>? lockedVoicePausedListenable;
+  /// Обрезать последний сегмент записи голоса в закреплённом режиме.
+  final Future<void> Function()? onLockedVoiceTrimLastPart;
 
   const TelegramMediaRecordButton({
     super.key,
@@ -34,6 +39,9 @@ class TelegramMediaRecordButton extends StatefulWidget {
     this.onHoldLockChanged,
     this.onLockedVideoPauseToggle,
     this.lockedVideoPausedListenable,
+    this.onLockedVoicePauseToggle,
+    this.lockedVoicePausedListenable,
+    this.onLockedVoiceTrimLastPart,
   });
 
   @override
@@ -130,7 +138,34 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
               );
             },
           );
+        } else if (!_videoMode &&
+            widget.onLockedVoicePauseToggle != null &&
+            widget.lockedVoicePausedListenable != null) {
+          pauseBtn = ValueListenableBuilder<bool>(
+            valueListenable: widget.lockedVoicePausedListenable!,
+            builder: (_, paused, __) {
+              return IconButton(
+                tooltip: paused ? 'Продолжить' : 'Пауза',
+                icon: Icon(
+                  paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                  color: cs.onSurface,
+                ),
+                onPressed: () => unawaited(widget.onLockedVoicePauseToggle!()),
+              );
+            },
+          );
         }
+        
+        Widget? trimBtn;
+        if (!_videoMode &&
+            widget.onLockedVoiceTrimLastPart != null) {
+          trimBtn = IconButton(
+            tooltip: 'Обрезать',
+            icon: Icon(Icons.content_cut_rounded, color: cs.onSurface),
+            onPressed: () => unawaited(widget.onLockedVoiceTrimLastPart!()),
+          );
+        }
+        
         return SafeArea(
           child: Align(
             alignment: Alignment.topCenter,
@@ -160,6 +195,7 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
                         ),
                       ),
                       if (pauseBtn != null) pauseBtn,
+                      if (trimBtn != null) trimBtn,
                       IconButton(
                         tooltip: 'Отправить',
                         icon: Icon(Icons.send_rounded, color: cs.primary),

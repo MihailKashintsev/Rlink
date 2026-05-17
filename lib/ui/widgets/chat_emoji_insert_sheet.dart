@@ -5,6 +5,8 @@ import 'avatar_widget.dart';
 Future<void> showChatEmojiInsertSheet(
   BuildContext context, {
   required void Function(String insert) onInsert,
+  void Function(String stickerPath)? onStickerPicked,
+  void Function(String gifUrl)? onGifPicked,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -34,9 +36,18 @@ Future<void> showChatEmojiInsertSheet(
               Expanded(
                 child: AvatarEmojiPicker(
                   selected: '',
+                  showStickersTab: true,
                   onSelected: (emoji) {
                     Navigator.pop(ctx);
                     onInsert(emoji);
+                  },
+                  onStickerPicked: (stickerPath) {
+                    Navigator.pop(ctx);
+                    onStickerPicked?.call(stickerPath);
+                  },
+                  onGifPicked: (gifUrl) {
+                    Navigator.pop(ctx);
+                    onGifPicked?.call(gifUrl);
                   },
                 ),
               ),

@@ -615,7 +615,7 @@ class _ChannelAdminSettingsScreenState
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: picked,
+                  initialValue: picked,
                   decoration: const InputDecoration(
                     labelText: 'Новый владелец',
                     border: OutlineInputBorder(),

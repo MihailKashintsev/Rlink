@@ -46,6 +46,7 @@ class GoogleDriveChannelBackup {
   static final List<String> _driveScopes = [drive.DriveApi.driveFileScope];
   static String? _lastSignInError;
   static String? get lastSignInError => _lastSignInError;
+  static bool _signInInProgress = false;
 
   /// Web client ID нужен на Android/iOS/macOS, чтобы выдавался access token для Google APIs.
   static final GoogleSignIn _signIn = GoogleSignIn(
@@ -185,21 +186,35 @@ class GoogleDriveChannelBackup {
       return postSilent;
     }
     if (!interactive) return null;
-    for (var attempt = 0; attempt < 2; attempt++) {
-      await _waitForForegroundForInteractiveSignIn();
-      try {
-        debugPrint('[RLINK][Drive] signIn() invoked '
-            '(attempt=${attempt + 1}, platform=$defaultTargetPlatform, lifecycle=${WidgetsBinding.instance.lifecycleState})');
-        final a = await _signIn.signIn();
-        debugPrint(
-            '[RLINK][Drive] signIn() → ${a?.email ?? 'null (user canceled or silent fail)'}');
-        final resolved = a ?? _signIn.currentUser;
-        if (resolved != null) return resolved;
-      } catch (e, st) {
-        _lastSignInError = e.toString();
-        debugPrint('[RLINK][Drive] signIn failed: $e\n$st');
+
+    if (_signInInProgress) {
+      debugPrint('[RLINK][Drive] signIn already in progress, returning cached');
+      return _signIn.currentUser;
+    }
+    _signInInProgress = true;
+    try {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await _waitForForegroundForInteractiveSignIn();
+        try {
+          debugPrint('[RLINK][Drive] signIn() invoked '
+              '(attempt=${attempt + 1}, platform=$defaultTargetPlatform, lifecycle=${WidgetsBinding.instance.lifecycleState})');
+          final a = await _signIn.signIn();
+          debugPrint(
+              '[RLINK][Drive] signIn() → ${a?.email ?? 'null (user canceled or silent fail)'}');
+          final resolved = a ?? _signIn.currentUser;
+          if (resolved != null) return resolved;
+          // User cancelled — don't retry, return currentUser if any
+          debugPrint(
+              '[RLINK][Drive] signIn cancelled by user, stopping retries');
+          break;
+        } catch (e, st) {
+          _lastSignInError = e.toString();
+          debugPrint('[RLINK][Drive] signIn failed: $e\n$st');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 220));
       }
-      await Future<void>.delayed(const Duration(milliseconds: 220));
+    } finally {
+      _signInInProgress = false;
     }
     return _signIn.currentUser;
   }

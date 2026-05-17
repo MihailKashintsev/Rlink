@@ -38,8 +38,10 @@ class CallService {
   static const Duration _ringingTimeoutDuration = Duration(seconds: 60);
   static const Duration _connectingTimeoutDuration = Duration(seconds: 50);
 
-  static const _turnHost = String.fromEnvironment('TURN_HOST', defaultValue: '');
-  static const _turnUser = String.fromEnvironment('TURN_USER', defaultValue: '');
+  static const _turnHost =
+      String.fromEnvironment('TURN_HOST', defaultValue: '');
+  static const _turnUser =
+      String.fromEnvironment('TURN_USER', defaultValue: '');
   static const _turnPassword =
       String.fromEnvironment('TURN_PASSWORD', defaultValue: '');
 
@@ -55,6 +57,7 @@ class CallService {
   Map<String, dynamic>? _lastLocalOffer;
   String? _activeCallId;
   String? _activePeerId;
+
   /// Для записи в [CallHistoryService] при [_cleanup].
   bool _historyWasIncoming = false;
   bool _videoEnabled = true;
@@ -71,6 +74,9 @@ class CallService {
   int _remoteSrflxCount = 0;
   int _remoteHostCount = 0;
   DateTime _phaseSince = DateTime.now();
+  final Map<String, DateTime> _recentlyHandledCallIds = {};
+  final Map<String, DateTime> _recentInviteNotifiedAt = {};
+  static const _recentCallTtl = Duration(seconds: 30);
   static final RegExp _pubKeyHex64 = RegExp(r'^[0-9a-f]{64}$');
 
   MediaStream? remoteStream;
@@ -148,9 +154,10 @@ class CallService {
       if (phase.value != CallPhase.connected) return;
       try {
         final dir = await getApplicationDocumentsDirectory();
-        final ext = (_videoEnabled && remoteStream?.getVideoTracks().isNotEmpty == true)
-            ? 'mp4'
-            : 'm4a';
+        final ext =
+            (_videoEnabled && remoteStream?.getVideoTracks().isNotEmpty == true)
+                ? 'mp4'
+                : 'm4a';
         _recordingPath = p.join(
           dir.path,
           'call_${callId.substring(0, 8)}_${DateTime.now().millisecondsSinceEpoch}.$ext',
@@ -182,7 +189,8 @@ class CallService {
         recordingElapsed.value = Duration.zero;
         _recordingTimer?.cancel();
         _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-          if (_recordingSw != null) recordingElapsed.value = _recordingSw!.elapsed;
+          if (_recordingSw != null)
+            recordingElapsed.value = _recordingSw!.elapsed;
         });
         await _sendSignal(peerId, callId, 'recording', {'on': true});
         debugPrint('[RLINK][Call] Recording started → $_recordingPath');
@@ -198,7 +206,8 @@ class CallService {
       } catch (_) {}
       try {
         final out = await _mediaRecorder!.stop();
-        debugPrint('[RLINK][Call] Recording stopped out=$out path=$_recordingPath');
+        debugPrint(
+            '[RLINK][Call] Recording stopped out=$out path=$_recordingPath');
       } catch (e) {
         debugPrint('[RLINK][Call] Recording stop failed: $e');
       }
@@ -264,7 +273,8 @@ class CallService {
         'local relay=$localRelay srflx=$localSrflx host=$localHost / '
         'remote relay=$remoteRelay srflx=$remoteSrflx host=$remoteHost');
     if (localRelay == 0 && _turnHost.trim().isNotEmpty) {
-      debugPrint('[RLINK][Call][WARN] no local relay candidates — TURN allocate '
+      debugPrint(
+          '[RLINK][Call][WARN] no local relay candidates — TURN allocate '
           'не прошёл (host=$_turnHost). Проверь UDP 3478 и порты 49160-49200.');
     }
     if (remoteRelay == 0 && remoteSrflx == 0) {
@@ -324,8 +334,8 @@ class CallService {
   }
 
   Future<void> acceptIncoming(CallSessionInfo session) async {
-    final isIncomingRinging =
-        phase.value == CallPhase.ringing && incomingCall.value?.callId == session.callId;
+    final isIncomingRinging = phase.value == CallPhase.ringing &&
+        incomingCall.value?.callId == session.callId;
     if (isBusy && !isIncomingRinging && _activeCallId != session.callId) {
       throw StateError('busy');
     }
@@ -375,7 +385,17 @@ class CallService {
 
   Future<void> rejectIncoming(CallSessionInfo session) async {
     await _sendSignal(session.peerId, session.callId, 'reject');
+    _recentlyHandledCallIds[session.callId] = DateTime.now();
     incomingCall.value = null;
+    await SoundEffectsService.instance.stopIncomingRingtone();
+    if (_activeCallId == session.callId || phase.value == CallPhase.ringing) {
+      _pendingOffers.remove(session.callId);
+      _pendingIce.remove(session.callId);
+      _activeCallId = null;
+      _activePeerId = null;
+      _acceptedAwaitingOffer = false;
+      _setPhase(CallPhase.idle);
+    }
     unawaited(
       CallHistoryService.instance.recordRejectedIncoming(
         peerId: session.peerId,
@@ -463,7 +483,8 @@ class CallService {
           _localHostCount++;
           break;
       }
-      debugPrint('[RLINK][Call] ICE candidate typ=$typ mid=${candidate.sdpMid}');
+      debugPrint(
+          '[RLINK][Call] ICE candidate typ=$typ mid=${candidate.sdpMid}');
       await _sendSignal(peerId, callId, 'ice', {
         'candidate': candidate.candidate,
         'sdpMid': candidate.sdpMid,
@@ -479,7 +500,8 @@ class CallService {
       _connectTimeout?.cancel();
       if (phase.value != CallPhase.connected) {
         _setPhase(CallPhase.connected);
-        unawaited(SoundEffectsService.instance.playAction(ActionSound.callConnected));
+        unawaited(
+            SoundEffectsService.instance.playAction(ActionSound.callConnected));
       }
     };
 
@@ -491,11 +513,13 @@ class CallService {
           _connectTimeout?.cancel();
           if (phase.value != CallPhase.connected) {
             _setPhase(CallPhase.connected);
-            unawaited(SoundEffectsService.instance.playAction(ActionSound.callConnected));
+            unawaited(SoundEffectsService.instance
+                .playAction(ActionSound.callConnected));
           }
           break;
         case RTCIceConnectionState.RTCIceConnectionStateFailed:
-          if (phase.value != CallPhase.ended && phase.value != CallPhase.failed) {
+          if (phase.value != CallPhase.ended &&
+              phase.value != CallPhase.failed) {
             unawaited(_cleanup(CallPhase.failed));
           }
           break;
@@ -523,7 +547,8 @@ class CallService {
         _connectTimeout?.cancel();
         if (phase.value != CallPhase.connected) {
           _setPhase(CallPhase.connected);
-          unawaited(SoundEffectsService.instance.playAction(ActionSound.callConnected));
+          unawaited(SoundEffectsService.instance
+              .playAction(ActionSound.callConnected));
         }
       }
     };
@@ -584,15 +609,29 @@ class CallService {
     debugPrint('[RLINK][Call][RX] $signalType call=$callId from=$f8');
     switch (signalType) {
       case 'invite':
+        final now = DateTime.now();
+        // Dedup: ignore re-invites for calls we've already handled.
+        final recentTs = _recentlyHandledCallIds[callId];
+        if (recentTs != null && now.difference(recentTs) < _recentCallTtl) {
+          debugPrint(
+              '[RLINK][Call] ignoring re-invite for handled call $callId');
+          break;
+        }
         // De-duplicate: if we're already ringing for this exact call, ignore
         // re-invites (sent by caller's offer resend loop).
         if (_activeCallId == callId && phase.value == CallPhase.ringing) {
+          final lastNotify = _recentInviteNotifiedAt[callId];
+          if (lastNotify == null ||
+              now.difference(lastNotify) > const Duration(seconds: 20)) {
+            _recentInviteNotifiedAt[callId] = now;
+          }
           break;
         }
         if (isBusy && _activeCallId != callId) {
           final staleBusy = (phase.value == CallPhase.ringing ||
                   phase.value == CallPhase.connecting) &&
-              DateTime.now().difference(_phaseSince) > const Duration(seconds: 70);
+              DateTime.now().difference(_phaseSince) >
+                  const Duration(seconds: 45);
           if (staleBusy) {
             debugPrint(
               '[RLINK][Call] dropping stale busy state: call=${_activeCallId ?? '-'} phase=${phase.value}',
@@ -609,13 +648,7 @@ class CallService {
             ? contact!.nickname.trim()
             : (fromId.length >= 8 ? '${fromId.substring(0, 8)}...' : fromId);
         final isVideo = payload['video'] == true;
-        unawaited(
-          NotificationService.instance.showPersonalMessage(
-            peerId: fromId,
-            title: displayName,
-            body: isVideo ? 'Видеозвонок' : 'Аудиозвонок',
-          ),
-        );
+        _recentInviteNotifiedAt[callId] = now;
         final info = CallSessionInfo(
           callId: callId,
           peerId: fromId,
@@ -623,8 +656,18 @@ class CallService {
           videoEnabled: isVideo,
           audioEnabled: payload['audio'] != false,
         );
+        _activeCallId = callId;
+        _activePeerId = fromId;
+        _videoEnabled = isVideo;
         incomingCall.value = info;
         _setPhase(CallPhase.ringing);
+        unawaited(
+          NotificationService.instance.showPersonalMessage(
+            peerId: fromId,
+            title: displayName,
+            body: isVideo ? 'Видеозвонок' : 'Аудиозвонок',
+          ),
+        );
         unawaited(SoundEffectsService.instance.startIncomingRingtone());
         break;
       case 'offer':
@@ -642,12 +685,14 @@ class CallService {
         // Callee accepted — move to connecting phase, then resend offer.
         final callMatch = _activeCallId == callId;
         final peerMatch = _activePeerId == fromId;
-        debugPrint('[RLINK][Call] accept gate: callMatch=$callMatch peerMatch=$peerMatch '
+        debugPrint(
+            '[RLINK][Call] accept gate: callMatch=$callMatch peerMatch=$peerMatch '
             'myCall=${_activeCallId?.substring(0, 8) ?? '-'} rxCall=${callId.substring(0, 8)} '
             'myPeer=${_activePeerId?.substring(0, 8) ?? '-'} rxPeer=${fromId.substring(0, 8)}');
         if (callMatch && peerMatch) {
+          _setPhase(CallPhase
+              .connecting); // Set phase BEFORE stopping loop to prevent race
           _stopOfferResendLoop(); // stop ringing resend, caller now sends offer on-demand
-          _setPhase(CallPhase.connecting);
           _armConnectTimeout();
           if (_lastLocalOffer != null) {
             await _sendSignal(fromId, callId, 'offer', _lastLocalOffer!);
@@ -703,6 +748,7 @@ class CallService {
       case 'reject':
       case 'busy':
       case 'end':
+        _recentlyHandledCallIds[callId] = DateTime.now();
         await _cleanup(CallPhase.ended);
         break;
     }
@@ -716,7 +762,8 @@ class CallService {
   ]) async {
     final myId = CryptoService.instance.publicKeyHex;
     if (myId.isEmpty) return;
-    final r8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : recipientId;
+    final r8 =
+        recipientId.length >= 8 ? recipientId.substring(0, 8) : recipientId;
     debugPrint('[RLINK][Call][TX] $signalType call=$callId to=$r8');
     await GossipRouter.instance.sendCallSignal(
       fromId: myId,
@@ -742,16 +789,21 @@ class CallService {
 
   Future<void> _cleanup(CallPhase endPhase) async {
     await SoundEffectsService.instance.stopIncomingRingtone();
+    final callIdForRecent = _activeCallId;
     final peerForHistory = _activePeerId;
     final durationSnapshot =
         _callDurationSw != null ? _callDurationSw!.elapsed : Duration.zero;
     final incomingSnapshot = _historyWasIncoming;
     final videoSnapshot = _videoEnabled;
+    final recordingPathSnapshot = _recordingPath;
     _stopCallDurationTimer();
     peerIsRecording.value = false;
-    if (localRecording.value && _activePeerId != null && _activeCallId != null) {
+    if (localRecording.value &&
+        _activePeerId != null &&
+        _activeCallId != null) {
       try {
-        await _sendSignal(_activePeerId!, _activeCallId!, 'recording', {'on': false});
+        await _sendSignal(
+            _activePeerId!, _activeCallId!, 'recording', {'on': false});
       } catch (_) {}
     }
     localRecording.value = false;
@@ -801,17 +853,29 @@ class CallService {
           duration: durationSnapshot,
           incoming: incomingSnapshot,
           video: videoSnapshot,
+          recordingPath: recordingPathSnapshot,
         ),
       );
     }
     _historyWasIncoming = false;
+    // Track handled call to prevent duplicate incoming from caller resend loop.
+    if (callIdForRecent != null) {
+      _recentlyHandledCallIds[callIdForRecent] = DateTime.now();
+    }
+    // Purge old entries
+    _recentlyHandledCallIds
+        .removeWhere((k, v) => DateTime.now().difference(v) > _recentCallTtl);
+    _recentInviteNotifiedAt
+        .removeWhere((k, v) => DateTime.now().difference(v) > _recentCallTtl);
   }
 
   void _startAcceptResendLoop(String peerId, String callId) {
     _stopAcceptResendLoop();
     _acceptResendAttempts = 0;
     _acceptResendTimer = Timer.periodic(const Duration(seconds: 2), (t) async {
-      if (!_acceptedAwaitingOffer || _activeCallId != callId || _activePeerId != peerId) {
+      if (!_acceptedAwaitingOffer ||
+          _activeCallId != callId ||
+          _activePeerId != peerId) {
         _stopAcceptResendLoop();
         return;
       }
@@ -821,7 +885,8 @@ class CallService {
         _stopAcceptResendLoop();
         return;
       }
-      debugPrint('[RLINK][Call] resend accept #$_acceptResendAttempts call=$callId');
+      debugPrint(
+          '[RLINK][Call] resend accept #$_acceptResendAttempts call=$callId');
       await _sendSignal(peerId, callId, 'accept');
     });
   }
@@ -842,8 +907,10 @@ class CallService {
         _stopOfferResendLoop();
         return;
       }
-      debugPrint('[RLINK][Call] resend invite+offer (ringing retry) call=$callId');
-      await _sendSignal(peerId, callId, 'invite', {'video': _videoEnabled, 'audio': true});
+      debugPrint(
+          '[RLINK][Call] resend invite+offer (ringing retry) call=$callId');
+      await _sendSignal(
+          peerId, callId, 'invite', {'video': _videoEnabled, 'audio': true});
       if (_lastLocalOffer != null) {
         await _sendSignal(peerId, callId, 'offer', _lastLocalOffer!);
       }
@@ -865,8 +932,12 @@ class CallService {
       debugPrint(
         '[RLINK][Call] connect timeout: call=${_activeCallId ?? '-'} phase=${phase.value}',
       );
-      _logIceCandidateSummary(_localRelayCount, _localSrflxCount,
-          _localHostCount, _remoteRelayCount, _remoteSrflxCount,
+      _logIceCandidateSummary(
+          _localRelayCount,
+          _localSrflxCount,
+          _localHostCount,
+          _remoteRelayCount,
+          _remoteSrflxCount,
           _remoteHostCount);
       unawaited(_cleanup(CallPhase.failed));
     });
@@ -875,8 +946,12 @@ class CallService {
     _iceDiagTimer?.cancel();
     _iceDiagTimer = Timer(const Duration(seconds: 8), () {
       if (phase.value != CallPhase.connecting) return;
-      _logIceCandidateSummary(_localRelayCount, _localSrflxCount,
-          _localHostCount, _remoteRelayCount, _remoteSrflxCount,
+      _logIceCandidateSummary(
+          _localRelayCount,
+          _localSrflxCount,
+          _localHostCount,
+          _remoteRelayCount,
+          _remoteSrflxCount,
           _remoteHostCount);
     });
   }

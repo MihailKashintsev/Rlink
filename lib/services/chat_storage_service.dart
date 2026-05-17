@@ -137,10 +137,11 @@ class ChatStorageService {
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
-    final localProfile = (snapshot['localProfile'] as List<dynamic>? ?? const [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
+    final localProfile =
+        (snapshot['localProfile'] as List<dynamic>? ?? const [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
     await _db!.transaction((txn) async {
       for (final row in contacts) {
         await txn.insert(
@@ -198,7 +199,7 @@ class ChatStorageService {
     final path = await _dbPath('rlink.db');
     _db = await openDatabase(
       path,
-      version: 21,
+      version: 22,
       onCreate: (db, v) async {
         try {
           await db.rawQuery('PRAGMA journal_mode = WAL');
@@ -240,6 +241,7 @@ class ChatStorageService {
             reactions            TEXT,
             view_once            INTEGER NOT NULL DEFAULT 0,
             view_once_opened     INTEGER NOT NULL DEFAULT 0,
+            is_sticker           INTEGER NOT NULL DEFAULT 0,
             forward_from_id      TEXT,
             forward_from_nick    TEXT,
             forward_from_channel_id TEXT,
@@ -458,6 +460,12 @@ class ChatStorageService {
                 'ALTER TABLE messages ADD COLUMN gigachat_attachment_ids TEXT');
           } catch (_) {}
         }
+        if (oldVersion < 22) {
+          try {
+            await db.execute(
+                'ALTER TABLE messages ADD COLUMN is_sticker INTEGER NOT NULL DEFAULT 0');
+          } catch (_) {}
+        }
         if (oldVersion < 21) {
           await db.execute('''
             CREATE TABLE IF NOT EXISTS local_profile_cache (
@@ -603,9 +611,8 @@ class ChatStorageService {
   Future<void> saveMessage(ChatMessage message) async {
     await _ensureDbReady();
     final peerKey = normalizeDmPeerId(message.peerId);
-    final stored = peerKey == message.peerId
-        ? message
-        : message.copyWith(peerId: peerKey);
+    final stored =
+        peerKey == message.peerId ? message : message.copyWith(peerId: peerKey);
     await _db?.insert('messages', stored.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace);
     _notifyMessages(peerKey);
@@ -882,8 +889,7 @@ class ChatStorageService {
 
   Future<void> deleteChat(String peerId) async {
     final pid = normalizeDmPeerId(peerId);
-    await _db
-        ?.delete('dm_chat_pins', where: 'peer_id = ?', whereArgs: [pid]);
+    await _db?.delete('dm_chat_pins', where: 'peer_id = ?', whereArgs: [pid]);
     await _db?.delete('messages', where: 'peer_id = ?', whereArgs: [pid]);
     await _db?.delete('conversation_read_cursor',
         where: 'conv_key = ?', whereArgs: ['dm:$pid']);

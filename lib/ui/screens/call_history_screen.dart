@@ -8,6 +8,7 @@ import '../../services/chat_storage_service.dart';
 import '../../services/relay_service.dart';
 import '../rlink_nav_routes.dart';
 import 'call_screen.dart';
+import 'call_recording_playback_screen.dart';
 import 'chat_screen.dart';
 
 /// Вкладка «История звонков»: дата, длительность, контакт; повторный звонок и чат.
@@ -47,6 +48,14 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     return '$s с';
   }
 
+  Future<void> _openRecording(CallHistoryEntry e) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CallRecordingPlaybackScreen(entry: e),
+      ),
+    );
+  }
+
   Future<void> _openChat(CallHistoryEntry e) async {
     final c = await ChatStorageService.instance.getContact(e.peerId);
     if (!mounted) return;
@@ -54,7 +63,8 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
       rlinkChatRoute(
         ChatScreen(
           peerId: e.peerId,
-          peerNickname: c?.nickname.isNotEmpty == true ? c!.nickname : e.peerDisplayName,
+          peerNickname:
+              c?.nickname.isNotEmpty == true ? c!.nickname : e.peerDisplayName,
           peerAvatarColor: c?.avatarColor ?? 0xFF607D8B,
           peerAvatarEmoji: c?.avatarEmoji ?? '',
           peerAvatarImagePath: c?.avatarImagePath,
@@ -67,7 +77,8 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     if (!RelayService.instance.isConnected) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Собеседник офлайн в relay. Звонок недоступен.')),
+          const SnackBar(
+              content: Text('Собеседник офлайн в relay. Звонок недоступен.')),
         );
       }
       return;
@@ -132,7 +143,8 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
             final sub = '${e.incoming ? 'Входящий' : 'Исходящий'} · '
                 '${e.video ? 'Видео' : 'Аудио'} · ${_fmtDuration(e.duration)}';
             return ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               title: Text(
                 e.peerDisplayName,
                 maxLines: 1,
@@ -141,12 +153,21 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
               ),
               subtitle: Text(
                 '${_fmtDateTime(e.endedAt)}\n$sub',
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, height: 1.35),
+                style: TextStyle(
+                    fontSize: 12, color: cs.onSurfaceVariant, height: 1.35),
               ),
               isThreeLine: true,
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (e.recordingPath != null && e.recordingPath!.isNotEmpty)
+                    IconButton(
+                      tooltip: e.video ? 'Смотреть запись' : 'Слушать запись',
+                      icon: Icon(e.video
+                          ? Icons.play_circle_outline
+                          : Icons.headphones),
+                      onPressed: () => _openRecording(e),
+                    ),
                   IconButton(
                     tooltip: 'Позвонить (аудио)',
                     icon: const Icon(Icons.call),

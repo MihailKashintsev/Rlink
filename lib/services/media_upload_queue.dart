@@ -8,6 +8,8 @@ import 'package:uuid/uuid.dart';
 
 import 'image_service.dart';
 import 'relay_service.dart';
+import 'chat_storage_service.dart';
+import '../models/chat_message.dart';
 
 /// Status of an upload task.
 enum UploadStatus { pending, uploading, done, failed }
@@ -57,6 +59,7 @@ class MediaUploadQueue {
 
   Database? _db;
   bool _processing = false;
+  bool _relayListenersAttached = false;
 
   /// Per-msgId upload progress (0.0 – 1.0). Key is removed when upload completes.
   final ValueNotifier<Map<String, double>> progressMap =
@@ -68,17 +71,18 @@ class MediaUploadQueue {
   /// iOS Dynamic Island: прогресс при отправке «крупного» медиа (см. порог ниже).
   void Function(String label, double progress)? onLiveActivityMediaProgress;
 
-  /// Порог размера **сжатых** данных для показа Live Activity (~250 KB).
-  static const kLiveActivityMinCompressedBytes = 250 * 1024;
+  /// Порог размера **сжатых** данных для показа Live Activity (~100 KB).
+  static const kLiveActivityMinCompressedBytes = 100 * 1024;
 
-  /// Max blob size for single relay message (~800 KB compressed).
-  static const _kMaxBlobBytes = 800 * 1024;
+  /// Max blob size for single relay message (~100 KB compressed).
+  /// All files larger than this are automatically split into chunks for reliable delivery.
+  static const _kMaxBlobBytes = 100 * 1024;
 
   /// Relay chunk size for large media.
-  /// 200 KB per chunk — sent as relay `blob` type (single base64, ~267 KB on wire),
+  /// 500 KB per chunk — sent as relay `blob` type (single base64, ~667 KB on wire),
   /// safely under the relay server's 10 MB raw-message limit.
-  /// A 13 MB file becomes ~66 chunks @ 20 ms = ~1.3 s.
-  static const _kRelayChunkBytes = 200 * 1024;
+  /// A 13 MB file becomes ~26 chunks @ 50 ms = ~1.3 s.
+  static const _kRelayChunkBytes = 500 * 1024;
 
   /// Max retry attempts before marking a task failed.
   static const _kMaxRetries = 5;
@@ -141,7 +145,18 @@ class MediaUploadQueue {
     } catch (e) {
       debugPrint('[UploadQueue] Reset stuck tasks failed: $e');
     }
+    if (!_relayListenersAttached) {
+      _relayListenersAttached = true;
+      RelayService.instance.state.addListener(_processOnRelaySignal);
+      RelayService.instance.presenceVersion.addListener(_processOnRelaySignal);
+    }
     debugPrint('[UploadQueue] Initialized');
+  }
+
+  void _processOnRelaySignal() {
+    if (RelayService.instance.isConnected) {
+      unawaited(processQueue());
+    }
   }
 
   /// Add a media file to the upload queue.
@@ -180,7 +195,8 @@ class MediaUploadQueue {
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
-    debugPrint('[UploadQueue] Enqueued msgId=$msgId for ${recipientKey.substring(0, 8)}');
+    debugPrint(
+        '[UploadQueue] Enqueued msgId=$msgId for ${recipientKey.substring(0, 8)}');
     // Start processing immediately if relay is ready
     unawaited(processQueue());
   }
@@ -195,25 +211,22 @@ class MediaUploadQueue {
       final db = _db;
       if (db == null) return;
 
-      // Loop until no pending tasks remain — handles tasks added while we were running.
-      while (RelayService.instance.isConnected) {
-        final rows = await db.query(
-          'upload_queue',
-          where: 'status IN (?, ?) AND retryCount < ?',
-          whereArgs: [
-            UploadStatus.pending.index,
-            UploadStatus.failed.index,
-            _kMaxRetries,
-          ],
-          orderBy: 'createdAt ASC',
-        );
-        if (rows.isEmpty) break;
+      final rows = await db.query(
+        'upload_queue',
+        where: 'status IN (?, ?) AND retryCount < ?',
+        whereArgs: [
+          UploadStatus.pending.index,
+          UploadStatus.failed.index,
+          _kMaxRetries,
+        ],
+        orderBy: 'createdAt ASC',
+      );
+      if (rows.isEmpty) return;
 
-        debugPrint('[UploadQueue] Processing ${rows.length} pending tasks');
-        for (final row in rows) {
-          if (!RelayService.instance.isConnected) break;
-          await _processTask(_taskFromRow(row));
-        }
+      debugPrint('[UploadQueue] Processing ${rows.length} pending tasks');
+      for (final row in rows) {
+        if (!RelayService.instance.isConnected) break;
+        await _processTask(_taskFromRow(row));
       }
     } finally {
       _processing = false;
@@ -226,16 +239,39 @@ class MediaUploadQueue {
 
     final label = _liveActivityLabel(task);
     var showIsland = false;
+    var transferAccepted = false;
+    final previousDeliveryFailed = RelayService.instance.onDeliveryFailed;
 
     // Skip if file no longer exists
     if (!File(task.filePath).existsSync()) {
-      debugPrint('[UploadQueue] File missing for ${task.msgId}, marking failed');
+      debugPrint(
+          '[UploadQueue] File missing for ${task.msgId}, marking failed');
       await db.update(
         'upload_queue',
         {'status': UploadStatus.failed.index},
         where: 'id = ?',
         whereArgs: [task.id],
       );
+      await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+        task.msgId,
+        MessageStatus.failed,
+      );
+      return;
+    }
+
+    if (RelayService.instance.isPeerKnownOffline(task.recipientKey)) {
+      debugPrint('[UploadQueue] Recipient offline for ${task.msgId}; waiting');
+      await db.update(
+        'upload_queue',
+        {'status': UploadStatus.pending.index},
+        where: 'id = ?',
+        whereArgs: [task.id],
+      );
+      await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+        task.msgId,
+        MessageStatus.sending,
+      );
+      _setProgress(task.msgId, 0);
       return;
     }
 
@@ -248,14 +284,15 @@ class MediaUploadQueue {
     );
     _setProgress(task.msgId, 0.01);
 
-    // Per-task offline detector — устанавливаем ПОСЛЕ sendBlob, чтобы
-    // не ловить «протухшие» delivery_status:offline события от предыдущих
-    // задач или presence-пингов. Иначе блоб ложно помечается как failed
-    // и retry-ится бесконечно.
     bool recipientOffline = false;
     void onDeliveryFailed(String key) {
-      if (key == task.recipientKey) recipientOffline = true;
+      previousDeliveryFailed?.call(key);
+      if (key.toLowerCase() == task.recipientKey.toLowerCase()) {
+        recipientOffline = true;
+      }
     }
+
+    RelayService.instance.onDeliveryFailed = onDeliveryFailed;
 
     try {
       final bytes = await File(task.filePath).readAsBytes();
@@ -282,17 +319,15 @@ class MediaUploadQueue {
           isSticker: task.isSticker,
           fileName: task.fileName,
         );
-        // Только теперь начинаем слушать offline-события для этого получателя.
-        RelayService.instance.onDeliveryFailed = onDeliveryFailed;
         await Future.delayed(const Duration(milliseconds: 300));
-        // Считаем доставкой по умолчанию — если получатель оффлайн, релей
-        // выкинет блоб, но retry на нашей стороне ничего не даст: блоб не
-        // буферизуется на сервере. Лучше пометить done и положиться на
-        // прикладной ack от получателя (если он подцепится позже).
+        if (recipientOffline) {
+          await _requeueAfterLiveDeliveryFailure(task);
+          return;
+        }
         if (showIsland) {
           onLiveActivityMediaProgress?.call(label, 0.9);
         }
-        _setProgress(task.msgId, 1.0);
+        _setProgress(task.msgId, 0.99);
       } else {
         // ── Chunked send for large files ──────────────────────────
         final total = (compressed.length / _kRelayChunkBytes).ceil();
@@ -326,55 +361,88 @@ class MediaUploadQueue {
             isSticker: task.isSticker,
             fileName: task.fileName,
           );
-          final frac = (i + 1) / total;
-          _setProgress(task.msgId, frac);
-          if (showIsland) {
-            onLiveActivityMediaProgress?.call(label, frac);
-          }
           await Future.delayed(const Duration(milliseconds: 20));
+          if (recipientOffline) {
+            await _requeueAfterLiveDeliveryFailure(task);
+            return;
+          }
+          final frac = (i + 1) / total;
+          _setProgress(task.msgId, frac >= 1 ? 0.99 : frac);
+          if (showIsland) {
+            onLiveActivityMediaProgress?.call(label, frac >= 1 ? 0.99 : frac);
+          }
         }
-        // Подключаем listener только после всех чанков.
-        RelayService.instance.onDeliveryFailed = onDeliveryFailed;
         await Future.delayed(const Duration(milliseconds: 300));
-        _setProgress(task.msgId, 1.0);
+        if (recipientOffline) {
+          await _requeueAfterLiveDeliveryFailure(task);
+          return;
+        }
+        _setProgress(task.msgId, 0.99);
       }
 
-      // ── Mark done ─────────────────────────────────────────────
-      // Логируем, если релей всё-таки сообщил об оффлайн — для диагностики,
-      // но задачу всё равно закрываем (см. комментарий выше).
-      if (recipientOffline) {
-        debugPrint('[UploadQueue] Note: ${task.recipientKey.substring(0, 8)} '
-            'reported offline — blob may be lost, ack will confirm');
-      }
-      await db.update(
-        'upload_queue',
-        {'status': UploadStatus.done.index},
-        where: 'id = ?',
-        whereArgs: [task.id],
+      // Bytes reached an online recipient socket. Keep the task in uploading
+      // until the recipient saves the media and sends the app-level ACK.
+      debugPrint('[UploadQueue] Awaiting recipient ACK: ${task.msgId}');
+      transferAccepted = true;
+      await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+        task.msgId,
+        MessageStatus.sent,
       );
-      debugPrint('[UploadQueue] Done: ${task.msgId}');
       onTaskCompleted?.call(task.msgId);
     } catch (e) {
       debugPrint('[UploadQueue] Task ${task.msgId} failed: $e');
+      final nextRetry = task.retryCount + 1;
+      final failed = nextRetry >= _kMaxRetries;
       await db.update(
         'upload_queue',
         {
-          'status': UploadStatus.pending.index,
-          'retryCount': task.retryCount + 1,
+          'status':
+              failed ? UploadStatus.failed.index : UploadStatus.pending.index,
+          'retryCount': nextRetry,
         },
         where: 'id = ?',
         whereArgs: [task.id],
       );
       _setProgress(task.msgId, 0);
+      if (failed) {
+        await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+          task.msgId,
+          MessageStatus.failed,
+        );
+      }
     } finally {
       if (showIsland) {
-        onLiveActivityMediaProgress?.call(label, 1.0);
+        onLiveActivityMediaProgress?.call(label, transferAccepted ? 0.99 : 0);
       }
       // Clear per-task delivery-fail listener
       if (RelayService.instance.onDeliveryFailed == onDeliveryFailed) {
-        RelayService.instance.onDeliveryFailed = null;
+        RelayService.instance.onDeliveryFailed = previousDeliveryFailed;
       }
     }
+  }
+
+  Future<void> _requeueAfterLiveDeliveryFailure(UploadTask task) async {
+    final db = _db;
+    if (db == null) return;
+    final nextRetry = task.retryCount + 1;
+    final failed = nextRetry >= _kMaxRetries;
+    await db.update(
+      'upload_queue',
+      {
+        'status':
+            failed ? UploadStatus.failed.index : UploadStatus.pending.index,
+        'retryCount': nextRetry,
+      },
+      where: 'id = ?',
+      whereArgs: [task.id],
+    );
+    _setProgress(task.msgId, 0);
+    await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+      task.msgId,
+      failed ? MessageStatus.failed : MessageStatus.sending,
+    );
+    debugPrint('[UploadQueue] Live delivery failed for ${task.msgId}; '
+        '${failed ? 'retry limit reached' : 'requeued'}');
   }
 
   String _liveActivityLabel(UploadTask t) {
@@ -422,12 +490,27 @@ class MediaUploadQueue {
   /// True while this msgId is being uploaded.
   bool isUploading(String msgId) => progressMap.value.containsKey(msgId);
 
+  /// Marks a media task as fully delivered after the recipient app-level ACK.
+  Future<void> markDelivered(String msgId) async {
+    final db = _db;
+    if (db == null) return;
+    final n = await db.update(
+      'upload_queue',
+      {'status': UploadStatus.done.index},
+      where: 'msgId = ?',
+      whereArgs: [msgId],
+    );
+    if (n > 0) {
+      _setProgress(msgId, 1.0);
+      debugPrint('[UploadQueue] Delivered ACK: $msgId');
+    }
+  }
+
   /// Remove completed tasks older than [maxAge].
   Future<void> cleanUp({Duration maxAge = const Duration(days: 7)}) async {
     final db = _db;
     if (db == null) return;
-    final cutoff =
-        DateTime.now().subtract(maxAge).millisecondsSinceEpoch;
+    final cutoff = DateTime.now().subtract(maxAge).millisecondsSinceEpoch;
     final deleted = await db.delete(
       'upload_queue',
       where: 'status = ? AND createdAt < ?',

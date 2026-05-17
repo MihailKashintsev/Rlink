@@ -22,7 +22,7 @@ class StickerPackDmService {
   static const _relayChunkBytes = 30 * 1024;
   static const _maxSingleBlob = 800 * 1024;
   static const _blobFileName = 'rlink_sticker_pack.json';
-  static final _uuid = const Uuid();
+  static const _uuid = Uuid();
 
   /// Собирает payload для БД и передачи (включает base64 байтов файлов).
   static Future<Map<String, dynamic>> buildStickerPackPayload(
@@ -251,6 +251,7 @@ class StickerPackDmService {
 
   /// Входящий blob с relay (полные [data] после сборки чанков).
   /// Возвращает превью-текст для уведомлений или null, если сообщение не создано.
+  /// Автоматически скачивает файлы стикеров в директорию images/stk_downloaded_*.
   static Future<String?> receiveFromRelay(
     String fromId,
     String msgId,
@@ -270,6 +271,36 @@ class StickerPackDmService {
     final previewText = (title != null && title.isNotEmpty)
         ? '🩵 Набор «$title»'
         : '🩵 Набор стикеров';
+
+    // Auto-download sticker files
+    final stickers = payload['stickers'] as List?;
+    if (stickers != null) {
+      final docs = await getApplicationDocumentsDirectory();
+      final imgDir = Directory(p.join(docs.path, 'images'));
+      if (!imgDir.existsSync()) imgDir.createSync(recursive: true);
+      
+      final downloadedPaths = <String>[];
+      for (var i = 0; i < stickers.length; i++) {
+        try {
+          final e = stickers[i] as Map?;
+          if (e == null) continue;
+          final b64 = e['bytes'] as String?;
+          if (b64 == null || b64.isEmpty) continue;
+          
+          final bytes = base64Decode(b64);
+          final safeExt = '.png';
+          final destName = 'stk_downloaded_${msgId}_$i$safeExt';
+          final dest = File(p.join(imgDir.path, destName));
+          await dest.writeAsBytes(bytes);
+          downloadedPaths.add(p.join('images', destName));
+        } catch (e) {
+          debugPrint('[StickerPackDm] download sticker $i failed: $e');
+        }
+      }
+      
+      // Update payload with downloaded paths
+      payload['downloadedPaths'] = downloadedPaths;
+    }
 
     final msg = ChatMessage(
       id: msgId,

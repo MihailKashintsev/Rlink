@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart' as epf;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -8,11 +9,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../models/sticker_pack.dart';
 import '../../models/emoji_pack.dart';
 import '../../services/app_settings.dart';
 import '../../services/emoji_pack_service.dart';
 import '../../services/image_service.dart';
 import '../../services/runtime_platform.dart';
+import '../../services/sticker_collection_service.dart';
 
 enum AvatarPresenceTransport { bluetooth, internet, wifiDirect }
 
@@ -103,9 +106,9 @@ class AvatarWidget extends StatelessWidget {
                       child: _buildEmojiOrInitials(innerSize),
                     ),
                   )
-            : Center(
-                child: _buildEmojiOrInitials(innerSize),
-              ),
+                : Center(
+                    child: _buildEmojiOrInitials(innerSize),
+                  ),
       ),
     );
 
@@ -177,7 +180,8 @@ class AvatarWidget extends StatelessWidget {
     if (emoji.isNotEmpty) {
       final m = _shortcodeRe.firstMatch(emoji.trim());
       if (m != null) {
-        final abs = EmojiPackService.instance.absolutePathForShortcode(m.group(1)!);
+        final abs =
+            EmojiPackService.instance.absolutePathForShortcode(m.group(1)!);
         if (abs != null && File(abs).existsSync()) {
           return ClipRRect(
             borderRadius: BorderRadius.circular(innerSize * 0.16),
@@ -239,11 +243,17 @@ class AvatarWidget extends StatelessWidget {
 class AvatarEmojiPicker extends StatefulWidget {
   final String selected;
   final void Function(String emoji) onSelected;
+  final bool showStickersTab;
+  final void Function(String path)? onStickerPicked;
+  final void Function(String url)? onGifPicked;
 
   const AvatarEmojiPicker({
     super.key,
     required this.selected,
     required this.onSelected,
+    this.showStickersTab = false,
+    this.onStickerPicked,
+    this.onGifPicked,
   });
 
   @override
@@ -251,33 +261,173 @@ class AvatarEmojiPicker extends StatefulWidget {
 }
 
 class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
-  List<(CustomEmoji, String?)> _customItems = [];
+  List<File> _stickerFiles = [];
+  List<StickerPack> _stickerPacks = [];
+  String? _filterStickerPackId;
+  List<String> _gifUrls = [];
+  bool _loadingGifs = false;
+
+  // Emoji packs for "Мои эмодзи" section
+  List<EmojiPack> _emojiPacks = [];
+  bool _loadingEmojiPacks = false;
+  String? _docsPath;
 
   @override
   void initState() {
     super.initState();
-    EmojiPackService.instance.version.addListener(_loadCustom);
-    _loadCustom();
+    if (widget.showStickersTab) {
+      StickerCollectionService.instance.version.addListener(_loadStickers);
+      _loadStickers();
+      _loadGifs();
+    }
+    _initEmojiPacks();
+  }
+
+  Future<void> _initEmojiPacks() async {
+    final docs = await getApplicationDocumentsDirectory();
+    if (mounted) {
+      setState(() => _docsPath = docs.path);
+    }
+    _loadEmojiPacks();
   }
 
   @override
   void dispose() {
-    EmojiPackService.instance.version.removeListener(_loadCustom);
+    if (widget.showStickersTab) {
+      StickerCollectionService.instance.version.removeListener(_loadStickers);
+    }
     super.dispose();
   }
 
-  Future<void> _loadCustom() async {
-    await EmojiPackService.instance.ensureInitialized();
-    final packs = await EmojiPackService.instance.loadPacks();
-    final docs = await getApplicationDocumentsDirectory();
-    final out = <(CustomEmoji, String?)>[];
-    for (final pack in packs) {
-      for (final e in pack.emojis) {
-        final abs = p.join(docs.path, e.relPath);
-        out.add((e, File(abs).existsSync() ? abs : null));
+  Future<void> _loadStickers() async {
+    await StickerCollectionService.instance.init();
+    final packs = await StickerCollectionService.instance.loadPacks();
+    final files = await StickerCollectionService.instance
+        .stickerFilesForPack(_filterStickerPackId);
+    if (mounted) {
+      setState(() {
+        _stickerPacks = packs;
+        _stickerFiles = files;
+      });
+    }
+  }
+
+  Future<void> _loadGifs() async {
+    setState(() => _loadingGifs = true);
+    // Load trending GIFs from Giphy (placeholder URLs for now)
+    final gifs = [
+      'https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+      'https://media.giphy.com/media/l0HlHFRbmaZtBRhXG/giphy.gif',
+      'https://media.giphy.com/media/3o7TKoWXm3okO1kgHC/giphy.gif',
+      'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
+      'https://media.giphy.com/media/xT0xeuOy2Fcl9vDGiA/giphy.gif',
+      'https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif',
+      'https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif',
+      'https://media.giphy.com/media/l1KVaj5UcbHwrBMqI/giphy.gif',
+    ];
+    await Future.delayed(const Duration(milliseconds: 500)); // Simulate loading
+    if (mounted) {
+      setState(() {
+        _gifUrls = gifs;
+        _loadingGifs = false;
+      });
+    }
+  }
+
+  Future<void> _loadEmojiPacks() async {
+    setState(() => _loadingEmojiPacks = true);
+    try {
+      await EmojiPackService.instance.warmIndex();
+      final packs = await EmojiPackService.instance.loadPacks();
+      if (mounted) {
+        setState(() {
+          _emojiPacks = packs;
+          _loadingEmojiPacks = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingEmojiPacks = false);
       }
     }
-    if (mounted) setState(() => _customItems = out);
+  }
+
+  void _showEmojiPackPicker(BuildContext context, EmojiPack pack) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.6,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    pack.name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Expanded(
+                  child: GridView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 5,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                    ),
+                    itemCount: pack.emojis.length,
+                    itemBuilder: (context, index) {
+                      final emoji = pack.emojis[index];
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          // Insert the actual emoji character (shortcode format requires recipient to have pack)
+                          // For now, insert as text - the recipient needs the emoji pack installed
+                          widget.onSelected(':${emoji.shortcode}:');
+                        },
+                        child: FutureBuilder<String?>(
+                          future: EmojiPackService.instance
+                              .absolutePathForEmoji(emoji),
+                          builder: (context, snapshot) {
+                            final path = snapshot.data;
+                            if (path == null) {
+                              return const SizedBox();
+                            }
+                            return Image.file(
+                              File(path),
+                              fit: BoxFit.contain,
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -285,148 +435,522 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
     final cs = Theme.of(context).colorScheme;
     final useNoto =
         RuntimePlatform.isAndroid && AppSettings.instance.useIosStyleEmoji;
-    return DefaultTabController(
-      length: 2,
-      child: SizedBox(
-        height: 320,
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TabBar(
-                indicatorSize: TabBarIndicatorSize.tab,
-                indicator: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(8),
+
+    if (widget.showStickersTab) {
+      // Show tabs when stickers tab is enabled (for sticker picker)
+      return DefaultTabController(
+        length: 3,
+        child: SizedBox(
+          height: 320,
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                labelColor: cs.primary,
-                unselectedLabelColor: cs.onSurfaceVariant,
-                dividerColor: Colors.transparent,
-                tabs: const [
-                  Tab(text: 'Эмодзи'),
-                  Tab(text: 'Мои'),
-                ],
+                child: TabBar(
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  indicator: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  labelColor: cs.primary,
+                  unselectedLabelColor: cs.onSurfaceVariant,
+                  dividerColor: Colors.transparent,
+                  tabs: const [
+                    Tab(text: 'Эмодзи'),
+                    Tab(text: 'Стикеры'),
+                    Tab(text: 'Гиф'),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: epf.EmojiPicker(
-                      onEmojiSelected: (_, emoji) =>
-                          widget.onSelected(emoji.emoji),
-                      config: epf.Config(
-                        height: 280,
-                        checkPlatformCompatibility: !useNoto,
-                        emojiTextStyle: useNoto
-                            ? GoogleFonts.notoColorEmoji(fontSize: 26)
-                            : null,
-                        emojiViewConfig: epf.EmojiViewConfig(
-                          backgroundColor: cs.surfaceContainerHighest
-                              .withValues(alpha: 0.5),
-                          columns: 8,
-                          emojiSizeMax: 26,
+              const SizedBox(height: 10),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    Column(
+                      children: [
+                        // "Мои эмодзи" section
+                        if (_loadingEmojiPacks)
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
+                        else if (_emojiPacks.isNotEmpty)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 8,
+                                  right: 8,
+                                  bottom: 8,
+                                ),
+                                child: Text(
+                                  'Мои эмодзи',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                height: 60,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 8),
+                                  itemCount: _emojiPacks.length,
+                                  itemBuilder: (context, index) {
+                                    final pack = _emojiPacks[index];
+                                    return GestureDetector(
+                                      onTap: () {
+                                        // Show emoji picker for this pack
+                                        _showEmojiPackPicker(context, pack);
+                                      },
+                                      child: Container(
+                                        width: 50,
+                                        margin: const EdgeInsets.only(right: 8),
+                                        decoration: BoxDecoration(
+                                          color: cs.surfaceContainerHighest
+                                              .withValues(alpha: 0.5),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            if (pack.emojis.isNotEmpty &&
+                                                _docsPath != null)
+                                              Image.file(
+                                                File(p.join(
+                                                  _docsPath!,
+                                                  pack.emojis[0].relPath,
+                                                )),
+                                                width: 32,
+                                                height: 32,
+                                              )
+                                            else
+                                              Icon(
+                                                Icons.emoji_emotions_outlined,
+                                                size: 24,
+                                                color: cs.onSurfaceVariant,
+                                              ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              pack.name,
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                color: cs.onSurfaceVariant,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const Divider(height: 16),
+                            ],
+                          ),
+                        // Standard emoji picker
+                        SizedBox(
+                          height: _emojiPacks.isNotEmpty ? 200 : 280,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: epf.EmojiPicker(
+                              onEmojiSelected: (_, emoji) =>
+                                  widget.onSelected(emoji.emoji),
+                              config: epf.Config(
+                                height: _emojiPacks.isNotEmpty ? 200 : 280,
+                                checkPlatformCompatibility: !useNoto,
+                                emojiTextStyle: useNoto
+                                    ? GoogleFonts.notoColorEmoji(fontSize: 26)
+                                    : null,
+                                emojiViewConfig: epf.EmojiViewConfig(
+                                  backgroundColor: cs.surfaceContainerHighest
+                                      .withValues(alpha: 0.5),
+                                  columns: 8,
+                                  emojiSizeMax: 26,
+                                ),
+                                categoryViewConfig: epf.CategoryViewConfig(
+                                  backgroundColor: cs.surfaceContainerHighest
+                                      .withValues(alpha: 0.5),
+                                  iconColorSelected: cs.primary,
+                                  indicatorColor: cs.primary,
+                                  iconColor: cs.onSurfaceVariant,
+                                ),
+                                bottomActionBarConfig:
+                                    epf.BottomActionBarConfig(
+                                  backgroundColor: cs.surfaceContainerHighest
+                                      .withValues(alpha: 0.5),
+                                  buttonIconColor: cs.onSurfaceVariant,
+                                ),
+                                searchViewConfig: epf.SearchViewConfig(
+                                  backgroundColor: cs.surfaceContainerHighest
+                                      .withValues(alpha: 0.5),
+                                  buttonIconColor: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                        categoryViewConfig: epf.CategoryViewConfig(
-                          backgroundColor: cs.surfaceContainerHighest
-                              .withValues(alpha: 0.5),
-                          iconColorSelected: cs.primary,
-                          indicatorColor: cs.primary,
-                          iconColor: cs.onSurfaceVariant,
-                        ),
-                        bottomActionBarConfig: epf.BottomActionBarConfig(
-                          backgroundColor: cs.surfaceContainerHighest
-                              .withValues(alpha: 0.5),
-                          buttonIconColor: cs.onSurfaceVariant,
-                        ),
-                        searchViewConfig: epf.SearchViewConfig(
-                          backgroundColor: cs.surfaceContainerHighest
-                              .withValues(alpha: 0.5),
-                          buttonIconColor: cs.onSurfaceVariant,
-                        ),
-                      ),
+                      ],
                     ),
-                  ),
-                  _CustomEmojiGrid(
-                    items: _customItems,
-                    onPick: (shortcode) => widget.onSelected(':$shortcode:'),
-                  ),
-                ],
+                    _StickerGrid(
+                      stickerFiles: _stickerFiles,
+                      stickerPacks: _stickerPacks,
+                      filterPackId: _filterStickerPackId,
+                      onPackSelected: (packId) {
+                        setState(() => _filterStickerPackId = packId);
+                        unawaited(_loadStickers());
+                      },
+                      onStickerPicked: widget.onStickerPicked ??
+                          (path) {
+                            // Default: stickers can't be inserted as text
+                            debugPrint('[RLINK][Emoji] Sticker picked: $path');
+                          },
+                    ),
+                    _GifGrid(
+                      gifUrls: _gifUrls,
+                      loading: _loadingGifs,
+                      onGifPicked: widget.onGifPicked ??
+                          (url) {
+                            // Default: log GIF pick
+                            debugPrint('[RLINK][Emoji] GIF picked: $url');
+                          },
+                    ),
+                  ],
+                ),
               ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show only emoji picker without tabs
+    return SizedBox(
+      height: 320,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: epf.EmojiPicker(
+          onEmojiSelected: (_, emoji) => widget.onSelected(emoji.emoji),
+          config: epf.Config(
+            height: 320,
+            checkPlatformCompatibility: !useNoto,
+            emojiTextStyle:
+                useNoto ? GoogleFonts.notoColorEmoji(fontSize: 26) : null,
+            emojiViewConfig: epf.EmojiViewConfig(
+              backgroundColor:
+                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
+              columns: 8,
+              emojiSizeMax: 26,
             ),
-          ],
+            categoryViewConfig: epf.CategoryViewConfig(
+              backgroundColor:
+                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
+              iconColorSelected: cs.primary,
+              indicatorColor: cs.primary,
+              iconColor: cs.onSurfaceVariant,
+            ),
+            bottomActionBarConfig: epf.BottomActionBarConfig(
+              backgroundColor:
+                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
+              buttonIconColor: cs.onSurfaceVariant,
+            ),
+            searchViewConfig: epf.SearchViewConfig(
+              backgroundColor:
+                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
+              buttonIconColor: cs.onSurfaceVariant,
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-class _CustomEmojiGrid extends StatelessWidget {
-  final List<(CustomEmoji, String?)> items;
-  final void Function(String shortcode) onPick;
+class _StickerGrid extends StatelessWidget {
+  final List<File> stickerFiles;
+  final List<StickerPack> stickerPacks;
+  final String? filterPackId;
+  final void Function(String? packId) onPackSelected;
+  final void Function(String path) onStickerPicked;
 
-  const _CustomEmojiGrid({
-    required this.items,
-    required this.onPick,
+  const _StickerGrid({
+    required this.stickerFiles,
+    required this.stickerPacks,
+    required this.filterPackId,
+    required this.onPackSelected,
+    required this.onStickerPicked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (stickerPacks.isNotEmpty)
+          SizedBox(
+            height: 70,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              itemCount: stickerPacks.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  final isSelected = filterPackId == null;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: GestureDetector(
+                      onTap: () => onPackSelected(null),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                              border: isSelected
+                                  ? Border.all(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      width: 2)
+                                  : null,
+                            ),
+                            child: const Icon(Icons.apps, size: 28),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Все',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final packIndex = index - 1;
+                final pack = stickerPacks[packIndex];
+                final isSelected = filterPackId == pack.id;
+                final firstStickerRel = pack.stickerRelPaths.isNotEmpty
+                    ? pack.stickerRelPaths.first
+                    : null;
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: GestureDetector(
+                    onTap: () => onPackSelected(pack.id),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: isSelected
+                                ? Border.all(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    width: 2)
+                                : null,
+                          ),
+                          child: firstStickerRel != null
+                              ? FutureBuilder<File?>(
+                                  future: _getStickerFile(firstStickerRel),
+                                  builder: (context, snapshot) {
+                                    if (!snapshot.hasData ||
+                                        snapshot.data == null) {
+                                      return const Icon(Icons.sticky_note_2,
+                                          size: 24);
+                                    }
+                                    return ClipRRect(
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Image.file(
+                                        snapshot.data!,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    );
+                                  },
+                                )
+                              : const Icon(Icons.sticky_note_2, size: 24),
+                        ),
+                        const SizedBox(height: 4),
+                        SizedBox(
+                          width: 50,
+                          child: Text(
+                            pack.title,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        Expanded(
+          child: stickerFiles.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      'В этом наборе пока нет стикеров',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ),
+                )
+              : GridView.builder(
+                  padding: const EdgeInsets.all(6),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    crossAxisSpacing: 6,
+                    mainAxisSpacing: 6,
+                  ),
+                  itemCount: stickerFiles.length,
+                  itemBuilder: (context, index) {
+                    final file = stickerFiles[index];
+                    return GestureDetector(
+                      onTap: () => onStickerPicked(file.path),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          file,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<File?> _getStickerFile(String relPath) async {
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final absPath = p.join(docs.path, relPath);
+      final file = File(absPath);
+      if (await file.exists()) {
+        return file;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+}
+
+class _GifGrid extends StatelessWidget {
+  final List<String> gifUrls;
+  final bool loading;
+  final void Function(String url) onGifPicked;
+
+  const _GifGrid({
+    required this.gifUrls,
+    required this.loading,
+    required this.onGifPicked,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    if (items.isEmpty) {
+
+    if (loading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (gifUrls.isEmpty) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           child: Text(
-            'Тут будут ваши эмодзи.\nДобавьте их через Emoji-бота или настройки.',
+            'Гифки недоступны',
             textAlign: TextAlign.center,
-            style: TextStyle(color: cs.onSurfaceVariant, height: 1.35),
+            style: TextStyle(color: cs.onSurfaceVariant),
           ),
         ),
       );
     }
+
     return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      padding: const EdgeInsets.all(6),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 6,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
+        crossAxisCount: 3,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
       ),
-      itemCount: items.length,
-      itemBuilder: (context, i) {
-        final item = items[i];
-        final e = item.$1;
-        final path = item.$2;
-        return Tooltip(
-          message: ':${e.shortcode}:',
-          child: Material(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              onTap: () => onPick(e.shortcode),
-              borderRadius: BorderRadius.circular(12),
-              child: path != null
-                  ? Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(9),
-                        child: Image.file(
-                          File(path),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          cacheWidth: RuntimePlatform.isAndroid ? 128 : null,
-                          cacheHeight: RuntimePlatform.isAndroid ? 128 : null,
-                        ),
-                      ),
-                    )
-                  : const Icon(Icons.image_not_supported_outlined),
+      itemCount: gifUrls.length,
+      itemBuilder: (context, index) {
+        final url = gifUrls[index];
+        return GestureDetector(
+          onTap: () => onGifPicked(url),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              url,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null,
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  color: cs.surfaceContainerHighest,
+                  child: const Icon(Icons.broken_image),
+                );
+              },
             ),
           ),
         );

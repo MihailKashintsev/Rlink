@@ -67,8 +67,8 @@ class ChannelBackupService {
     final existing = await _readSymKeyBytes(channelId);
     if (existing != null && existing.length == 32) return existing;
     final rng = Random.secure();
-    final key = Uint8List.fromList(
-        List<int>.generate(32, (_) => rng.nextInt(256)));
+    final key =
+        Uint8List.fromList(List<int>.generate(32, (_) => rng.nextInt(256)));
     await _writeSymKeyBytes(channelId, key);
     return key;
   }
@@ -134,7 +134,8 @@ class ChannelBackupService {
     if (channel.adminId != myId) return;
 
     final rev = channel.driveBackupRev + 1;
-    final snap = await ChannelService.instance.buildChannelBackupSnapshot(channel.id);
+    final snap =
+        await ChannelService.instance.buildChannelBackupSnapshot(channel.id);
     snap['rev'] = rev;
     final jsonStr = jsonEncode(snap);
     final key = await getOrCreateSymmetricKey(channel.id);
@@ -184,8 +185,14 @@ class ChannelBackupService {
     String? fileUrl;
     String? keysFileId;
     String? keysFileUrl;
+    String? avatarFileId;
+    String? avatarUrl;
+    String? bannerFileId;
+    String? bannerUrl;
+
     if (channel.driveBackupEnabled) {
       final compact = ChannelService.compactChannelId(channel.id);
+
       // Upload encrypted snapshot.
       fileId = await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
         fileName: 'Rlink_ch_$compact.bin',
@@ -193,11 +200,11 @@ class ChannelBackupService {
         existingFileId: channel.driveFileId,
       );
       if (fileId != null) {
-        fileUrl = await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(fileId);
+        fileUrl =
+            await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(fileId);
       }
 
       // Upload per-subscriber wrapped keys as a public JSON file.
-      // Each value is an EncryptedMessage.toJson() — individually E2E encrypted.
       if (wrappedKeys.isNotEmpty) {
         final keysJson = jsonEncode({
           'v': 1,
@@ -215,7 +222,48 @@ class ChannelBackupService {
         if (keysFileId != null) {
           await _writeKeysFileId(channel.id, keysFileId);
           keysFileUrl =
-              await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(keysFileId);
+              await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(
+                  keysFileId);
+        }
+      }
+
+      // Upload channel avatar if exists.
+      if (channel.avatarImagePath != null) {
+        final rp =
+            ImageService.instance.resolveStoredPath(channel.avatarImagePath);
+        if (rp != null && File(rp).existsSync()) {
+          final avatarBytes = await File(rp).readAsBytes();
+          avatarFileId =
+              await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
+            fileName: 'Rlink_ch_${compact}_avatar.jpg',
+            ciphertext: avatarBytes,
+            existingFileId: channel.driveAvatarFileId,
+          );
+          if (avatarFileId != null) {
+            avatarUrl =
+                await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(
+                    avatarFileId);
+          }
+        }
+      }
+
+      // Upload channel banner if exists.
+      if (channel.bannerImagePath != null) {
+        final rp =
+            ImageService.instance.resolveStoredPath(channel.bannerImagePath);
+        if (rp != null && File(rp).existsSync()) {
+          final bannerBytes = await File(rp).readAsBytes();
+          bannerFileId =
+              await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
+            fileName: 'Rlink_ch_${compact}_banner.jpg',
+            ciphertext: bannerBytes,
+            existingFileId: channel.driveBannerFileId,
+          );
+          if (bannerFileId != null) {
+            bannerUrl =
+                await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(
+                    bannerFileId);
+          }
         }
       }
     }
@@ -225,6 +273,10 @@ class ChannelBackupService {
       driveFileId: fileId ?? channel.driveFileId,
       driveFileUrl: fileUrl ?? channel.driveFileUrl,
       driveKeysUrl: keysFileUrl ?? channel.driveKeysUrl,
+      driveAvatarFileId: avatarFileId ?? channel.driveAvatarFileId,
+      driveAvatarUrl: avatarUrl ?? channel.driveAvatarUrl,
+      driveBannerFileId: bannerFileId ?? channel.driveBannerFileId,
+      driveBannerUrl: bannerUrl ?? channel.driveBannerUrl,
     );
     await ChannelService.instance.updateChannel(next);
     await next.broadcastGossipMeta();
@@ -240,8 +292,7 @@ class ChannelBackupService {
           _PendingDecrypt(rev: rev, sealed: sealed);
       return;
     }
-    final plain =
-        await CryptoService.instance.openSymmetric(sealed, key);
+    final plain = await CryptoService.instance.openSymmetric(sealed, key);
     if (plain == null) return;
     Map<String, dynamic> json;
     try {
@@ -285,7 +336,11 @@ class ChannelBackupService {
     final n = (packet.payload['n'] as num?)?.toInt();
     final from = packet.payload['from'] as String?;
     final mid = packet.payload['mid'] as String?;
-    if (cid == null || rev == null || n == null || from == null || mid == null) {
+    if (cid == null ||
+        rev == null ||
+        n == null ||
+        from == null ||
+        mid == null) {
       return;
     }
     if (n <= 0 || n > 200000) return;
@@ -341,7 +396,8 @@ class ChannelBackupService {
   /// Возвращает true при успешном импорте. Не требует авторизации в Google — файл публичный.
   /// Если локального ключа нет — пытается получить его из файла ключей [channel.driveKeysUrl].
   /// [onStep] вызывается при смене этапа — для UI-индикаторов.
-  Future<bool> restoreFromDriveUrl(Channel channel, {void Function(String)? onStep}) async {
+  Future<bool> restoreFromDriveUrl(Channel channel,
+      {void Function(String)? onStep}) async {
     final url = channel.driveFileUrl;
     if (url == null || url.isEmpty) return false;
 
@@ -352,28 +408,34 @@ class ChannelBackupService {
     if (key == null) {
       key = await _fetchKeyFromKeysFile(channel, onStep: onStep);
       if (key == null) {
-        debugPrint('[RLINK][ChBak] restoreFromDriveUrl: no sym key for ${channel.id}');
+        debugPrint(
+            '[RLINK][ChBak] restoreFromDriveUrl: no sym key for ${channel.id}');
         return false;
       }
     }
 
     try {
       onStep?.call('Скачивание из Google Drive…');
-      debugPrint('[RLINK][ChBak] restoreFromDriveUrl: fetching ${url.substring(0, url.length.clamp(0, 60))}…');
+      debugPrint(
+          '[RLINK][ChBak] restoreFromDriveUrl: fetching ${url.substring(0, url.length.clamp(0, 60))}…');
       final dio = Dio();
       final response = await dio.get<List<int>>(
         url,
-        options: Options(responseType: ResponseType.bytes, receiveTimeout: const Duration(seconds: 120)),
+        options: Options(
+            responseType: ResponseType.bytes,
+            receiveTimeout: const Duration(seconds: 120)),
       );
       if (response.statusCode != 200 || response.data == null) {
-        debugPrint('[RLINK][ChBak] restoreFromDriveUrl: HTTP ${response.statusCode}');
+        debugPrint(
+            '[RLINK][ChBak] restoreFromDriveUrl: HTTP ${response.statusCode}');
         return false;
       }
       final sealed = Uint8List.fromList(response.data!);
       onStep?.call('Расшифровка данных…');
       await _decryptAndImport(channel.id, channel.driveBackupRev, sealed);
       onStep?.call('Применение истории…');
-      debugPrint('[RLINK][ChBak] restoreFromDriveUrl: import done (${sealed.length} bytes)');
+      debugPrint(
+          '[RLINK][ChBak] restoreFromDriveUrl: import done (${sealed.length} bytes)');
       return true;
     } catch (e, st) {
       debugPrint('[RLINK][ChBak] restoreFromDriveUrl failed: $e\n$st');
@@ -383,7 +445,8 @@ class ChannelBackupService {
 
   /// Скачивает публичный JSON-файл ключей, находит запись для текущего пользователя,
   /// расшифровывает симметричный ключ и сохраняет его локально.
-  Future<Uint8List?> _fetchKeyFromKeysFile(Channel channel, {void Function(String)? onStep}) async {
+  Future<Uint8List?> _fetchKeyFromKeysFile(Channel channel,
+      {void Function(String)? onStep}) async {
     final keysUrl = channel.driveKeysUrl;
     if (keysUrl == null || keysUrl.isEmpty) return null;
     final myId = CryptoService.instance.publicKeyHex;
@@ -394,7 +457,9 @@ class ChannelBackupService {
       final dio = Dio();
       final response = await dio.get<String>(
         keysUrl,
-        options: Options(responseType: ResponseType.plain, receiveTimeout: const Duration(seconds: 30)),
+        options: Options(
+            responseType: ResponseType.plain,
+            receiveTimeout: const Duration(seconds: 30)),
       );
       if (response.statusCode != 200 || response.data == null) return null;
       final parsed = jsonDecode(response.data!) as Map<String, dynamic>;
@@ -409,7 +474,8 @@ class ChannelBackupService {
       if (bytes.length != 32) return null;
       final key = Uint8List.fromList(bytes);
       await _writeSymKeyBytes(channel.id, key);
-      debugPrint('[RLINK][ChBak] key recovered from keys file for ${channel.id}');
+      debugPrint(
+          '[RLINK][ChBak] key recovered from keys file for ${channel.id}');
       return key;
     } catch (e, st) {
       debugPrint('[RLINK][ChBak] _fetchKeyFromKeysFile failed: $e\n$st');

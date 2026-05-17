@@ -10,30 +10,40 @@ class ChatMessage {
   final String? imagePath;
   final String? videoPath; // локальный путь к видеосообщению (.mp4)
   final String? voicePath; // локальный путь к голосовому сообщению (.m4a)
-  final String? filePath;  // локальный путь к файлу/документу
-  final String? fileName;  // оригинальное имя файла
-  final int? fileSize;     // размер файла в байтах
-  final double? latitude;  // геотег — широта (локально, не передаётся по BLE)
+  final String? filePath; // локальный путь к файлу/документу
+  final String? fileName; // оригинальное имя файла
+  final int? fileSize; // размер файла в байтах
+  final double? latitude; // геотег — широта (локально, не передаётся по BLE)
   final double? longitude; // геотег — долгота
   final bool isOutgoing;
   final DateTime timestamp;
   final MessageStatus status;
   final Map<String, List<String>> reactions;
+
   /// Одноразовый просмотр (медиа): до открытия скрываем превью у получателя.
   final bool viewOnce;
   final bool viewOnceOpened;
+
   /// Переслано: публичный ключ автора оригинала (Ed25519 hex).
   final String? forwardFromId;
+
   /// Отображаемое имя автора оригинала (подпись над пересланным).
   final String? forwardFromNick;
+
   /// Переслано из канала — id канала (для перехода в ленту).
   final String? forwardFromChannelId;
+
   /// JSON приглашения в канал/группу в ЛС (`kind` + поля payload), для кнопок в пузыре.
   final String? invitePayloadJson;
+
   /// Карточка набора стикеров из чата (`type`: `sticker_pack`); в БД — колонка [invite_payload].
   final Map<String, dynamic>? stickerPackPayload;
+
   /// Id файлов, загруженных в GigaChat (чат с ИИ); хранится как JSON-массив в БД.
   final List<String> gigachatAttachmentIds;
+
+  /// Стикер (отображается без пузыря, как в Telegram).
+  final bool isSticker;
 
   const ChatMessage({
     required this.id,
@@ -60,6 +70,7 @@ class ChatMessage {
     this.invitePayloadJson,
     this.stickerPackPayload,
     this.gigachatAttachmentIds = const [],
+    this.isSticker = false,
   });
 
   ChatMessage copyWith({
@@ -82,6 +93,7 @@ class ChatMessage {
     String? invitePayloadJson,
     Map<String, dynamic>? stickerPackPayload,
     List<String>? gigachatAttachmentIds,
+    bool? isSticker,
   }) =>
       ChatMessage(
         id: id,
@@ -104,12 +116,12 @@ class ChatMessage {
         viewOnceOpened: viewOnceOpened ?? this.viewOnceOpened,
         forwardFromId: forwardFromId ?? this.forwardFromId,
         forwardFromNick: forwardFromNick ?? this.forwardFromNick,
-        forwardFromChannelId:
-            forwardFromChannelId ?? this.forwardFromChannelId,
+        forwardFromChannelId: forwardFromChannelId ?? this.forwardFromChannelId,
         invitePayloadJson: invitePayloadJson ?? this.invitePayloadJson,
         stickerPackPayload: stickerPackPayload ?? this.stickerPackPayload,
         gigachatAttachmentIds:
             gigachatAttachmentIds ?? this.gigachatAttachmentIds,
+        isSticker: isSticker ?? this.isSticker,
       );
 
   Map<String, dynamic> toMap() => {
@@ -140,6 +152,7 @@ class ChatMessage {
         'gigachat_attachment_ids': gigachatAttachmentIds.isEmpty
             ? null
             : jsonEncode(gigachatAttachmentIds),
+        'is_sticker': isSticker ? 1 : 0,
       };
 
   factory ChatMessage.fromMap(Map<String, dynamic> m) {
@@ -192,8 +205,8 @@ class ChatMessage {
       longitude: (m['longitude'] as num?)?.toDouble(),
       isOutgoing: (m['is_outgoing'] as int) == 1,
       timestamp: DateTime.fromMillisecondsSinceEpoch(m['timestamp'] as int),
-      status: MessageStatus
-          .values[(m['status'] as int?)?.clamp(0, MessageStatus.values.length - 1) ??
+      status: MessageStatus.values[
+          (m['status'] as int?)?.clamp(0, MessageStatus.values.length - 1) ??
               0],
       reactions: reactions,
       viewOnce: (m['view_once'] as int?) == 1,
@@ -204,6 +217,7 @@ class ChatMessage {
       invitePayloadJson: invitePayloadJson,
       stickerPackPayload: stickerPackPayload,
       gigachatAttachmentIds: gigaAtt,
+      isSticker: (m['is_sticker'] as int?) == 1,
     );
   }
 

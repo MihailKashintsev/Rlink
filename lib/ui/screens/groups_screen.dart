@@ -913,7 +913,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   ),
                   if (quiz)
                     DropdownButtonFormField<int>(
-                      value: correctIndex,
+                      initialValue: correctIndex,
                       decoration: const InputDecoration(
                           labelText: 'Правильный вариант'),
                       items: const [
@@ -1118,10 +1118,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       onStickerCropped: _groupGalleryStickerCrop,
       onStickerFromLibrary: _groupGalleryStickerLib,
       onFilePath: _groupGalleryFile,
-      onLocation: _toggleLocation,
-      onTodo: _composeAndSendTodo,
-      onPoll: () async => _sendPoll(),
-      onCalendarEvent: _composeAndSendCalendar,
+      onOpenEmojiInsert: null,
+      isEmojiBot: false,
     );
   }
 
@@ -1978,8 +1976,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final fn = m.forwardFromNick?.trim();
     if (fn != null && fn.isNotEmpty) {
       lines.add('Переслано от: $fn');
-    } else if (m.forwardFromId != null &&
-        m.forwardFromId!.trim().isNotEmpty) {
+    } else if (m.forwardFromId != null && m.forwardFromId!.trim().isNotEmpty) {
       lines.add('Переслано (автор: ${m.forwardFromId})');
     }
     lines.add('Автор: ${_nickFor(m.senderId)}');
@@ -2353,10 +2350,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                             contextMenuBuilder: _buildContextMenu,
                             maxLines: AppSettings.instance.sendOnEnter ? 1 : 4,
                             minLines: 1,
-                            decoration: InputDecoration(
+                            decoration: const InputDecoration(
                               hintText: 'Сообщение...',
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
+                              contentPadding: EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 10),
                             ),
                             style: TextStyle(fontSize: 15, color: cs.onSurface),
@@ -2372,9 +2369,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       const SizedBox(width: 8),
                       if (_composeHasText || _isSending)
                         GestureDetector(
-                          onTap: _isSending || !_composeHasText
-                              ? null
-                              : _send,
+                          onTap: _isSending || !_composeHasText ? null : _send,
                           child: Container(
                             width: 44,
                             height: 44,

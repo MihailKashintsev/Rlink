@@ -122,7 +122,7 @@ class EmojiBotService {
       final id = t.substring('/pack '.length).trim();
       final p = await EmojiPackService.instance.packById(id);
       if (p == null) {
-        return EmojiBotTurnResult(lines: ['Набор с таким id не найден.']);
+        return const EmojiBotTurnResult(lines: ['Набор с таким id не найден.']);
       }
       s.activePackId = id;
       return EmojiBotTurnResult(
@@ -133,7 +133,7 @@ class EmojiBotService {
     if (lower == '/list' || lower.startsWith('/list ')) {
       final packs = await EmojiPackService.instance.loadPacks();
       if (packs.isEmpty) {
-        return EmojiBotTurnResult(lines: ['Пока нет наборов. Создайте: /newpack Имя']);
+        return const EmojiBotTurnResult(lines: ['Пока нет наборов. Создайте: /newpack Имя']);
       }
       final lines = <String>['Ваши наборы:'];
       for (final p in packs) {
@@ -146,12 +146,12 @@ class EmojiBotService {
     if (lower.startsWith('/add')) {
       final sc = _parseShortcodeArg(t);
       if (sc == null) {
-        return EmojiBotTurnResult(
+        return const EmojiBotTurnResult(
           lines: ['Укажите шорткод: /add :smile:'],
         );
       }
       if (s.activePackId == null) {
-        return EmojiBotTurnResult(
+        return const EmojiBotTurnResult(
           lines: [
             'Сначала выберите или создайте набор: /newpack Имя или /pack (uuid)',
           ],
@@ -168,16 +168,16 @@ class EmojiBotService {
 
     if (lower == '/cancel' || lower.startsWith('/cancel ')) {
       s.pendingShortcode = null;
-      return EmojiBotTurnResult(lines: ['Ожидание картинки сброшено.']);
+      return const EmojiBotTurnResult(lines: ['Ожидание картинки сброшено.']);
     }
 
     if (lower.startsWith('/delete')) {
       final sc = _parseShortcodeArg(t);
       if (sc == null) {
-        return EmojiBotTurnResult(lines: ['Пример: /delete :smile:']);
+        return const EmojiBotTurnResult(lines: ['Пример: /delete :smile:']);
       }
       if (s.activePackId == null) {
-        return EmojiBotTurnResult(lines: ['Нет текущего набора. Укажите /pack id']);
+        return const EmojiBotTurnResult(lines: ['Нет текущего набора. Укажите /pack id']);
       }
       await EmojiPackService.instance.deleteEmoji(s.activePackId!, sc);
       return EmojiBotTurnResult(lines: ['Удалено :$sc: из текущего набора.']);
@@ -185,11 +185,11 @@ class EmojiBotService {
 
     if (lower == '/preview' || lower.startsWith('/preview ')) {
       if (s.activePackId == null) {
-        return EmojiBotTurnResult(lines: ['Нет текущего набора.']);
+        return const EmojiBotTurnResult(lines: ['Нет текущего набора.']);
       }
       final p = await EmojiPackService.instance.packById(s.activePackId!);
       if (p == null || p.emojis.isEmpty) {
-        return EmojiBotTurnResult(lines: ['В текущем наборе пока нет эмодзи.']);
+        return const EmojiBotTurnResult(lines: ['В текущем наборе пока нет эмодзи.']);
       }
       final lines = <String>['**${p.name}** (${p.emojis.length}):'];
       for (final e in p.emojis) {
@@ -200,11 +200,11 @@ class EmojiBotService {
 
     if (lower == '/share' || lower.startsWith('/share ')) {
       if (s.activePackId == null) {
-        return EmojiBotTurnResult(lines: ['Нет текущего набора для шаринга.']);
+        return const EmojiBotTurnResult(lines: ['Нет текущего набора для шаринга.']);
       }
       final pack = await EmojiPackService.instance.packById(s.activePackId!);
       if (pack == null || pack.emojis.isEmpty) {
-        return EmojiBotTurnResult(lines: ['В наборе нет эмодзи для карточки.']);
+        return const EmojiBotTurnResult(lines: ['В наборе нет эмодзи для карточки.']);
       }
       final share = await _buildShare(pack);
       return EmojiBotTurnResult(
@@ -218,7 +218,7 @@ class EmojiBotService {
           ? t.substring(t.indexOf(' ')).trim()
           : '';
       if (arg.isEmpty) {
-        return EmojiBotTurnResult(
+        return const EmojiBotTurnResult(
           lines: ['Укажите id набора с карточки: /install `<uuid>`'],
         );
       }
@@ -233,7 +233,7 @@ class EmojiBotService {
       }
       final newId = await EmojiPackService.instance.installFromSharePayload(payload);
       if (newId == null) {
-        return EmojiBotTurnResult(
+        return const EmojiBotTurnResult(
           lines: ['Не удалось установить набор (нет данных в карточке).'],
         );
       }
@@ -246,7 +246,7 @@ class EmojiBotService {
       );
     }
 
-    return EmojiBotTurnResult(
+    return const EmojiBotTurnResult(
       lines: ['Неизвестная команда. /help'],
     );
   }

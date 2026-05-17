@@ -11,7 +11,7 @@ import 'emoji_pack_service.dart';
 class EmojiPackDmService {
   EmojiPackDmService._();
 
-  static final _uuid = const Uuid();
+  static const _uuid = Uuid();
   static const _blobFileName = 'rlink_emoji_pack_auto.json';
   static final RegExp _shortcodeRe = RegExp(r':([a-zA-Z0-9_]{1,48}):');
 
@@ -36,7 +36,8 @@ class EmojiPackDmService {
       if (rawBytes == null || rawBytes.isEmpty) continue;
       final encoded = base64Encode(rawBytes);
       totalBytes += encoded.length;
-      if (totalBytes > 300 * 1024) break;
+      if (totalBytes > 2 * 1024 * 1024)
+        break; // Increased to 2MB for larger emoji packs
       emojis.add({
         'shortcode': sc,
         'data': encoded,
@@ -75,7 +76,8 @@ class EmojiPackDmService {
 
   static Future<Map<String, dynamic>?> buildPayloadForStatus(
       String statusEmoji) async {
-    final m = RegExp(r'^:([a-zA-Z0-9_]{1,48}):$').firstMatch(statusEmoji.trim());
+    final m =
+        RegExp(r'^:([a-zA-Z0-9_]{1,48}):$').firstMatch(statusEmoji.trim());
     if (m == null) return null;
     final sc = m.group(1);
     if (sc == null || sc.isEmpty) return null;
@@ -89,7 +91,8 @@ class EmojiPackDmService {
   }) async {
     if (!RelayService.instance.isConnected) return;
     final jsonBytes = utf8.encode(jsonEncode(payload));
-    final compressed = ImageService.instance.compress(Uint8List.fromList(jsonBytes));
+    final compressed =
+        ImageService.instance.compress(Uint8List.fromList(jsonBytes));
     final msgId = 'emojiauto_${_uuid.v4()}';
     await RelayService.instance.sendBlob(
       recipientKey: targetPeerId,
@@ -134,4 +137,3 @@ class EmojiPackDmService {
     );
   }
 }
-

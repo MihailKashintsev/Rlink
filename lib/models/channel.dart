@@ -47,6 +47,18 @@ class Channel {
   /// Позволяет новому устройству получить симметричный ключ без онлайн-рассылки gossip.
   final String? driveKeysUrl;
 
+  /// Id файла аватара на Google Drive (локально, в gossip не передаётся).
+  final String? driveAvatarFileId;
+
+  /// Прямая ссылка для скачивания аватара с Google Drive (публичная, только чтение).
+  final String? driveAvatarUrl;
+
+  /// Id файла баннера на Google Drive (локально, в gossip не передаётся).
+  final String? driveBannerFileId;
+
+  /// Прямая ссылка для скачивания баннера с Google Drive (публичная, только чтение).
+  final String? driveBannerUrl;
+
   /// Разрешить модераторам перепривязывать Google-аккаунт резерва в общих настройках.
   final bool allowModeratorsManageDriveAccount;
 
@@ -87,6 +99,10 @@ class Channel {
     this.driveFileId,
     this.driveFileUrl,
     this.driveKeysUrl,
+    this.driveAvatarFileId,
+    this.driveAvatarUrl,
+    this.driveBannerFileId,
+    this.driveBannerUrl,
     this.allowModeratorsManageDriveAccount = false,
   });
 
@@ -132,8 +148,14 @@ class Channel {
         'pub': isPublic,
         if (driveBackupEnabled) 'drv': true,
         if (driveBackupRev > 0) 'drvRev': driveBackupRev,
-        if (driveFileUrl != null && driveFileUrl!.isNotEmpty) 'drvUrl': driveFileUrl,
-        if (driveKeysUrl != null && driveKeysUrl!.isNotEmpty) 'drvKUrl': driveKeysUrl,
+        if (driveFileUrl != null && driveFileUrl!.isNotEmpty)
+          'drvUrl': driveFileUrl,
+        if (driveKeysUrl != null && driveKeysUrl!.isNotEmpty)
+          'drvKUrl': driveKeysUrl,
+        if (driveAvatarUrl != null && driveAvatarUrl!.isNotEmpty)
+          'drvAvUrl': driveAvatarUrl,
+        if (driveBannerUrl != null && driveBannerUrl!.isNotEmpty)
+          'drvBnUrl': driveBannerUrl,
         if (allowModeratorsManageDriveAccount) 'drvMods': true,
       };
 
@@ -171,6 +193,10 @@ class Channel {
         driveFileId: j['drvFid'] as String?,
         driveFileUrl: j['drvUrl'] as String?,
         driveKeysUrl: j['drvKUrl'] as String?,
+        driveAvatarFileId: j['drvAvFid'] as String?,
+        driveAvatarUrl: j['drvAvUrl'] as String?,
+        driveBannerFileId: j['drvBnFid'] as String?,
+        driveBannerUrl: j['drvBnUrl'] as String?,
         allowModeratorsManageDriveAccount: j['drvMods'] == true,
       );
 
@@ -210,6 +236,10 @@ class Channel {
     String? driveFileId,
     String? driveFileUrl,
     String? driveKeysUrl,
+    String? driveAvatarFileId,
+    String? driveAvatarUrl,
+    String? driveBannerFileId,
+    String? driveBannerUrl,
     bool? allowModeratorsManageDriveAccount,
   }) =>
       Channel(
@@ -240,6 +270,10 @@ class Channel {
         driveFileId: driveFileId ?? this.driveFileId,
         driveFileUrl: driveFileUrl ?? this.driveFileUrl,
         driveKeysUrl: driveKeysUrl ?? this.driveKeysUrl,
+        driveAvatarFileId: driveAvatarFileId ?? this.driveAvatarFileId,
+        driveAvatarUrl: driveAvatarUrl ?? this.driveAvatarUrl,
+        driveBannerFileId: driveBannerFileId ?? this.driveBannerFileId,
+        driveBannerUrl: driveBannerUrl ?? this.driveBannerUrl,
         allowModeratorsManageDriveAccount: allowModeratorsManageDriveAccount ??
             this.allowModeratorsManageDriveAccount,
       );

@@ -33,6 +33,7 @@ import '../widgets/status_emoji_view.dart';
 import '../screens/about_screen.dart';
 import '../screens/documentation_screen.dart';
 import '../screens/settings_data_page.dart';
+import '../screens/input_bar_button_order_settings.dart';
 import '../../main.dart' show sendProfileToAllContacts;
 import '../widgets/reactions.dart';
 import '../rlink_nav_routes.dart';
@@ -409,6 +410,13 @@ class SettingsCategoryCards extends StatelessWidget {
             title: AppL10n.t('settings_messaging'),
             subtitle: 'Отправка, медиа, память',
             onTap: () => _open(context, const _MessagingPage()),
+          ),
+          _CategoryItem(
+            icon: Icons.tune,
+            color: const Color(0xFF9C27B0),
+            title: 'Панель ввода',
+            subtitle: 'Порядок кнопок',
+            onTap: () => _open(context, const InputBarButtonOrderSettings()),
           ),
           _CategoryItem(
             icon: Icons.lock_outline,
@@ -1248,6 +1256,17 @@ class _MessagingPageState extends State<_MessagingPage> {
             value: settings.autoDownloadMedia,
             onChanged: (v) => settings.setAutoDownloadMedia(v),
           ),
+          _SectionHeader('Панель ввода'),
+          ListTile(
+            leading: Icon(Icons.reorder, color: cs.primary),
+            title: Text('Порядок кнопок'),
+            subtitle: Text(
+              'Перетащите для изменения порядка',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showInputBarButtonOrderPicker(context, settings),
+          ),
           _SectionHeader(AppL10n.t('settings_section_memory')),
           ListTile(
             leading: Icon(Icons.delete_sweep_outlined, color: cs.error),
@@ -1259,6 +1278,137 @@ class _MessagingPageState extends State<_MessagingPage> {
             onTap: () => showMessageCacheClearDialog(context),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showInputBarButtonOrderPicker(BuildContext context, AppSettings settings) {
+    final buttonLabels = {
+      'emoji': 'Эмодзи',
+      'sticker': 'Стикеры',
+      'media_gallery': 'Медиа',
+      'todo': 'Задачи',
+      'calendar': 'Календарь',
+      'location': 'Геолокация',
+      'voice_video': 'Голосовое/Видео',
+    };
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _InputBarButtonOrderSheet(
+        initialOrder: List.from(settings.inputBarButtonOrder),
+        buttonLabels: buttonLabels,
+        onSave: (order) async {
+          await settings.setInputBarButtonOrder(order);
+        },
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Input Bar Button Order Sheet
+// ─────────────────────────────────────────────────────────────────────
+
+class _InputBarButtonOrderSheet extends StatefulWidget {
+  final List<String> initialOrder;
+  final Map<String, String> buttonLabels;
+  final Future<void> Function(List<String>) onSave;
+
+  const _InputBarButtonOrderSheet({
+    required this.initialOrder,
+    required this.buttonLabels,
+    required this.onSave,
+  });
+
+  @override
+  State<_InputBarButtonOrderSheet> createState() =>
+      _InputBarButtonOrderSheetState();
+}
+
+class _InputBarButtonOrderSheetState extends State<_InputBarButtonOrderSheet> {
+  late List<String> _order;
+
+  @override
+  void initState() {
+    super.initState();
+    _order = List.from(widget.initialOrder);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        constraints: const BoxConstraints(maxHeight: 500),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Порядок кнопок',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Отмена'),
+                ),
+              ],
+            ),
+            const Divider(),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ReorderableListView.builder(
+                itemCount: _order.length,
+                onReorder: (oldIndex, newIndex) {
+                  setState(() {
+                    if (newIndex > oldIndex) {
+                      newIndex -= 1;
+                    }
+                    final item = _order.removeAt(oldIndex);
+                    _order.insert(newIndex, item);
+                  });
+                },
+                itemBuilder: (context, index) {
+                  final buttonId = _order[index];
+                  return ListTile(
+                    key: ValueKey(buttonId),
+                    leading: const Icon(Icons.drag_handle),
+                    title: Text(widget.buttonLabels[buttonId] ?? buttonId),
+                    trailing: Icon(
+                      Icons.circle,
+                      size: 12,
+                      color: cs.onSurface.withValues(alpha: 0.3),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () async {
+                  await widget.onSave(_order);
+                  if (mounted) Navigator.pop(context);
+                },
+                child: const Text('Сохранить'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1580,7 +1730,7 @@ class _NetworkPageState extends State<_NetworkPage> {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
           // ── Связка устройств ──────────────────────────────────────
-          _SectionHeader('Связка устройств'),
+          const _SectionHeader('Связка устройств'),
           if (settings.isDeviceLinked) ...[
             ListTile(
               leading: Icon(
@@ -1747,7 +1897,7 @@ class _NetworkPageState extends State<_NetworkPage> {
 
           // ── Ретранслятор ───────────────────────────────────────────
           if (settings.connectionMode >= 1) ...[
-            _SectionHeader('Ретранслятор'),
+            const _SectionHeader('Ретранслятор'),
             ValueListenableBuilder<RelayState>(
               valueListenable: RelayService.instance.state,
               builder: (_, relayState, __) {

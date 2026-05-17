@@ -37,14 +37,17 @@ import '../../services/voice_service.dart';
 import '../../services/embedded_video_pause_bus.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/avatar_widget.dart';
-import '../widgets/reactions.dart';
-import '../widgets/rich_message_text.dart';
-import '../widgets/poll_message_card.dart';
+import '../widgets/mesh_radar_widget.dart';
+import '../widgets/status_emoji_view.dart';
+import '../widgets/update_available_banner.dart';
 import '../widgets/missing_local_media.dart';
 import '../widgets/channel_feed_image.dart';
 import '../widgets/desktop_image_picker.dart';
 import '../widgets/chat_emoji_insert_sheet.dart';
 import '../widgets/media_gallery_send_sheet.dart';
+import '../widgets/reactions.dart';
+import '../widgets/rich_message_text.dart';
+import '../widgets/poll_message_card.dart';
 import 'image_editor_screen.dart';
 import 'square_video_recorder_screen.dart';
 import 'channel_profile_screen.dart';
@@ -415,7 +418,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     if (AppSettings.instance.isLinkedChildDevice) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Создание канала доступно только на главном устройстве'),
+          content:
+              Text('Создание канала доступно только на главном устройстве'),
         ),
       );
       return;
@@ -687,7 +691,10 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   void _maybeAutoDriveBackupAfterOwnerPost() {
     unawaited(() async {
       if (!mounted) return;
-      setState(() { _isBackingUp = true; _backupStep = 'Сохранение на Google Drive…'; });
+      setState(() {
+        _isBackingUp = true;
+        _backupStep = 'Сохранение на Google Drive…';
+      });
       try {
         await ChannelBackupService.instance
             .publishBackupIfAdminDriveEnabled(_channel.id);
@@ -695,7 +702,11 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       } catch (e, st) {
         debugPrint('[RLINK][Drive] auto backup: $e\n$st');
       } finally {
-        if (mounted) setState(() { _isBackingUp = false; _backupStep = ''; });
+        if (mounted)
+          setState(() {
+            _isBackingUp = false;
+            _backupStep = '';
+          });
       }
     }());
   }
@@ -795,7 +806,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                   ),
                   if (quiz)
                     DropdownButtonFormField<int>(
-                      value: correctIndex,
+                      initialValue: correctIndex,
                       decoration: const InputDecoration(
                           labelText: 'Правильный вариант'),
                       items: const [
@@ -1161,7 +1172,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       onStickerCropped: _channelGalleryStickerFromCrop,
       onStickerFromLibrary: _channelGalleryStickerFromLibrary,
       onFilePath: _channelGalleryFilePath,
-      onPoll: _createPollPost,
+      onOpenEmojiInsert: null,
+      isEmojiBot: false,
     );
   }
 
@@ -1994,7 +2006,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   // ── Helpers ─────────────────────────────────────────────────
 
   Widget _buildEmptyPostsView(ColorScheme cs) {
-    final hasUrl = _channel.driveFileUrl != null && _channel.driveFileUrl!.isNotEmpty;
+    final hasUrl =
+        _channel.driveFileUrl != null && _channel.driveFileUrl!.isNotEmpty;
     if (!hasUrl) {
       return Center(
         child: Text('Нет постов',
@@ -2007,12 +2020,14 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_download_outlined, size: 48, color: cs.primary.withValues(alpha: 0.7)),
+            Icon(Icons.cloud_download_outlined,
+                size: 48, color: cs.primary.withValues(alpha: 0.7)),
             const SizedBox(height: 16),
             Text(
               'История канала доступна\nчерез Google Drive',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, color: cs.onSurface.withValues(alpha: 0.7)),
+              style: TextStyle(
+                  fontSize: 15, color: cs.onSurface.withValues(alpha: 0.7)),
             ),
             const SizedBox(height: 20),
             if (_isRestoringFromDrive) ...[
@@ -2021,7 +2036,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               Text(
                 _backupStep.isNotEmpty ? _backupStep : 'Загрузка…',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.6)),
+                style: TextStyle(
+                    fontSize: 13, color: cs.onSurface.withValues(alpha: 0.6)),
               ),
             ] else
               FilledButton.icon(
@@ -2036,25 +2052,37 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   }
 
   Future<void> _restoreFromDrive() async {
-    setState(() { _isRestoringFromDrive = true; _backupStep = 'Подключение к Google Drive…'; });
+    setState(() {
+      _isRestoringFromDrive = true;
+      _backupStep = 'Подключение к Google Drive…';
+    });
     try {
       final ok = await ChannelBackupService.instance.restoreFromDriveUrl(
         _channel,
-        onStep: (step) { if (mounted) setState(() => _backupStep = step); },
+        onStep: (step) {
+          if (mounted) setState(() => _backupStep = step);
+        },
       );
       if (!mounted) return;
       if (ok) {
         await _loadAndMarkRead();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('История восстановлена из Google Drive')),
+          const SnackBar(
+              content: Text('История восстановлена из Google Drive')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось загрузить историю. Возможно, ключ ещё не получен от автора.')),
+          const SnackBar(
+              content: Text(
+                  'Не удалось загрузить историю. Возможно, ключ ещё не получен от автора.')),
         );
       }
     } finally {
-      if (mounted) setState(() { _isRestoringFromDrive = false; _backupStep = ''; });
+      if (mounted)
+        setState(() {
+          _isRestoringFromDrive = false;
+          _backupStep = '';
+        });
     }
   }
 
@@ -2183,12 +2211,15 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SizedBox(
-                    width: 14, height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: cs.primary),
                   ),
                   const SizedBox(width: 8),
                   Text(_backupStep,
-                      style: TextStyle(fontSize: 12, color: cs.onPrimaryContainer)),
+                      style: TextStyle(
+                          fontSize: 12, color: cs.onPrimaryContainer)),
                 ],
               ),
             ),
@@ -2304,30 +2335,21 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               recordingSecondsNotifier: _recordingSecondsNotifier,
               onSend: () => unawaited(_createPost()),
               onOpenEmojiInsert: () => unawaited(showChatEmojiInsertSheet(
-                    context,
-                    onInsert: (insert) {
-                      final value = _postCtrl.value;
-                      final sel = value.selection;
-                      final text = value.text;
-                      if (!sel.isValid) {
-                        _postCtrl.value = value.copyWith(
-                          text: '$text$insert',
-                          selection: TextSelection.collapsed(
-                            offset: text.length + insert.length,
-                          ),
-                        );
-                        return;
-                      }
-                      final start = sel.start < 0 ? text.length : sel.start;
-                      final end = sel.end < 0 ? text.length : sel.end;
-                      final next = text.replaceRange(start, end, insert);
-                      _postCtrl.value = value.copyWith(
-                        text: next,
-                        selection:
-                            TextSelection.collapsed(offset: start + insert.length),
-                      );
-                    },
-                  )),
+                context,
+                onInsert: (insert) {
+                  final value = _postCtrl.value;
+                  final sel = value.selection;
+                  final text = value.text;
+                  final off = sel.isValid ? sel.start : text.length;
+                  final end = sel.isValid ? sel.end : text.length;
+                  final next = text.replaceRange(off, end, insert);
+                  final newOff = off + insert.length;
+                  _postCtrl.value = TextEditingValue(
+                    text: next,
+                    selection: TextSelection.collapsed(offset: newOff),
+                  );
+                },
+              )),
               onOpenMediaGallery: () => unawaited(_openChannelMediaGallery()),
               onRecordSquareVideo: () => unawaited(_recordAndSendSquarePost()),
               onMicDown: () => unawaited(_startVoiceRecording()),

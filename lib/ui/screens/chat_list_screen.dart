@@ -28,6 +28,7 @@ import '../../services/audio_queue_mini_player_layout.dart';
 import '../../services/platform_capabilities.dart';
 import '../../services/wifi_direct_service.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/animated_transitions.dart';
 import '../widgets/mesh_radar_widget.dart';
 import '../widgets/status_emoji_view.dart';
 import '../widgets/update_available_banner.dart';
@@ -579,20 +580,48 @@ class _ChatListScreenState extends State<ChatListScreen>
             ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentTab,
-        children: [
-          _UnifiedChatsTab(
-            searchQuery: _searchActive ? _searchController.text : '',
-            layoutActive: _currentTab == 0 &&
-                !_searchActive &&
-                (ModalRoute.of(context)?.isCurrent ?? true),
-          ),
-          _NearbyTab(showRadar: _nearbyShowRadar),
-          const EtherScreen(),
-          const CallHistoryScreen(),
-          const _MeTab(),
-        ],
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity == null) return;
+          // Swipe right to previous tab (negative velocity)
+          if (details.primaryVelocity! < -300 && _currentTab > 0) {
+            setState(() {
+              _currentTab--;
+              if (_searchActive) {
+                _searchActive = false;
+                _searchController.clear();
+                RelayService.instance.searchResults.value = [];
+              }
+            });
+          }
+          // Swipe left to next tab (positive velocity)
+          else if (details.primaryVelocity! > 300 && _currentTab < 4) {
+            setState(() {
+              _currentTab++;
+              if (_searchActive) {
+                _searchActive = false;
+                _searchController.clear();
+                RelayService.instance.searchResults.value = [];
+              }
+              if (_currentTab == 2) EtherService.instance.markRead();
+            });
+          }
+        },
+        child: IndexedStack(
+          index: _currentTab,
+          children: [
+            _UnifiedChatsTab(
+              searchQuery: _searchActive ? _searchController.text : '',
+              layoutActive: _currentTab == 0 &&
+                  !_searchActive &&
+                  (ModalRoute.of(context)?.isCurrent ?? true),
+            ),
+            _NearbyTab(showRadar: _nearbyShowRadar),
+            const EtherScreen(),
+            const CallHistoryScreen(),
+            const _MeTab(),
+          ],
+        ),
       ),
       bottomNavigationBar: _AnimatedNavBar(
         selectedIndex: _currentTab,
@@ -902,6 +931,7 @@ String _dmChatListPreviewOrDraft(
 
 class _UnifiedChatsTab extends StatefulWidget {
   final String searchQuery;
+
   /// Вкладка «Чаты» видна и поиск не открыт — якорь под фильтрами актуален.
   final bool layoutActive;
   const _UnifiedChatsTab({
@@ -914,7 +944,8 @@ class _UnifiedChatsTab extends StatefulWidget {
 }
 
 class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
-  final GlobalKey _miniPlayerListAnchor = GlobalKey(debugLabel: 'miniPlayerListAnchor');
+  final GlobalKey _miniPlayerListAnchor =
+      GlobalKey(debugLabel: 'miniPlayerListAnchor');
   bool _miniPlayerAnchorCallbackPending = false;
   List<_ChatItem> _items = [];
   StreamSubscription<IncomingMessage>? _sub;
@@ -1079,6 +1110,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
             _dmChatListPreviewOrDraft(s.peerId, s.displayText, dmDrafts),
         lastTime: s.timestamp,
         isOnline: showOnline && transports.isNotEmpty,
+        lastSeen: contactById[s.peerId]?.lastSeen,
         onlineTransports: transports,
         showPresenceStatus: showOnline,
         isAiBot: isDmBotPeerId(s.peerId),
@@ -1107,6 +1139,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         lastMessage: _dmChatListPreviewOrDraft(c.publicKeyHex, '', dmDrafts),
         lastTime: c.addedAt,
         isOnline: showOnline && transports.isNotEmpty,
+        lastSeen: c.lastSeen,
         onlineTransports: transports,
         showPresenceStatus: showOnline,
         isAiBot: isDmBotPeerId(c.publicKeyHex),
@@ -1716,6 +1749,8 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         SizedBox(height: 0, key: _miniPlayerListAnchor),
         Expanded(
             child: ListView.separated(
+          key: const PageStorageKey<String>('chat_inbox_list'),
+          cacheExtent: 720,
           itemCount: visible.length,
           padding: const EdgeInsets.only(top: 2, bottom: 8),
           separatorBuilder: (_, __) => Divider(
@@ -1730,14 +1765,20 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
             final pinned =
                 inbox.pinOrder.contains(key) && !item.isSavedMessages;
             return RepaintBoundary(
-              child: _TelegramChatRow(
-                item: item,
-                onTap: () => _navigate(context, item),
-                onLongPress: () => _showChatItemActions(context, item),
-                showPinned: pinned,
-                timeLabel: item.isSavedMessages && !item.savedHasMessages
-                    ? ''
-                    : _fmtTime(item.lastTime),
+              key: ValueKey<String>('chat_row_$key'),
+              child: StaggeredListItem(
+                index: i,
+                duration: const Duration(milliseconds: 280),
+                maxDelay: const Duration(milliseconds: 220),
+                child: _TelegramChatRow(
+                  item: item,
+                  onTap: () => _navigate(context, item),
+                  onLongPress: () => _showChatItemActions(context, item),
+                  showPinned: pinned,
+                  timeLabel: item.isSavedMessages && !item.savedHasMessages
+                      ? ''
+                      : _fmtTime(item.lastTime),
+                ),
               ),
             );
           },
@@ -1782,6 +1823,16 @@ class _TelegramChatRow extends StatelessWidget {
     required this.timeLabel,
   });
 
+  static String _formatLastSeen(DateTime? lastSeen) {
+    if (lastSeen == null) return 'Не в сети';
+    final diff = DateTime.now().difference(lastSeen);
+    if (diff.inSeconds < 60) return 'был(а) только что';
+    if (diff.inMinutes < 60) return 'был(а) ${diff.inMinutes} мин назад';
+    if (diff.inHours < 24) return 'был(а) ${diff.inHours} ч назад';
+    if (diff.inDays < 7) return 'был(а) ${diff.inDays} дн назад';
+    return 'Не в сети';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1793,7 +1844,7 @@ class _TelegramChatRow extends StatelessWidget {
         : const Color(0xFF8E8E93);
     final showVerifiedMark =
         (item.type == _ChatItemType.channel && item.channelVerified) ||
-        item.isAiBot;
+            item.isAiBot;
 
     return Material(
       color: Colors.transparent,
@@ -1928,7 +1979,9 @@ class _TelegramChatRow extends StatelessWidget {
                             !item.isAiBot) ...[
                           const SizedBox(width: 6),
                           Text(
-                            item.isOnline ? 'В сети' : 'Не в сети',
+                            item.isOnline
+                                ? 'В сети'
+                                : _formatLastSeen(item.lastSeen),
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
@@ -2058,6 +2111,7 @@ class _ChatItem {
   final String? avatarImagePath;
   final DateTime lastTime;
   final bool isOnline;
+  final DateTime? lastSeen;
   final List<AvatarPresenceTransport> onlineTransports;
   final bool showPresenceStatus;
   final int unreadCount;
@@ -2082,6 +2136,7 @@ class _ChatItem {
     required this.lastMessage,
     required this.lastTime,
     required this.isOnline,
+    this.lastSeen,
     this.onlineTransports = const [],
     this.showPresenceStatus = false,
     this.unreadCount = 0,

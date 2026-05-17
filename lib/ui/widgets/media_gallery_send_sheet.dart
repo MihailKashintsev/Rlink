@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -22,13 +24,11 @@ const _kMaxRecentFiles = 24;
 
 bool get _useNativePhotoGrid {
   if (kIsWeb) return false;
-  return RuntimePlatform.isAndroid ||
-      RuntimePlatform.isIos ||
-      defaultTargetPlatform == TargetPlatform.macOS;
+  // PhotoManager doesn't work well on macOS, use desktop picker instead
+  return RuntimePlatform.isAndroid || RuntimePlatform.isIos;
 }
 
-bool _isGifMime(String? m) =>
-    m != null && m.toLowerCase().contains('gif');
+bool _isGifMime(String? m) => m != null && m.toLowerCase().contains('gif');
 
 Future<void> _rememberFilePath(String path) async {
   try {
@@ -61,8 +61,8 @@ Future<List<String>> _loadRecentFilePaths() async {
   }
 }
 
-/// Вкладки: коллекция стикеров / GIF / фото / видео / файлы (+ меню действий).
-Future<void> showMediaGallerySendSheet(
+/// Tabbed gallery sheet for full gallery view (fallback)
+Future<void> showTabbedGallerySheet(
   BuildContext context, {
   required Future<void> Function(String filePath) onPhotoPath,
   required Future<void> Function(String filePath) onGifPath,
@@ -71,20 +71,21 @@ Future<void> showMediaGallerySendSheet(
   required Future<void> Function(String stickerLibraryFilePath)
       onStickerFromLibrary,
   required Future<void> Function(String filePath) onFilePath,
+  required VoidCallback? onOpenEmojiInsert,
   Future<void> Function()? onLocation,
   Future<void> Function()? onTodo,
   Future<void> Function()? onPoll,
   Future<void> Function()? onCalendarEvent,
 }) {
-  final hasExtraMenu =
-      onLocation != null || onTodo != null || onPoll != null || onCalendarEvent != null;
+  final hasExtraMenu = onLocation != null ||
+      onTodo != null ||
+      onPoll != null ||
+      onCalendarEvent != null;
   final tabs = <Tab>[
-    const Tab(text: 'Стикеры'),
-    const Tab(text: 'GIF'),
     const Tab(text: 'Фото'),
     const Tab(text: 'Видео'),
     const Tab(text: 'Файлы'),
-    if (hasExtraMenu) const Tab(text: 'Гео/Меню'),
+    if (hasExtraMenu) const Tab(text: 'Меню'),
   ];
   return showModalBottomSheet<void>(
     context: context,
@@ -120,18 +121,6 @@ Future<void> showMediaGallerySendSheet(
                 Expanded(
                   child: TabBarView(
                     children: [
-                      _StickerLibraryTab(
-                        sheetContext: ctx,
-                        onStickerFromLibrary: onStickerFromLibrary,
-                        onStickerCropped: onStickerCropped,
-                      ),
-                      _GalleryTab(
-                        mode: _GalleryMode.gif,
-                        onPhotoPath: onPhotoPath,
-                        onGifPath: onGifPath,
-                        onVideoPath: onVideoPath,
-                        sheetContext: ctx,
-                      ),
                       _GalleryTab(
                         mode: _GalleryMode.photo,
                         onPhotoPath: onPhotoPath,
@@ -168,6 +157,1054 @@ Future<void> showMediaGallerySendSheet(
       );
     },
   );
+}
+
+/// Telegram-style media gallery with horizontal scroll and categories
+Future<void> showMediaGallerySendSheet(
+  BuildContext context, {
+  required Future<void> Function(String filePath) onPhotoPath,
+  required Future<void> Function(String filePath) onGifPath,
+  required Future<void> Function(String filePath) onVideoPath,
+  required Future<void> Function(Uint8List croppedBytes) onStickerCropped,
+  required Future<void> Function(String stickerLibraryFilePath)
+      onStickerFromLibrary,
+  required Future<void> Function(String filePath) onFilePath,
+  required VoidCallback? onOpenEmojiInsert,
+  Future<void> Function()? onLocation,
+  Future<void> Function()? onTodo,
+  Future<void> Function()? onPoll,
+  Future<void> Function()? onCalendarEvent,
+  bool isEmojiBot = false,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => _TelegramMediaGallerySheet(
+      sheetContext: ctx,
+      onPhotoPath: onPhotoPath,
+      onGifPath: onGifPath,
+      onVideoPath: onVideoPath,
+      onStickerCropped: onStickerCropped,
+      onStickerFromLibrary: onStickerFromLibrary,
+      onFilePath: onFilePath,
+      onOpenEmojiInsert: onOpenEmojiInsert,
+      onLocation: onLocation,
+      onTodo: onTodo,
+      onPoll: onPoll,
+      onCalendarEvent: onCalendarEvent,
+      isEmojiBot: isEmojiBot,
+    ),
+  );
+}
+
+class _TelegramMediaGallerySheet extends StatefulWidget {
+  final BuildContext sheetContext;
+  final Future<void> Function(String filePath) onPhotoPath;
+  final Future<void> Function(String filePath) onGifPath;
+  final Future<void> Function(String filePath) onVideoPath;
+  final Future<void> Function(Uint8List croppedBytes) onStickerCropped;
+  final Future<void> Function(String stickerLibraryFilePath)
+      onStickerFromLibrary;
+  final Future<void> Function(String filePath) onFilePath;
+  final VoidCallback? onOpenEmojiInsert;
+  final Future<void> Function()? onLocation;
+  final Future<void> Function()? onTodo;
+  final Future<void> Function()? onPoll;
+  final Future<void> Function()? onCalendarEvent;
+  final bool isEmojiBot;
+
+  const _TelegramMediaGallerySheet({
+    super.key,
+    required this.sheetContext,
+    required this.onPhotoPath,
+    required this.onGifPath,
+    required this.onVideoPath,
+    required this.onStickerCropped,
+    required this.onStickerFromLibrary,
+    required this.onFilePath,
+    required this.onOpenEmojiInsert,
+    required this.onLocation,
+    required this.onTodo,
+    required this.onPoll,
+    required this.onCalendarEvent,
+    required this.isEmojiBot,
+  });
+
+  @override
+  State<_TelegramMediaGallerySheet> createState() =>
+      _TelegramMediaGallerySheetState();
+}
+
+class _TelegramMediaGallerySheetState extends State<_TelegramMediaGallerySheet>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    // For official bots (except emoji bot), hide video tab
+    final tabCount = widget.isEmojiBot ? 4 : 3;
+    _tabController = TabController(length: tabCount, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final fixedHeight = keyboardHeight > 0 ? keyboardHeight : 400.0;
+
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      child: Container(
+        color: Colors.black.withOpacity(0.4),
+        child: Container(
+          height: fixedHeight,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8, bottom: 8),
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Content area
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _PhotoTab(onPhotoPath: widget.onPhotoPath),
+                    _GalleryFilesTab(onFilePath: widget.onFilePath),
+                    _OtherTab(
+                      onLocation: widget.onLocation,
+                      onTodo: widget.onTodo,
+                      onPoll: widget.onPoll,
+                      onCalendarEvent: widget.onCalendarEvent,
+                    ),
+                    if (widget.isEmojiBot)
+                      _VideoTab(onVideoPath: widget.onVideoPath),
+                  ],
+                ),
+              ),
+              // Bottom tab selector
+              _GalleryBottomTabSelector(
+                tabController: _tabController,
+                onOpenEmojiInsert: widget.onOpenEmojiInsert,
+                isEmojiBot: widget.isEmojiBot,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoTab extends StatelessWidget {
+  final Future<void> Function(String filePath) onPhotoPath;
+
+  const _PhotoTab({super.key, required this.onPhotoPath});
+
+  @override
+  Widget build(BuildContext context) {
+    return _GalleryTab(
+      mode: _GalleryMode.photo,
+      onPhotoPath: (path) async => await onPhotoPath(path),
+      onGifPath: (_) async {},
+      onVideoPath: (_) async {},
+      sheetContext: context,
+    );
+  }
+}
+
+class _VideoTab extends StatelessWidget {
+  final Future<void> Function(String filePath) onVideoPath;
+
+  const _VideoTab({super.key, required this.onVideoPath});
+
+  @override
+  Widget build(BuildContext context) {
+    return _GalleryTab(
+      mode: _GalleryMode.video,
+      onPhotoPath: (_) async {},
+      onGifPath: (_) async {},
+      onVideoPath: (path) async => await onVideoPath(path),
+      sheetContext: context,
+    );
+  }
+}
+
+class _GalleryFilesTab extends StatelessWidget {
+  final Future<void> Function(String filePath) onFilePath;
+
+  const _GalleryFilesTab({super.key, required this.onFilePath});
+
+  @override
+  Widget build(BuildContext context) {
+    return _FilesGalleryTab(
+      sheetContext: context,
+      onFilePath: onFilePath,
+    );
+  }
+}
+
+class _OtherTab extends StatelessWidget {
+  final Future<void> Function()? onLocation;
+  final Future<void> Function()? onTodo;
+  final Future<void> Function()? onPoll;
+  final Future<void> Function()? onCalendarEvent;
+
+  const _OtherTab({
+    super.key,
+    this.onLocation,
+    this.onTodo,
+    this.onPoll,
+    this.onCalendarEvent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: GridView.count(
+        crossAxisCount: 2,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 1.5,
+        children: [
+          if (onLocation != null)
+            _GridActionButton(
+              icon: Icons.location_on,
+              label: 'Локация',
+              color: cs.primary,
+              onTap: () {
+                Navigator.of(context).pop();
+                unawaited(onLocation!());
+              },
+            ),
+          if (onTodo != null)
+            _GridActionButton(
+              icon: Icons.checklist_rtl,
+              label: 'Задачи',
+              color: cs.tertiary,
+              onTap: () {
+                Navigator.of(context).pop();
+                unawaited(onTodo!());
+              },
+            ),
+          if (onPoll != null)
+            _GridActionButton(
+              icon: Icons.poll,
+              label: 'Опрос',
+              color: cs.secondary,
+              onTap: () {
+                Navigator.of(context).pop();
+                unawaited(onPoll!());
+              },
+            ),
+          if (onCalendarEvent != null)
+            _GridActionButton(
+              icon: Icons.event,
+              label: 'Событие',
+              color: cs.error,
+              onTap: () {
+                Navigator.of(context).pop();
+                unawaited(onCalendarEvent!());
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GridActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _GridActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 32, color: color),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GalleryBottomTabSelector extends StatelessWidget {
+  final TabController tabController;
+  final VoidCallback? onOpenEmojiInsert;
+  final bool isEmojiBot;
+
+  const _GalleryBottomTabSelector({
+    super.key,
+    required this.tabController,
+    required this.onOpenEmojiInsert,
+    required this.isEmojiBot,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TabBar(
+              controller: tabController,
+              tabs: [
+                const Tab(icon: Icon(Icons.photo_library)),
+                const Tab(icon: Icon(Icons.insert_drive_file)),
+                const Tab(icon: Icon(Icons.more_horiz)),
+                if (isEmojiBot) const Tab(icon: Icon(Icons.videocam)),
+              ],
+              indicatorSize: TabBarIndicatorSize.label,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TelegramAttachmentSheet extends StatefulWidget {
+  final BuildContext sheetContext;
+  final Future<void> Function(String filePath) onPhotoPath;
+  final Future<void> Function(String filePath) onGifPath;
+  final Future<void> Function(String filePath) onVideoPath;
+  final Future<void> Function(Uint8List croppedBytes) onStickerCropped;
+  final Future<void> Function(String stickerLibraryFilePath)
+      onStickerFromLibrary;
+  final Future<void> Function(String filePath) onFilePath;
+  final VoidCallback? onOpenEmojiInsert;
+  final VoidCallback? onOpenCamera;
+  final Future<void> Function()? onLocation;
+  final Future<void> Function()? onTodo;
+  final Future<void> Function()? onPoll;
+  final Future<void> Function()? onCalendarEvent;
+  final Future<void> Function()? onContact;
+
+  const _TelegramAttachmentSheet({
+    super.key,
+    required this.sheetContext,
+    required this.onPhotoPath,
+    required this.onGifPath,
+    required this.onVideoPath,
+    required this.onStickerCropped,
+    required this.onStickerFromLibrary,
+    required this.onFilePath,
+    required this.onOpenEmojiInsert,
+    required this.onOpenCamera,
+    required this.onLocation,
+    required this.onTodo,
+    required this.onPoll,
+    required this.onCalendarEvent,
+    required this.onContact,
+  });
+
+  @override
+  State<_TelegramAttachmentSheet> createState() =>
+      _TelegramAttachmentSheetState();
+}
+
+class _TelegramAttachmentSheetState extends State<_TelegramAttachmentSheet> {
+  final Set<int> _selectedIndices = {};
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      child: Container(
+        color: Colors.black.withOpacity(0.4),
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.4,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          snap: true,
+          snapSizes: const [0.4, 0.95],
+          builder: (context, scrollController) {
+            return GestureDetector(
+              onTap: () {},
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    // Drag handle
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 12),
+                        width: 32,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant
+                              .withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    // Gallery preview grid
+                    Expanded(
+                      child: _GalleryPreviewGrid(
+                        scrollController: scrollController,
+                        onPhotoPath: widget.onPhotoPath,
+                        onGifPath: widget.onGifPath,
+                        onVideoPath: widget.onVideoPath,
+                        onOpenCamera: widget.onOpenCamera,
+                        selectedIndices: _selectedIndices,
+                        onSelectionChanged: (indices) {
+                          setState(() {
+                            _selectedIndices.clear();
+                            _selectedIndices.addAll(indices);
+                          });
+                        },
+                      ),
+                    ),
+                    // Send button when items are selected
+                    if (_selectedIndices.isNotEmpty)
+                      _SendButton(
+                        count: _selectedIndices.length,
+                        onSend: () => _sendSelected(),
+                      ),
+                    // Action bar
+                    _ActionBar(
+                      onOpenGallery: () => _openFullGallery(context),
+                      onOpenFile: () => _openFilePicker(context),
+                      onLocation: widget.onLocation,
+                      onTodo: widget.onTodo,
+                      onPoll: widget.onPoll,
+                      onCalendarEvent: widget.onCalendarEvent,
+                      onContact: widget.onContact,
+                      onOpenEmojiInsert: widget.onOpenEmojiInsert,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _sendSelected() {
+    Navigator.of(context).pop();
+    // Send selected items
+  }
+
+  void _openFullGallery(BuildContext context) {
+    // Do nothing - keep using the new Telegram-style interface
+    // The horizontal scroll and action bar are already shown
+  }
+
+  void _openFilePicker(BuildContext context) async {
+    final r = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+      allowMultiple: false,
+      withData: false,
+    );
+    final path = r?.files.single.path;
+    if (path == null || !mounted) return;
+    await _rememberFilePath(path);
+    Navigator.of(context).pop();
+    await widget.onFilePath(path);
+  }
+}
+
+class _SendButton extends StatelessWidget {
+  final int count;
+  final VoidCallback onSend;
+
+  const _SendButton({
+    super.key,
+    required this.count,
+    required this.onSend,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.more_vert),
+            onPressed: () {},
+          ),
+          const Spacer(),
+          ElevatedButton.icon(
+            onPressed: onSend,
+            icon: const Icon(Icons.send),
+            label: Text('Отправить $count'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GalleryPreviewGrid extends StatefulWidget {
+  final ScrollController scrollController;
+  final Future<void> Function(String filePath) onPhotoPath;
+  final Future<void> Function(String filePath) onGifPath;
+  final Future<void> Function(String filePath) onVideoPath;
+  final VoidCallback? onOpenCamera;
+  final Set<int> selectedIndices;
+  final Function(Set<int>) onSelectionChanged;
+
+  const _GalleryPreviewGrid({
+    super.key,
+    required this.scrollController,
+    required this.onPhotoPath,
+    required this.onGifPath,
+    required this.onVideoPath,
+    required this.onOpenCamera,
+    required this.selectedIndices,
+    required this.onSelectionChanged,
+  });
+
+  @override
+  State<_GalleryPreviewGrid> createState() => _GalleryPreviewGridState();
+}
+
+class _GalleryPreviewGridState extends State<_GalleryPreviewGrid> {
+  List<AssetEntity>? _assets;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_useNativePhotoGrid) {
+      _loadRecentMedia();
+    } else {
+      _loading = false;
+    }
+  }
+
+  Future<void> _loadRecentMedia() async {
+    try {
+      final state = await PhotoManager.requestPermissionExtend();
+      if (!state.hasAccess) {
+        setState(() {
+          _loading = false;
+          _assets = [];
+        });
+        return;
+      }
+
+      final paths = await PhotoManager.getAssetPathList(
+        type: RequestType.image,
+        hasAll: true,
+        onlyAll: false,
+      );
+
+      if (paths.isEmpty) {
+        setState(() {
+          _loading = false;
+          _assets = [];
+        });
+        return;
+      }
+
+      final allPath =
+          paths.firstWhere((p) => p.isAll, orElse: () => paths.first);
+      final assets = await allPath.getAssetListPaged(page: 0, size: 20);
+
+      if (mounted) {
+        setState(() {
+          _assets = assets;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _assets = [];
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (!_useNativePhotoGrid) {
+      return _DesktopPlaceholder(
+        mode: _GalleryMode.photo,
+        onPressed: () {},
+      );
+    }
+
+    final assets = _assets ?? [];
+
+    if (assets.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.photo_library_outlined,
+              size: 48,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Нет фото в галерее',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Horizontal list for compact state
+    return ListView.builder(
+      controller: widget.scrollController,
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      itemCount: assets.length + 1, // +1 for camera
+      itemBuilder: (context, index) {
+        // First item is camera
+        if (index == 0) {
+          return _CameraCard(onTap: widget.onOpenCamera);
+        }
+
+        final asset = assets[index - 1];
+        return _PhotoCard(
+          asset: asset,
+          index: index - 1,
+          onTap: () => _onPhotoTap(asset),
+          isSelected: widget.selectedIndices.contains(index - 1),
+          onToggleSelection: () {
+            final newSelection = Set<int>.from(widget.selectedIndices);
+            if (newSelection.contains(index - 1)) {
+              newSelection.remove(index - 1);
+            } else {
+              newSelection.add(index - 1);
+            }
+            widget.onSelectionChanged(newSelection);
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _onPhotoTap(AssetEntity asset) async {
+    final file = await asset.file;
+    if (file == null || !mounted) return;
+
+    final type = asset.type;
+    if (type == AssetType.video) {
+      await widget.onVideoPath(file.path);
+    } else {
+      await widget.onPhotoPath(file.path);
+    }
+
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+}
+
+class _CameraCard extends StatelessWidget {
+  final VoidCallback? onTap;
+
+  const _CameraCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 80,
+        height: 80,
+        margin: const EdgeInsets.only(right: 4),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          Icons.camera_alt,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          size: 32,
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoCard extends StatefulWidget {
+  final AssetEntity asset;
+  final int index;
+  final VoidCallback onTap;
+  final bool isSelected;
+  final VoidCallback onToggleSelection;
+
+  const _PhotoCard({
+    super.key,
+    required this.asset,
+    required this.index,
+    required this.onTap,
+    required this.isSelected,
+    required this.onToggleSelection,
+  });
+
+  @override
+  State<_PhotoCard> createState() => _PhotoCardState();
+}
+
+class _PhotoCardState extends State<_PhotoCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleTapDown() async {
+    await _animationController.forward();
+  }
+
+  Future<void> _handleTapUp() async {
+    await _animationController.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _handleTapDown(),
+      onTapUp: (_) {
+        _handleTapUp();
+        widget.onTap();
+      },
+      onTapCancel: () => _handleTapUp(),
+      onLongPress: widget.onToggleSelection,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: Container(
+          width: 80,
+          height: 80,
+          margin: const EdgeInsets.only(right: 4),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: FutureBuilder<Uint8List?>(
+                  future: widget.asset.thumbnailDataWithSize(
+                    const ThumbnailSize.square(200),
+                  ),
+                  builder: (context, snap) {
+                    final data = snap.data;
+                    if (data == null) {
+                      return Container(
+                        color: Colors.grey.shade800,
+                      );
+                    }
+                    return Image.memory(
+                      data,
+                      fit: BoxFit.cover,
+                    );
+                  },
+                ),
+              ),
+              if (widget.asset.type == AssetType.video)
+                const Positioned(
+                  bottom: 4,
+                  right: 4,
+                  child: Icon(
+                    Icons.play_circle_fill,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              if (widget.isSelected)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${widget.index + 1}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionBar extends StatelessWidget {
+  final VoidCallback onOpenGallery;
+  final VoidCallback onOpenFile;
+  final Future<void> Function()? onLocation;
+  final Future<void> Function()? onTodo;
+  final Future<void> Function()? onPoll;
+  final Future<void> Function()? onCalendarEvent;
+  final Future<void> Function()? onContact;
+  final VoidCallback? onOpenEmojiInsert;
+
+  const _ActionBar({
+    super.key,
+    required this.onOpenGallery,
+    required this.onOpenFile,
+    required this.onLocation,
+    required this.onTodo,
+    required this.onPoll,
+    required this.onCalendarEvent,
+    required this.onContact,
+    required this.onOpenEmojiInsert,
+  });
+
+  Future<void> _runAndClose(Future<void> Function() action) async {
+    await action();
+  }
+
+  List<_ActionItem> _getActionItems(BuildContext context) {
+    final items = <_ActionItem>[
+      _ActionItem(
+        icon: Icons.insert_drive_file,
+        label: 'Файл',
+        onTap: onOpenFile,
+      ),
+      if (onLocation != null)
+        _ActionItem(
+          icon: Icons.location_on,
+          label: 'Локация',
+          onTap: () => unawaited(_runAndClose(onLocation!)),
+        ),
+      if (onContact != null)
+        _ActionItem(
+          icon: Icons.person,
+          label: 'Контакт',
+          onTap: () => unawaited(_runAndClose(onContact!)),
+        ),
+      if (onTodo != null)
+        _ActionItem(
+          icon: Icons.checklist_rtl,
+          label: 'Задачи',
+          onTap: () => unawaited(_runAndClose(onTodo!)),
+        ),
+      if (onCalendarEvent != null)
+        _ActionItem(
+          icon: Icons.event,
+          label: 'Событие',
+          onTap: () => unawaited(_runAndClose(onCalendarEvent!)),
+        ),
+      if (onPoll != null)
+        _ActionItem(
+          icon: Icons.poll,
+          label: 'Опрос',
+          onTap: () => unawaited(_runAndClose(onPoll!)),
+        ),
+    ];
+    return items;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _getActionItems(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
+      ),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          childAspectRatio: 1,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 16,
+        ),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return _ActionButton(
+            icon: item.icon,
+            label: item.label,
+            onTap: item.onTap,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ActionItem {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  _ActionItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ExtraActionsMenuTab extends StatelessWidget {
@@ -229,6 +1266,76 @@ class _ExtraActionsMenuTab extends StatelessWidget {
   }
 }
 
+class _EmojiStickersGifTab extends StatefulWidget {
+  final BuildContext sheetContext;
+  final Future<void> Function(String path) onStickerFromLibrary;
+  final Future<void> Function(Uint8List cropped) onStickerCropped;
+  final Future<void> Function(String filePath) onGifPath;
+  final VoidCallback? onOpenEmojiInsert;
+
+  const _EmojiStickersGifTab({
+    required this.sheetContext,
+    required this.onStickerFromLibrary,
+    required this.onStickerCropped,
+    required this.onGifPath,
+    required this.onOpenEmojiInsert,
+  });
+
+  @override
+  State<_EmojiStickersGifTab> createState() => _EmojiStickersGifTabState();
+}
+
+class _EmojiStickersGifTabState extends State<_EmojiStickersGifTab>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Стикеры'),
+            Tab(text: 'GIF'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _StickerLibraryTab(
+                sheetContext: widget.sheetContext,
+                onStickerFromLibrary: widget.onStickerFromLibrary,
+                onStickerCropped: widget.onStickerCropped,
+              ),
+              _GalleryTab(
+                mode: _GalleryMode.gif,
+                onPhotoPath: (_) async {},
+                onGifPath: widget.onGifPath,
+                onVideoPath: (_) async {},
+                sheetContext: widget.sheetContext,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _StickerLibraryTab extends StatefulWidget {
   final BuildContext sheetContext;
   final Future<void> Function(String path) onStickerFromLibrary;
@@ -279,8 +1386,8 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
     if (filter != null && !packs.any((p) => p.id == filter)) {
       filter = null;
     }
-    final files = await StickerCollectionService.instance
-        .stickerFilesForPack(filter);
+    final files =
+        await StickerCollectionService.instance.stickerFilesForPack(filter);
     if (mounted) {
       setState(() {
         _packs = packs;
@@ -289,6 +1396,20 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
         _files = files;
         _loading = false;
       });
+    }
+  }
+
+  Future<File?> _getStickerFile(String relPath) async {
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final absPath = p.join(docs.path, relPath);
+      final file = File(absPath);
+      if (await file.exists()) {
+        return file;
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 
@@ -352,39 +1473,142 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
     if (_files.isEmpty && _allStickerCount > 0) {
       return Column(
         children: [
-          if (_packs.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: DropdownButtonFormField<String?>(
-                value: _filterPackId,
-                decoration: const InputDecoration(
-                  labelText: 'Набор',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('Все стикеры'),
-                  ),
-                  ..._packs.map(
-                    (p) => DropdownMenuItem<String?>(
-                      value: p.id,
-                      child: Text(
-                        p.title,
-                        overflow: TextOverflow.ellipsis,
+          SizedBox(
+            height: 70,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              itemCount: _packs.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  // "All stickers" option
+                  final isSelected = _filterPackId == null;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => _filterPackId = null);
+                        unawaited(_reload());
+                      },
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                              border: isSelected
+                                  ? Border.all(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      width: 2)
+                                  : null,
+                            ),
+                            child: const Icon(Icons.apps, size: 28),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Все',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                  );
+                }
+
+                final packIndex = index - 1;
+                final pack = _packs[packIndex];
+                final isSelected = _filterPackId == pack.id;
+                final firstStickerRel = pack.stickerRelPaths.isNotEmpty
+                    ? pack.stickerRelPaths.first
+                    : null;
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() => _filterPackId = pack.id);
+                      unawaited(_reload());
+                    },
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: isSelected
+                                ? Border.all(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    width: 2)
+                                : null,
+                          ),
+                          child: firstStickerRel != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: FutureBuilder<File?>(
+                                    future: _getStickerFile(firstStickerRel),
+                                    builder: (context, snapshot) {
+                                      if (!snapshot.hasData ||
+                                          snapshot.data == null) {
+                                        return const Icon(Icons.sticky_note_2,
+                                            size: 24);
+                                      }
+                                      return Image.file(
+                                        snapshot.data!,
+                                        fit: BoxFit.cover,
+                                      );
+                                    },
+                                  ),
+                                )
+                              : const Icon(Icons.sticky_note_2, size: 24),
+                        ),
+                        const SizedBox(height: 4),
+                        SizedBox(
+                          width: 50,
+                          child: Text(
+                            pack.title,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-                onChanged: (v) {
-                  setState(() => _filterPackId = v);
-                  unawaited(_reload());
-                },
-              ),
+                );
+              },
             ),
+          ),
           Expanded(
             child: Center(
               child: Padding(
@@ -405,35 +1629,139 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
     return Column(
       children: [
         if (_packs.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: DropdownButtonFormField<String?>(
-              value: _filterPackId,
-              decoration: const InputDecoration(
-                labelText: 'Набор',
-                border: OutlineInputBorder(),
-                isDense: true,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('Все стикеры'),
-                ),
-                ..._packs.map(
-                  (p) => DropdownMenuItem<String?>(
-                    value: p.id,
-                    child: Text(
-                      p.title,
-                      overflow: TextOverflow.ellipsis,
+          SizedBox(
+            height: 70,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              itemCount: _packs.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  // "All stickers" option
+                  final isSelected = _filterPackId == null;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => _filterPackId = null);
+                        unawaited(_reload());
+                      },
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                              border: isSelected
+                                  ? Border.all(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      width: 2)
+                                  : null,
+                            ),
+                            child: const Icon(Icons.apps, size: 28),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Все',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final packIndex = index - 1;
+                final pack = _packs[packIndex];
+                final isSelected = _filterPackId == pack.id;
+                final firstStickerRel = pack.stickerRelPaths.isNotEmpty
+                    ? pack.stickerRelPaths.first
+                    : null;
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() => _filterPackId = pack.id);
+                      unawaited(_reload());
+                    },
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: isSelected
+                                ? Border.all(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    width: 2)
+                                : null,
+                          ),
+                          child: firstStickerRel != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: FutureBuilder<File?>(
+                                    future: _getStickerFile(firstStickerRel),
+                                    builder: (context, snapshot) {
+                                      if (!snapshot.hasData ||
+                                          snapshot.data == null) {
+                                        return const Icon(Icons.sticky_note_2,
+                                            size: 24);
+                                      }
+                                      return Image.file(
+                                        snapshot.data!,
+                                        fit: BoxFit.cover,
+                                      );
+                                    },
+                                  ),
+                                )
+                              : const Icon(Icons.sticky_note_2, size: 24),
+                        ),
+                        const SizedBox(height: 4),
+                        SizedBox(
+                          width: 50,
+                          child: Text(
+                            pack.title,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-              onChanged: (v) {
-                setState(() => _filterPackId = v);
-                unawaited(_reload());
+                );
               },
             ),
           ),
@@ -567,7 +1895,8 @@ class _FilesGalleryTabState extends State<_FilesGalleryTab> {
                 final name = norm.split('/').last;
                 return ListTile(
                   leading: const Icon(Icons.insert_drive_file_outlined),
-                  title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  title:
+                      Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
                     p,
                     maxLines: 1,
@@ -628,9 +1957,8 @@ class _GalleryTabState extends State<_GalleryTab> {
     }
   }
 
-  RequestType get _requestType => widget.mode == _GalleryMode.video
-      ? RequestType.video
-      : RequestType.image;
+  RequestType get _requestType =>
+      widget.mode == _GalleryMode.video ? RequestType.video : RequestType.image;
 
   Future<List<AssetEntity>> _filterRawByMode(List<AssetEntity> raw) async {
     if (widget.mode == _GalleryMode.gif) {
@@ -724,8 +2052,7 @@ class _GalleryTabState extends State<_GalleryTab> {
         });
 
       final withAll = sorted.where((p) => p.isAll);
-      final defaultAlbum =
-          withAll.isNotEmpty ? withAll.first : sorted.first;
+      final defaultAlbum = withAll.isNotEmpty ? withAll.first : sorted.first;
 
       await _loadAssetsForAlbum(sorted, defaultAlbum.id, permissionLimited);
     } catch (e) {
@@ -757,8 +2084,9 @@ class _GalleryTabState extends State<_GalleryTab> {
   }
 
   Future<void> _openPhotoAccessSettings() async {
-    final rt =
-        widget.mode == _GalleryMode.video ? RequestType.video : RequestType.image;
+    final rt = widget.mode == _GalleryMode.video
+        ? RequestType.video
+        : RequestType.image;
     if (RuntimePlatform.isIos) {
       await PhotoManager.presentLimited(type: rt);
     } else {
@@ -814,7 +2142,8 @@ class _GalleryTabState extends State<_GalleryTab> {
         await widget.onPhotoPath(raw);
         break;
       case _GalleryMode.video:
-        final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
+        final picked =
+            await ImagePicker().pickVideo(source: ImageSource.gallery);
         if (picked == null || !mounted) return;
         sheetNav.pop();
         await widget.onVideoPath(picked.path);
@@ -849,9 +2178,9 @@ class _GalleryTabState extends State<_GalleryTab> {
                 child: const Text('Повторить'),
               ),
               const SizedBox(height: 8),
-              TextButton(
+              const TextButton(
                 onPressed: PhotoManager.openSetting,
-                child: const Text('Настройки доступа'),
+                child: Text('Настройки доступа'),
               ),
             ],
           ),
@@ -941,7 +2270,8 @@ class _GalleryTabState extends State<_GalleryTab> {
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.25,
-                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        color:
+                            Theme.of(context).colorScheme.onSecondaryContainer,
                       ),
                     ),
                   ),
@@ -957,7 +2287,7 @@ class _GalleryTabState extends State<_GalleryTab> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
             child: DropdownButtonFormField<String>(
-              value: _selectedAlbumId,
+              initialValue: _selectedAlbumId,
               decoration: const InputDecoration(
                 labelText: 'Альбом',
                 isDense: true,

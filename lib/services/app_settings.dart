@@ -58,6 +58,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyLinkedDeviceNickname = 'linked_device_nickname';
   static const _keyPreLinkConnectionMode = 'pre_link_connection_mode';
   static const _keyEnabledBotIds = 'enabled_bot_ids';
+  static const _keyInputBarButtonOrder = 'input_bar_button_order';
 
   late SharedPreferences _prefs;
   bool _prefsReady = false;
@@ -120,6 +121,7 @@ class AppSettings extends ChangeNotifier {
       'linkedDeviceNickname': _linkedDeviceNickname,
       'preLinkConnectionMode': _preLinkConnectionMode,
       'enabledBotIds': _enabledBotIds,
+      'inputBarButtonConfig': _inputBarButtonConfig,
     };
     await WebAccountBundle.layeredWrite(kAppSettingsBackup, jsonEncode(json));
   }
@@ -159,6 +161,10 @@ class AppSettings extends ChangeNotifier {
   String _linkedDeviceNickname = '';
   int? _preLinkConnectionMode;
   List<String> _enabledBotIds = const [];
+  List<Map<String, dynamic>> _inputBarButtonConfig = const [
+    {'id': 'emoji_stickers', 'side': 'left'},
+    {'id': 'media_menu', 'side': 'left'},
+  ];
 
   ThemeMode get themeMode => _themeMode;
   int get accentColorIndex => _accentColorIndex;
@@ -202,6 +208,8 @@ class AppSettings extends ChangeNotifier {
   bool isBotEnabled(String botId) => _enabledBotIds.contains(botId);
   bool get canEditOwnProfileAndSettings => !isLinkedChildDevice;
   bool get channelsEnabled => connectionMode != 0;
+  List<Map<String, dynamic>> get inputBarButtonConfig => List.unmodifiable(_inputBarButtonConfig);
+  List<String> get inputBarButtonOrder => inputBarButtonConfig.map((e) => e['id'] as String).toList();
 
   /// На Android включает шрифт Noto Color Emoji (ближе к единому виду с iOS).
   bool get useIosStyleEmoji => _useIosStyleEmoji;
@@ -344,7 +352,8 @@ class AppSettings extends ChangeNotifier {
     final pre = _prefs.getInt(_keyPreLinkConnectionMode);
     _preLinkConnectionMode = pre?.clamp(0, 2).toInt();
     final hasBotPrefs = _prefs.containsKey(_keyEnabledBotIds);
-    final rawBotIds = _prefs.getStringList(_keyEnabledBotIds) ?? const <String>[];
+    final rawBotIds =
+        _prefs.getStringList(_keyEnabledBotIds) ?? const <String>[];
     _enabledBotIds = _sanitizeBotIds(rawBotIds);
     if (!hasBotPrefs) {
       final defaults = kBuiltinAiBots
@@ -381,6 +390,27 @@ class AppSettings extends ChangeNotifier {
     _notifyGroups = _prefs.getBool(_keyNotifyGroups) ?? true;
     _notifyChannels = _prefs.getBool(_keyNotifyChannels) ?? true;
     _callRingtone = (_prefs.getInt(_keyCallRingtone) ?? 0).clamp(0, 2);
+    final rawButtonOrder = _prefs.getString(_keyInputBarButtonOrder);
+    if (rawButtonOrder != null && rawButtonOrder.isNotEmpty) {
+      // Migration: check if old format (List<String>) or new format (List<Map>)
+      try {
+        final decoded = jsonDecode(rawButtonOrder);
+        if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
+          // New format: JSON string of List<Map>
+          _inputBarButtonConfig = List<Map<String, dynamic>>.from(decoded);
+        } else if (decoded is List) {
+          // Old format: List<String>
+          _inputBarButtonConfig = decoded.map((id) => {'id': id as String, 'side': 'left'} as Map<String, dynamic>).toList();
+        } else {
+          // Fallback: treat as single string (old format with single value)
+          _inputBarButtonConfig = [{'id': rawButtonOrder, 'side': 'left'}];
+        }
+      } catch (_) {
+        // Fallback: treat as old format with comma-separated values
+        final items = rawButtonOrder.split(',');
+        _inputBarButtonConfig = items.map((id) => {'id': id.trim(), 'side': 'left'} as Map<String, dynamic>).toList();
+      }
+    }
     var iconV = (_prefs.getInt(_keyAppIconVariant) ?? 0).clamp(0, 3);
     // Раньше: 2=mirror (теперь совпадает с классикой), 3=ai → 2.
     if (iconV == 2) iconV = 0;
@@ -419,17 +449,33 @@ class AppSettings extends ChangeNotifier {
     _notifySettingsChanged();
   }
 
+  Future<void> setInputBarButtonOrder(List<String> order) async {
+    _inputBarButtonConfig = List.unmodifiable(order.map((id) => {'id': id, 'side': 'left'}));
+    await _runPrefsWrite(
+      (p) => p.setString(_keyInputBarButtonOrder, jsonEncode(_inputBarButtonConfig)),
+    );
+    _notifySettingsChanged();
+  }
+
+  Future<void> setInputBarButtonConfig(List<Map<String, dynamic>> config) async {
+    _inputBarButtonConfig = List.unmodifiable(config);
+    await _runPrefsWrite(
+      (p) => p.setString(_keyInputBarButtonOrder, jsonEncode(_inputBarButtonConfig)),
+    );
+    _notifySettingsChanged();
+  }
+
   Future<void> _applyWebSettingsBackupIfPresent() async {
     try {
       final raw = await WebAccountBundle.layeredRead(kAppSettingsBackup);
       if (raw == null || raw.isEmpty) return;
       final m = jsonDecode(raw);
       if (m is! Map) return;
-      _themeMode =
-          ThemeMode.values[((m['themeMode'] as num?)?.toInt() ?? _themeMode.index).clamp(0, 2)];
-      _accentColorIndex = ((m['accentColorIndex'] as num?)?.toInt() ??
-              _accentColorIndex)
-          .clamp(0, accentColors.length - 1);
+      _themeMode = ThemeMode.values[
+          ((m['themeMode'] as num?)?.toInt() ?? _themeMode.index).clamp(0, 2)];
+      _accentColorIndex =
+          ((m['accentColorIndex'] as num?)?.toInt() ?? _accentColorIndex)
+              .clamp(0, accentColors.length - 1);
       _notificationsEnabled =
           m['notificationsEnabled'] as bool? ?? _notificationsEnabled;
       _notifSound = m['notifSound'] as bool? ?? _notifSound;
@@ -603,7 +649,8 @@ class AppSettings extends ChangeNotifier {
       await _runPrefsWrite((p) => p.remove('$_keyChatBgPrefix$peerId'));
     } else {
       _chatBgMap[peerId] = path;
-      await _runPrefsWrite((p) => p.setString('$_keyChatBgPrefix$peerId', path));
+      await _runPrefsWrite(
+          (p) => p.setString('$_keyChatBgPrefix$peerId', path));
     }
     _notifySettingsChanged();
   }
@@ -658,7 +705,8 @@ class AppSettings extends ChangeNotifier {
 
   Future<void> setOnlineStatusMode(int mode) async {
     _onlineStatusMode = mode.clamp(0, 2);
-    await _runPrefsWrite((p) => p.setInt(_keyOnlineStatusMode, _onlineStatusMode));
+    await _runPrefsWrite(
+        (p) => p.setInt(_keyOnlineStatusMode, _onlineStatusMode));
     _notifySettingsChanged();
   }
 
@@ -764,7 +812,6 @@ class AppSettings extends ChangeNotifier {
   }
 
   // ── Admin password (SHA-256 hash) ─────────────────────────────
-  // Default password: "Misha0000ff2010"
   static const _defaultAdminHash =
       '8676c71fc75fa72489c87aa387b752ad816a4ea4476995da848c76fa06dae4fd';
   static const _keyAdminPwdV2Migrated = 'admin_password_hash_v2_migrated';

@@ -17,6 +17,10 @@ class CallHistoryEntry {
   final int durationMs;
   final bool incoming;
   final bool video;
+  final String? recordingPath;
+  final String? transcript;
+  final String?
+      transcriptSpeakerLabels; // JSON: [{"speaker":"me"/"peer","text":"..."},...]
 
   const CallHistoryEntry({
     required this.id,
@@ -26,6 +30,9 @@ class CallHistoryEntry {
     required this.durationMs,
     required this.incoming,
     required this.video,
+    this.recordingPath,
+    this.transcript,
+    this.transcriptSpeakerLabels,
   });
 
   DateTime get endedAt =>
@@ -41,6 +48,9 @@ class CallHistoryEntry {
         'durationMs': durationMs,
         'incoming': incoming,
         'video': video,
+        'recordingPath': recordingPath,
+        'transcript': transcript,
+        'transcriptSpeakerLabels': transcriptSpeakerLabels,
       };
 
   factory CallHistoryEntry.fromJson(Map<String, dynamic> m) {
@@ -52,6 +62,9 @@ class CallHistoryEntry {
       durationMs: (m['durationMs'] as num?)?.toInt() ?? 0,
       incoming: m['incoming'] == true,
       video: m['video'] == true,
+      recordingPath: m['recordingPath'] as String?,
+      transcript: m['transcript'] as String?,
+      transcriptSpeakerLabels: m['transcriptSpeakerLabels'] as String?,
     );
   }
 }
@@ -133,6 +146,7 @@ class CallHistoryService {
     required Duration duration,
     required bool incoming,
     required bool video,
+    String? recordingPath,
   }) async {
     if (peerId.trim().length < 8) return;
     final normalized = peerId.trim().toLowerCase();
@@ -150,6 +164,7 @@ class CallHistoryService {
         durationMs: duration.inMilliseconds.clamp(0, 86400000 * 1000),
         incoming: incoming,
         video: video,
+        recordingPath: recordingPath,
       ),
     );
     while (_entries.length > _kMaxEntries) {
@@ -159,7 +174,29 @@ class CallHistoryService {
     await _save();
   }
 
-  /// Отклонённый входящий (ещё до поднятия трубки).
+  /// Сохранить расшифровку для записи звонка.
+  Future<void> setTranscript(String entryId, String transcript,
+      {String? speakerLabels}) async {
+    await _ensureReady();
+    final idx = _entries.indexWhere((e) => e.id == entryId);
+    if (idx < 0) return;
+    final old = _entries[idx];
+    _entries[idx] = CallHistoryEntry(
+      id: old.id,
+      peerId: old.peerId,
+      peerDisplayName: old.peerDisplayName,
+      endedAtMs: old.endedAtMs,
+      durationMs: old.durationMs,
+      incoming: old.incoming,
+      video: old.video,
+      recordingPath: old.recordingPath,
+      transcript: transcript,
+      transcriptSpeakerLabels: speakerLabels,
+    );
+    version.value++;
+    await _save();
+  }
+
   Future<void> recordRejectedIncoming({
     required String peerId,
     required bool video,

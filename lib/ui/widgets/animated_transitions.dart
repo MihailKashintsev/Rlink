@@ -21,7 +21,8 @@ class SmoothPageRoute<T> extends PageRouteBuilder<T> {
                 end: Offset.zero,
               ).animate(curvedAnimation),
               child: FadeTransition(
-                opacity: Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnimation),
+                opacity: Tween<double>(begin: 0.0, end: 1.0)
+                    .animate(curvedAnimation),
                 child: child,
               ),
             );
@@ -46,7 +47,8 @@ class ScaleFadeRoute<T> extends PageRouteBuilder<T> {
               reverseCurve: Curves.easeIn,
             );
             return ScaleTransition(
-              scale: Tween<double>(begin: 0.85, end: 1.0).animate(curvedAnimation),
+              scale:
+                  Tween<double>(begin: 0.85, end: 1.0).animate(curvedAnimation),
               child: FadeTransition(
                 opacity: curvedAnimation,
                 child: child,
@@ -112,14 +114,84 @@ class StaggeredListItem extends StatelessWidget {
       duration: duration,
       curve: Curves.easeOutCubic,
       builder: (_, value, child) {
-        final delayFrac = delay.inMilliseconds / (duration.inMilliseconds + maxDelay.inMilliseconds);
-        final adjusted = ((value - delayFrac) / (1.0 - delayFrac)).clamp(0.0, 1.0);
+        final delayFrac = delay.inMilliseconds /
+            (duration.inMilliseconds + maxDelay.inMilliseconds);
+        final adjusted =
+            ((value - delayFrac) / (1.0 - delayFrac)).clamp(0.0, 1.0);
         return Transform.translate(
           offset: Offset(0, 20 * (1.0 - adjusted)),
           child: Opacity(opacity: adjusted, child: child),
         );
       },
       child: child,
+    );
+  }
+}
+
+/// One-shot slide + fade animation for list rows.
+///
+/// Keeps expensive child subtrees static after the first entrance animation.
+class OneShotSlideFade extends StatefulWidget {
+  final Widget child;
+  final Offset beginOffset;
+  final Duration duration;
+  final Duration delay;
+  final Curve curve;
+
+  const OneShotSlideFade({
+    super.key,
+    required this.child,
+    this.beginOffset = const Offset(0, 0.08),
+    this.duration = const Duration(milliseconds: 260),
+    this.delay = Duration.zero,
+    this.curve = Curves.easeOutCubic,
+  });
+
+  @override
+  State<OneShotSlideFade> createState() => _OneShotSlideFadeState();
+}
+
+class _OneShotSlideFadeState extends State<OneShotSlideFade>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.duration + widget.delay,
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return widget.child;
+    }
+
+    final totalMs = _controller.duration?.inMilliseconds ?? 1;
+    final start = (widget.delay.inMilliseconds / totalMs).clamp(0.0, 0.95);
+    final animation = CurvedAnimation(
+      parent: _controller,
+      curve: Interval(start, 1, curve: widget.curve),
+    );
+
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: widget.beginOffset,
+          end: Offset.zero,
+        ).animate(animation),
+        child: widget.child,
+      ),
     );
   }
 }
@@ -144,8 +216,10 @@ class ScaleIn extends StatelessWidget {
       duration: duration + delay,
       curve: Curves.elasticOut,
       builder: (_, value, child) {
-        final delayFrac = delay.inMilliseconds / (duration + delay).inMilliseconds;
-        final adjusted = ((value - delayFrac) / (1.0 - delayFrac)).clamp(0.0, 1.0);
+        final delayFrac =
+            delay.inMilliseconds / (duration + delay).inMilliseconds;
+        final adjusted =
+            ((value - delayFrac) / (1.0 - delayFrac)).clamp(0.0, 1.0);
         return Transform.scale(
           scale: adjusted,
           child: Opacity(opacity: adjusted.clamp(0.0, 1.0), child: child),

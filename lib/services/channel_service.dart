@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -388,12 +390,38 @@ class ChannelService {
         }
         if (oldVersion < 18) {
           try {
-            await db.execute('ALTER TABLE channels ADD COLUMN drive_file_url TEXT');
+            await db
+                .execute('ALTER TABLE channels ADD COLUMN drive_file_url TEXT');
           } catch (_) {}
         }
         if (oldVersion < 19) {
           try {
-            await db.execute('ALTER TABLE channels ADD COLUMN drive_keys_url TEXT');
+            await db
+                .execute('ALTER TABLE channels ADD COLUMN drive_keys_url TEXT');
+          } catch (_) {}
+        }
+        if (oldVersion < 20) {
+          try {
+            await db.execute(
+                'ALTER TABLE channels ADD COLUMN drive_avatar_file_id TEXT');
+          } catch (_) {}
+        }
+        if (oldVersion < 20) {
+          try {
+            await db.execute(
+                'ALTER TABLE channels ADD COLUMN drive_avatar_url TEXT');
+          } catch (_) {}
+        }
+        if (oldVersion < 20) {
+          try {
+            await db.execute(
+                'ALTER TABLE channels ADD COLUMN drive_banner_file_id TEXT');
+          } catch (_) {}
+        }
+        if (oldVersion < 20) {
+          try {
+            await db.execute(
+                'ALTER TABLE channels ADD COLUMN drive_banner_url TEXT');
           } catch (_) {}
         }
       },
@@ -466,6 +494,10 @@ class ChannelService {
       'drive_file_id': channel.driveFileId,
       'drive_file_url': channel.driveFileUrl,
       'drive_keys_url': channel.driveKeysUrl,
+      'drive_avatar_file_id': channel.driveAvatarFileId,
+      'drive_avatar_url': channel.driveAvatarUrl,
+      'drive_banner_file_id': channel.driveBannerFileId,
+      'drive_banner_url': channel.driveBannerUrl,
       'allow_mods_manage_drive_account':
           channel.allowModeratorsManageDriveAccount ? 1 : 0,
     });
@@ -526,6 +558,10 @@ class ChannelService {
             'drive_file_id': ch.driveFileId,
             'drive_file_url': ch.driveFileUrl,
             'drive_keys_url': ch.driveKeysUrl,
+            'drive_avatar_file_id': ch.driveAvatarFileId,
+            'drive_avatar_url': ch.driveAvatarUrl,
+            'drive_banner_file_id': ch.driveBannerFileId,
+            'drive_banner_url': ch.driveBannerUrl,
             'allow_mods_manage_drive_account':
                 ch.allowModeratorsManageDriveAccount ? 1 : 0,
           },
@@ -804,6 +840,10 @@ class ChannelService {
         driveFileId: r['drive_file_id'] as String?,
         driveFileUrl: r['drive_file_url'] as String?,
         driveKeysUrl: r['drive_keys_url'] as String?,
+        driveAvatarFileId: r['drive_avatar_file_id'] as String?,
+        driveAvatarUrl: r['drive_avatar_url'] as String?,
+        driveBannerFileId: r['drive_banner_file_id'] as String?,
+        driveBannerUrl: r['drive_banner_url'] as String?,
         allowModeratorsManageDriveAccount:
             (r['allow_mods_manage_drive_account'] as int?) == 1,
       );
@@ -837,6 +877,10 @@ class ChannelService {
         'drive_file_id': ch.driveFileId,
         'drive_file_url': ch.driveFileUrl,
         'drive_keys_url': ch.driveKeysUrl,
+        'drive_avatar_file_id': ch.driveAvatarFileId,
+        'drive_avatar_url': ch.driveAvatarUrl,
+        'drive_banner_file_id': ch.driveBannerFileId,
+        'drive_banner_url': ch.driveBannerUrl,
         'allow_mods_manage_drive_account':
             ch.allowModeratorsManageDriveAccount ? 1 : 0,
       },
@@ -1108,6 +1152,10 @@ class ChannelService {
       'drive_file_id': ch.driveFileId,
       'drive_file_url': ch.driveFileUrl,
       'drive_keys_url': ch.driveKeysUrl,
+      'drive_avatar_file_id': ch.driveAvatarFileId,
+      'drive_avatar_url': ch.driveAvatarUrl,
+      'drive_banner_file_id': ch.driveBannerFileId,
+      'drive_banner_url': ch.driveBannerUrl,
       'allow_mods_manage_drive_account':
           ch.allowModeratorsManageDriveAccount ? 1 : 0,
     });
@@ -1558,11 +1606,13 @@ class ChannelService {
         orderBy: 'timestamp ASC',
       );
       final postMap = Map<String, dynamic>.from(r);
-      final postMedia = kIsWeb ? const <String, dynamic>{} : await _readRowMediaData(postMap);
+      final postMedia =
+          kIsWeb ? const <String, dynamic>{} : await _readRowMediaData(postMap);
       final commentsList = <Map<String, dynamic>>[];
       for (final c in crows) {
         final cm = Map<String, dynamic>.from(c);
-        final commentMedia = kIsWeb ? const <String, dynamic>{} : await _readRowMediaData(cm);
+        final commentMedia =
+            kIsWeb ? const <String, dynamic>{} : await _readRowMediaData(cm);
         commentsList.add({...cm, ...commentMedia});
       }
       posts.add({
@@ -1581,7 +1631,8 @@ class ChannelService {
   }
 
   /// Читает медиафайлы поста/комментария и возвращает base64-данные для включения в снимок.
-  Future<Map<String, dynamic>> _readRowMediaData(Map<String, dynamic> row) async {
+  Future<Map<String, dynamic>> _readRowMediaData(
+      Map<String, dynamic> row) async {
     final result = <String, dynamic>{};
     await _attachMediaBytes(row, result, 'image_path', '_img', '_img_n');
     await _attachMediaBytes(row, result, 'video_path', '_vid', '_vid_n');
@@ -1590,8 +1641,12 @@ class ChannelService {
     return result;
   }
 
-  Future<void> _attachMediaBytes(Map<String, dynamic> row, Map<String, dynamic> out,
-      String pathKey, String dataKey, String nameKey) async {
+  Future<void> _attachMediaBytes(
+      Map<String, dynamic> row,
+      Map<String, dynamic> out,
+      String pathKey,
+      String dataKey,
+      String nameKey) async {
     final path = row[pathKey] as String?;
     if (path == null || path.isEmpty) return;
     try {
@@ -1698,7 +1753,8 @@ class ChannelService {
   }
 
   /// Восстанавливает медиафайлы из base64-полей снимка, возвращает новые пути для DB.
-  Future<Map<String, String>> _restoreRowMediaFiles(Map<String, dynamic> entry) async {
+  Future<Map<String, String>> _restoreRowMediaFiles(
+      Map<String, dynamic> entry) async {
     final result = <String, String>{};
     final docsDir = await getApplicationDocumentsDirectory();
     await _restoreMediaField(entry, result, '_img', '_img_n', 'image_path',
@@ -1764,6 +1820,66 @@ class ChannelService {
     final ch = await getChannel(fullId);
     if (ch == null) return;
     await updateChannel(ch.copyWith(avatarImagePath: localImagePath));
+  }
+
+  /// Download channel avatar from Google Drive if URL is available and local file missing.
+  Future<void> maybeDownloadChannelAvatarFromDrive(String channelId) async {
+    final ch = await getChannel(channelId);
+    if (ch == null) return;
+    if (ch.driveAvatarUrl == null || ch.driveAvatarUrl!.isEmpty) return;
+    if (ch.avatarImagePath != null) {
+      final rp = ImageService.instance.resolveStoredPath(ch.avatarImagePath);
+      if (rp != null && File(rp).existsSync())
+        return; // Already have local file
+    }
+    try {
+      final dio = Dio();
+      final response = await dio.get<Uint8List>(
+        ch.driveAvatarUrl!,
+        options: Options(
+            responseType: ResponseType.bytes,
+            receiveTimeout: const Duration(seconds: 30)),
+      );
+      if (response.data != null) {
+        final path = await ImageService.instance
+            .saveContactAvatar(channelId, response.data!);
+        await updateChannel(ch.copyWith(avatarImagePath: path));
+        debugPrint(
+            '[RLINK][Channel] Downloaded avatar from Drive for $channelId');
+      }
+    } catch (e) {
+      debugPrint('[RLINK][Channel] Failed to download avatar from Drive: $e');
+    }
+  }
+
+  /// Download channel banner from Google Drive if URL is available and local file missing.
+  Future<void> maybeDownloadChannelBannerFromDrive(String channelId) async {
+    final ch = await getChannel(channelId);
+    if (ch == null) return;
+    if (ch.driveBannerUrl == null || ch.driveBannerUrl!.isEmpty) return;
+    if (ch.bannerImagePath != null) {
+      final rp = ImageService.instance.resolveStoredPath(ch.bannerImagePath);
+      if (rp != null && File(rp).existsSync())
+        return; // Already have local file
+    }
+    try {
+      final dio = Dio();
+      final response = await dio.get<Uint8List>(
+        ch.driveBannerUrl!,
+        options: Options(
+            responseType: ResponseType.bytes,
+            receiveTimeout: const Duration(seconds: 30)),
+      );
+      if (response.data != null) {
+        final path = await ImageService.instance
+            .saveBannerImage(channelId, response.data!);
+        await updateChannel(ch.copyWith(bannerImagePath: path));
+        debugPrint(
+            '[RLINK][Channel] Downloaded banner from Drive for $channelId');
+      }
+    } catch (e) {
+      debugPrint('[RLINK][Channel] Failed to download banner from Drive: $e');
+    }
   }
 
   Future<void> flushPendingMediaForPost(String postId) async {

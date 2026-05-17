@@ -95,6 +95,40 @@ class StickerPackCardBubble extends StatelessWidget {
       _snack(context, 'В наборе нет данных');
       return;
     }
+    
+    // Use pre-downloaded files if available
+    final downloadedPathsRaw = payload['downloadedPaths'] as List?;
+    if (downloadedPathsRaw != null && downloadedPathsRaw.isNotEmpty) {
+      try {
+        final docs = await getApplicationDocumentsDirectory();
+        final absPaths = <String>[];
+        for (final relPath in downloadedPathsRaw) {
+          if (relPath is! String) continue;
+          final absPath = File(p.join(docs.path, relPath));
+          if (await absPath.exists()) {
+            absPaths.add(absPath.path);
+          }
+        }
+        if (absPaths.isEmpty) {
+          _snack(context, 'Файлы не найдены');
+          return;
+        }
+        await StickerCollectionService.instance.importPackFromAbsolutePaths(
+          title: _title,
+          absPaths: absPaths,
+          sourcePeerId: sourcePeerId,
+          sourcePeerLabel: sourcePeerLabel,
+        );
+        if (!context.mounted) return;
+        _snack(context, 'Набор добавлен');
+      } catch (e) {
+        if (!context.mounted) return;
+        _snack(context, 'Ошибка: $e');
+      }
+      return;
+    }
+    
+    // Fallback to decoding from base64 (old behavior)
     final tmp = await getTemporaryDirectory();
     final absPaths = <String>[];
     try {

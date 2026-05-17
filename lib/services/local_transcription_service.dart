@@ -1,22 +1,60 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
-import 'package:flutter_whisper_kit/flutter_whisper_kit.dart';
 
-/// Локальная (on-device) расшифровка аудио через WhisperKit.
+import 'whisper_web_service.dart';
+import 'huggingface_stt_service.dart';
+
+// Conditional imports: use IO-specific code on native platforms, stub on web
+import 'local_transcription_service_stub.dart'
+    if (dart.library.io) 'local_transcription_service_io.dart';
+
+/// Локальная (on-device) расшифровка аудио через Whisper.
 ///
-/// Сейчас поддержка включена для iOS/macOS (Apple-платформы).
+/// iOS/macOS: cloud-first via Hugging Face; local WhisperKit dependency removed.
+/// Android/Windows/Linux: whisper.cpp через FFI
+/// Web: whisper.cpp через WASM (модель кешируется в IndexedDB)
 class LocalTranscriptionService {
   LocalTranscriptionService._();
-  static final LocalTranscriptionService instance = LocalTranscriptionService._();
+  static final LocalTranscriptionService instance =
+      LocalTranscriptionService._();
 
-  final FlutterWhisperKit _whisper = FlutterWhisperKit();
   bool _modelReady = false;
   bool _loadingModel = false;
+  bool preferCloud = true;
 
-  bool get isSupported {
-    if (kIsWeb) return false;
-    return Platform.isIOS || Platform.isMacOS;
+  /// Все платформы поддерживают локальную расшифровку.
+  bool get isSupported => true;
+
+  /// Web-платформа.
+  bool get _isWeb => kIsWeb;
+
+  /// Apple-платформа (только на native, через LocalTranscriptionServiceIO)
+  bool get _isApplePlatform =>
+      !kIsWeb && LocalTranscriptionServiceIO.isApplePlatform;
+
+  /// Преобразует locale приложения в код языка для Whisper.
+  /// Поддерживаемые языки Whisper: ru, en, es, de, fr, it, pt, nl, pl, tr, ja, ko, zh
+  static String mapLocaleToWhisperLanguage(String appLocale) {
+    if (appLocale == 'system') {
+      // Для системного языка используем русский как дефолт
+      return 'ru';
+    }
+    // Прямое маппинг для поддерживаемых языков
+    final supported = {
+      'ru': 'ru',
+      'en': 'en',
+      'es': 'es',
+      'de': 'de',
+      'fr': 'fr',
+      'it': 'it',
+      'pt': 'pt',
+      'nl': 'nl',
+      'pl': 'pl',
+      'tr': 'tr',
+      'ja': 'ja',
+      'ko': 'ko',
+      'zh': 'zh',
+    };
+    return supported[appLocale] ?? 'ru';
   }
 
   Future<void> _ensureModel() async {
@@ -29,54 +67,77 @@ class LocalTranscriptionService {
     }
     _loadingModel = true;
     try {
-      // `base` — мультиязычная модель; `tiny` даёт хуже русский и чаще уезжает в латиницу/англ.
-      final loaded = await _whisper.loadModel('base');
-      if (loaded == null || loaded.isEmpty) {
-        throw StateError('Whisper model load failed');
+      if (_isWeb) {
+        await WhisperWebService.instance.init();
+      } else if (_isApplePlatform) {
+        throw StateError(
+          'Локальная Apple-расшифровка отключена: используется cloud STT.',
+        );
+      } else {
+        // Desktop/Android: use LocalTranscriptionServiceIO for FFI
+        await LocalTranscriptionServiceIO.ensureModel(isApple: false);
       }
       _modelReady = true;
+    } catch (e) {
+      throw StateError('Не удалось загрузить модель для расшифровки: $e');
     } finally {
       _loadingModel = false;
     }
   }
 
-  Future<String> transcribeFile(String audioPath, {String language = 'ru'}) async {
-    if (!isSupported) {
-      throw UnsupportedError('Локальная расшифровка доступна на iOS/macOS.');
+  Future<String> transcribeFile(String audioPath,
+      {String language = 'ru'}) async {
+    if (audioPath.isEmpty) {
+      throw ArgumentError('Файл не найден: $audioPath');
     }
-    if (audioPath.isEmpty || !File(audioPath).existsSync()) {
-      throw ArgumentError('Файл голосового не найден.');
+    Object? cloudError;
+    if (preferCloud) {
+      try {
+        return await HuggingFaceSttService.instance.transcribeFile(
+          audioPath,
+          language: language,
+        );
+      } catch (e) {
+        cloudError = e;
+        debugPrint('[STT] Hugging Face failed, falling back locally: $e');
+      }
     }
-    await _ensureModel();
-    // Явная JSON-сборка: только `task: transcribe` (не translate — иначе выход на английском).
-    final decode = DecodingOptions.fromJson(<String, dynamic>{
-      'verbose': false,
-      'task': 'transcribe',
-      'language': language,
-      'detectLanguage': false,
-      'temperature': 0.0,
-      'temperatureIncrementOnFallback': 0.2,
-      'temperatureFallbackCount': 5,
-      'sampleLength': 224,
-      'topK': 5,
-      'usePrefillPrompt': false,
-      'usePrefillCache': false,
-      'skipSpecialTokens': true,
-      'withoutTimestamps': true,
-      'wordTimestamps': false,
-      'clipTimestamps': <double>[0.0],
-      'concurrentWorkerCount': 4,
-      'chunkingStrategy': 'vad',
-    });
-    final result = await _whisper.transcribeFromFile(
-      audioPath,
-      options: decode,
+
+    try {
+      await _ensureModel();
+
+      if (_isWeb) {
+        return _transcribeWeb(audioPath, language);
+      } else if (_isApplePlatform) {
+        return _transcribeApple(audioPath, language);
+      } else {
+        return _transcribeCpp(audioPath, language);
+      }
+    } catch (localError) {
+      if (cloudError != null) {
+        throw StateError(
+          'Сетевая расшифровка недоступна ($cloudError), '
+          'локальная модель тоже не запустилась ($localError)',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<String> _transcribeApple(String audioPath, String language) async {
+    throw StateError(
+      'Локальная Apple-расшифровка отключена: используется cloud STT.',
     );
-    final text = (result?.text ?? '').trim();
-    if (text.isEmpty) {
-      throw StateError('Речь не распознана');
-    }
-    return text;
+  }
+
+  Future<String> _transcribeCpp(String audioPath, String language) async {
+    return LocalTranscriptionServiceIO.transcribeCpp(audioPath, language);
+  }
+
+  Future<String> _transcribeWeb(String audioPath, String language) async {
+    final text = await WhisperWebService.instance
+        .transcribe(audioPath, language: language);
+    if (text.trim().isEmpty) throw StateError('Речь не распознана');
+    return text.trim();
   }
 }
-

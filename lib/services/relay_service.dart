@@ -66,13 +66,33 @@ class RelayService with WidgetsBindingObserver {
   // ── Reliability state ────────────────────────────────────────
   /// Время последнего полученного pong от сервера (для watchdog'а).
   DateTime _lastPongAt = DateTime.now();
+
   /// Счётчик неудачных попыток подключения (для exp backoff).
   int _retryCount = 0;
+
+  /// Rate limiting backoff timer
+  Timer? _retryTimer;
+  int _retryBackoffMs = 100; // Start with 100ms, exponential backoff
+
+  /// Handle rate limiting by adding retry delay
+  void _handleRateLimit() {
+    _retryTimer?.cancel();
+    // Exponential backoff: 100ms -> 200ms -> 400ms -> 800ms -> max 5s
+    _retryBackoffMs = (_retryBackoffMs * 2).clamp(100, 5000);
+    _relayTrace(
+        '[RLINK][Relay] Rate limited - retrying in ${_retryBackoffMs}ms');
+    _retryTimer = Timer(Duration(milliseconds: _retryBackoffMs), () {
+      _retryBackoffMs = 100; // Reset backoff
+    });
+  }
+
   /// Один раз навешиваем lifecycle-наблюдатель.
   bool _lifecycleAttached = false;
 
-  /// Публичный relay (VPS FirstByte, MSK — wss через nginx).
-  static const defaultServerUrl = 'wss://185.244.172.90.nip.io';
+  /// Default public relay server.
+  /// Захардкожен — пользователь не может переопределить через настройки
+  /// (см. serverUrl getter и connect() ниже).
+  static const defaultServerUrl = 'ws://185.244.172.90:8080';
   static const List<String> fallbackServerUrls = <String>[
     defaultServerUrl,
   ];
@@ -85,12 +105,12 @@ class RelayService with WidgetsBindingObserver {
   bool _disposed = false;
   bool _intentionalClose = false;
   bool _reconnectInProgress = false;
-  DateTime _lastReconnectRequestAt =
-      DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastReconnectRequestAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _connectEpoch = 0;
 
   /// Current connection state
-  final ValueNotifier<RelayState> state = ValueNotifier(RelayState.disconnected);
+  final ValueNotifier<RelayState> state =
+      ValueNotifier(RelayState.disconnected);
   final ValueNotifier<String?> lastError = ValueNotifier<String?>(null);
 
   /// Online users count from server
@@ -141,11 +161,13 @@ class RelayService with WidgetsBindingObserver {
   /// Ответ relay на `bot_register_start` (Lib / регистрация бота).
   void Function(Map<String, dynamic> msg)? onBotRegisterAck;
 
-  final Map<String, Completer<Map<String, dynamic>>> _botOwnerAckCompleters = {};
-  final Map<String, Completer<Map<String, dynamic>>> _adminBotAckCompleters = {};
-  final Map<String, Completer<Map<String, dynamic>>> _botInfoAckCompleters = {};
-  final Map<String, Completer<Map<String, dynamic>>> _botCommandsSetAckCompleters =
+  final Map<String, Completer<Map<String, dynamic>>> _botOwnerAckCompleters =
       {};
+  final Map<String, Completer<Map<String, dynamic>>> _adminBotAckCompleters =
+      {};
+  final Map<String, Completer<Map<String, dynamic>>> _botInfoAckCompleters = {};
+  final Map<String, Completer<Map<String, dynamic>>>
+      _botCommandsSetAckCompleters = {};
 
   /// Peer X25519 keys discovered via relay
   final Map<String, String> _peerX25519Keys = {};
@@ -172,8 +194,10 @@ class RelayService with WidgetsBindingObserver {
 
   /// Online presence of known peers
   final Map<String, bool> _peerOnline = {};
+
   /// Peer nicks discovered via relay presence
   final Map<String, String> _peerNicks = {};
+
   /// Peer usernames discovered via relay presence
   final Map<String, String> _peerUsernames = {};
   final ValueNotifier<int> presenceVersion = ValueNotifier(0);
@@ -207,7 +231,15 @@ class RelayService with WidgetsBindingObserver {
   }
 
   /// Check if a peer is online on relay
-  bool isPeerOnline(String publicKey) => _peerOnline[publicKey] ?? false;
+  bool isPeerOnline(String publicKey) =>
+      _peerOnline[publicKey] ?? _peerOnline[publicKey.toLowerCase()] ?? false;
+
+  /// True only when relay explicitly reported this peer offline.
+  bool isPeerKnownOffline(String publicKey) {
+    final value =
+        _peerOnline[publicKey] ?? _peerOnline[publicKey.toLowerCase()];
+    return value == false;
+  }
 
   /// Register a peer's username from gossip profile packet
   void registerPeerUsername(String publicKey, String username) {
@@ -252,9 +284,7 @@ class RelayService with WidgetsBindingObserver {
     if (k.length != 64) return const [];
     final raw = _relayBotCommandsById[k];
     if (raw == null || raw.isEmpty) return const [];
-    return raw
-        .map((e) => Map<String, String>.from(e))
-        .toList(growable: false);
+    return raw.map((e) => Map<String, String>.from(e)).toList(growable: false);
   }
 
   static String _normalizeBotInfoHandle(String raw) {
@@ -314,7 +344,8 @@ class RelayService with WidgetsBindingObserver {
     if (cached != null && exp != null && now.isBefore(exp)) {
       return Map<String, dynamic>.from(cached);
     }
-    if (!isConnected) return cached != null ? Map<String, dynamic>.from(cached) : null;
+    if (!isConnected)
+      return cached != null ? Map<String, dynamic>.from(cached) : null;
     final reqId = _newBotOwnerReqId();
     final c = Completer<Map<String, dynamic>>();
     _botInfoAckCompleters[reqId] = c;
@@ -423,7 +454,8 @@ class RelayService with WidgetsBindingObserver {
     }
   }
 
-  void _applyRelayBotVisualFromSnapshot(String idLower, String avatarUrl, String bannerUrl) {
+  void _applyRelayBotVisualFromSnapshot(
+      String idLower, String avatarUrl, String bannerUrl) {
     final a = avatarUrl.trim();
     final b = bannerUrl.trim();
     if (a.isNotEmpty) {
@@ -438,7 +470,8 @@ class RelayService with WidgetsBindingObserver {
     }
   }
 
-  void _mergeRelayBotVisualFromSearch(String idLower, String? avatarUrl, String? bannerUrl) {
+  void _mergeRelayBotVisualFromSearch(
+      String idLower, String? avatarUrl, String? bannerUrl) {
     final a = avatarUrl?.trim() ?? '';
     final b = bannerUrl?.trim() ?? '';
     if (a.isNotEmpty) _relayBotAvatarUrl[idLower] = a;
@@ -470,7 +503,9 @@ class RelayService with WidgetsBindingObserver {
 
   Future<void> connect() async {
     if (state.value == RelayState.connected ||
-        state.value == RelayState.connecting) { return; }
+        state.value == RelayState.connecting) {
+      return;
+    }
     final connectEpoch = ++_connectEpoch;
 
     // Режим «только Bluetooth» — relay не используем.
@@ -532,9 +567,8 @@ class RelayService with WidgetsBindingObserver {
       }
     }
     if (connectedUrl == null || _channel == null) {
-      final msg =
-          (lastConnectError ?? Exception('No relay endpoint available'))
-              .toString();
+      final msg = (lastConnectError ?? Exception('No relay endpoint available'))
+          .toString();
       debugPrint('[RLINK][Relay] Connection failed: $msg');
       lastError.value = msg;
       state.value = RelayState.disconnected;
@@ -543,7 +577,6 @@ class RelayService with WidgetsBindingObserver {
     }
 
     try {
-
       // Listen for messages
       final stream = _channelStream;
       if (stream == null) {
@@ -622,8 +655,7 @@ class RelayService with WidgetsBindingObserver {
       _relayTrace('[RLINK][Relay] Reconnect skipped: already in progress');
       return;
     }
-    if (now.difference(_lastReconnectRequestAt) <
-        const Duration(seconds: 2)) {
+    if (now.difference(_lastReconnectRequestAt) < const Duration(seconds: 2)) {
       _relayTrace('[RLINK][Relay] Reconnect skipped: throttled');
       return;
     }
@@ -659,7 +691,9 @@ class RelayService with WidgetsBindingObserver {
     _subscription?.cancel();
     _chunkQueue.clear();
     _draining = false;
-    try { _channel?.sink.close(); } catch (_) {}
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
     _channel = null;
     _channelStream = null;
     state.value = RelayState.disconnected;
@@ -677,6 +711,7 @@ class RelayService with WidgetsBindingObserver {
     _channelStream = null;
     _chunkQueue.clear();
     _draining = false;
+    _blobAssemblies.clear();
     state.value = RelayState.disconnected;
     final detail = cc == null
         ? ''
@@ -705,7 +740,8 @@ class RelayService with WidgetsBindingObserver {
     // Экспоненциальный backoff: 1, 2, 4, 8, 16, 30, 30, … секунд (cap 30).
     final delay = _retryCount >= 5 ? 30 : (1 << _retryCount);
     _retryCount++;
-    _relayTrace('[RLINK][Relay] Reconnect in ${delay}s (attempt #$_retryCount)');
+    _relayTrace(
+        '[RLINK][Relay] Reconnect in ${delay}s (attempt #$_retryCount)');
     _reconnectTimer = Timer(Duration(seconds: delay), () {
       if (!_disposed &&
           !_intentionalClose &&
@@ -730,7 +766,8 @@ class RelayService with WidgetsBindingObserver {
   // (ValueNotifier<RelayState>). Линт avoid_renaming_method_parameters
   // здесь игнорируется осознанно.
   @override
-  void didChangeAppLifecycleState(AppLifecycleState lifecycle) { // ignore: avoid_renaming_method_parameters
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    // ignore: avoid_renaming_method_parameters
     if (lifecycle != AppLifecycleState.resumed) return;
     if (state.value != RelayState.connected) {
       _relayTrace(
@@ -798,7 +835,8 @@ class RelayService with WidgetsBindingObserver {
           packet.type == 'raw' ||
           packet.type == 'pair_req' ||
           packet.type == 'pair_acc') {
-        _relayTrace('[RLINK][Relay][TX] type=${packet.type} id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+        _relayTrace(
+            '[RLINK][Relay][TX] type=${packet.type} id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
             'to=${_relayShort(recipientKey ?? '')} rid=${_relayShort(packet.recipientId ?? '')} '
             'r8=${packet.payload['r'] ?? '-'}');
       }
@@ -839,7 +877,8 @@ class RelayService with WidgetsBindingObserver {
       _startDraining();
     } else {
       if (packet.type == 'ether') {
-        _relayTrace('[RLINK][Relay][TX] type=ether id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+        _relayTrace(
+            '[RLINK][Relay][TX] type=ether id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
             'len=${(packet.payload['text'] as String?)?.length ?? 0}');
       }
       await _safeSend(envelope, context: 'broadcastPacket:${packet.type}');
@@ -864,13 +903,24 @@ class RelayService with WidgetsBindingObserver {
     String? fileName,
     bool viewOnce = false,
   }) async {
-    if (!isConnected) return;
+    debugPrint(
+        '[RLINK][Relay] sendBlob called: recipient=$recipientKey from=$fromId msgId=$msgId size=${compressedData.length} voice=$isVoice video=$isVideo file=$isFile sticker=$isSticker');
+    if (!isConnected) {
+      debugPrint('[RLINK][Relay] sendBlob: NOT CONNECTED, aborting');
+      return;
+    }
     final b64 = base64Encode(compressedData);
+    debugPrint('[RLINK][Relay] sendBlob: base64 encoded length=${b64.length}');
+    // Use short key for relay routing (rid8), include full key in 'fullTo' for verification
+    // Recipient will verify that the full key matches their public key
+    final rid8 =
+        recipientKey.length > 8 ? recipientKey.substring(0, 8) : recipientKey;
     // Send as 'blob' type directly — single base64, no packet wrapping.
-    // The relay server routes via 'to', replaces it with 'from', and forwards.
+    // The relay server routes via 'to' (rid8), replaces it with 'from', and forwards.
     final msg = <String, dynamic>{
       'type': 'blob',
-      'to': recipientKey,
+      'to': rid8, // Short key for relay routing
+      'fullTo': recipientKey, // Full key for recipient verification
       'msgId': msgId,
       'from': fromId,
       'data': b64,
@@ -882,9 +932,12 @@ class RelayService with WidgetsBindingObserver {
       if (fileName != null) 'fname': fileName,
       if (viewOnce) 'vo': true,
     };
+    debugPrint(
+        '[RLINK][Relay] sendBlob: message prepared with to=$rid8 fullTo=$recipientKey, sending...');
     try {
       await _safeSend(msg, context: 'sendBlob');
-      debugPrint('[RLINK][Relay] Sent blob ${compressedData.length} bytes for $msgId');
+      debugPrint(
+          '[RLINK][Relay] Sent blob ${compressedData.length} bytes for $msgId to $rid8 (full: $recipientKey)');
     } catch (e) {
       debugPrint('[RLINK][Relay] Failed to send blob: $e');
     }
@@ -911,10 +964,14 @@ class RelayService with WidgetsBindingObserver {
   }) async {
     if (!isConnected) return;
     final b64 = base64Encode(chunkData);
+    // Use short key for relay routing (rid8), include full key in 'fullTo' for verification
+    final rid8 =
+        recipientKey.length > 8 ? recipientKey.substring(0, 8) : recipientKey;
     // Meta flags + filename only in first chunk — saves bytes.
     final msg = <String, dynamic>{
       'type': 'blob',
-      'to': recipientKey,
+      'to': rid8, // Short key for relay routing
+      'fullTo': recipientKey, // Full key for recipient verification
       'msgId': msgId,
       'from': fromId,
       'data': b64,
@@ -955,7 +1012,8 @@ class RelayService with WidgetsBindingObserver {
       return;
     }
     _lastSearchQuery = q;
-    debugPrint('[RLINK][Relay] Searching for: "$q" (known online: ${knownOnlinePeers.length})');
+    debugPrint(
+        '[RLINK][Relay] Searching for: "$q" (known online: ${knownOnlinePeers.length})');
 
     // Immediately search local presence cache + contacts DB (instant results)
     final localResults = _searchLocalPeers(q);
@@ -987,7 +1045,8 @@ class RelayService with WidgetsBindingObserver {
       if (entry.key == myKey) continue;
 
       final publicKey = entry.key;
-      final shortId = publicKey.length > 8 ? publicKey.substring(0, 8) : publicKey;
+      final shortId =
+          publicKey.length > 8 ? publicKey.substring(0, 8) : publicKey;
       final nick = _peerNicks[publicKey] ?? '';
       final uname = _peerUsernames[publicKey] ?? '';
 
@@ -1010,7 +1069,9 @@ class RelayService with WidgetsBindingObserver {
     for (final c in ChatStorageService.instance.contactsNotifier.value) {
       if (c.publicKeyHex == myKey) continue;
       if (results.containsKey(c.publicKeyHex)) continue;
-      final shortId = c.publicKeyHex.length > 8 ? c.publicKeyHex.substring(0, 8) : c.publicKeyHex;
+      final shortId = c.publicKeyHex.length > 8
+          ? c.publicKeyHex.substring(0, 8)
+          : c.publicKeyHex;
       if (c.username.toLowerCase().contains(q) ||
           c.nickname.toLowerCase().contains(q) ||
           shortId.toLowerCase().contains(q) ||
@@ -1031,19 +1092,17 @@ class RelayService with WidgetsBindingObserver {
   /// All known online peers (from presence data)
   List<RelayPeer> get knownOnlinePeers {
     final myKey = CryptoService.instance.publicKeyHex;
-    return _peerOnline.entries
-        .where((e) => e.value && e.key != myKey)
-        .map((e) {
-          final pk = e.key;
-          return RelayPeer(
-            publicKey: pk,
-            nick: _peerNicks[pk] ?? '',
-            username: _peerUsernames[pk] ?? '',
-            shortId: pk.length > 8 ? pk.substring(0, 8) : pk,
-            online: true,
-            x25519Key: _peerX25519Keys[pk] ?? '',
-          );
-        }).toList();
+    return _peerOnline.entries.where((e) => e.value && e.key != myKey).map((e) {
+      final pk = e.key;
+      return RelayPeer(
+        publicKey: pk,
+        nick: _peerNicks[pk] ?? '',
+        username: _peerUsernames[pk] ?? '',
+        shortId: pk.length > 8 ? pk.substring(0, 8) : pk,
+        online: true,
+        x25519Key: _peerX25519Keys[pk] ?? '',
+      );
+    }).toList();
   }
 
   // ── Receive ──────────────────────────────────────────────────
@@ -1205,7 +1264,12 @@ class RelayService with WidgetsBindingObserver {
           break;
 
         case 'error':
-          debugPrint('[RLINK][Relay] Server error: ${msg['msg']}');
+          final errorMsg = msg['msg']?.toString() ?? '';
+          debugPrint('[RLINK][Relay] Server error: $errorMsg');
+          // Handle rate limiting - add to retry queue
+          if (errorMsg.contains('rate_limited')) {
+            _handleRateLimit();
+          }
           break;
       }
     } catch (e, st) {
@@ -1499,7 +1563,8 @@ class RelayService with WidgetsBindingObserver {
     _relayBotCommandsById.clear();
     if (bots.isEmpty) {
       botDirectoryVersion.value++;
-      debugPrint('[RLINK][Relay] bot_dir_snapshot empty — каталог ботов очищен');
+      debugPrint(
+          '[RLINK][Relay] bot_dir_snapshot empty — каталог ботов очищен');
       return;
     }
     for (final raw in bots) {
@@ -1562,7 +1627,8 @@ class RelayService with WidgetsBindingObserver {
                 decoded.type == 'pair_req' ||
                 decoded.type == 'pair_acc' ||
                 decoded.type == 'ether')) {
-          _relayTrace('[RLINK][Relay][RX] type=${decoded.type} id=${decoded.id.substring(0, decoded.id.length.clamp(0, 8))} '
+          _relayTrace(
+              '[RLINK][Relay][RX] type=${decoded.type} id=${decoded.id.substring(0, decoded.id.length.clamp(0, 8))} '
               'from=${_relayShort(from)} rid=${_relayShort(decoded.recipientId ?? '')} r8=${decoded.payload['r'] ?? '-'}');
         }
         // Regular gossip packet — feed to GossipRouter
@@ -1606,11 +1672,13 @@ class RelayService with WidgetsBindingObserver {
       }
       if (peer.x25519Key.isNotEmpty && peer.publicKey.isNotEmpty) {
         _peerX25519Keys[peer.publicKey] = peer.x25519Key;
-        BleService.instance.registerPeerX25519Key(peer.publicKey, peer.x25519Key);
-        unawaited(ChatStorageService.instance.updateContactX25519Key(peer.publicKey, peer.x25519Key));
+        BleService.instance
+            .registerPeerX25519Key(peer.publicKey, peer.x25519Key);
+        unawaited(ChatStorageService.instance
+            .updateContactX25519Key(peer.publicKey, peer.x25519Key));
       }
       if (peer.publicKey.isNotEmpty) {
-        _peerOnline[peer.publicKey] = peer.online;
+        _peerOnline[peer.publicKey.toLowerCase()] = peer.online;
       }
       return peer;
     }).toList();
@@ -1620,15 +1688,20 @@ class RelayService with WidgetsBindingObserver {
     if (serverPeers.isNotEmpty) {
       // Merge server + local (server wins for duplicates)
       final merged = <String, RelayPeer>{};
-      for (final p in serverPeers) { merged[p.publicKey] = p; }
+      for (final p in serverPeers) {
+        merged[p.publicKey] = p;
+      }
       final local = _searchLocalPeers(_lastSearchQuery);
-      for (final p in local) { merged.putIfAbsent(p.publicKey, () => p); }
+      for (final p in local) {
+        merged.putIfAbsent(p.publicKey, () => p);
+      }
       searchResults.value = merged.values.toList();
     } else if (_lastSearchQuery.isNotEmpty) {
       // Server returned 0 — fall back to local presence cache + contacts
       final local = _searchLocalPeers(_lastSearchQuery);
       if (local.isNotEmpty) {
-        debugPrint('[RLINK][Relay] Server 0 → local fallback: ${local.length} matches');
+        debugPrint(
+            '[RLINK][Relay] Server 0 → local fallback: ${local.length} matches');
         searchResults.value = local;
       } else if (searchResults.value.isEmpty) {
         // Only clear if no results were already set by the initial local search
@@ -1655,7 +1728,7 @@ class RelayService with WidgetsBindingObserver {
     final online = _relayJsonBool(msg['online']);
     if (publicKey == null || online == null) return;
 
-    _peerOnline[publicKey] = online;
+    _peerOnline[publicKey.toLowerCase()] = online;
     presenceVersion.value++;
     _recomputeOnlineCountFromPresence();
 
@@ -1664,7 +1737,8 @@ class RelayService with WidgetsBindingObserver {
     if (x25519Key != null && x25519Key.isNotEmpty) {
       _peerX25519Keys[publicKey] = x25519Key;
       BleService.instance.registerPeerX25519Key(publicKey, x25519Key);
-      unawaited(ChatStorageService.instance.updateContactX25519Key(publicKey, x25519Key));
+      unawaited(ChatStorageService.instance
+          .updateContactX25519Key(publicKey, x25519Key));
     }
 
     // Store nick and username from presence data
@@ -1677,11 +1751,15 @@ class RelayService with WidgetsBindingObserver {
       _peerUsernames[publicKey] = uname;
     }
 
-    debugPrint('[RLINK][Relay] Presence: ${publicKey.substring(0, 8)} → ${online ? 'online' : 'offline'}');
+    debugPrint(
+        '[RLINK][Relay] Presence: ${publicKey.substring(0, 8)} → ${online ? 'online' : 'offline'}');
 
     // Notify about new peer online (for avatar sync, etc.)
     if (online) {
       onPeerOnline?.call(publicKey);
+    } else {
+      // Update lastSeen when peer goes offline
+      unawaited(ChatStorageService.instance.updateContactLastSeen(publicKey));
     }
   }
 
@@ -1704,11 +1782,28 @@ class RelayService with WidgetsBindingObserver {
     final from = msg['from'] as String?;
     final msgId = msg['msgId'] as String?;
     final data = msg['data'] as String?;
-    if (from == null || msgId == null || data == null) return;
+    final fullTo = msg['fullTo'] as String?;
+    debugPrint(
+        '[RLINK][Blob] Incoming blob: from=$from msgId=$msgId dataLength=${data?.length ?? 0} fullTo=${fullTo?.substring(0, 8) ?? 'null'}');
+    if (from == null || msgId == null || data == null) {
+      debugPrint('[RLINK][Blob] Missing required fields, dropping');
+      return;
+    }
     final relayMsgId = msg['relayMsgId'] as String?;
+
+    // Verify fullTo matches our public key if provided
+    if (fullTo != null && fullTo.isNotEmpty) {
+      final myId = CryptoService.instance.publicKeyHex;
+      if (myId.isNotEmpty && fullTo.toLowerCase() != myId.toLowerCase()) {
+        debugPrint(
+            '[RLINK][Blob] fullTo mismatch: expected=$myId got=$fullTo, dropping (collision protection)');
+        return;
+      }
+    }
 
     try {
       final bytes = base64Decode(data);
+      debugPrint('[RLINK][Blob] Decoded ${bytes.length} bytes');
       final chunkIdx = msg['cIdx'] as int?;
       final chunkTotal = msg['cTot'] as int?;
 
@@ -1721,9 +1816,13 @@ class RelayService with WidgetsBindingObserver {
         final isSticker = (msg['stk'] as bool?) ?? false;
         final fileName = msg['fname'] as String?;
         final viewOnce = (msg['vo'] as bool?) ?? false;
-        debugPrint('[RLINK][Relay] Received blob ${bytes.length} bytes for $msgId');
-        onBlobReceived?.call(from, msgId, Uint8List.fromList(bytes),
-            isVoice, isVideo, isSquare, isFile, isSticker, fileName, viewOnce);
+        debugPrint(
+            '[RLINK][Relay] Received blob ${bytes.length} bytes for $msgId voice=$isVoice video=$isVideo file=$isFile sticker=$isSticker');
+        debugPrint(
+            '[RLINK][Relay] Calling onBlobReceived callback (exists: ${onBlobReceived != null})');
+        onBlobReceived?.call(from, msgId, Uint8List.fromList(bytes), isVoice,
+            isVideo, isSquare, isFile, isSticker, fileName, viewOnce);
+        debugPrint('[RLINK][Relay] onBlobReceived callback completed');
         if (relayMsgId != null && relayMsgId.isNotEmpty) {
           unawaited(_safeSend({
             'type': 'relay_ack',
@@ -1767,10 +1866,18 @@ class RelayService with WidgetsBindingObserver {
         }
         final full = builder.toBytes();
         _blobAssemblies.remove(msgId);
-        debugPrint('[RLINK][Relay] Assembled chunked blob ${full.length} bytes for $msgId');
-        onBlobReceived?.call(from, msgId, full,
-            assembly.isVoice, assembly.isVideo, assembly.isSquare,
-            assembly.isFile, assembly.isSticker, assembly.fileName,
+        debugPrint(
+            '[RLINK][Relay] Assembled chunked blob ${full.length} bytes for $msgId');
+        onBlobReceived?.call(
+            from,
+            msgId,
+            full,
+            assembly.isVoice,
+            assembly.isVideo,
+            assembly.isSquare,
+            assembly.isFile,
+            assembly.isSticker,
+            assembly.fileName,
             assembly.viewOnce);
         if (relayMsgId != null && relayMsgId.isNotEmpty) {
           unawaited(_safeSend({
@@ -1789,9 +1896,11 @@ class RelayService with WidgetsBindingObserver {
     final status = msg['status'] as String?;
     if (to == null || status == null) return;
     if (status == 'offline' || status == 'queued_offline') {
+      final changed = _peerOnline[to] != false;
       _peerOnline[to] = false;
-      presenceVersion.value++;
-      debugPrint('[RLINK][Relay] Delivery FAILED → ${to.substring(0, 8)} is OFFLINE ($status)');
+      if (changed) presenceVersion.value++;
+      debugPrint(
+          '[RLINK][Relay] Delivery FAILED → ${to.substring(0, 8)} is OFFLINE ($status)');
       onDeliveryFailed?.call(to);
     } else if (status == 'error') {
       debugPrint('[RLINK][Relay] Delivery ERROR → ${to.substring(0, 8)}');

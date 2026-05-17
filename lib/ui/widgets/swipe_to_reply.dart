@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 /// Свайп пузыря к центру экрана (как в Telegram) — [onReply].
 ///
-/// Входящие слева: тянем вправо. Исходящие справа: тянем влево.
+/// Входящие слева: тянем влево. Исходящие справа: тянем вправо.
 class SwipeToReply extends StatefulWidget {
   const SwipeToReply({
     super.key,
@@ -16,6 +16,7 @@ class SwipeToReply extends StatefulWidget {
   final bool isOutgoing;
   final VoidCallback onReply;
   final Widget child;
+
   /// Если false — только [child], без свайпа (например режим выбора сообщений).
   final bool enabled;
 
@@ -28,6 +29,7 @@ class _SwipeToReplyState extends State<SwipeToReply>
   double _dx = 0;
   static const double _max = 52;
   static const double _trigger = 34;
+
   /// Во время [dispose] у [State] поле [mounted] ещё true — без флага анимация
   /// может вызвать [setState] и сломать дерево (`_elements.contains(element)`).
   bool _tearDown = false;
@@ -102,9 +104,9 @@ class _SwipeToReplyState extends State<SwipeToReply>
     }
     setState(() {
       if (widget.isOutgoing) {
-        _dx = (_dx + d.delta.dx).clamp(-_max, 0);
-      } else {
         _dx = (_dx + d.delta.dx).clamp(0, _max);
+      } else {
+        _dx = (_dx + d.delta.dx).clamp(-_max, 0);
       }
     });
   }
@@ -112,9 +114,8 @@ class _SwipeToReplyState extends State<SwipeToReply>
   void _onEnd(DragEndDetails d) {
     if (_tearDown || !widget.enabled) return;
     final vx = d.velocity.pixelsPerSecond.dx;
-    final distOk =
-        widget.isOutgoing ? _dx <= -_trigger : _dx >= _trigger;
-    final flickOk = widget.isOutgoing ? vx < -700 : vx > 700;
+    final distOk = widget.isOutgoing ? _dx >= _trigger : _dx <= -_trigger;
+    final flickOk = widget.isOutgoing ? vx > 700 : vx < -700;
     if (distOk || flickOk) {
       HapticFeedback.lightImpact();
       widget.onReply();
@@ -140,8 +141,8 @@ class _SwipeToReplyState extends State<SwipeToReply>
         children: [
           Align(
             alignment: widget.isOutgoing
-                ? Alignment.centerLeft
-                : Alignment.centerRight,
+                ? Alignment.centerRight
+                : Alignment.centerLeft,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
               child: Opacity(

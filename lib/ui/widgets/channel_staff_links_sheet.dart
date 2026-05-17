@@ -157,11 +157,11 @@ class _StaffLinksEditorSheetState extends State<StaffLinksEditorSheet> {
                   style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
               ...() {
-                final ids = [
+                final ids = {
                   _ch.adminId,
                   ..._ch.moderatorIds,
                   ..._ch.linkAdminIds,
-                ].toSet().toList();
+                }.toList();
                 return ids.map((id) {
                   final c = _labelCtrls.putIfAbsent(
                     id,

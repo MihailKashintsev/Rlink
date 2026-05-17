@@ -534,8 +534,8 @@ class ImageService {
     try {
       infoBefore = await VideoCompress.getMediaInfo(inputForCompress);
     } catch (_) {}
-    final startSec = trimStart == null ? null : trimStart.inSeconds;
-    final endSec = trimEnd == null ? null : trimEnd.inSeconds;
+    final startSec = trimStart?.inSeconds;
+    final endSec = trimEnd?.inSeconds;
     final trimDurationSec =
         (startSec != null && endSec != null && endSec > startSec)
             ? (endSec - startSec)

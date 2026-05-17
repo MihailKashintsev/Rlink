@@ -13,10 +13,18 @@ class AudioQueueMiniPlayerLayout {
 
   void setBarTop(double? top) {
     if (barTop.value == top) return;
-    barTop.value = top;
+    // Use addPostFrameCallback to avoid setState during dispose
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      barTop.value = top;
+    });
   }
 
-  void clearBarTop() => setBarTop(null);
+  void clearBarTop() {
+    // Use addPostFrameCallback to avoid setState during dispose
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      barTop.value = null;
+    });
+  }
 
   /// Сразу под системной плашкой и типовым [AppBar] (56dp).
   void setBarTopBelowAppBar(BuildContext context) {

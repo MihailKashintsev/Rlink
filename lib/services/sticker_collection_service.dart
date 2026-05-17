@@ -20,18 +20,18 @@ class StickerCollectionService {
   static const _packsJsonName = 'sticker_packs.json';
   static const _defaultPackAssetPrefix = 'assets/sticker_packs/default/';
   static const _defaultPackAssetNames = <String>[
-    'sticker_01.png',
-    'sticker_02.png',
-    'sticker_03.png',
-    'sticker_04.png',
-    'sticker_05.png',
-    'sticker_06.png',
-    'sticker_07.png',
-    'sticker_08.png',
-    'sticker_09.png',
-    'sticker_10.png',
-    'sticker_11.png',
-    'sticker_12.png',
+    'Angry.png',
+    'Best.png',
+    'Happy.png',
+    'Jump.png',
+    'LapTop.png',
+    'Like.png',
+    'Love.png',
+    'MAX.png',
+    'Sad.png',
+    'Scary.png',
+    'Wery scary.png',
+    'Woah!.png',
   ];
   final _uuid = const Uuid();
 
@@ -39,6 +39,49 @@ class StickerCollectionService {
   Future<void> init() async {
     await ensureInitialized();
     await _seedDefaultPackIfEmpty();
+  }
+
+  /// Принудительное обновление дефолтного набора новыми стикерами
+  Future<void> forceReseedDefaultPack() async {
+    final packs = await _readPacks();
+    
+    // Delete ALL existing Rlink packs (in case of duplicates)
+    for (final pack in packs) {
+      if (pack.title == 'Rlink' && pack.sourcePeerId == null) {
+        await deletePack(pack.id);
+      }
+    }
+    
+    // Seed without checking if packs are empty
+    final docs = await getApplicationDocumentsDirectory();
+    final imgDir = Directory(p.join(docs.path, 'images'));
+    if (!imgDir.existsSync()) imgDir.createSync(recursive: true);
+
+    final rels = <String>[];
+    for (final name in _defaultPackAssetNames) {
+      try {
+        final data =
+            await rootBundle.load('$_defaultPackAssetPrefix$name');
+        final destName =
+            'stk_default_${name.replaceAll('.png', '').replaceAll('.webp', '')}${p.extension(name)}';
+        final dest = File(p.join(imgDir.path, destName));
+        
+        // Only add if file doesn't already exist
+        if (!await dest.exists()) {
+          await dest.writeAsBytes(data.buffer.asUint8List());
+        }
+        rels.add(p.join('images', destName));
+      } catch (e, st) {
+        debugPrint('[Stickers] default asset $name: $e\n$st');
+      }
+    }
+    if (rels.isEmpty) return;
+
+    await createPack(
+      title: 'Rlink',
+      relPaths: rels,
+    );
+    debugPrint('[Stickers] reseeded default pack (${rels.length} files)');
   }
 
   Future<void> _seedDefaultPackIfEmpty() async {
