@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart' as archive;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
@@ -264,7 +265,7 @@ class ImageService {
   /// Для уже сжатых форматов (JPEG, M4A, MP4) выигрыш ~5-10%.
   /// Для документов (PDF, TXT, DOCX) выигрыш 30-70%.
   Uint8List compress(Uint8List data) {
-    final compressed = Uint8List.fromList(ZLibCodec(level: 6).encode(data));
+    final compressed = archive.ZLibEncoder().encodeBytes(data, level: 6);
     debugPrint('[ImageService] compress: ${data.length} → ${compressed.length} '
         '(${(100 - compressed.length * 100 / data.length).toStringAsFixed(0)}% saved)');
     // Используем сжатое только если оно меньше оригинала
@@ -274,7 +275,7 @@ class ImageService {
   /// Распаковывает zlib-сжатые данные на приёмнике.
   Uint8List decompress(Uint8List data) {
     try {
-      return Uint8List.fromList(ZLibCodec().decode(data));
+      return archive.ZLibDecoder().decodeBytes(data);
     } catch (_) {
       // Если данные не сжаты (обратная совместимость) — возвращаем как есть
       return data;
