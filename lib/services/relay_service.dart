@@ -92,7 +92,7 @@ class RelayService with WidgetsBindingObserver {
   /// Default public relay server.
   /// Захардкожен — пользователь не может переопределить через настройки
   /// (см. serverUrl getter и connect() ниже).
-  static const defaultServerUrl = 'ws://185.244.172.90:8080';
+  static const defaultServerUrl = 'wss://185.244.172.90.nip.io';
   static const List<String> fallbackServerUrls = <String>[
     defaultServerUrl,
   ];
