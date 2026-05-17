@@ -317,9 +317,8 @@ class MediaReceiver {
     } else if (isFile) {
       filePath = await img.assembleAndSaveFile(msgId);
       if (filePath == null) return;
-      fileSize = kIsWeb
-          ? _dataUriSize(filePath)
-          : await File(filePath).length();
+      fileSize =
+          kIsWeb ? _dataUriSize(filePath) : await File(filePath).length();
       label = '📎 ${fileName ?? 'Файл'}';
     } else if (isVideo) {
       videoPath = await img.assembleAndSaveVideo(msgId, isSquare: isSquare);

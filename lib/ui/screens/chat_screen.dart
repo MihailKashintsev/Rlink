@@ -363,9 +363,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void _showErrorSnack(String text) {
     if (_tearingDown) return;
     final rootCtx = navigatorKey.currentContext;
-    final messenger = rootCtx != null
-        ? ScaffoldMessenger.maybeOf(rootCtx)
-        : null;
+    final messenger =
+        rootCtx != null ? ScaffoldMessenger.maybeOf(rootCtx) : null;
     (messenger ?? _scaffoldMessenger)?.showSnackBar(
       SnackBar(content: Text(text), backgroundColor: Colors.red),
     );
@@ -420,8 +419,8 @@ class _ChatScreenState extends State<ChatScreen> {
               _isLibBot
                   ? 'В чате с Lib доступен только текст'
                   : _isGigachatBot
-                  ? 'В чате с ИИ доступен только текст'
-                  : 'В чате с ботом доступен только текст',
+                      ? 'В чате с ИИ доступен только текст'
+                      : 'В чате с ботом доступен только текст',
             ),
           ),
         );
@@ -625,8 +624,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    final hasMedia =
-        msg.imagePath != null ||
+    final hasMedia = msg.imagePath != null ||
         msg.videoPath != null ||
         msg.voicePath != null ||
         msg.filePath != null;
@@ -655,25 +653,21 @@ class _ChatScreenState extends State<ChatScreen> {
       final fileName = msg.fileName;
 
       if (msg.imagePath != null) {
-        path =
-            ImageService.instance.resolveStoredPath(msg.imagePath!) ??
+        path = ImageService.instance.resolveStoredPath(msg.imagePath!) ??
             msg.imagePath;
       } else if (msg.videoPath != null) {
-        path =
-            ImageService.instance.resolveStoredPath(msg.videoPath!) ??
+        path = ImageService.instance.resolveStoredPath(msg.videoPath!) ??
             msg.videoPath;
         isVideo = true;
         if (path != null) {
           isSquare = _videoPathIsSquare(path);
         }
       } else if (msg.voicePath != null) {
-        path =
-            ImageService.instance.resolveStoredPath(msg.voicePath!) ??
+        path = ImageService.instance.resolveStoredPath(msg.voicePath!) ??
             msg.voicePath;
         isVoice = true;
       } else if (msg.filePath != null) {
-        path =
-            ImageService.instance.resolveStoredPath(msg.filePath!) ??
+        path = ImageService.instance.resolveStoredPath(msg.filePath!) ??
             msg.filePath;
         isFile = true;
       }
@@ -754,9 +748,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Checks DB and updates [_isContact]. Called on init and whenever contacts change.
   Future<void> _checkContactStatus() async {
-    final key = _looksLikePublicKey(_resolvedPeerId)
-        ? _resolvedPeerId
-        : widget.peerId;
+    final key =
+        _looksLikePublicKey(_resolvedPeerId) ? _resolvedPeerId : widget.peerId;
     final contact = await ChatStorageService.instance.getContact(key);
     final relAvatar = _looksLikePublicKey(key)
         ? RelayService.instance.relayBotAvatarUrl(key)
@@ -931,8 +924,7 @@ class _ChatScreenState extends State<ChatScreen> {
       debugPrint(
         '[Chat] msg from ${msg.fromId.substring(0, 16)}, resolved=${resolved.substring(0, 16)}',
       );
-      final isOurPeer =
-          msg.fromId == _resolvedPeerId ||
+      final isOurPeer = msg.fromId == _resolvedPeerId ||
           msg.fromId == widget.peerId ||
           msg.fromId == resolved;
       if (!isOurPeer) return;
@@ -942,8 +934,8 @@ class _ChatScreenState extends State<ChatScreen> {
       final senderKey = _looksLikePublicKey(msg.fromId)
           ? msg.fromId
           : _looksLikePublicKey(resolved)
-          ? resolved
-          : _resolvedPeerId;
+              ? resolved
+              : _resolvedPeerId;
 
       if (senderKey != _resolvedPeerId) {
         _resolvedPeerId = senderKey;
@@ -1206,15 +1198,15 @@ class _ChatScreenState extends State<ChatScreen> {
     _voiceAmpSub = VoiceService.instance
         .amplitudeStream(interval: const Duration(milliseconds: 150))
         .listen((db) {
-          if (!mounted || !_isRecording || _isVoiceRecordingPaused) return;
-          final normalized = ((db + 60) / 60).clamp(0.0, 1.0);
-          final bars = List<double>.from(_recordingWaveformNotifier.value);
-          bars.add(normalized);
-          if (bars.length > 48) {
-            bars.removeAt(0);
-          }
-          _recordingWaveformNotifier.value = bars;
-        }, onError: (_) {});
+      if (!mounted || !_isRecording || _isVoiceRecordingPaused) return;
+      final normalized = ((db + 60) / 60).clamp(0.0, 1.0);
+      final bars = List<double>.from(_recordingWaveformNotifier.value);
+      bars.add(normalized);
+      if (bars.length > 48) {
+        bars.removeAt(0);
+      }
+      _recordingWaveformNotifier.value = bars;
+    }, onError: (_) {});
   }
 
   Future<void> _startVoiceSegment() async {
@@ -1344,9 +1336,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scheduleHydrateVoiceTranscripts(List<ChatMessage> messages) {
-    final ids =
-        messages.where((m) => m.voicePath != null).map((m) => m.id).toList()
-          ..sort();
+    final ids = messages
+        .where((m) => m.voicePath != null)
+        .map((m) => m.id)
+        .toList()
+      ..sort();
     final hash = '$_resolvedPeerId|${ids.join('|')}';
     if (hash == _lastVoiceHydratedMsgsHash) return;
     _lastVoiceHydratedMsgsHash = hash;
@@ -1403,8 +1397,8 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final transcriptionLanguage =
           LocalTranscriptionService.mapLocaleToWhisperLanguage(
-            AppSettings.instance.locale,
-          );
+        AppSettings.instance.locale,
+      );
       final text = await LocalTranscriptionService.instance.transcribeFile(
         pathForTranscribe,
         language: transcriptionLanguage,
@@ -2074,9 +2068,8 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     }
-    final msgs = ChatStorageService.instance
-        .messagesNotifier(_resolvedPeerId)
-        .value;
+    final msgs =
+        ChatStorageService.instance.messagesNotifier(_resolvedPeerId).value;
     _recomputePinHighlight(msgs);
   }
 
@@ -2093,17 +2086,16 @@ class _ChatScreenState extends State<ChatScreen> {
     const estH = 72.0;
     double scroll = 0;
     try {
-      final pos = _scrollController.hasClients
-          ? _scrollController.position
-          : null;
+      final pos =
+          _scrollController.hasClients ? _scrollController.position : null;
       scroll = pos?.pixels ?? 0;
     } catch (_) {
       scroll = 0;
     }
     final firstIdx = (scroll / estH).floor().clamp(
-      0,
-      messages.isEmpty ? 0 : messages.length - 1,
-    );
+          0,
+          messages.isEmpty ? 0 : messages.length - 1,
+        );
     String? bestId;
     var bestIdx = -1;
     for (final pid in _pinnedIdsChrono) {
@@ -2167,8 +2159,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Text(
                       'Закреплённые',
                       style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                   ),
                   ListView.builder(
@@ -2270,8 +2262,7 @@ class _ChatScreenState extends State<ChatScreen> {
   ) async {
     final c = await ChatStorageService.instance.getContact(authorKey);
     if (!mounted) return;
-    final nick =
-        c?.nickname ??
+    final nick = c?.nickname ??
         (hintNick?.isNotEmpty == true
             ? hintNick!
             : '${authorKey.substring(0, 8)}…');
@@ -2689,9 +2680,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
       // 2) Normal mode: send message(s). Личные чаты: нарезка по 600 симв. на
       // транспорт (см. OutboundDmText). ИИ — одним сообщением.
-      final parts = _isBuiltinAiBot
-          ? <String>[text]
-          : OutboundDmText.splitChunks(text);
+      final parts =
+          _isBuiltinAiBot ? <String>[text] : OutboundDmText.splitChunks(text);
       if (parts.isEmpty) return;
 
       _controller.clear();
@@ -2701,8 +2691,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final canonicalTargetPeerId = ChatStorageService.normalizeDmPeerId(
         targetPeerId,
       );
-      final autoEmojiPayload =
-          (!_savedMessagesLocalOnly &&
+      final autoEmojiPayload = (!_savedMessagesLocalOnly &&
               !_isBuiltinAiBot &&
               _looksLikePublicKey(canonicalTargetPeerId))
           ? await EmojiPackDmService.buildPayloadForText(text)
@@ -2899,8 +2888,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final botMsg = ChatMessage(
           id: _uuid.v4(),
           peerId: kLibBotPeerId,
-          text:
-              'Lib работает только через интернет-соединение relay. '
+          text: 'Lib работает только через интернет-соединение relay. '
               'Включите режим Интернет/Both и дождитесь подключения relay.',
           isOutgoing: false,
           timestamp: DateTime.now(),
@@ -3039,8 +3027,8 @@ class _ChatScreenState extends State<ChatScreen> {
               _isLibBot
                   ? 'В чате с Lib доступен только обычный текст'
                   : _isGigachatBot
-                  ? 'В чате с ИИ доступен только обычный текст'
-                  : 'В чате с ботом доступен только обычный текст',
+                      ? 'В чате с ИИ доступен только обычный текст'
+                      : 'В чате с ботом доступен только обычный текст',
             ),
           ),
         );
@@ -3181,9 +3169,8 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       return;
     }
-    final peerStore = _looksLikePublicKey(_resolvedPeerId)
-        ? _resolvedPeerId
-        : widget.peerId;
+    final peerStore =
+        _looksLikePublicKey(_resolvedPeerId) ? _resolvedPeerId : widget.peerId;
     await ChatStorageService.instance.insertScheduledDm(
       id: _uuid.v4(),
       peerId: peerStore,
@@ -3228,24 +3215,24 @@ class _ChatScreenState extends State<ChatScreen> {
       onFilePath: _sendFileFromMediaGalleryPath,
       onOpenEmojiInsert: (!_isDmBot || _isEmojiBot)
           ? () => unawaited(
-              showChatEmojiInsertSheet(
-                context,
-                onInsert: (insert) {
-                  final t = _controller.text;
-                  final sel = _controller.selection;
-                  final off = sel.isValid ? sel.start : t.length;
-                  final end = sel.isValid ? sel.end : t.length;
-                  final next = t.replaceRange(off, end, insert);
-                  final newOff = off + insert.length;
-                  _controller.value = TextEditingValue(
-                    text: next,
-                    selection: TextSelection.collapsed(offset: newOff),
-                  );
-                },
-                onStickerPicked: _sendStickerFromLibraryPath,
-                onGifPicked: (gifUrl) => _sendGifFromUrl(gifUrl, myId),
-              ),
-            )
+                showChatEmojiInsertSheet(
+                  context,
+                  onInsert: (insert) {
+                    final t = _controller.text;
+                    final sel = _controller.selection;
+                    final off = sel.isValid ? sel.start : t.length;
+                    final end = sel.isValid ? sel.end : t.length;
+                    final next = t.replaceRange(off, end, insert);
+                    final newOff = off + insert.length;
+                    _controller.value = TextEditingValue(
+                      text: next,
+                      selection: TextSelection.collapsed(offset: newOff),
+                    );
+                  },
+                  onStickerPicked: _sendStickerFromLibraryPath,
+                  onGifPicked: (gifUrl) => _sendGifFromUrl(gifUrl, myId),
+                ),
+              )
           : null,
       onLocation: () async => _toggleLocation(),
       onTodo: _isDmBot ? null : _composeAndSendTodo,
@@ -3429,14 +3416,16 @@ class _ChatScreenState extends State<ChatScreen> {
       final r = await FilePicker.platform.pickFiles(
         type: FileType.video,
         allowMultiple: false,
-        withData: true,
+        withReadStream: true,
       );
       final f = r?.files.firstOrNull;
-      if (f?.bytes == null || !mounted) return;
-      await _sendWebVideoBytes(
-        bytes: f!.bytes!,
+      if (f == null || !mounted) return;
+      await _sendWebPickedStream(
+        picked: f,
         fileName: f.name.isNotEmpty ? f.name : 'video.mp4',
         myId: myId,
+        textFallback: '📹 Видео',
+        isVideo: true,
       );
       return;
     }
@@ -3491,15 +3480,16 @@ class _ChatScreenState extends State<ChatScreen> {
     final r = await FilePicker.platform.pickFiles(
       type: FileType.any,
       allowMultiple: false,
-      withData: true,
+      withReadStream: true,
     );
     final f = r?.files.firstOrNull;
-    if (f?.bytes == null || !mounted) return;
-    await _sendWebBytesAsFile(
-      bytes: f!.bytes!,
+    if (f == null || !mounted) return;
+    await _sendWebPickedStream(
+      picked: f,
       fileName: f.name.isNotEmpty ? f.name : 'file.bin',
       myId: myId,
       textFallback: '📎 ${f.name.isNotEmpty ? f.name : 'Файл'}',
+      isFile: true,
     );
   }
 
@@ -3643,6 +3633,151 @@ class _ChatScreenState extends State<ChatScreen> {
       _sendActivity(Activity.stopped);
       if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  Future<void> _sendWebPickedStream({
+    required PlatformFile picked,
+    required String fileName,
+    required String myId,
+    required String textFallback,
+    bool isVideo = false,
+    bool isFile = false,
+  }) async {
+    final stream = picked.readStream;
+    if (stream == null) {
+      final bytes = picked.bytes;
+      if (bytes == null) {
+        _showErrorSnack('Не удалось прочитать файл в браузере');
+        return;
+      }
+      if (isVideo) {
+        await _sendWebVideoBytes(bytes: bytes, fileName: fileName, myId: myId);
+      } else {
+        await _sendWebBytesAsFile(
+          bytes: bytes,
+          fileName: fileName,
+          myId: myId,
+          textFallback: textFallback,
+        );
+      }
+      return;
+    }
+    if (_savedMessagesLocalOnly) {
+      _showErrorSnack('В избранном браузер не может сохранить большой файл');
+      return;
+    }
+    if (!RelayService.instance.isConnected) {
+      _showErrorSnack('Для отправки больших файлов в вебе нужен интернет');
+      return;
+    }
+
+    setState(() => _isSending = true);
+    _sendActivity(Activity.sendingFile);
+    final msgId = _uuid.v4();
+    final targetPeerId =
+        _looksLikePublicKey(_resolvedPeerId) ? _resolvedPeerId : widget.peerId;
+    try {
+      await _saveAndTrack(
+        ChatMessage(
+          id: msgId,
+          peerId: targetPeerId,
+          text: textFallback,
+          isOutgoing: true,
+          timestamp: DateTime.now(),
+          status: MessageStatus.sending,
+          fileName: fileName,
+          fileSize: picked.size,
+        ),
+        wasQueued: true,
+      );
+      await _sendRelayStream(
+        stream: stream,
+        size: picked.size,
+        msgId: msgId,
+        myId: myId,
+        isVideo: isVideo,
+        isFile: isFile,
+        fileName: isFile ? fileName : null,
+      );
+      await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+        msgId,
+        MessageStatus.sent,
+      );
+      if (mounted) {
+        setState(() => _uploadingMsgIds.remove(msgId));
+      }
+      _scrollToBottom();
+    } catch (e) {
+      await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+        msgId,
+        MessageStatus.failed,
+      );
+      if (mounted) {
+        setState(() => _uploadingMsgIds.remove(msgId));
+      }
+      _showErrorSnack('Ошибка отправки: $e');
+    } finally {
+      _sendActivity(Activity.stopped);
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _sendRelayStream({
+    required Stream<List<int>> stream,
+    required int size,
+    required String msgId,
+    required String myId,
+    bool isVideo = false,
+    bool isFile = false,
+    String? fileName,
+  }) async {
+    final total = math.max(1, (size / _kRelayChunkBytes).ceil());
+    var index = 0;
+    var sent = 0;
+    final pending = BytesBuilder(copy: false);
+
+    Future<void> flushChunk(Uint8List chunk) async {
+      await RelayService.instance.sendBlobChunk(
+        recipientKey: _resolvedPeerId,
+        fromId: myId,
+        msgId: msgId,
+        chunkIdx: index,
+        chunkTotal: total,
+        chunkData: chunk,
+        isVideo: isVideo,
+        isFile: isFile,
+        fileName: fileName,
+      );
+      index++;
+      sent += chunk.length;
+      RelayService.instance.updateSendProgress(
+        msgId,
+        size <= 0 ? 0.99 : math.min(0.99, sent / size),
+      );
+      await Future.delayed(const Duration(milliseconds: 20));
+    }
+
+    await for (final part in stream) {
+      pending.add(part);
+      var data = pending.toBytes();
+      var offset = 0;
+      while (data.length - offset >= _kRelayChunkBytes) {
+        await flushChunk(
+          Uint8List.sublistView(data, offset, offset + _kRelayChunkBytes),
+        );
+        offset += _kRelayChunkBytes;
+      }
+      pending.clear();
+      if (offset < data.length) {
+        pending.add(Uint8List.sublistView(data, offset));
+      }
+    }
+
+    final rest = pending.toBytes();
+    if (rest.isNotEmpty || index == 0) {
+      await flushChunk(rest);
+    }
+    RelayService.instance.updateSendProgress(msgId, 1);
   }
 
   Future<void> _sendWebVideoBytes({
@@ -4395,14 +4530,16 @@ class _ChatScreenState extends State<ChatScreen> {
       final picked = await FilePicker.platform.pickFiles(
         type: FileType.video,
         allowMultiple: false,
-        withData: true,
+        withReadStream: true,
       );
       final f = picked?.files.firstOrNull;
-      if (f?.bytes == null || !mounted) return;
-      await _sendWebVideoBytes(
-        bytes: f!.bytes!,
+      if (f == null || !mounted) return;
+      await _sendWebPickedStream(
+        picked: f,
         fileName: f.name.isNotEmpty ? f.name : 'video.mp4',
         myId: myId,
+        textFallback: '📹 Видео',
+        isVideo: true,
       );
       return;
     }
@@ -4431,11 +4568,32 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
 
+    if (kIsWeb) {
+      final myId = CryptoService.instance.publicKeyHex;
+      if (myId.isEmpty) return;
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withReadStream: true,
+      );
+      final picked = result?.files.firstOrNull;
+      if (picked == null || !mounted) return;
+      final originalName = picked.name.isNotEmpty ? picked.name : 'file.bin';
+      await _sendWebPickedStream(
+        picked: picked,
+        fileName: originalName,
+        myId: myId,
+        textFallback: '📎 $originalName',
+        isFile: true,
+      );
+      return;
+    }
+
     // Web and some desktop providers can return null path, so keep bytes when needed.
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
       allowMultiple: false,
-      withData: kIsWeb,
+      withData: false,
     );
     if (result == null || result.files.isEmpty || !mounted) return;
 
@@ -4775,9 +4933,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _bulkForwardFromList() async {
-    final all = ChatStorageService.instance
-        .messagesNotifier(_resolvedPeerId)
-        .value;
+    final all =
+        ChatStorageService.instance.messagesNotifier(_resolvedPeerId).value;
     final ordered = _selectedMessagesInChatOrder(all);
     if (ordered.isEmpty) return;
     final picked = await showForwardDmTargetSheet(
@@ -4828,9 +4985,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _bulkDeleteFromList() async {
-    final all = ChatStorageService.instance
-        .messagesNotifier(_resolvedPeerId)
-        .value;
+    final all =
+        ChatStorageService.instance.messagesNotifier(_resolvedPeerId).value;
     final outgoing = _selectedMessagesInChatOrder(
       all,
     ).where((m) => m.isOutgoing).toList();
@@ -4916,9 +5072,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final replyId = msg.replyToMessageId;
     if (replyId != null && replyId.isNotEmpty) {
       String? snap;
-      final list = ChatStorageService.instance
-          .messagesNotifier(_resolvedPeerId)
-          .value;
+      final list =
+          ChatStorageService.instance.messagesNotifier(_resolvedPeerId).value;
       for (final m in list) {
         if (m.id == replyId) {
           snap = m.text.trim();
@@ -5014,7 +5169,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final stickerSourcePath = msg.imagePath == null
         ? null
         : (ImageService.instance.resolveStoredPath(msg.imagePath) ??
-              msg.imagePath);
+            msg.imagePath);
     await showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -5107,7 +5262,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Navigator.pop(ctx);
                   final p =
                       ImageService.instance.resolveStoredPath(msg.imagePath) ??
-                      msg.imagePath!;
+                          msg.imagePath!;
                   await _saveImageToGallery(p);
                 },
               ),
@@ -5387,9 +5542,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _jumpToMessageById(String messageId) {
-    final messages = ChatStorageService.instance
-        .messagesNotifier(_resolvedPeerId)
-        .value;
+    final messages =
+        ChatStorageService.instance.messagesNotifier(_resolvedPeerId).value;
     final idx = messages.indexWhere((m) => m.id == messageId);
     if (idx < 0) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -5506,9 +5660,9 @@ class _ChatScreenState extends State<ChatScreen> {
         content: Text(
           msg.isOutgoing
               ? 'Когда собеседник будет в сети, попросите переслать файл '
-                    'или дождитесь подтяжки истории.'
+                  'или дождитесь подтяжки истории.'
               : 'Когда собеседник будет в сети, вложение может подтянуться '
-                    'с историей; иначе попросите переслать.',
+                  'с историей; иначе попросите переслать.',
         ),
       ),
     );
@@ -5689,12 +5843,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                     : '?',
                                 color: widget.peerAvatarColor,
                                 emoji: widget.peerAvatarEmoji,
-                                imagePath:
-                                    _headerAvatarPath ??
+                                imagePath: _headerAvatarPath ??
                                     widget.peerAvatarImagePath,
                                 size: 38,
-                                isOnline:
-                                    !_isDmBot &&
+                                isOnline: !_isDmBot &&
                                     (BleService.instance.isPeerConnected(
                                           _resolvedPeerId,
                                         ) ||
@@ -5710,12 +5862,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                   : '?',
                               color: widget.peerAvatarColor,
                               emoji: widget.peerAvatarEmoji,
-                              imagePath:
-                                  _headerAvatarPath ??
+                              imagePath: _headerAvatarPath ??
                                   widget.peerAvatarImagePath,
                               size: 38,
-                              isOnline:
-                                  !_isDmBot &&
+                              isOnline: !_isDmBot &&
                                   (BleService.instance.isPeerConnected(
                                         _resolvedPeerId,
                                       ) ||
@@ -5747,8 +5897,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                         ),
                                         if (RelayService.instance
                                             .relayCatalogBotVerified(
-                                              _resolvedPeerId,
-                                            )) ...[
+                                          _resolvedPeerId,
+                                        )) ...[
                                           const SizedBox(width: 4),
                                           Icon(
                                             Icons.verified,
@@ -5790,10 +5940,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                         _isLibBot
                                             ? 'Официальный бот · регистратор ботов'
                                             : _isGigachatBot
-                                            ? 'Официальный бот · ИИ GigaChat (Сбер)'
-                                            : _isEmojiBot
-                                            ? 'Официальный бот · свои эмодзи (:shortcode:)'
-                                            : 'Сторонний бот · только текст, ответ когда процесс бота в сети',
+                                                ? 'Официальный бот · ИИ GigaChat (Сбер)'
+                                                : _isEmojiBot
+                                                    ? 'Официальный бот · свои эмодзи (:shortcode:)'
+                                                    : 'Сторонний бот · только текст, ответ когда процесс бота в сети',
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
@@ -5872,10 +6022,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                       _isLibBot
                                           ? 'Официальный бот · регистратор ботов'
                                           : _isGigachatBot
-                                          ? 'Официальный бот · ИИ GigaChat (Сбер)'
-                                          : _isEmojiBot
-                                          ? 'Официальный бот · свои эмодзи (:shortcode:)'
-                                          : 'Сторонний бот · только текст, ответ когда процесс бота в сети',
+                                              ? 'Официальный бот · ИИ GigaChat (Сбер)'
+                                              : _isEmojiBot
+                                                  ? 'Официальный бот · свои эмодзи (:shortcode:)'
+                                                  : 'Сторонний бот · только текст, ответ когда процесс бота в сети',
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500,
@@ -5908,22 +6058,19 @@ class _ChatScreenState extends State<ChatScreen> {
                                           builder: (_, __, ___) {
                                             return ValueListenableBuilder<int>(
                                               valueListenable: RelayService
-                                                  .instance
-                                                  .presenceVersion,
+                                                  .instance.presenceVersion,
                                               builder: (_, __, ___) {
                                                 final online = BleService
                                                     .instance
                                                     .isPeerConnected(
-                                                      _resolvedPeerId,
-                                                    );
-                                                final relayOnline =
-                                                    RelayService
-                                                        .instance
-                                                        .isConnected &&
+                                                  _resolvedPeerId,
+                                                );
+                                                final relayOnline = RelayService
+                                                        .instance.isConnected &&
                                                     RelayService.instance
                                                         .isPeerOnline(
-                                                          _resolvedPeerId,
-                                                        );
+                                                      _resolvedPeerId,
+                                                    );
                                                 final isOnline =
                                                     online || relayOnline;
                                                 return Text(
@@ -5963,8 +6110,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     PopupMenuButton<String>(
                       itemBuilder: (_) {
-                        final hasBg =
-                            (AppSettings.instance.chatBgForPeer(
+                        final hasBg = (AppSettings.instance.chatBgForPeer(
                                   _resolvedPeerId,
                                 ) ??
                                 AppSettings.instance.chatBgForPeer(
@@ -6116,10 +6262,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             _isLibBot
                                 ? 'Lib отвечает…'
                                 : _isGigachatBot
-                                ? 'GigaChat формирует ответ…'
-                                : _isEmojiBot
-                                ? 'Emoji…'
-                                : 'Ждём ответ бота…',
+                                    ? 'GigaChat формирует ответ…'
+                                    : _isEmojiBot
+                                        ? 'Emoji…'
+                                        : 'Ждём ответ бота…',
                             style: TextStyle(
                               fontSize: 12,
                               color: Theme.of(
@@ -6173,14 +6319,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         final uploadProgress = _uploadingMsgIds.isEmpty
                             ? null
                             : progressMap.entries
-                                  .where(
-                                    (e) => _uploadingMsgIds.contains(e.key),
-                                  )
-                                  .map((e) => e.value)
-                                  .fold<double?>(
-                                    null,
-                                    (acc, v) => acc == null ? v : (acc + v) / 2,
-                                  );
+                                .where(
+                                  (e) => _uploadingMsgIds.contains(e.key),
+                                )
+                                .map((e) => e.value)
+                                .fold<double?>(
+                                  null,
+                                  (acc, v) => acc == null ? v : (acc + v) / 2,
+                                );
                         final label = uploadProgress != null
                             ? 'Загружается файл... ${(uploadProgress * 100).round()}%'
                             : 'Отправка...';
@@ -6296,8 +6442,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   emoji: myProfile.avatarEmoji,
                                   recipientId: _resolvedPeerId,
                                   x25519Key: CryptoService
-                                      .instance
-                                      .x25519PublicKeyBase64,
+                                      .instance.x25519PublicKeyBase64,
                                   tags: myProfile.tags,
                                   statusEmoji: myProfile.statusEmoji,
                                 );
@@ -6310,8 +6455,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   color: myProfile.avatarColor,
                                   emoji: myProfile.avatarEmoji,
                                   x25519Key: CryptoService
-                                      .instance
-                                      .x25519PublicKeyBase64,
+                                      .instance.x25519PublicKeyBase64,
                                   tags: myProfile.tags,
                                   statusEmoji: myProfile.statusEmoji,
                                 );
@@ -6356,8 +6500,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         ListenableBuilder(
                           listenable: AppSettings.instance,
                           builder: (_, __) {
-                            final path =
-                                AppSettings.instance.chatBgForPeer(
+                            final path = AppSettings.instance.chatBgForPeer(
                                   _resolvedPeerId,
                                 ) ??
                                 AppSettings.instance.chatBgForPeer(
@@ -6429,8 +6572,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       itemCount: messages.length,
                                       itemBuilder: (_, i) {
                                         final msg = messages[i];
-                                        final showDate =
-                                            i == 0 ||
+                                        final showDate = i == 0 ||
                                             !_sameDay(
                                               messages[i - 1].timestamp,
                                               msg.timestamp,
@@ -6465,40 +6607,40 @@ class _ChatScreenState extends State<ChatScreen> {
                                                         child: InkWell(
                                                           onTap: () =>
                                                               _toggleBulkMessageSelection(
-                                                                msg,
-                                                              ),
+                                                            msg,
+                                                          ),
                                                           child: Padding(
                                                             padding:
-                                                                const EdgeInsets.only(
-                                                                  left: 6,
-                                                                  right: 2,
-                                                                  top: 8,
-                                                                ),
+                                                                const EdgeInsets
+                                                                    .only(
+                                                              left: 6,
+                                                              right: 2,
+                                                              top: 8,
+                                                            ),
                                                             child: Icon(
                                                               _selectedMsgIds
                                                                       .contains(
-                                                                        msg.id,
-                                                                      )
+                                                                msg.id,
+                                                              )
                                                                   ? Icons
-                                                                        .check_circle
+                                                                      .check_circle
                                                                   : Icons
-                                                                        .radio_button_unchecked,
+                                                                      .radio_button_unchecked,
                                                               size: 22,
-                                                              color:
-                                                                  _selectedMsgIds
+                                                              color: _selectedMsgIds
                                                                       .contains(
-                                                                        msg.id,
-                                                                      )
+                                                                msg.id,
+                                                              )
                                                                   ? Theme.of(
-                                                                          context,
-                                                                        )
-                                                                        .colorScheme
-                                                                        .primary
+                                                                      context,
+                                                                    )
+                                                                      .colorScheme
+                                                                      .primary
                                                                   : Theme.of(
-                                                                          context,
-                                                                        )
-                                                                        .colorScheme
-                                                                        .outline,
+                                                                      context,
+                                                                    )
+                                                                      .colorScheme
+                                                                      .outline,
                                                             ),
                                                           ),
                                                         ),
@@ -6517,74 +6659,79 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                   .translucent,
                                                           onPointerDown:
                                                               _bulkSelectMode
-                                                              ? null
-                                                              : (e) =>
-                                                                    _onMessagePointerDownQuickReact(
-                                                                      e,
-                                                                      msg,
-                                                                    ),
-                                                          child: GestureDetector(
+                                                                  ? null
+                                                                  : (e) =>
+                                                                      _onMessagePointerDownQuickReact(
+                                                                        e,
+                                                                        msg,
+                                                                      ),
+                                                          child:
+                                                              GestureDetector(
                                                             behavior:
                                                                 HitTestBehavior
                                                                     .deferToChild,
                                                             onTap:
                                                                 _bulkSelectMode
-                                                                ? () =>
-                                                                      _toggleBulkMessageSelection(
-                                                                        msg,
-                                                                      )
-                                                                : null,
+                                                                    ? () =>
+                                                                        _toggleBulkMessageSelection(
+                                                                          msg,
+                                                                        )
+                                                                    : null,
                                                             onLongPress:
                                                                 _bulkSelectMode
-                                                                ? () =>
-                                                                      _bulkSelectRangeThrough(
-                                                                        messages,
-                                                                        i,
-                                                                      )
-                                                                : () =>
-                                                                      _onLongPressMessage(
-                                                                        msg,
-                                                                      ),
+                                                                    ? () =>
+                                                                        _bulkSelectRangeThrough(
+                                                                          messages,
+                                                                          i,
+                                                                        )
+                                                                    : () =>
+                                                                        _onLongPressMessage(
+                                                                          msg,
+                                                                        ),
                                                             onDoubleTap:
                                                                 _bulkSelectMode
-                                                                ? null
-                                                                : () => unawaited(
-                                                                    _quickReaction(
-                                                                      msg,
-                                                                    ),
-                                                                  ),
-                                                            child: _MessageBubble(
+                                                                    ? null
+                                                                    : () =>
+                                                                        unawaited(
+                                                                          _quickReaction(
+                                                                            msg,
+                                                                          ),
+                                                                        ),
+                                                            child:
+                                                                _MessageBubble(
                                                               msg: msg,
                                                               bulkSelectMode:
                                                                   _bulkSelectMode,
                                                               replyPreviewText:
                                                                   msg.replyToMessageId ==
-                                                                      null
-                                                                  ? null
-                                                                  : messageTextById[msg
-                                                                        .replyToMessageId],
+                                                                          null
+                                                                      ? null
+                                                                      : messageTextById[
+                                                                          msg.replyToMessageId],
                                                               onDownloadImage:
                                                                   _saveImageToGallery,
                                                               onLongPressSaveImageToGallery:
                                                                   _bulkSelectMode
-                                                                  ? null
-                                                                  : (
-                                                                      p,
-                                                                    ) => unawaited(
-                                                                      _saveImageToGallery(
-                                                                        p,
-                                                                      ),
-                                                                    ),
+                                                                      ? null
+                                                                      : (
+                                                                          p,
+                                                                        ) =>
+                                                                          unawaited(
+                                                                            _saveImageToGallery(
+                                                                              p,
+                                                                            ),
+                                                                          ),
                                                               onLongPressSaveVideoToGallery:
                                                                   _bulkSelectMode
-                                                                  ? null
-                                                                  : (
-                                                                      p,
-                                                                    ) => unawaited(
-                                                                      _saveVideoToGallery(
-                                                                        p,
-                                                                      ),
-                                                                    ),
+                                                                      ? null
+                                                                      : (
+                                                                          p,
+                                                                        ) =>
+                                                                          unawaited(
+                                                                            _saveVideoToGallery(
+                                                                              p,
+                                                                            ),
+                                                                          ),
                                                               onCollabPersist:
                                                                   _patchSharedCollab,
                                                               onForwardContextTap:
@@ -6593,35 +6740,39 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                   _onRequestMissingDmMedia,
                                                               onRetryFailed:
                                                                   (!_isDmBot &&
-                                                                      !_savedMessagesLocalOnly)
-                                                                  ? _retryFailedOutgoing
-                                                                  : null,
+                                                                          !_savedMessagesLocalOnly)
+                                                                      ? _retryFailedOutgoing
+                                                                      : null,
                                                               onTranscribeVoice:
                                                                   _transcribeVoiceMessage,
                                                               isVoiceTranscribing:
                                                                   (
-                                                                    messageId,
-                                                                  ) => _voiceTranscribing
-                                                                      .contains(
-                                                                        messageId,
-                                                                      ),
+                                                                messageId,
+                                                              ) =>
+                                                                      _voiceTranscribing
+                                                                          .contains(
+                                                                messageId,
+                                                              ),
                                                               voiceTranscript:
                                                                   (messageId) =>
-                                                                      _voiceTranscripts[messageId],
+                                                                      _voiceTranscripts[
+                                                                          messageId],
                                                               voiceTranscriptExpanded:
                                                                   (messageId) =>
-                                                                      _voiceTranscriptExpanded[messageId] ??
+                                                                      _voiceTranscriptExpanded[
+                                                                          messageId] ??
                                                                       false,
                                                               onVoiceTranscriptExpanded:
                                                                   (
-                                                                    messageId,
-                                                                    open,
-                                                                  ) {
-                                                                    setState(
-                                                                      () => _voiceTranscriptExpanded[messageId] =
-                                                                          open,
-                                                                    );
-                                                                  },
+                                                                messageId,
+                                                                open,
+                                                              ) {
+                                                                setState(
+                                                                  () => _voiceTranscriptExpanded[
+                                                                          messageId] =
+                                                                      open,
+                                                                );
+                                                              },
                                                               playbackThread:
                                                                   messages,
                                                               playbackIndex: i,
@@ -6629,8 +6780,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                   _isDmBot,
                                                               onSlashCommandTap:
                                                                   _isDmBot
-                                                                  ? _onSlashCommandFromBubble
-                                                                  : null,
+                                                                      ? _onSlashCommandFromBubble
+                                                                      : null,
                                                               dmIncomingBotHeader:
                                                                   _isDmBot,
                                                               dmBotDisplayName:
@@ -6638,20 +6789,20 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                       .peerNickname,
                                                               dmBotVerified:
                                                                   _isBuiltinAiBot ||
-                                                                  RelayService
-                                                                      .instance
-                                                                      .relayCatalogBotVerified(
+                                                                      RelayService
+                                                                          .instance
+                                                                          .relayCatalogBotVerified(
                                                                         _resolvedPeerId,
                                                                       ),
-                                                              onCustomEmojiTap:
-                                                                  (
-                                                                    shortcode,
+                                                              onCustomEmojiTap: (
+                                                                shortcode,
+                                                                sourcePeerId,
+                                                              ) =>
+                                                                  _openPackByShortcodeFromMessage(
+                                                                shortcode,
+                                                                sourcePeerId:
                                                                     sourcePeerId,
-                                                                  ) => _openPackByShortcodeFromMessage(
-                                                                    shortcode,
-                                                                    sourcePeerId:
-                                                                        sourcePeerId,
-                                                                  ),
+                                                              ),
                                                               onStickerTapFromPeer:
                                                                   _openPeerStickersFromMessage,
                                                               onStickerTapFromLocal:
@@ -6818,8 +6969,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       isRecording: _isRecording,
                       isVoiceRecordingMode:
                           _isRecording && _dmHoldVideoCam == null,
-                      voiceControlsEnabled:
-                          _isRecording &&
+                      voiceControlsEnabled: _isRecording &&
                           _dmHoldVideoCam == null &&
                           _voiceHoldLocked,
                       recordingPaused: _isVoiceRecordingPaused,
@@ -6828,12 +6978,12 @@ class _ChatScreenState extends State<ChatScreen> {
                       recordingWaveformNotifier: _recordingWaveformNotifier,
                       hintText: _isDmBot
                           ? (_isLibBot
-                                ? 'Команда для Lib…'
-                                : _isEmojiBot
-                                ? 'Команда для Emoji…'
-                                : _isGigachatBot
-                                ? 'Сообщение для GigaChat…'
-                                : 'Сообщение боту…')
+                              ? 'Команда для Lib…'
+                              : _isEmojiBot
+                                  ? 'Команда для Emoji…'
+                                  : _isGigachatBot
+                                      ? 'Сообщение для GigaChat…'
+                                      : 'Сообщение боту…')
                           : null,
                       aiTextOnlyComposer:
                           _isDmBot && !_isEmojiBot && !_isLibBot,
@@ -6841,31 +6991,32 @@ class _ChatScreenState extends State<ChatScreen> {
                       allowGallery: _isEmojiBot || _isLibBot || !_isDmBot,
                       onOpenEmojiInsert: (!_isDmBot || _isEmojiBot || _isLibBot)
                           ? () => unawaited(
-                              showChatEmojiInsertSheet(
-                                context,
-                                onInsert: (insert) {
-                                  final t = _controller.text;
-                                  final sel = _controller.selection;
-                                  final off = sel.isValid
-                                      ? sel.start
-                                      : t.length;
-                                  final end = sel.isValid ? sel.end : t.length;
-                                  final next = t.replaceRange(off, end, insert);
-                                  final newOff = off + insert.length;
-                                  _controller.value = TextEditingValue(
-                                    text: next,
-                                    selection: TextSelection.collapsed(
-                                      offset: newOff,
-                                    ),
-                                  );
-                                },
-                                onStickerPicked: _sendStickerFromLibraryPath,
-                                onGifPicked: (gifUrl) => _sendGifFromUrl(
-                                  gifUrl,
-                                  CryptoService.instance.publicKeyHex,
+                                showChatEmojiInsertSheet(
+                                  context,
+                                  onInsert: (insert) {
+                                    final t = _controller.text;
+                                    final sel = _controller.selection;
+                                    final off =
+                                        sel.isValid ? sel.start : t.length;
+                                    final end =
+                                        sel.isValid ? sel.end : t.length;
+                                    final next =
+                                        t.replaceRange(off, end, insert);
+                                    final newOff = off + insert.length;
+                                    _controller.value = TextEditingValue(
+                                      text: next,
+                                      selection: TextSelection.collapsed(
+                                        offset: newOff,
+                                      ),
+                                    );
+                                  },
+                                  onStickerPicked: _sendStickerFromLibraryPath,
+                                  onGifPicked: (gifUrl) => _sendGifFromUrl(
+                                    gifUrl,
+                                    CryptoService.instance.publicKeyHex,
+                                  ),
                                 ),
-                              ),
-                            )
+                              )
                           : null,
                       locationActive: _pendingLat != null,
                       onSend: _send,
@@ -7311,8 +7462,7 @@ class _DmInviteBubbleActions extends StatelessWidget {
                 future: ChannelService.instance.getChannel(channelId),
                 builder: (context, snap) {
                   final ch = snap.data;
-                  final subscribed =
-                      myId.isNotEmpty &&
+                  final subscribed = myId.isNotEmpty &&
                       ch != null &&
                       (ch.subscriberIds.contains(myId) || ch.adminId == myId);
                   return FilledButton(
@@ -7378,7 +7528,7 @@ class _MessageBubble extends StatelessWidget {
   final void Function(String path)? onLongPressSaveImageToGallery;
   final void Function(String path)? onLongPressSaveVideoToGallery;
   final Future<void> Function(ChatMessage msg, String newEncoded)?
-  onCollabPersist;
+      onCollabPersist;
   final void Function(ChatMessage msg)? onForwardContextTap;
   final void Function(ChatMessage msg)? onRequestMissingMedia;
   final Future<void> Function(ChatMessage msg)? onRetryFailed;
@@ -7387,7 +7537,7 @@ class _MessageBubble extends StatelessWidget {
   final String? Function(String messageId)? voiceTranscript;
   final bool Function(String messageId)? voiceTranscriptExpanded;
   final void Function(String messageId, bool expanded)?
-  onVoiceTranscriptExpanded;
+      onVoiceTranscriptExpanded;
   final List<ChatMessage>? playbackThread;
   final int? playbackIndex;
   final bool highlightSlashCommands;
@@ -7396,7 +7546,7 @@ class _MessageBubble extends StatelessWidget {
   final String? dmBotDisplayName;
   final bool dmBotVerified;
   final Future<void> Function(String shortcode, String sourcePeerId)?
-  onCustomEmojiTap;
+      onCustomEmojiTap;
   final Future<void> Function(String sourcePeerId)? onStickerTapFromPeer;
   final Future<void> Function(String imagePath)? onStickerTapFromLocal;
 
@@ -7460,8 +7610,7 @@ class _MessageBubble extends StatelessWidget {
     final slashButtons = parsed.buttons;
 
     // Check if this is a sticker message
-    final isSticker =
-        msg.isSticker ||
+    final isSticker = msg.isSticker ||
         (msg.imagePath != null &&
             (p.basename(msg.imagePath!).startsWith('stk_') ||
                 p.basename(msg.imagePath!).startsWith('stk_downloaded_')));
@@ -7485,9 +7634,8 @@ class _MessageBubble extends StatelessWidget {
                 borderRadius: settings.bubbleRadius(isMe: isOut),
               ),
         child: Column(
-          crossAxisAlignment: isOut
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isOut ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             if (dmIncomingBotHeader &&
                 !isOut &&
@@ -7544,8 +7692,8 @@ class _MessageBubble extends StatelessWidget {
                             msg.forwardFromNick?.isNotEmpty == true
                                 ? msg.forwardFromNick!
                                 : (msg.forwardFromChannelId != null
-                                      ? 'Канал'
-                                      : '${msg.forwardFromId!.substring(0, 8)}…'),
+                                    ? 'Канал'
+                                    : '${msg.forwardFromId!.substring(0, 8)}…'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -7601,19 +7749,19 @@ class _MessageBubble extends StatelessWidget {
                   })(),
                   onPlayWithQueue:
                       playbackThread != null && playbackIndex != null
-                      ? () {
-                          VoiceService.instance
-                              .playQueue(
+                          ? () {
+                              VoiceService.instance
+                                  .playQueue(
                                 _dmPlaybackQueueFrom(
                                   playbackThread!,
                                   playbackIndex!,
                                 ),
                               )
-                              .catchError((e) {
+                                  .catchError((e) {
                                 debugPrint('[Voice] playQueue error: $e');
                               });
-                        }
-                      : null,
+                            }
+                          : null,
                 ),
               ),
             if (msg.videoPath != null)
@@ -7622,25 +7770,24 @@ class _MessageBubble extends StatelessWidget {
                 child: _VideoMessageBubble(
                   videoPath: msg.videoPath!,
                   isOut: isOut,
-                  onPlaySquareWithQueue:
-                      playbackThread != null &&
+                  onPlaySquareWithQueue: playbackThread != null &&
                           playbackIndex != null &&
                           _dmVideoPathIsSquare(msg.videoPath!)
                       ? () {
                           VoiceService.instance
                               .playQueue(
-                                _dmPlaybackQueueFrom(
-                                  playbackThread!,
-                                  playbackIndex!,
-                                ),
-                              )
+                            _dmPlaybackQueueFrom(
+                              playbackThread!,
+                              playbackIndex!,
+                            ),
+                          )
                               .catchError((e) {
-                                debugPrint('[Voice] playQueue sq error: $e');
-                              });
+                            debugPrint('[Voice] playQueue sq error: $e');
+                          });
                         }
                       : null,
-                  onLongPressSaveToGallery:
-                      onLongPressSaveVideoToGallery == null ||
+                  onLongPressSaveToGallery: onLongPressSaveVideoToGallery ==
+                              null ||
                           kIsWeb ||
                           !File(msg.videoPath!).existsSync()
                       ? null
@@ -7652,8 +7799,7 @@ class _MessageBubble extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Builder(
                   builder: (context) {
-                    final isSticker =
-                        msg.isSticker ||
+                    final isSticker = msg.isSticker ||
                         p.basename(msg.imagePath!).startsWith('stk_') ||
                         p
                             .basename(msg.imagePath!)
@@ -7692,8 +7838,7 @@ class _MessageBubble extends StatelessWidget {
                             ),
                           );
                         },
-                        onLongPress:
-                            kIsWeb ||
+                        onLongPress: kIsWeb ||
                                 onLongPressSaveImageToGallery == null ||
                                 !File(msg.imagePath!).existsSync()
                             ? null
@@ -7752,15 +7897,15 @@ class _MessageBubble extends StatelessWidget {
                     isOut: isOut,
                     onAudioQueueFromHere:
                         playbackThread != null && playbackIndex != null
-                        ? () => unawaited(
-                            VoiceService.instance.playQueue(
-                              _dmPlaybackQueueFrom(
-                                playbackThread!,
-                                playbackIndex!,
-                              ),
-                            ),
-                          )
-                        : null,
+                            ? () => unawaited(
+                                  VoiceService.instance.playQueue(
+                                    _dmPlaybackQueueFrom(
+                                      playbackThread!,
+                                      playbackIndex!,
+                                    ),
+                                  ),
+                                )
+                            : null,
                   ),
                 ),
               ),
@@ -7779,9 +7924,8 @@ class _MessageBubble extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
-                  crossAxisAlignment: isOut
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      isOut ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Ответ',
@@ -7829,11 +7973,8 @@ class _MessageBubble extends StatelessWidget {
                 sourcePeerLabel: msg.isOutgoing
                     ? null
                     : () {
-                        for (final c
-                            in ChatStorageService
-                                .instance
-                                .contactsNotifier
-                                .value) {
+                        for (final c in ChatStorageService
+                            .instance.contactsNotifier.value) {
                           if (c.publicKeyHex == msg.peerId) {
                             return c.nickname;
                           }
@@ -7845,9 +7986,8 @@ class _MessageBubble extends StatelessWidget {
               EmojiPackCardBubble(data: inviteMap, isOutgoing: isOut)
             else if (inviteMap != null)
               Column(
-                crossAxisAlignment: isOut
-                    ? CrossAxisAlignment.end
-                    : CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    isOut ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
                   Text(
                     inviteMap['kind'] == 'device_link'
@@ -7882,14 +8022,13 @@ class _MessageBubble extends StatelessWidget {
                       ProfileService.instance.profile,
                     ),
                     onMentionTap: (hex) => openDmFromMentionKey(context, hex),
-                    onSlashCommandTap: highlightSlashCommands
-                        ? onSlashCommandTap
-                        : null,
+                    onSlashCommandTap:
+                        highlightSlashCommands ? onSlashCommandTap : null,
                     onCustomEmojiTap: onCustomEmojiTap == null
                         ? null
                         : (shortcode) => unawaited(
-                            onCustomEmojiTap!(shortcode, msg.peerId),
-                          ),
+                              onCustomEmojiTap!(shortcode, msg.peerId),
+                            ),
                   );
                 },
               ),
@@ -8530,9 +8669,8 @@ class _InputBarState extends State<_InputBar> {
                         setState(() => _showFormatStrip = !_showFormatStrip),
                     icon: Icon(
                       Icons.text_fields_rounded,
-                      color: _showFormatStrip
-                          ? cs.primary
-                          : cs.onSurfaceVariant,
+                      color:
+                          _showFormatStrip ? cs.primary : cs.onSurfaceVariant,
                       size: 22,
                     ),
                     padding: EdgeInsets.zero,
@@ -8565,10 +8703,10 @@ class _InputBarState extends State<_InputBar> {
                                 GestureDetector(
                                   onTap: widget.voiceControlsEnabled
                                       ? (widget.recordingPaused
-                                            ? () => unawaited(
+                                          ? () => unawaited(
                                                 widget.onVoiceResume(),
                                               )
-                                            : () => unawaited(
+                                          : () => unawaited(
                                                 widget.onVoicePause(),
                                               ))
                                       : null,
@@ -8595,10 +8733,10 @@ class _InputBarState extends State<_InputBar> {
                                         child: CustomPaint(
                                           painter:
                                               _LiveRecordingWaveformPainter(
-                                                bars: bars,
-                                                color: cs.primary,
-                                                paused: widget.recordingPaused,
-                                              ),
+                                            bars: bars,
+                                            color: cs.primary,
+                                            paused: widget.recordingPaused,
+                                          ),
                                         ),
                                       );
                                     },
@@ -8610,9 +8748,9 @@ class _InputBarState extends State<_InputBar> {
                                       widget.recordingSecondsNotifier,
                                   builder: (_, secs, __) {
                                     final mm = (secs ~/ 60).toString().padLeft(
-                                      2,
-                                      '0',
-                                    );
+                                          2,
+                                          '0',
+                                        );
                                     final ss = (secs.floor() % 60)
                                         .toString()
                                         .padLeft(2, '0');
@@ -8630,12 +8768,11 @@ class _InputBarState extends State<_InputBar> {
                                 ),
                                 const SizedBox(width: 6),
                                 GestureDetector(
-                                  onTap:
-                                      widget.voiceControlsEnabled &&
+                                  onTap: widget.voiceControlsEnabled &&
                                           widget.recordingPaused
                                       ? () => unawaited(
-                                          widget.onVoiceTrimLastPart(),
-                                        )
+                                            widget.onVoiceTrimLastPart(),
+                                          )
                                       : null,
                                   child: Icon(
                                     Icons.content_cut_rounded,
@@ -8667,8 +8804,8 @@ class _InputBarState extends State<_InputBar> {
                               final t = ((secs % 1) * 10).floor();
                               final sendOnEnter =
                                   AppSettings.instance.sendOnEnter;
-                              final hasShortcode = widget.controller.text
-                                  .contains(':');
+                              final hasShortcode =
+                                  widget.controller.text.contains(':');
                               final textStyle = TextStyle(
                                 fontSize: 15,
                                 color: hasShortcode
@@ -8708,9 +8845,9 @@ class _InputBarState extends State<_InputBar> {
                                       border: InputBorder.none,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 10,
-                                          ),
+                                        horizontal: 16,
+                                        vertical: 10,
+                                      ),
                                     ),
                                   ),
                                   if (hasShortcode)
@@ -8768,8 +8905,7 @@ class _InputBarState extends State<_InputBar> {
                     onTap: widget.isSending || widget.isRecording
                         ? null
                         : widget.onSend,
-                    onLongPress:
-                        (widget.onLongPressSend == null ||
+                    onLongPress: (widget.onLongPressSend == null ||
                             !hasText ||
                             widget.isSending ||
                             widget.isRecording)
@@ -8888,12 +9024,10 @@ class _FileMessageBubble extends StatelessWidget {
     }
     final cs = Theme.of(context).colorScheme;
     final textColor = isOut ? cs.onPrimary : cs.onSurface;
-    final subColor = isOut
-        ? cs.onPrimary.withValues(alpha: 0.65)
-        : cs.onSurfaceVariant;
-    final bgColor = isOut
-        ? Colors.black.withValues(alpha: 0.15)
-        : cs.surfaceContainerHigh;
+    final subColor =
+        isOut ? cs.onPrimary.withValues(alpha: 0.65) : cs.onSurfaceVariant;
+    final bgColor =
+        isOut ? Colors.black.withValues(alpha: 0.15) : cs.surfaceContainerHigh;
 
     return GestureDetector(
       onTap: () => _open(context),
@@ -9018,9 +9152,10 @@ class _DocumentPreviewScreenState extends State<_DocumentPreviewScreen> {
   Future<String> _readPptxText() async {
     final bytes = await File(widget.filePath).readAsBytes();
     final z = ZipDecoder().decodeBytes(bytes, verify: false);
-    final slides =
-        z.files.where((f) => f.name.startsWith('ppt/slides/slide')).toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
+    final slides = z.files
+        .where((f) => f.name.startsWith('ppt/slides/slide'))
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
     if (slides.isEmpty) return 'Слайды не найдены.';
     final out = <String>[];
     for (var i = 0; i < slides.length; i++) {
@@ -9196,9 +9331,8 @@ class _AudioFileBubble extends StatelessWidget {
     final inactiveColor = (isOut ? cs.onPrimary : cs.onSurface).withValues(
       alpha: 0.35,
     );
-    final subColor = isOut
-        ? cs.onPrimary.withValues(alpha: 0.65)
-        : cs.onSurfaceVariant;
+    final subColor =
+        isOut ? cs.onPrimary.withValues(alpha: 0.65) : cs.onSurfaceVariant;
 
     return ValueListenableBuilder<String?>(
       valueListenable: VoiceService.instance.currentlyPlaying,
@@ -9253,8 +9387,8 @@ class _AudioFileBubble extends StatelessWidget {
                         seed: filePath.hashCode,
                         progress: isPlaying
                             ? (progress.isFinite
-                                  ? progress.clamp(0.0, 1.0)
-                                  : 0.0)
+                                ? progress.clamp(0.0, 1.0)
+                                : 0.0)
                             : 0,
                         activeColor: activeColor,
                         inactiveColor: inactiveColor,
@@ -9386,8 +9520,8 @@ class _VoiceMessageBubble extends StatelessWidget {
                       builder: (_, progress, __) {
                         final p = isPlaying
                             ? (progress.isFinite
-                                  ? progress.clamp(0.0, 1.0)
-                                  : 0.0)
+                                ? progress.clamp(0.0, 1.0)
+                                : 0.0)
                             : 0.0;
                         return SizedBox(
                           width: 120,
@@ -9426,8 +9560,8 @@ class _VoiceMessageBubble extends StatelessWidget {
                                     ? progress.clamp(0.0, 1.0)
                                     : 0.0;
                                 final elapsed = Duration(
-                                  milliseconds: (p * dur.inMilliseconds)
-                                      .round(),
+                                  milliseconds:
+                                      (p * dur.inMilliseconds).round(),
                                 );
                                 return Text(
                                   '${_fmtDur(elapsed)} / ${_fmtDur(dur)}',
@@ -9734,8 +9868,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   @override
   void didUpdateWidget(covariant _VideoMessageBubble oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final oldSq =
-        _ChatScreenState._videoPathIsSquare(oldWidget.videoPath) &&
+    final oldSq = _ChatScreenState._videoPathIsSquare(oldWidget.videoPath) &&
         oldWidget.onPlaySquareWithQueue != null;
     final newSq = _isSquare && widget.onPlaySquareWithQueue != null;
     if (oldWidget.videoPath != widget.videoPath || oldSq != newSq) {
@@ -9822,7 +9955,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     final cur = VoiceService.instance.currentlyPlaying.value;
     final vsOwns =
         VoiceService.instance.isCurrentQueueSquareAtPath(widget.videoPath) &&
-        VoiceService.instance.hasSquareQueueVideoController;
+            VoiceService.instance.hasSquareQueueVideoController;
 
     if (cur == widget.videoPath) {
       if (vsOwns) {
@@ -10186,11 +10319,11 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     return GestureDetector(
       onTap: exists
           ? () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute(
-                fullscreenDialog: true,
-                builder: (_) => DmVideoFullscreenPage(path: widget.videoPath),
-              ),
-            )
+                MaterialPageRoute(
+                  fullscreenDialog: true,
+                  builder: (_) => DmVideoFullscreenPage(path: widget.videoPath),
+                ),
+              )
           : null,
       onLongPress: exists && widget.onLongPressSaveToGallery != null
           ? () {
@@ -11285,8 +11418,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                     builder: (_, __, ___) {
                       final hasMusic =
                           _musicPath != null && File(_musicPath!).existsSync();
-                      final online =
-                          RelayService.instance.isConnected &&
+                      final online = RelayService.instance.isConnected &&
                           RelayService.instance.isPeerOnline(widget.peerId);
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -11373,8 +11505,8 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                   Text(
                     'Материалы чата',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -11486,17 +11618,17 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
   }
 
   Widget _bannerFallback(int color) => DecoratedBox(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Color(color).withValues(alpha: 0.65),
-          Color(color).withValues(alpha: 0.35),
-        ],
-      ),
-    ),
-  );
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(color).withValues(alpha: 0.65),
+              Color(color).withValues(alpha: 0.35),
+            ],
+          ),
+        ),
+      );
 }
 
 // ── Кнопка форматирования ──────────────────────────────────────────
@@ -11533,8 +11665,8 @@ class _FmtBtn extends StatelessWidget {
             decoration: strikethrough
                 ? TextDecoration.lineThrough
                 : underline
-                ? TextDecoration.underline
-                : null,
+                    ? TextDecoration.underline
+                    : null,
             fontSize: 15,
           ),
         ),

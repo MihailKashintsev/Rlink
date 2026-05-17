@@ -50,22 +50,20 @@ class AvatarWidget extends StatelessWidget {
     // Resolve potentially stale iOS sandbox path
     final raw = imagePath;
     final resolvedPath = ImageService.instance.resolveStoredPath(raw);
-    final String networkPath =
-        resolvedPath != null &&
+    final String networkPath = resolvedPath != null &&
             (resolvedPath.startsWith('http://') ||
                 resolvedPath.startsWith('https://') ||
                 resolvedPath.startsWith('blob:') ||
                 resolvedPath.startsWith('data:'))
         ? resolvedPath
         : (raw != null &&
-                  (raw.startsWith('http://') ||
-                      raw.startsWith('https://') ||
-                      raw.startsWith('blob:') ||
-                      raw.startsWith('data:'))
-              ? raw
-              : '');
-    final file =
-        !kIsWeb &&
+                (raw.startsWith('http://') ||
+                    raw.startsWith('https://') ||
+                    raw.startsWith('blob:') ||
+                    raw.startsWith('data:'))
+            ? raw
+            : '');
+    final file = !kIsWeb &&
             resolvedPath != null &&
             !resolvedPath.startsWith('http://') &&
             !resolvedPath.startsWith('https://')
@@ -95,15 +93,15 @@ class AvatarWidget extends StatelessWidget {
                     Center(child: _buildEmojiOrInitials(innerSize)),
               )
             : hasNetworkImage
-            ? Image.network(
-                networkPath,
-                width: innerSize,
-                height: innerSize,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    Center(child: _buildEmojiOrInitials(innerSize)),
-              )
-            : Center(child: _buildEmojiOrInitials(innerSize)),
+                ? Image.network(
+                    networkPath,
+                    width: innerSize,
+                    height: innerSize,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        Center(child: _buildEmojiOrInitials(innerSize)),
+                  )
+                : Center(child: _buildEmojiOrInitials(innerSize)),
       ),
     );
 
@@ -385,10 +383,10 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                     padding: const EdgeInsets.all(16),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 5,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                        ),
+                      crossAxisCount: 5,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                    ),
                     itemCount: pack.emojis.length,
                     itemBuilder: (context, index) {
                       final emoji = pack.emojis[index];
@@ -585,11 +583,10 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                                 ),
                                 bottomActionBarConfig:
                                     epf.BottomActionBarConfig(
-                                      backgroundColor: cs
-                                          .surfaceContainerHighest
-                                          .withValues(alpha: 0.5),
-                                      buttonIconColor: cs.onSurfaceVariant,
-                                    ),
+                                  backgroundColor: cs.surfaceContainerHighest
+                                      .withValues(alpha: 0.5),
+                                  buttonIconColor: cs.onSurfaceVariant,
+                                ),
                                 searchViewConfig: epf.SearchViewConfig(
                                   backgroundColor: cs.surfaceContainerHighest
                                       .withValues(alpha: 0.5),
@@ -609,8 +606,7 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                         setState(() => _filterStickerPackId = packId);
                         unawaited(_loadStickers());
                       },
-                      onStickerPicked:
-                          widget.onStickerPicked ??
+                      onStickerPicked: widget.onStickerPicked ??
                           (path) {
                             // Default: stickers can't be inserted as text
                             debugPrint('[RLINK][Emoji] Sticker picked: $path');
@@ -619,8 +615,7 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                     _GifGrid(
                       gifUrls: _gifUrls,
                       loading: _loadingGifs,
-                      onGifPicked:
-                          widget.onGifPicked ??
+                      onGifPicked: widget.onGifPicked ??
                           (url) {
                             // Default: log GIF pick
                             debugPrint('[RLINK][Emoji] GIF picked: $url');
@@ -645,9 +640,8 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
           config: epf.Config(
             height: 320,
             checkPlatformCompatibility: !useNoto,
-            emojiTextStyle: useNoto
-                ? GoogleFonts.notoColorEmoji(fontSize: 26)
-                : null,
+            emojiTextStyle:
+                useNoto ? GoogleFonts.notoColorEmoji(fontSize: 26) : null,
             emojiViewConfig: epf.EmojiViewConfig(
               backgroundColor: cs.surfaceContainerHighest.withValues(
                 alpha: 0.5,
@@ -877,35 +871,36 @@ class _StickerGrid extends StatelessWidget {
                   },
                 )
               : stickerFiles.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'В этом наборе пока нет стикеров',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ),
-                )
-              : GridView.builder(
-                  padding: const EdgeInsets.all(6),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    crossAxisSpacing: 6,
-                    mainAxisSpacing: 6,
-                  ),
-                  itemCount: stickerFiles.length,
-                  itemBuilder: (context, index) {
-                    final file = stickerFiles[index];
-                    return GestureDetector(
-                      onTap: () => onStickerPicked(file.path),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(file, fit: BoxFit.cover),
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'В этом наборе пока нет стикеров',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
                       ),
-                    );
-                  },
-                ),
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.all(6),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 4,
+                        crossAxisSpacing: 6,
+                        mainAxisSpacing: 6,
+                      ),
+                      itemCount: stickerFiles.length,
+                      itemBuilder: (context, index) {
+                        final file = stickerFiles[index];
+                        return GestureDetector(
+                          onTap: () => onStickerPicked(file.path),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(file, fit: BoxFit.cover),
+                          ),
+                        );
+                      },
+                    ),
         ),
       ],
     );
@@ -981,7 +976,7 @@ class _GifGrid extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: loadingProgress.expectedTotalBytes != null
                         ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
+                            loadingProgress.expectedTotalBytes!
                         : null,
                   ),
                 );
@@ -1038,9 +1033,8 @@ class AvatarColorPicker extends StatelessWidget {
             decoration: BoxDecoration(
               color: Color(c),
               shape: BoxShape.circle,
-              border: isSelected
-                  ? Border.all(color: Colors.white, width: 3)
-                  : null,
+              border:
+                  isSelected ? Border.all(color: Colors.white, width: 3) : null,
               boxShadow: isSelected
                   ? [
                       BoxShadow(
