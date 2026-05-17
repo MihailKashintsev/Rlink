@@ -10981,33 +10981,97 @@ class _DmImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Widget errorBox(Object error) {
+      final cs = Theme.of(context).colorScheme;
+      return Container(
+        width: width ?? 220,
+        height: height ?? 148,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          Icons.broken_image_outlined,
+          color: cs.onSurfaceVariant,
+          size: 32,
+        ),
+      );
+    }
+
+    Widget loadingBox() {
+      final cs = Theme.of(context).colorScheme;
+      return Container(
+        width: width ?? 220,
+        height: height ?? 148,
+        alignment: Alignment.center,
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: cs.primary,
+          ),
+        ),
+      );
+    }
+
+    Widget constrain(Widget child) {
+      if (height != null) return child;
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: width ?? 0,
+          maxWidth: width ?? 220,
+          minHeight: 96,
+          maxHeight: 260,
+        ),
+        child: child,
+      );
+    }
+
     if (kIsWeb) {
       final bytes = _ChatScreenState._bytesFromDataUri(imagePath);
       if (bytes != null) {
-        return Image.memory(
-          bytes,
-          width: width,
-          height: height,
-          fit: fit,
-          filterQuality: filterQuality,
+        return constrain(
+          Image.memory(
+            bytes,
+            width: width,
+            height: height,
+            fit: fit,
+            filterQuality: filterQuality,
+            errorBuilder: (_, error, __) => errorBox(error),
+            frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
+              if (wasSynchronouslyLoaded || frame != null) return child;
+              return loadingBox();
+            },
+          ),
         );
       }
       if (_ChatScreenState._isInlineWebUri(imagePath)) {
-        return Image.network(
-          imagePath,
-          width: width,
-          height: height,
-          fit: fit,
-          filterQuality: filterQuality,
+        return constrain(
+          Image.network(
+            imagePath,
+            width: width,
+            height: height,
+            fit: fit,
+            filterQuality: filterQuality,
+            errorBuilder: (_, error, __) => errorBox(error),
+            loadingBuilder: (_, child, event) =>
+                event == null ? child : loadingBox(),
+          ),
         );
       }
     }
-    return Image.file(
-      File(imagePath),
-      width: width,
-      height: height,
-      fit: fit,
-      filterQuality: filterQuality,
+    return constrain(
+      Image.file(
+        File(imagePath),
+        width: width,
+        height: height,
+        fit: fit,
+        filterQuality: filterQuality,
+        errorBuilder: (_, error, __) => errorBox(error),
+      ),
     );
   }
 }

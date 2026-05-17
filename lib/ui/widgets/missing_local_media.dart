@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/channel.dart';
@@ -10,8 +11,17 @@ import '../../models/shared_collab.dart';
 import '../../services/image_service.dart';
 
 bool _hasLocalFile(String? storedPath) {
+  if (kIsWeb && _isInlineWebMediaRef(storedPath)) return true;
   final r = ImageService.instance.resolveStoredPath(storedPath);
   return r != null && File(r).existsSync();
+}
+
+bool _isInlineWebMediaRef(String? value) {
+  if (value == null || value.isEmpty) return false;
+  return value.startsWith('data:') ||
+      value.startsWith('blob:') ||
+      value.startsWith('http://') ||
+      value.startsWith('https://');
 }
 
 /// Подписи к медиа, которые остаются в БД после «только медиа».
@@ -73,6 +83,7 @@ bool channelCommentMissingLocalMedia(ChannelComment c) {
 /// Кнопка на месте удалённого из кэша вложения.
 class ClearedMediaPlaceholder extends StatelessWidget {
   final bool isOutgoing;
+
   /// Личный чат: для входящих — «от собеседника».
   final bool isDirectChat;
   final ColorScheme colorScheme;
