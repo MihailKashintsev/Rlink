@@ -22,6 +22,7 @@ class ImageService {
 
   final _uuid = const Uuid();
   final Map<String, _ImageAssembly> _assemblies = {};
+
   /// Track completed assemblies to prevent duplicate processing
   /// when both blob and gossip chunks deliver the same msgId.
   final Set<String> _completedMsgIds = {};
@@ -33,9 +34,13 @@ class ImageService {
 
   /// Must be called once at startup (before any path resolution).
   Future<void> init() async {
+    if (kIsWeb) return;
     final dir = await getApplicationDocumentsDirectory();
     _docsPath = dir.path;
   }
+
+  String _dataUri(Uint8List bytes, String mimeType) =>
+      'data:$mimeType;base64,${base64Encode(bytes)}';
 
   /// Resolves a stored file path that may have become stale after a rebuild or
   /// app reinstall.
@@ -184,7 +189,9 @@ class ImageService {
   /// Сохраняет аватар контакта по его publicKeyHex (перезаписывает).
   Future<String> saveContactAvatar(String publicKeyHex, Uint8List data) async {
     final dir = await _imagesDir();
-    final key = publicKeyHex.length >= 16 ? publicKeyHex.substring(0, 16) : publicKeyHex;
+    final key = publicKeyHex.length >= 16
+        ? publicKeyHex.substring(0, 16)
+        : publicKeyHex;
     final name = 'avatar_$key.jpg';
     final path = p.join(dir.path, name);
     await File(path).writeAsBytes(data);
@@ -194,7 +201,9 @@ class ImageService {
   /// Сохраняет баннер профиля контакта (отдельный файл, не пересекается с аватаром).
   Future<String> saveBannerImage(String publicKeyHex, Uint8List data) async {
     final dir = await _imagesDir();
-    final key = publicKeyHex.length >= 16 ? publicKeyHex.substring(0, 16) : publicKeyHex;
+    final key = publicKeyHex.length >= 16
+        ? publicKeyHex.substring(0, 16)
+        : publicKeyHex;
     final name = 'banner_$key.jpg';
     final path = p.join(dir.path, name);
     await File(path).writeAsBytes(data);
@@ -202,7 +211,10 @@ class ImageService {
   }
 
   String _audioExtFromMagic(Uint8List data) {
-    if (data.length >= 3 && data[0] == 0x49 && data[1] == 0x44 && data[2] == 0x33) {
+    if (data.length >= 3 &&
+        data[0] == 0x49 &&
+        data[1] == 0x44 &&
+        data[2] == 0x33) {
       return 'mp3';
     }
     if (data.length >= 12) {
@@ -215,7 +227,9 @@ class ImageService {
   /// Сохраняет принятую по сети «музыку профиля» контакта.
   Future<String> saveProfileMusic(String publicKeyHex, Uint8List data) async {
     final dir = await _imagesDir();
-    final key = publicKeyHex.length >= 16 ? publicKeyHex.substring(0, 16) : publicKeyHex;
+    final key = publicKeyHex.length >= 16
+        ? publicKeyHex.substring(0, 16)
+        : publicKeyHex;
     final ext = _audioExtFromMagic(data);
     final name = 'profile_music_$key.$ext';
     final path = p.join(dir.path, name);
@@ -302,7 +316,8 @@ class ImageService {
 
   /// Receive a complete compressed blob from relay (no chunking needed).
   /// Sets the assembly as complete with a single data block.
-  void receiveBlobData({required String msgId, required Uint8List compressedData}) {
+  void receiveBlobData(
+      {required String msgId, required Uint8List compressedData}) {
     final assembly = _assemblies[msgId];
     if (assembly == null) return;
     // Override totalChunks=1 and put all data at index 0
@@ -329,22 +344,26 @@ class ImageService {
 
     final raw = assembly.assemble();
     final data = decompress(raw);
+    if (kIsWeb) {
+      return _dataUri(data, assembly.isSticker ? 'image/jpeg' : 'image/jpeg');
+    }
     final dir = await _imagesDir();
     String name;
     if (forContactKey != null) {
       // Banner keys end with '_banner' — use distinct prefix to avoid overwriting avatar.
       if (forContactKey.endsWith('_banner')) {
-        final base = forContactKey.substring(0, forContactKey.length - 7); // strip '_banner'
+        final base = forContactKey.substring(
+            0, forContactKey.length - 7); // strip '_banner'
         final key = base.length >= 16 ? base.substring(0, 16) : base;
         name = 'banner_$key.jpg';
       } else {
-        final key = forContactKey.length >= 16 ? forContactKey.substring(0, 16) : forContactKey;
+        final key = forContactKey.length >= 16
+            ? forContactKey.substring(0, 16)
+            : forContactKey;
         name = 'avatar_$key.jpg';
       }
     } else {
-      name = assembly.isSticker
-          ? 'stk_${_uuid.v4()}.jpg'
-          : '${_uuid.v4()}.jpg';
+      name = assembly.isSticker ? 'stk_${_uuid.v4()}.jpg' : '${_uuid.v4()}.jpg';
     }
     final path = p.join(dir.path, name);
     await File(path).writeAsBytes(data);
@@ -436,6 +455,7 @@ class ImageService {
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
     final data = decompress(raw);
+    if (kIsWeb) return _dataUri(data, 'audio/mp4');
     final dir = await _voicesDir();
     final path = p.join(dir.path, '$msgId.m4a');
     await File(path).writeAsBytes(data);
@@ -466,7 +486,8 @@ class ImageService {
   }
 
   /// Native platform channel for square video cropping.
-  static const _videoCropChannel = MethodChannel('com.rendergames.rlink/video_crop');
+  static const _videoCropChannel =
+      MethodChannel('com.rendergames.rlink/video_crop');
 
   /// Склеивает несколько MP4 (последовательных фрагментов записи, например после смены камеры).
   /// На iOS/Android через нативный muxer/composition. При ошибке возвращает null.
@@ -519,7 +540,8 @@ class ImageService {
         );
         if (success == true && await File(croppedPath).exists()) {
           inputForCompress = croppedPath;
-          debugPrint('[VideoSave] Native crop OK: ${(await File(croppedPath).length()) ~/ 1024}KB');
+          debugPrint(
+              '[VideoSave] Native crop OK: ${(await File(croppedPath).length()) ~/ 1024}KB');
         } else {
           debugPrint('[VideoSave] Native crop returned false, using original');
         }
@@ -529,7 +551,8 @@ class ImageService {
     }
 
     // Step 2: Compress
-    debugPrint('[VideoSave] Compressing via native codec (isSquare=$isSquare)…');
+    debugPrint(
+        '[VideoSave] Compressing via native codec (isSquare=$isSquare)…');
     MediaInfo? infoBefore;
     try {
       infoBefore = await VideoCompress.getMediaInfo(inputForCompress);
@@ -601,16 +624,20 @@ class ImageService {
     // Fallback: plain copy
     await File(inputForCompress).copy(targetPath);
     if (inputForCompress != sourcePath) {
-      try { await File(inputForCompress).delete(); } catch (_) {}
+      try {
+        await File(inputForCompress).delete();
+      } catch (_) {}
     }
     return targetPath;
   }
 
-  Future<String?> assembleAndSaveVideo(String msgId, {bool isSquare = false}) async {
+  Future<String?> assembleAndSaveVideo(String msgId,
+      {bool isSquare = false}) async {
     final assembly = _assemblies.remove(msgId);
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
     final data = decompress(raw);
+    if (kIsWeb) return _dataUri(data, 'video/mp4');
     final dir = await _videosDir();
     final suffix = isSquare ? '_sq' : '';
     final path = p.join(dir.path, '$msgId$suffix.mp4');
@@ -625,6 +652,10 @@ class ImageService {
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
     final data = decompress(raw);
+    if (kIsWeb) {
+      final mime = _mimeFromFileName(assembly.fileName);
+      return _dataUri(data, mime);
+    }
     final dir = await _filesDir();
     // Preserve original extension from fileName, else use .bin
     final originalName = assembly.fileName;
@@ -643,6 +674,49 @@ class ImageService {
     if (!dir.existsSync()) dir.createSync(recursive: true);
     return dir;
   }
+
+  static String _mimeFromFileName(String? fileName) {
+    final ext = p.extension(fileName ?? '').toLowerCase();
+    switch (ext) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.webp':
+        return 'image/webp';
+      case '.mp4':
+      case '.m4v':
+        return 'video/mp4';
+      case '.webm':
+        return 'video/webm';
+      case '.mov':
+        return 'video/quicktime';
+      case '.m4a':
+        return 'audio/mp4';
+      case '.mp3':
+        return 'audio/mpeg';
+      case '.wav':
+        return 'audio/wav';
+      case '.ogg':
+      case '.opus':
+        return 'audio/ogg';
+      case '.pdf':
+        return 'application/pdf';
+      case '.txt':
+      case '.md':
+      case '.csv':
+      case '.json':
+      case '.xml':
+      case '.html':
+      case '.htm':
+        return 'text/plain';
+      default:
+        return 'application/octet-stream';
+    }
+  }
 }
 
 class _ImageAssembly {
@@ -654,7 +728,8 @@ class _ImageAssembly {
   final bool isFile;
   final bool isSticker;
   final bool isStory;
-  final bool isChannelPost; // медиа канального поста — кэшируем если пост ещё не пришёл
+  final bool
+      isChannelPost; // медиа канального поста — кэшируем если пост ещё не пришёл
   final bool viewOnce;
   final String? fileName;
   final String? storyId;

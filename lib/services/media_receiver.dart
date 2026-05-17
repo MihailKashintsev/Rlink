@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -268,7 +269,8 @@ class MediaReceiver {
     } else if (isFile) {
       filePath = await img.assembleAndSaveFile(msgId);
       if (filePath == null) return;
-      fileSize = await File(filePath!).length();
+      fileSize =
+          kIsWeb ? _dataUriSize(filePath!) : await File(filePath!).length();
       label = '📎 ${fileName ?? 'Файл'}';
     } else if (isVideo) {
       videoPath = await img.assembleAndSaveVideo(msgId, isSquare: isSquare);
@@ -308,5 +310,15 @@ class MediaReceiver {
           .sendAck(messageId: msgId, senderId: myKey, recipientId: fromId));
     }
     onNotify?.call(fromId, label.isNotEmpty ? label : '📷 Фото');
+  }
+}
+
+int? _dataUriSize(String value) {
+  final idx = value.indexOf(',');
+  if (!value.startsWith('data:') || idx < 0) return null;
+  try {
+    return base64Decode(value.substring(idx + 1)).length;
+  } catch (_) {
+    return null;
   }
 }

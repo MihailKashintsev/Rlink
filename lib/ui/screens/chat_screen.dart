@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection' show LinkedHashSet;
-import 'dart:convert' show jsonDecode, jsonEncode, latin1, utf8;
+import 'dart:convert'
+    show base64Decode, base64Encode, jsonDecode, jsonEncode, latin1, utf8;
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -424,7 +425,7 @@ class _ChatScreenState extends State<ChatScreen> {
     // large files out of RAM.  In-memory fallback only when no filePath given.
     if (RelayService.instance.isConnected) {
       try {
-        if (filePath != null && File(filePath).existsSync()) {
+        if (!kIsWeb && filePath != null && File(filePath).existsSync()) {
           // Queue-based send (all sizes) — progress shown on bubble overlay
           unawaited(MediaUploadQueue.instance.enqueue(
             msgId: msgId,
@@ -3155,35 +3156,124 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _openWebMediaPicker(String myId) async {
+    Widget actionTile(
+      BuildContext ctx, {
+      required IconData icon,
+      required String label,
+      required String value,
+      Color? color,
+    }) {
+      final theme = Theme.of(ctx);
+      final accent = color ?? theme.colorScheme.primary;
+      return Material(
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.56),
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => Navigator.pop(ctx, value),
+          child: SizedBox(
+            height: 96,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: accent.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: accent),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final choice = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Фото'),
-              onTap: () => Navigator.pop(ctx, 'photo'),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.16),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.video_library_outlined),
-              title: const Text('Видео'),
-              onTap: () => Navigator.pop(ctx, 'video'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.dividerColor.withOpacity(0.55),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                GridView.count(
+                  crossAxisCount: 4,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 0.92,
+                  children: [
+                    actionTile(
+                      ctx,
+                      icon: Icons.photo_library_rounded,
+                      label: 'Фото',
+                      value: 'photo',
+                      color: Colors.green.shade700,
+                    ),
+                    actionTile(
+                      ctx,
+                      icon: Icons.videocam_rounded,
+                      label: 'Видео',
+                      value: 'video',
+                      color: Colors.red.shade600,
+                    ),
+                    actionTile(
+                      ctx,
+                      icon: Icons.insert_drive_file_rounded,
+                      label: 'Файл',
+                      value: 'file',
+                      color: Colors.blue.shade700,
+                    ),
+                    actionTile(
+                      ctx,
+                      icon: Icons.more_horiz_rounded,
+                      label: 'Еще',
+                      value: 'menu',
+                      color: Colors.deepPurple.shade500,
+                    ),
+                  ],
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.attach_file_outlined),
-              title: const Text('Файл'),
-              onTap: () => Navigator.pop(ctx, 'file'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.menu_open_rounded),
-              title: const Text('Меню'),
-              onTap: () => Navigator.pop(ctx, 'menu'),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
     if (choice == null || !mounted) return;
 
@@ -3288,12 +3378,18 @@ class _ChatScreenState extends State<ChatScreen> {
     _sendActivity(Activity.sendingFile);
     try {
       final msgId = _uuid.v4();
-      final localPath = await _persistPickedBytes(
-        bytes: bytes,
-        fileName: fileName,
-        subdir: asImage ? 'images' : 'files',
-        fallbackExt: asImage ? 'jpg' : 'bin',
-      );
+      final localPath = kIsWeb
+          ? _webDataUriForPickedBytes(
+              bytes,
+              fileName,
+              fallbackMime: asImage ? 'image/jpeg' : 'application/octet-stream',
+            )
+          : await _persistPickedBytes(
+              bytes: bytes,
+              fileName: fileName,
+              subdir: asImage ? 'images' : 'files',
+              fallbackExt: asImage ? 'jpg' : 'bin',
+            );
       final targetPeerId = _looksLikePublicKey(_resolvedPeerId)
           ? _resolvedPeerId
           : widget.peerId;
@@ -3305,7 +3401,7 @@ class _ChatScreenState extends State<ChatScreen> {
           myId: myId,
           isFile: !asImage,
           fileName: asImage ? null : fileName,
-          filePath: localPath,
+          filePath: kIsWeb ? null : localPath,
         );
       }
       await _saveAndTrack(
@@ -3347,12 +3443,18 @@ class _ChatScreenState extends State<ChatScreen> {
     _sendActivity(Activity.sendingFile);
     try {
       final msgId = _uuid.v4();
-      final localPath = await _persistPickedBytes(
-        bytes: bytes,
-        fileName: fileName,
-        subdir: 'videos',
-        fallbackExt: 'mp4',
-      );
+      final localPath = kIsWeb
+          ? _webDataUriForPickedBytes(
+              bytes,
+              fileName,
+              fallbackMime: 'video/mp4',
+            )
+          : await _persistPickedBytes(
+              bytes: bytes,
+              fileName: fileName,
+              subdir: 'videos',
+              fallbackExt: 'mp4',
+            );
       final targetPeerId = _looksLikePublicKey(_resolvedPeerId)
           ? _resolvedPeerId
           : widget.peerId;
@@ -3365,7 +3467,7 @@ class _ChatScreenState extends State<ChatScreen> {
           isVideo: true,
           isSquare: false,
           fileName: fileName,
-          filePath: localPath,
+          filePath: kIsWeb ? null : localPath,
         );
       }
       await _saveAndTrack(
@@ -3416,6 +3518,77 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     await File(path).writeAsBytes(bytes);
     return path;
+  }
+
+  String _webDataUriForPickedBytes(
+    Uint8List bytes,
+    String fileName, {
+    required String fallbackMime,
+  }) {
+    final mime = _mimeTypeForFileName(fileName, fallbackMime: fallbackMime);
+    return 'data:$mime;base64,${base64Encode(bytes)}';
+  }
+
+  static bool _isInlineWebUri(String value) =>
+      value.startsWith('data:') ||
+      value.startsWith('blob:') ||
+      value.startsWith('http://') ||
+      value.startsWith('https://');
+
+  static Uint8List? _bytesFromDataUri(String value) {
+    if (!value.startsWith('data:')) return null;
+    final comma = value.indexOf(',');
+    if (comma < 0) return null;
+    try {
+      return base64Decode(value.substring(comma + 1));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String _mimeTypeForFileName(
+    String fileName, {
+    required String fallbackMime,
+  }) {
+    switch (p.extension(fileName).toLowerCase()) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.webp':
+        return 'image/webp';
+      case '.mp4':
+      case '.m4v':
+        return 'video/mp4';
+      case '.webm':
+        return 'video/webm';
+      case '.mov':
+        return 'video/quicktime';
+      case '.m4a':
+        return 'audio/mp4';
+      case '.mp3':
+        return 'audio/mpeg';
+      case '.wav':
+        return 'audio/wav';
+      case '.ogg':
+      case '.opus':
+        return 'audio/ogg';
+      case '.pdf':
+        return 'application/pdf';
+      case '.txt':
+      case '.md':
+      case '.csv':
+      case '.json':
+      case '.xml':
+      case '.html':
+      case '.htm':
+        return 'text/plain';
+      default:
+        return fallbackMime;
+    }
   }
 
   Future<void> _sendFileFromMediaGalleryPath(String srcPath) async {
@@ -4022,6 +4195,11 @@ class _ChatScreenState extends State<ChatScreen> {
           return;
         }
         fileSize = webBytes.length;
+        localPath = _webDataUriForPickedBytes(
+          webBytes,
+          originalName,
+          fallbackMime: 'application/octet-stream',
+        );
         if (!_savedMessagesLocalOnly) {
           wasQueued = await _sendMedia(
             bytes: webBytes,
@@ -7001,6 +7179,7 @@ class _MessageBubble extends StatelessWidget {
                       : null,
                   onLongPressSaveToGallery: onLongPressSaveVideoToGallery ==
                               null ||
+                          kIsWeb ||
                           !File(msg.videoPath!).existsSync()
                       ? null
                       : () => onLongPressSaveVideoToGallery!(msg.videoPath!),
@@ -7050,7 +7229,8 @@ class _MessageBubble extends StatelessWidget {
                             ),
                           );
                         },
-                        onLongPress: onLongPressSaveImageToGallery == null ||
+                        onLongPress: kIsWeb ||
+                                onLongPressSaveImageToGallery == null ||
                                 !File(msg.imagePath!).existsSync()
                             ? null
                             : () {
@@ -7064,8 +7244,8 @@ class _MessageBubble extends StatelessWidget {
                             ClipRRect(
                               borderRadius:
                                   BorderRadius.circular(isSticker ? 10 : 12),
-                              child: Image.file(
-                                File(msg.imagePath!),
+                              child: _DmImage(
+                                imagePath: msg.imagePath!,
                                 width: isSticker ? 132 : 220,
                                 height: isSticker ? 132 : null,
                                 fit: BoxFit.cover,
@@ -8159,6 +8339,11 @@ class _FileMessageBubble extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) async {
+    if (kIsWeb && _ChatScreenState._isInlineWebUri(filePath)) {
+      await launchUrl(Uri.parse(filePath),
+          mode: LaunchMode.externalApplication);
+      return;
+    }
     if (!File(filePath).existsSync()) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -8172,7 +8357,10 @@ class _FileMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (_isAudio && File(filePath).existsSync()) {
+    final exists = kIsWeb
+        ? _ChatScreenState._isInlineWebUri(filePath)
+        : File(filePath).existsSync();
+    if (_isAudio && exists) {
       return _AudioFileBubble(
         filePath: filePath,
         fileName: fileName,
@@ -9038,7 +9226,8 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         .addListener(_onSquarePausePulse);
     VoiceService.instance.squareVideoUiResumePulse
         .addListener(_onSquareResumePulse);
-    if (File(widget.videoPath).existsSync()) {
+    if ((kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)) ||
+        (!kIsWeb && File(widget.videoPath).existsSync())) {
       _initPlayer();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -9198,7 +9387,9 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   }
 
   Future<void> _initPlayer() async {
-    final ctrl = VideoPlayerController.file(File(widget.videoPath));
+    final ctrl = kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)
+        ? VideoPlayerController.networkUrl(Uri.parse(widget.videoPath))
+        : VideoPlayerController.file(File(widget.videoPath));
     try {
       await ctrl.initialize();
       if (_isSquare) {
@@ -9292,7 +9483,9 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   }
 
   Widget _buildCircle() {
-    final exists = File(widget.videoPath).existsSync();
+    final exists = kIsWeb
+        ? _ChatScreenState._isInlineWebUri(widget.videoPath)
+        : File(widget.videoPath).existsSync();
     final ctrl = _ctrl;
 
     return GestureDetector(
@@ -9408,7 +9601,9 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   }
 
   Widget _buildRegular(BuildContext context) {
-    final exists = File(widget.videoPath).existsSync();
+    final exists = kIsWeb
+        ? _ChatScreenState._isInlineWebUri(widget.videoPath)
+        : File(widget.videoPath).existsSync();
     // Aspect ratio from the video itself; fall back to 16:9.
     final ar = (_initialized && _ctrl != null && _ctrl!.value.aspectRatio > 0)
         ? _ctrl!.value.aspectRatio
@@ -10769,6 +10964,54 @@ class _UploadProgressOverlay extends StatelessWidget {
 
 // ── Полноэкранный просмотр изображения ───────────────────────────
 
+class _DmImage extends StatelessWidget {
+  final String imagePath;
+  final double? width;
+  final double? height;
+  final BoxFit? fit;
+  final FilterQuality filterQuality;
+
+  const _DmImage({
+    required this.imagePath,
+    this.width,
+    this.height,
+    this.fit,
+    this.filterQuality = FilterQuality.low,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (kIsWeb) {
+      final bytes = _ChatScreenState._bytesFromDataUri(imagePath);
+      if (bytes != null) {
+        return Image.memory(
+          bytes,
+          width: width,
+          height: height,
+          fit: fit,
+          filterQuality: filterQuality,
+        );
+      }
+      if (_ChatScreenState._isInlineWebUri(imagePath)) {
+        return Image.network(
+          imagePath,
+          width: width,
+          height: height,
+          fit: fit,
+          filterQuality: filterQuality,
+        );
+      }
+    }
+    return Image.file(
+      File(imagePath),
+      width: width,
+      height: height,
+      fit: fit,
+      filterQuality: filterQuality,
+    );
+  }
+}
+
 class _FullScreenImageViewer extends StatefulWidget {
   final String imagePath;
   final Future<void> Function()? onSaveToGallery;
@@ -10806,8 +11049,8 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
               clipBehavior: Clip.none,
               boundaryMargin: const EdgeInsets.all(80),
               child: Center(
-                child: Image.file(
-                  File(widget.imagePath),
+                child: _DmImage(
+                  imagePath: widget.imagePath,
                   fit: BoxFit.contain,
                   filterQuality: FilterQuality.high,
                 ),

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -118,7 +119,14 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
         }
       });
 
-    _ctrl = VideoPlayerController.file(File(widget.path))
+    final isInlineWeb = kIsWeb &&
+        (widget.path.startsWith('data:') ||
+            widget.path.startsWith('blob:') ||
+            widget.path.startsWith('http://') ||
+            widget.path.startsWith('https://'));
+    _ctrl = (isInlineWeb
+        ? VideoPlayerController.networkUrl(Uri.parse(widget.path))
+        : VideoPlayerController.file(File(widget.path)))
       ..initialize().then((_) {
         if (mounted) {
           setState(() => _initialized = true);
@@ -368,7 +376,8 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                                     padding: const EdgeInsets.all(18),
                                     decoration: BoxDecoration(
                                       color: Colors.black.withValues(
-                                          alpha: 0.45 * opacity.clamp(0.0, 1.0)),
+                                          alpha:
+                                              0.45 * opacity.clamp(0.0, 1.0)),
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(
@@ -394,7 +403,8 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                                     padding: const EdgeInsets.all(18),
                                     decoration: BoxDecoration(
                                       color: Colors.black.withValues(
-                                          alpha: 0.45 * opacity.clamp(0.0, 1.0)),
+                                          alpha:
+                                              0.45 * opacity.clamp(0.0, 1.0)),
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(
@@ -568,14 +578,12 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                                 _armHideTopBar();
                               },
                               onChanged: (v) {
-                                _ctrl
-                                    .seekTo(Duration(milliseconds: v.round()));
+                                _ctrl.seekTo(Duration(milliseconds: v.round()));
                               },
                             ),
                           ),
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
