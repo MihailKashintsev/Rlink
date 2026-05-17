@@ -24,14 +24,17 @@ class MediaReceiver {
   void Function(String peerId, String body)? onNotify;
 
   /// Собрать и сохранить медиа, определить тип (DM/канал/группа/история) и доставить.
-  Future<void> assembleAndDeliver(
-      {required String fromId, required String msgId}) async {
+  Future<void> assembleAndDeliver({
+    required String fromId,
+    required String msgId,
+  }) async {
     final img = ImageService.instance;
     final isAvatar = img.isAvatarAssembly(msgId);
     final isVoice = img.isVoiceAssembly(msgId);
     final isVideo = img.isVideoAssembly(msgId);
     final isSquare = img.isSquareAssembly(msgId);
     final isFile = img.isFileAssembly(msgId);
+    final isSticker = img.isStickerAssembly(msgId);
     final isChannelPost = img.isChannelPostAssembly(msgId);
     final fileName = img.assemblyFileName(msgId);
     final viewOnce = img.isViewOnceAssembly(msgId);
@@ -50,8 +53,10 @@ class MediaReceiver {
       final path = await img.assembleAndSave(msgId, forContactKey: senderKey);
       if (path != null) {
         img.markCompleted(msgId);
-        await ChatStorageService.instance
-            .updateContactAvatarImage(senderKey, path);
+        await ChatStorageService.instance.updateContactAvatarImage(
+          senderKey,
+          path,
+        );
       }
       return;
     }
@@ -83,6 +88,7 @@ class MediaReceiver {
       isVideo: isVideo,
       isSquare: isSquare,
       isFile: isFile,
+      isSticker: isSticker,
       fileName: fileName,
       viewOnce: viewOnce,
       forwardFromId: ffId,
@@ -94,14 +100,17 @@ class MediaReceiver {
   Future<bool> _tryServiceMedia(String msgId, String senderKey) async {
     final img = ImageService.instance;
     if (msgId.startsWith('banner_')) {
-      final path = await img.assembleAndSave(msgId,
-          forContactKey: '${senderKey}_banner');
+      final path = await img.assembleAndSave(
+        msgId,
+        forContactKey: '${senderKey}_banner',
+      );
       if (path != null) {
         img.markCompleted(msgId);
         final c = await ChatStorageService.instance.getContact(senderKey);
         if (c != null)
           await ChatStorageService.instance.saveContact(
-              c.copyWith(bannerImagePath: path, setBannerImagePath: true));
+            c.copyWith(bannerImagePath: path, setBannerImagePath: true),
+          );
       }
       return true;
     }
@@ -112,7 +121,8 @@ class MediaReceiver {
         final c = await ChatStorageService.instance.getContact(senderKey);
         if (c != null)
           await ChatStorageService.instance.saveContact(
-              c.copyWith(profileMusicPath: path, setProfileMusicPath: true));
+            c.copyWith(profileMusicPath: path, setProfileMusicPath: true),
+          );
       }
       return true;
     }
@@ -121,7 +131,9 @@ class MediaReceiver {
       if (path != null) {
         img.markCompleted(msgId);
         await ChannelService.instance.applyChannelBannerFromNetwork(
-            msgId.substring('chbn_'.length), path);
+          msgId.substring('chbn_'.length),
+          path,
+        );
       }
       return true;
     }
@@ -130,22 +142,31 @@ class MediaReceiver {
       if (path != null) {
         img.markCompleted(msgId);
         await ChannelService.instance.applyChannelAvatarFromNetwork(
-            msgId.substring('chav_'.length), path);
+          msgId.substring('chav_'.length),
+          path,
+        );
       }
       return true;
     }
     return false;
   }
 
-  Future<void> _deliverToChannelPost(String msgId, bool isVoice, bool isVideo,
-      bool isFile, String? fileName) async {
+  Future<void> _deliverToChannelPost(
+    String msgId,
+    bool isVoice,
+    bool isVideo,
+    bool isFile,
+    String? fileName,
+  ) async {
     final img = ImageService.instance;
     if (isVoice) {
       final p = await img.assembleAndSaveVoice(msgId);
       if (p != null) {
         img.markCompleted(msgId);
-        await ChannelService.instance
-            .applyAssembledPostMedia(postId: msgId, voicePath: p);
+        await ChannelService.instance.applyAssembledPostMedia(
+          postId: msgId,
+          voicePath: p,
+        );
       }
     } else if (isFile) {
       final p = await img.assembleAndSaveFile(msgId);
@@ -153,34 +174,49 @@ class MediaReceiver {
         img.markCompleted(msgId);
         final sz = await File(p).length();
         await ChannelService.instance.applyAssembledPostMedia(
-            postId: msgId, filePath: p, fileName: fileName, fileSize: sz);
+          postId: msgId,
+          filePath: p,
+          fileName: fileName,
+          fileSize: sz,
+        );
       }
     } else if (isVideo) {
       final p = await img.assembleAndSaveVideo(msgId);
       if (p != null) {
         img.markCompleted(msgId);
-        await ChannelService.instance
-            .applyAssembledPostMedia(postId: msgId, videoPath: p);
+        await ChannelService.instance.applyAssembledPostMedia(
+          postId: msgId,
+          videoPath: p,
+        );
       }
     } else {
       final p = await img.assembleAndSave(msgId);
       if (p != null) {
         img.markCompleted(msgId);
-        await ChannelService.instance
-            .applyAssembledPostMedia(postId: msgId, imagePath: p);
+        await ChannelService.instance.applyAssembledPostMedia(
+          postId: msgId,
+          imagePath: p,
+        );
       }
     }
   }
 
-  Future<void> _deliverToChannelComment(String msgId, bool isVoice,
-      bool isVideo, bool isFile, String? fileName) async {
+  Future<void> _deliverToChannelComment(
+    String msgId,
+    bool isVoice,
+    bool isVideo,
+    bool isFile,
+    String? fileName,
+  ) async {
     final img = ImageService.instance;
     if (isVoice) {
       final p = await img.assembleAndSaveVoice(msgId);
       if (p != null) {
         img.markCompleted(msgId);
-        await ChannelService.instance
-            .applyAssembledCommentMedia(commentId: msgId, voicePath: p);
+        await ChannelService.instance.applyAssembledCommentMedia(
+          commentId: msgId,
+          voicePath: p,
+        );
       }
     } else if (isFile) {
       final p = await img.assembleAndSaveFile(msgId);
@@ -188,27 +224,38 @@ class MediaReceiver {
         img.markCompleted(msgId);
         final sz = await File(p).length();
         await ChannelService.instance.applyAssembledCommentMedia(
-            commentId: msgId, filePath: p, fileName: fileName, fileSize: sz);
+          commentId: msgId,
+          filePath: p,
+          fileName: fileName,
+          fileSize: sz,
+        );
       }
     } else if (isVideo) {
       final p = await img.assembleAndSaveVideo(msgId);
       if (p != null) {
         img.markCompleted(msgId);
-        await ChannelService.instance
-            .applyAssembledCommentMedia(commentId: msgId, videoPath: p);
+        await ChannelService.instance.applyAssembledCommentMedia(
+          commentId: msgId,
+          videoPath: p,
+        );
       }
     } else {
       final p = await img.assembleAndSave(msgId);
       if (p != null) {
         img.markCompleted(msgId);
-        await ChannelService.instance
-            .applyAssembledCommentMedia(commentId: msgId, imagePath: p);
+        await ChannelService.instance.applyAssembledCommentMedia(
+          commentId: msgId,
+          imagePath: p,
+        );
       }
     }
   }
 
   Future<void> _deliverToGroup(
-      String msgId, bool isVideo, bool isSquare) async {
+    String msgId,
+    bool isVideo,
+    bool isSquare,
+  ) async {
     final img = ImageService.instance;
     if (isVideo) {
       final p = await img.assembleAndSaveVideo(msgId, isSquare: isSquare);
@@ -250,6 +297,7 @@ class MediaReceiver {
     required bool isVideo,
     required bool isSquare,
     required bool isFile,
+    required bool isSticker,
     required bool viewOnce,
     String? fileName,
     String? forwardFromId,
@@ -269,8 +317,9 @@ class MediaReceiver {
     } else if (isFile) {
       filePath = await img.assembleAndSaveFile(msgId);
       if (filePath == null) return;
-      fileSize =
-          kIsWeb ? _dataUriSize(filePath!) : await File(filePath!).length();
+      fileSize = kIsWeb
+          ? _dataUriSize(filePath)
+          : await File(filePath).length();
       label = '📎 ${fileName ?? 'Файл'}';
     } else if (isVideo) {
       videoPath = await img.assembleAndSaveVideo(msgId, isSquare: isSquare);
@@ -297,6 +346,7 @@ class MediaReceiver {
       fileName: fileName,
       fileSize: fileSize,
       imagePath: imagePath,
+      isSticker: isSticker,
       viewOnce: viewOnce,
       forwardFromId: forwardFromId,
       forwardFromNick: forwardFromNick,
@@ -306,8 +356,13 @@ class MediaReceiver {
     _incomingMessageController.add(msg);
 
     if (myKey.isNotEmpty) {
-      unawaited(GossipRouter.instance
-          .sendAck(messageId: msgId, senderId: myKey, recipientId: fromId));
+      unawaited(
+        GossipRouter.instance.sendAck(
+          messageId: msgId,
+          senderId: myKey,
+          recipientId: fromId,
+        ),
+      );
     }
     onNotify?.call(fromId, label.isNotEmpty ? label : '📷 Фото');
   }
