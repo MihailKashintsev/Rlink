@@ -1128,6 +1128,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _startCall({required bool video}) async {
     if (_isDmBot || _savedMessagesLocalOnly) return;
+    if (kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Звонки в веб-версии временно недоступны'),
+          ),
+        );
+      }
+      return;
+    }
     if (!_looksLikePublicKey(_resolvedPeerId)) {
       final ok = await _waitForPeerPublicKey();
       if (!ok) return;
@@ -3381,16 +3391,15 @@ class _ChatScreenState extends State<ChatScreen> {
       final r = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: false,
-        withData: true,
+        withReadStream: true,
       );
       final f = r?.files.firstOrNull;
-      if (f?.bytes == null || !mounted) return;
-      await _sendWebBytesAsFile(
-        bytes: f!.bytes!,
+      if (f == null || !mounted) return;
+      await _sendWebPickedStream(
+        picked: f,
         fileName: f.name.isNotEmpty ? f.name : 'photo.jpg',
         myId: myId,
         textFallback: '📷 Фото',
-        asImage: true,
       );
       return;
     }
@@ -3399,16 +3408,15 @@ class _ChatScreenState extends State<ChatScreen> {
         type: FileType.custom,
         allowedExtensions: const ['gif'],
         allowMultiple: false,
-        withData: true,
+        withReadStream: true,
       );
       final f = r?.files.firstOrNull;
-      if (f?.bytes == null || !mounted) return;
-      await _sendWebBytesAsFile(
-        bytes: f!.bytes!,
+      if (f == null || !mounted) return;
+      await _sendWebPickedStream(
+        picked: f,
         fileName: f.name.isNotEmpty ? f.name : 'animation.gif',
         myId: myId,
         textFallback: '🎞 GIF',
-        asImage: true,
       );
       return;
     }

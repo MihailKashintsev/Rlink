@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../services/call_service.dart';
 import 'avatar_widget.dart';
@@ -46,6 +47,10 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay>
   }
 
   Future<void> _accept() async {
+    if (kIsWeb) {
+      await CallService.instance.rejectIncoming(widget.session);
+      return;
+    }
     if (_busy) return;
     setState(() => _busy = true);
     if (!mounted) return;
