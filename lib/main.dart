@@ -3193,6 +3193,10 @@ Future<bool> _handleIncomingMediaWhenAutoDownloadDisabled({
   bool isChannelPost = false,
 }) async {
   if (AppSettings.instance.autoDownloadMedia) return false;
+  // In the browser the relay blob is already in memory and can be rendered as a
+  // blob: URL, so keeping a "download from peer" placeholder only hides media
+  // that we are able to show immediately.
+  if (kIsWeb) return false;
   // Стикеры всегда скачиваем — они часть сообщения.
   if (isSticker) return false;
   if (msgId.startsWith('stickerpack_')) return false;

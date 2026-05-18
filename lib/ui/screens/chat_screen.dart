@@ -74,6 +74,7 @@ import '../../services/pending_media_service.dart';
 import '../../utils/channel_mentions.dart';
 import '../../utils/custom_emoji_text.dart';
 import '../../utils/reaction_emoji_key.dart';
+import '../../utils/web_object_url.dart';
 import '../../utils/external_message_share.dart';
 import '../../utils/invite_dm_codec.dart';
 import '../widgets/avatar_widget.dart';
@@ -390,9 +391,15 @@ class _ChatScreenState extends State<ChatScreen> {
   /// All files larger than this are automatically split into chunks for reliable delivery.
   static const _kMaxBlobBytes = 100 * 1024;
 
-  /// Relay chunk size for large media — 500 KB raw → ~667 KB after base64.
-  /// Safely under relay server's 10 MB limit. Faster transfers for large files.
+  /// Relay chunk size for large media on native — 500 KB raw → ~667 KB after
+  /// base64. Web uses smaller chunks to keep the browser websocket and memory
+  /// pressure stable during video/file uploads.
   static const _kRelayChunkBytes = 500 * 1024;
+  static const _kWebRelayChunkBytes = 96 * 1024;
+  static const _kWebLocalPreviewMaxBytes = 24 * 1024 * 1024;
+
+  static int _relayChunkBytesFor(int size) =>
+      kIsWeb ? _kWebRelayChunkBytes : _kRelayChunkBytes;
 
   /// Send media: relay blob over internet, BLE chunks for mesh.
   /// Returns true if the file was queued for background upload (status = sending).
@@ -487,13 +494,15 @@ class _ChatScreenState extends State<ChatScreen> {
               '[RLINK][Media] In-memory blob sent: ${compressed.length} bytes to ${_resolvedPeerId.substring(0, 8)}',
             );
           } else {
-            final total = (compressed.length / _kRelayChunkBytes).ceil();
+            final chunkBytes = _relayChunkBytesFor(compressed.length);
+            final total = (compressed.length / chunkBytes).ceil();
             debugPrint('[RLINK][Media] Fallback in-memory chunks: $total');
             _sendBlobChunksInBackground(
               compressed: compressed,
               msgId: msgId,
               myId: myId,
               total: total,
+              chunkBytes: chunkBytes,
               isVoice: isVoice,
               isVideo: isVideo,
               isSquare: isSquare,
@@ -560,6 +569,7 @@ class _ChatScreenState extends State<ChatScreen> {
     required String msgId,
     required String myId,
     required int total,
+    required int chunkBytes,
     bool isVoice = false,
     bool isVideo = false,
     bool isSquare = false,
@@ -571,10 +581,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final relayRecipientKey = _resolvedPeerId;
     () async {
       for (var i = 0; i < total; i++) {
-        final offset = i * _kRelayChunkBytes;
-        final end = (offset + _kRelayChunkBytes) > compressed.length
+        final offset = i * chunkBytes;
+        final end = (offset + chunkBytes) > compressed.length
             ? compressed.length
-            : offset + _kRelayChunkBytes;
+            : offset + chunkBytes;
         final chunk = Uint8List.sublistView(compressed, offset, end);
         await RelayService.instance.sendBlobChunk(
           recipientKey: relayRecipientKey,
@@ -591,7 +601,7 @@ class _ChatScreenState extends State<ChatScreen> {
           fileName: fileName,
         );
         // Gentle pacing — relay allows ~30 msgs/sec, we stay at 20/sec.
-        await Future.delayed(const Duration(milliseconds: 50));
+        await Future.delayed(Duration(milliseconds: kIsWeb ? 80 : 50));
       }
       debugPrint(
         '[RLINK][Media] All $total blob chunks sent for $msgId to $relayRecipientKey',
@@ -1128,16 +1138,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _startCall({required bool video}) async {
     if (_isDmBot || _savedMessagesLocalOnly) return;
-    if (kIsWeb) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Звонки в веб-версии временно недоступны'),
-          ),
-        );
-      }
-      return;
-    }
     if (!_looksLikePublicKey(_resolvedPeerId)) {
       final ok = await _waitForPeerPublicKey();
       if (!ok) return;
@@ -3698,7 +3698,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         wasQueued: true,
       );
-      await _sendRelayStream(
+      final localRef = await _sendRelayStream(
         stream: stream,
         size: picked.size,
         msgId: msgId,
@@ -3706,7 +3706,25 @@ class _ChatScreenState extends State<ChatScreen> {
         isVideo: isVideo,
         isFile: isFile,
         fileName: isFile ? fileName : null,
+        previewMime: _mimeTypeForFileName(
+          fileName,
+          fallbackMime: isVideo
+              ? 'video/mp4'
+              : isFile
+                  ? 'application/octet-stream'
+                  : 'image/jpeg',
+        ),
       );
+      final saved = await ChatStorageService.instance.getMessageById(msgId);
+      if (saved != null && localRef != null) {
+        await ChatStorageService.instance.saveMessage(
+          saved.copyWith(
+            imagePath: (!isVideo && !isFile) ? localRef : null,
+            videoPath: isVideo ? localRef : null,
+            filePath: isFile ? localRef : null,
+          ),
+        );
+      }
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
         msgId,
         MessageStatus.sent,
@@ -3730,19 +3748,24 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _sendRelayStream({
+  Future<String?> _sendRelayStream({
     required Stream<List<int>> stream,
     required int size,
     required String msgId,
     required String myId,
+    required String previewMime,
     bool isVideo = false,
     bool isFile = false,
     String? fileName,
   }) async {
-    final total = math.max(1, (size / _kRelayChunkBytes).ceil());
+    final chunkBytes = _relayChunkBytesFor(size);
+    final total = math.max(1, (size / chunkBytes).ceil());
     var index = 0;
     var sent = 0;
     final pending = BytesBuilder(copy: false);
+    final shouldKeepLocalPreview =
+        kIsWeb && size > 0 && size <= _kWebLocalPreviewMaxBytes;
+    final previewChunks = shouldKeepLocalPreview ? <Uint8List>[] : null;
 
     Future<void> flushChunk(Uint8List chunk) async {
       await RelayService.instance.sendBlobChunk(
@@ -3762,18 +3785,21 @@ class _ChatScreenState extends State<ChatScreen> {
         msgId,
         size <= 0 ? 0.99 : math.min(0.99, sent / size),
       );
-      await Future.delayed(const Duration(milliseconds: 20));
+      await Future.delayed(Duration(milliseconds: kIsWeb ? 80 : 20));
     }
 
     await for (final part in stream) {
+      if (previewChunks != null) {
+        previewChunks.add(Uint8List.fromList(part));
+      }
       pending.add(part);
       var data = pending.toBytes();
       var offset = 0;
-      while (data.length - offset >= _kRelayChunkBytes) {
+      while (data.length - offset >= chunkBytes) {
         await flushChunk(
-          Uint8List.sublistView(data, offset, offset + _kRelayChunkBytes),
+          Uint8List.sublistView(data, offset, offset + chunkBytes),
         );
-        offset += _kRelayChunkBytes;
+        offset += chunkBytes;
       }
       pending.clear();
       if (offset < data.length) {
@@ -3786,6 +3812,8 @@ class _ChatScreenState extends State<ChatScreen> {
       await flushChunk(rest);
     }
     RelayService.instance.updateSendProgress(msgId, 1);
+    if (previewChunks == null) return null;
+    return createWebObjectUrl(previewChunks, previewMime);
   }
 
   Future<void> _sendWebVideoBytes({

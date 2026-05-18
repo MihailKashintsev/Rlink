@@ -12,6 +12,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../utils/web_object_url.dart';
+
 /// Сколько байт сырых данных помещается в один img_chunk-пакет.
 /// 90 байт → 120 байт base64. Итого JSON ≈ 274 байт < BLE MTU 290 байт.
 /// (overhead: id36+type+ttl+ts+msgId36+idx = ~154 байт; без rid и from)
@@ -40,7 +42,8 @@ class ImageService {
     _docsPath = dir.path;
   }
 
-  String _dataUri(Uint8List bytes, String mimeType) =>
+  String _webMediaRef(Uint8List bytes, String mimeType) =>
+      createWebObjectUrl([bytes], mimeType) ??
       'data:$mimeType;base64,${base64Encode(bytes)}';
 
   /// Resolves a stored file path that may have become stale after a rebuild or
@@ -345,9 +348,7 @@ class ImageService {
 
     final raw = assembly.assemble();
     final data = decompress(raw);
-    if (kIsWeb) {
-      return _dataUri(data, _imageMimeFromBytes(data));
-    }
+    if (kIsWeb) return _webMediaRef(data, _imageMimeFromBytes(data));
     final dir = await _imagesDir();
     String name;
     if (forContactKey != null) {
@@ -456,7 +457,7 @@ class ImageService {
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
     final data = decompress(raw);
-    if (kIsWeb) return _dataUri(data, 'audio/mp4');
+    if (kIsWeb) return _webMediaRef(data, 'audio/mp4');
     final dir = await _voicesDir();
     final path = p.join(dir.path, '$msgId.m4a');
     await File(path).writeAsBytes(data);
@@ -638,7 +639,7 @@ class ImageService {
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
     final data = decompress(raw);
-    if (kIsWeb) return _dataUri(data, 'video/mp4');
+    if (kIsWeb) return _webMediaRef(data, 'video/mp4');
     final dir = await _videosDir();
     final suffix = isSquare ? '_sq' : '';
     final path = p.join(dir.path, '$msgId$suffix.mp4');
@@ -655,7 +656,7 @@ class ImageService {
     final data = decompress(raw);
     if (kIsWeb) {
       final mime = _mimeFromFileName(assembly.fileName);
-      return _dataUri(data, mime);
+      return _webMediaRef(data, mime);
     }
     final dir = await _filesDir();
     // Preserve original extension from fileName, else use .bin
