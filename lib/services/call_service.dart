@@ -311,18 +311,22 @@ class CallService {
     // Show "ringing" while waiting for callee to accept.
     // Transitions to connecting when 'accept' signal arrives.
     _setPhase(CallPhase.ringing);
-    await _ensurePeerConnection();
-    await _ensureLocalStream();
+    try {
+      await _ensurePeerConnection();
+      await _ensureLocalStream();
 
-    await _sendSignal(recipientKey, callId, 'invite', {
-      'video': _videoEnabled,
-      'audio': true,
-    });
-    await _createAndSendOffer();
-    _armRingingTimeout();
-    // Keep resending invite+offer every 5 s so callee gets it even after
-    // a transient relay reconnect (WS drop → silent mailbox queue).
-    _startOfferResendLoop(recipientKey, callId);
+      await _sendSignal(recipientKey, callId, 'invite', {
+        'video': _videoEnabled,
+        'audio': true,
+      });
+      await _createAndSendOffer();
+      _armRingingTimeout();
+      _startOfferResendLoop(recipientKey, callId);
+    } catch (e) {
+      debugPrint('[RLINK][Call] startOutgoing failed: $e');
+      await _cleanup(CallPhase.failed);
+      throw StateError('media_init_failed');
+    }
 
     return CallSessionInfo(
       callId: callId,
@@ -346,8 +350,17 @@ class CallService {
     await SoundEffectsService.instance.stopIncomingRingtone();
     _setPhase(CallPhase.connecting);
 
-    await _ensurePeerConnection();
-    await _ensureLocalStream();
+    try {
+      await _ensurePeerConnection();
+      await _ensureLocalStream();
+    } catch (e) {
+      debugPrint('[RLINK][Call] acceptIncoming media failed: $e');
+      try {
+        await _sendSignal(session.peerId, session.callId, 'reject');
+      } catch (_) {}
+      await _cleanup(CallPhase.failed);
+      throw StateError('media_init_failed');
+    }
     await _sendSignal(session.peerId, session.callId, 'accept');
     _armConnectTimeout();
 
@@ -458,10 +471,6 @@ class CallService {
     if (_pc != null) return;
     final pc = await createPeerConnection(_iceConfig());
     _pc = pc;
-    // Pre-create remote stream — on iOS event.streams is often empty,
-    // so we add tracks manually and avoid the null-stream bug.
-    final rs = await createLocalMediaStream('remote');
-
     pc.onIceCandidate = (candidate) async {
       final peerId = _activePeerId;
       final callId = _activeCallId;
@@ -493,16 +502,7 @@ class CallService {
     };
 
     pc.onTrack = (event) {
-      unawaited(rs.addTrack(event.track));
-      remoteStream = rs;
-      remoteStreamNotifier.value = rs;
-      remoteStreamGeneration.value++;
-      _connectTimeout?.cancel();
-      if (phase.value != CallPhase.connected) {
-        _setPhase(CallPhase.connected);
-        unawaited(
-            SoundEffectsService.instance.playAction(ActionSound.callConnected));
-      }
+      unawaited(_attachRemoteTrack(event));
     };
 
     pc.onIceConnectionState = (state) {
@@ -552,6 +552,26 @@ class CallService {
         }
       }
     };
+  }
+
+  Future<void> _attachRemoteTrack(dynamic event) async {
+    MediaStream stream;
+    final streams = event.streams;
+    if (streams is List && streams.isNotEmpty && streams.first is MediaStream) {
+      stream = streams.first as MediaStream;
+    } else {
+      stream = remoteStream ?? await createLocalMediaStream('remote');
+      await stream.addTrack(event.track as MediaStreamTrack);
+    }
+    remoteStream = stream;
+    remoteStreamNotifier.value = stream;
+    remoteStreamGeneration.value++;
+    _connectTimeout?.cancel();
+    if (phase.value != CallPhase.connected) {
+      _setPhase(CallPhase.connected);
+      unawaited(
+          SoundEffectsService.instance.playAction(ActionSound.callConnected));
+    }
   }
 
   Future<void> _ensureLocalStream() async {
@@ -824,13 +844,29 @@ class CallService {
       await _pc?.close();
     } catch (_) {}
     _pc = null;
-    try {
-      await _localStream?.dispose();
-    } catch (_) {}
+    final local = _localStream;
+    if (local != null) {
+      for (final track in local.getTracks()) {
+        try {
+          await track.stop();
+        } catch (_) {}
+      }
+      try {
+        await local.dispose();
+      } catch (_) {}
+    }
     _localStream = null;
-    try {
-      await remoteStream?.dispose();
-    } catch (_) {}
+    final remote = remoteStream;
+    if (remote != null) {
+      for (final track in remote.getTracks()) {
+        try {
+          await track.stop();
+        } catch (_) {}
+      }
+      try {
+        await remote.dispose();
+      } catch (_) {}
+    }
     remoteStream = null;
     remoteStreamNotifier.value = null;
     _activeCallId = null;
@@ -897,9 +933,9 @@ class CallService {
     _acceptResendAttempts = 0;
   }
 
-  /// Caller-side loop: resend invite+offer every 5 s while still ringing.
-  /// Ensures callee gets the offer even if they reconnected to relay after
-  /// the initial delivery (transient WebSocket drop → silent relay queue).
+  /// Caller-side loop: refresh offer while still ringing. The invite itself is
+  /// sent once; repeatedly sending it can surface as duplicate incoming banners
+  /// on web when notifications and overlays race.
   void _startOfferResendLoop(String peerId, String callId) {
     _stopOfferResendLoop();
     _offerResendTimer = Timer.periodic(const Duration(seconds: 5), (t) async {
@@ -907,10 +943,7 @@ class CallService {
         _stopOfferResendLoop();
         return;
       }
-      debugPrint(
-          '[RLINK][Call] resend invite+offer (ringing retry) call=$callId');
-      await _sendSignal(
-          peerId, callId, 'invite', {'video': _videoEnabled, 'audio': true});
+      debugPrint('[RLINK][Call] resend offer (ringing retry) call=$callId');
       if (_lastLocalOffer != null) {
         await _sendSignal(peerId, callId, 'offer', _lastLocalOffer!);
       }

@@ -911,16 +911,16 @@ class RelayService with WidgetsBindingObserver {
     }
     final b64 = base64Encode(compressedData);
     debugPrint('[RLINK][Relay] sendBlob: base64 encoded length=${b64.length}');
-    // Use short key for relay routing (rid8), include full key in 'fullTo' for verification
-    // Recipient will verify that the full key matches their public key
-    final rid8 =
-        recipientKey.length > 8 ? recipientKey.substring(0, 8) : recipientKey;
+    // Route by the full public key. Older relay deployments do not understand
+    // fullTo-only routing, so using rid8 in "to" makes media look offline even
+    // while text packets work.
+    final routeKey = recipientKey.trim().toLowerCase();
     // Send as 'blob' type directly — single base64, no packet wrapping.
     // The relay server routes via 'to' (rid8), replaces it with 'from', and forwards.
     final msg = <String, dynamic>{
       'type': 'blob',
-      'to': rid8, // Short key for relay routing
-      'fullTo': recipientKey, // Full key for recipient verification
+      'to': routeKey,
+      'fullTo': routeKey,
       'msgId': msgId,
       'from': fromId,
       'data': b64,
@@ -933,11 +933,11 @@ class RelayService with WidgetsBindingObserver {
       if (viewOnce) 'vo': true,
     };
     debugPrint(
-        '[RLINK][Relay] sendBlob: message prepared with to=$rid8 fullTo=$recipientKey, sending...');
+        '[RLINK][Relay] sendBlob: message prepared with to=$routeKey, sending...');
     try {
       await _safeSend(msg, context: 'sendBlob');
       debugPrint(
-          '[RLINK][Relay] Sent blob ${compressedData.length} bytes for $msgId to $rid8 (full: $recipientKey)');
+          '[RLINK][Relay] Sent blob ${compressedData.length} bytes for $msgId to $routeKey');
     } catch (e) {
       debugPrint('[RLINK][Relay] Failed to send blob: $e');
     }
@@ -964,14 +964,14 @@ class RelayService with WidgetsBindingObserver {
   }) async {
     if (!isConnected) return;
     final b64 = base64Encode(chunkData);
-    // Use short key for relay routing (rid8), include full key in 'fullTo' for verification
-    final rid8 =
-        recipientKey.length > 8 ? recipientKey.substring(0, 8) : recipientKey;
+    // Route by the full public key for compatibility with both old and new
+    // relay servers.
+    final routeKey = recipientKey.trim().toLowerCase();
     // Meta flags + filename only in first chunk — saves bytes.
     final msg = <String, dynamic>{
       'type': 'blob',
-      'to': rid8, // Short key for relay routing
-      'fullTo': recipientKey, // Full key for recipient verification
+      'to': routeKey,
+      'fullTo': routeKey,
       'msgId': msgId,
       'from': fromId,
       'data': b64,
