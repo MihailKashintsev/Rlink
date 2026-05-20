@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:video_compress/video_compress.dart';
 import 'package:video_player/video_player.dart';
 
@@ -52,7 +53,9 @@ class _HoldSquareVideoReviewScreenState
     super.initState();
     _embedPauseGen = EmbeddedVideoPauseBus.instance.generation.value;
     EmbeddedVideoPauseBus.instance.generation.addListener(_onEmbedPauseBus);
-    final c = VideoPlayerController.file(File(widget.videoPath));
+    final c = kIsWeb && _isInlineWebUri(widget.videoPath)
+        ? VideoPlayerController.networkUrl(Uri.parse(widget.videoPath))
+        : VideoPlayerController.file(File(widget.videoPath));
     _player = c;
     c.initialize().then((_) {
       if (!mounted) return;
@@ -105,6 +108,10 @@ class _HoldSquareVideoReviewScreenState
       nav.pop(widget.videoPath);
       return;
     }
+    if (kIsWeb) {
+      nav.pop(widget.videoPath);
+      return;
+    }
 
     setState(() => _busy = true);
     try {
@@ -143,6 +150,12 @@ class _HoldSquareVideoReviewScreenState
       }
     }
   }
+
+  static bool _isInlineWebUri(String value) =>
+      value.startsWith('data:') ||
+      value.startsWith('blob:') ||
+      value.startsWith('http://') ||
+      value.startsWith('https://');
 
   @override
   Widget build(BuildContext context) {

@@ -215,6 +215,25 @@ class ImageService {
   }
 
   String _audioExtFromMagic(Uint8List data) {
+    if (data.length >= 4 &&
+        data[0] == 0x1A &&
+        data[1] == 0x45 &&
+        data[2] == 0xDF &&
+        data[3] == 0xA3) {
+      return 'webm';
+    }
+    if (data.length >= 4 &&
+        data[0] == 0x4F &&
+        data[1] == 0x67 &&
+        data[2] == 0x67 &&
+        data[3] == 0x53) {
+      return 'ogg';
+    }
+    if (data.length >= 12) {
+      final riff = String.fromCharCodes(data.sublist(0, 4));
+      final wave = String.fromCharCodes(data.sublist(8, 12));
+      if (riff == 'RIFF' && wave == 'WAVE') return 'wav';
+    }
     if (data.length >= 3 &&
         data[0] == 0x49 &&
         data[1] == 0x44 &&
@@ -225,7 +244,27 @@ class ImageService {
       final f = String.fromCharCodes(data.sublist(4, 8));
       if (f == 'ftyp') return 'm4a';
     }
+    if (data.length >= 2 && data[0] == 0xFF && (data[1] & 0xF0) == 0xF0) {
+      return 'aac';
+    }
     return 'mp3';
+  }
+
+  String _audioMimeFromMagic(Uint8List data) {
+    switch (_audioExtFromMagic(data)) {
+      case 'webm':
+        return 'audio/webm';
+      case 'ogg':
+        return 'audio/ogg';
+      case 'wav':
+        return 'audio/wav';
+      case 'm4a':
+        return 'audio/mp4';
+      case 'aac':
+        return 'audio/aac';
+      default:
+        return 'audio/mpeg';
+    }
   }
 
   /// Сохраняет принятую по сети «музыку профиля» контакта.
@@ -457,9 +496,9 @@ class ImageService {
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
     final data = decompress(raw);
-    if (kIsWeb) return _webMediaRef(data, 'audio/mp4');
+    if (kIsWeb) return _webMediaRef(data, _audioMimeFromMagic(data));
     final dir = await _voicesDir();
-    final path = p.join(dir.path, '$msgId.m4a');
+    final path = p.join(dir.path, '$msgId.${_audioExtFromMagic(data)}');
     await File(path).writeAsBytes(data);
     return path;
   }
@@ -639,7 +678,10 @@ class ImageService {
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
     final data = decompress(raw);
-    if (kIsWeb) return _webMediaRef(data, 'video/mp4');
+    if (kIsWeb) {
+      final ref = _webMediaRef(data, 'video/mp4');
+      return isSquare ? '$ref#rlink_square' : ref;
+    }
     final dir = await _videosDir();
     final suffix = isSquare ? '_sq' : '';
     final path = p.join(dir.path, '$msgId$suffix.mp4');

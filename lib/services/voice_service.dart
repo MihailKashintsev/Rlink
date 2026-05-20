@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:audio_session/audio_session.dart';
-import 'package:audioplayers/audioplayers.dart' show AudioPlayer, DeviceFileSource;
+import 'package:audioplayers/audioplayers.dart'
+    show AudioPlayer, DeviceFileSource, UrlSource;
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -87,8 +88,7 @@ class VoiceService {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration(
         avAudioSessionCategory: AVAudioSessionCategory.playback,
-        avAudioSessionCategoryOptions:
-            AVAudioSessionCategoryOptions.duckOthers,
+        avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.duckOthers,
         avAudioSessionMode: AVAudioSessionMode.spokenAudio,
         avAudioSessionRouteSharingPolicy:
             AVAudioSessionRouteSharingPolicy.defaultPolicy,
@@ -182,19 +182,34 @@ class VoiceService {
   Future<String?> startRecording() async {
     await interruptForRecording();
     if (!await _recorder.hasPermission()) return null;
-    final dir = await getTemporaryDirectory();
-    final path =
-        '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    final encoder = await _preferredRecordingEncoder();
+    final path = kIsWeb
+        ? ''
+        : '${(await getTemporaryDirectory()).path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
     await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.aacLc,
+      RecordConfig(
+        encoder: encoder,
         bitRate: 64000,
-        sampleRate: 44100,
+        sampleRate: kIsWeb ? 48000 : 44100,
         numChannels: 1,
       ),
       path: path,
     );
     return path;
+  }
+
+  Future<AudioEncoder> _preferredRecordingEncoder() async {
+    if (!kIsWeb) return AudioEncoder.aacLc;
+    for (final encoder in const [
+      AudioEncoder.aacLc,
+      AudioEncoder.opus,
+      AudioEncoder.wav,
+    ]) {
+      try {
+        if (await _recorder.isEncoderSupported(encoder)) return encoder;
+      } catch (_) {}
+    }
+    return AudioEncoder.opus;
   }
 
   /// Останавливает запись и возвращает финальный путь.
@@ -256,11 +271,10 @@ class VoiceService {
     if (_squareEndDispatchedInService) return;
     if (v.position.inMilliseconds >= totalMs - 80) {
       _squareEndDispatchedInService = true;
-      final path = _queue.isNotEmpty &&
-              _queuePos >= 0 &&
-              _queuePos < _queue.length
-          ? _queue[_queuePos].path
-          : null;
+      final path =
+          _queue.isNotEmpty && _queuePos >= 0 && _queuePos < _queue.length
+              ? _queue[_queuePos].path
+              : null;
       if (path != null) {
         unawaited(onSquareVideoPlaybackEnded(path));
       }
@@ -335,7 +349,7 @@ class VoiceService {
   Future<void> playQueue(List<PlaybackQueueItem> items) async {
     final filtered = <PlaybackQueueItem>[];
     for (final it in items) {
-      if (it.path.isNotEmpty && File(it.path).existsSync()) {
+      if (_isPlayableMediaPath(it.path)) {
         filtered.add(it);
       }
     }
@@ -358,6 +372,18 @@ class VoiceService {
     await playQueue([
       PlaybackQueueItem(path: path, title: title, kind: kind),
     ]);
+  }
+
+  bool _isPlayableMediaPath(String path) {
+    if (path.isEmpty) return false;
+    if (kIsWeb &&
+        (path.startsWith('blob:') ||
+            path.startsWith('data:') ||
+            path.startsWith('http://') ||
+            path.startsWith('https://'))) {
+      return true;
+    }
+    return File(path).existsSync();
   }
 
   Future<void> _playCurrentItem() async {
@@ -408,7 +434,14 @@ class VoiceService {
       debugPrint('[Voice] player error: $e');
       unawaited(_advanceQueue());
     });
-    await _player!.play(DeviceFileSource(item.path));
+    final source = kIsWeb &&
+            (item.path.startsWith('blob:') ||
+                item.path.startsWith('data:') ||
+                item.path.startsWith('http://') ||
+                item.path.startsWith('https://'))
+        ? UrlSource(item.path)
+        : DeviceFileSource(item.path);
+    await _player!.play(source);
   }
 
   /// Перемотка на позицию [progress] ∈ [0.0, 1.0].
@@ -422,8 +455,7 @@ class VoiceService {
       if (c == null || !c.value.isInitialized) return;
       final totalMs = c.value.duration.inMilliseconds;
       if (totalMs <= 0) return;
-      final target =
-          Duration(milliseconds: (p * totalMs).round());
+      final target = Duration(milliseconds: (p * totalMs).round());
       try {
         await c.seekTo(target);
         _setProgressClamped(p);
@@ -434,8 +466,7 @@ class VoiceService {
     }
     final dur = playDuration.value;
     if (dur.inMilliseconds <= 0) return;
-    final target = Duration(
-        milliseconds: (p * dur.inMilliseconds).round());
+    final target = Duration(milliseconds: (p * dur.inMilliseconds).round());
     try {
       await _player?.seek(target);
       _setProgressClamped(p);

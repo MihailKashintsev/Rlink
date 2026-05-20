@@ -5,3 +5,8 @@ import 'web_object_url_stub.dart'
 
 String? createWebObjectUrl(List<Uint8List> chunks, String mimeType) =>
     impl.createWebObjectUrl(chunks, mimeType);
+
+Future<Uint8List?> readWebObjectUrlBytes(String url) =>
+    impl.readWebObjectUrlBytes(url);
+
+void revokeWebObjectUrl(String url) => impl.revokeWebObjectUrl(url);

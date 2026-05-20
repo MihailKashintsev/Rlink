@@ -112,8 +112,10 @@ import 'stickers_hub_screen.dart';
 import '../widgets/telegram_media_record_button.dart';
 import '../mention_nav.dart';
 
-bool _dmVideoPathIsSquare(String path) =>
-    p.basename(path).toLowerCase().endsWith('_sq.mp4');
+bool _dmVideoPathIsSquare(String path) {
+  final lower = p.basename(path).toLowerCase();
+  return lower.endsWith('_sq.mp4') || path.contains('#rlink_square');
+}
 
 bool _dmPlaybackFileNameIsAudio(String fileName) {
   const exts = {
@@ -682,7 +684,8 @@ class _ChatScreenState extends State<ChatScreen> {
         isFile = true;
       }
 
-      final webBytes = path == null || !kIsWeb ? null : _bytesFromDataUri(path);
+      final webBytes =
+          path == null || !kIsWeb ? null : await _readInlineWebMediaBytes(path);
       if (path == null ||
           (!kIsWeb && !File(path).existsSync()) ||
           (kIsWeb && webBytes == null)) {
@@ -813,7 +816,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }) async {
     final deadline = DateTime.now().add(timeout);
     while (mounted && DateTime.now().isBefore(deadline)) {
-      final resolved = BleService.instance.resolvePublicKey(widget.peerId);
+      var resolved = BleService.instance.resolvePublicKey(widget.peerId);
+      if (!_looksLikePublicKey(resolved)) {
+        resolved = RelayService.instance.findPeerByPrefix(widget.peerId) ??
+            RelayService.instance.findPeerByPrefix(_resolvedPeerId) ??
+            resolved;
+      }
       if (_looksLikePublicKey(resolved)) {
         if (!mounted) return false;
         setState(() => _resolvedPeerId = resolved);
@@ -1274,6 +1282,7 @@ class _ChatScreenState extends State<ChatScreen> {
     await VoiceService.instance.pauseRecording();
     final current = _activeVoiceSegmentPath;
     if (current != null &&
+        current.isNotEmpty &&
         !_voiceSegments.contains(current) &&
         _activeVoiceSegmentSeconds > 0) {
       _voiceSegments.add(current);
@@ -1321,9 +1330,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_voiceSegments.isEmpty) return;
     final lastPath = _voiceSegments.removeLast();
     _voiceSegmentDurations.removeLast();
-    try {
-      await File(lastPath).delete();
-    } catch (_) {}
+    await _deleteLocalMediaPath(lastPath);
     final done = _voiceSegmentDurations.fold<double>(0, (a, b) => a + b);
     _recordingSecondsNotifier.value = done;
     if (mounted) setState(() {});
@@ -1473,15 +1480,15 @@ class _ChatScreenState extends State<ChatScreen> {
           ? _resolvedPeerId
           : widget.peerId;
       for (final segPath in segments) {
-        if (!File(segPath).existsSync()) continue;
-        final bytes = await File(segPath).readAsBytes();
+        final bytes = await _readLocalOrWebMediaBytes(segPath);
+        if (bytes == null || bytes.isEmpty) continue;
         final msgId = _uuid.v4();
         final wasQueued = await _sendMedia(
           bytes: bytes,
           msgId: msgId,
           myId: myId,
           isVoice: true,
-          filePath: segPath,
+          filePath: kIsWeb ? null : segPath,
         );
         await _saveAndTrack(
           ChatMessage(
@@ -1506,6 +1513,38 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _deleteLocalMediaPath(String path) async {
+    if (path.isEmpty) return;
+    if (kIsWeb && _isInlineWebUri(path)) {
+      revokeWebObjectUrl(path);
+      return;
+    }
+    try {
+      await File(path).delete();
+    } catch (_) {}
+  }
+
+  static Future<Uint8List?> _readInlineWebMediaBytes(String value) async {
+    final bytes = _bytesFromDataUri(value);
+    if (bytes != null) return bytes;
+    if (value.startsWith('blob:') ||
+        value.startsWith('http://') ||
+        value.startsWith('https://')) {
+      return readWebObjectUrlBytes(value);
+    }
+    return null;
+  }
+
+  static Future<Uint8List?> _readLocalOrWebMediaBytes(String path) async {
+    if (path.isEmpty) return null;
+    if (kIsWeb && _isInlineWebUri(path)) {
+      return _readInlineWebMediaBytes(path);
+    }
+    final file = File(path);
+    if (!file.existsSync()) return null;
+    return file.readAsBytes();
   }
 
   /// Отмена записи (свайп / корзина в закреплённом режиме).
@@ -1929,10 +1968,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() => _isSending = true);
     try {
-      final path = await ImageService.instance.saveVideo(
-        rawVideoPath,
-        isSquare: true,
-      );
+      final isWebInlineVideo = kIsWeb && _isInlineWebUri(rawVideoPath);
+      final path = isWebInlineVideo
+          ? (rawVideoPath.contains('#rlink_square')
+              ? rawVideoPath
+              : '$rawVideoPath#rlink_square')
+          : await ImageService.instance.saveVideo(
+              rawVideoPath,
+              isSquare: true,
+            );
       final msgId = _uuid.v4();
       final targetPeerId = _looksLikePublicKey(_resolvedPeerId)
           ? _resolvedPeerId
@@ -1940,7 +1984,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       var wasQueued = false;
       if (!_savedMessagesLocalOnly) {
-        if (RelayService.instance.isConnected) {
+        if (RelayService.instance.isConnected && !kIsWeb) {
           unawaited(
             MediaUploadQueue.instance.enqueue(
               msgId: msgId,
@@ -1953,14 +1997,17 @@ class _ChatScreenState extends State<ChatScreen> {
           );
           wasQueued = true;
         } else {
-          final bytes = await File(path).readAsBytes();
+          final bytes = await _readLocalOrWebMediaBytes(path);
+          if (bytes == null || bytes.isEmpty) {
+            throw StateError('video_bytes_empty');
+          }
           await _sendMedia(
             bytes: bytes,
             msgId: msgId,
             myId: myId,
             isVideo: true,
             isSquare: true,
-            filePath: path,
+            filePath: kIsWeb ? null : path,
           );
         }
       }
@@ -8491,6 +8538,9 @@ class _InputBarState extends State<_InputBar> {
   List<Map<String, dynamic>> get _buttonConfig =>
       AppSettings.instance.inputBarButtonConfig;
 
+  bool get _hasConfiguredRecordButton =>
+      _buttonConfig.any((b) => b['id'] == 'voice_video_square');
+
   List<Widget> _buildButtonsInOrder(ColorScheme cs, {required bool leftSide}) {
     final buttons = <Widget>[];
 
@@ -8527,20 +8577,21 @@ class _InputBarState extends State<_InputBar> {
   }
 
   Widget _buildVoiceVideoButton(ColorScheme cs) {
-    return IconButton(
-      onPressed: widget.isSending || widget.isRecording
-          ? null
-          : widget.onPickSquareVideo,
-      icon: Icon(
-        widget.isRecording ? Icons.stop_circle : Icons.mic,
-        color: widget.isSending || widget.isRecording
-            ? cs.onSurface.withValues(alpha: 0.3)
-            : cs.onSurfaceVariant,
-        size: 24,
-      ),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      tooltip: widget.isRecording ? 'Остановить' : 'Голосовое / Видео',
+    return TelegramMediaRecordButton(
+      isSending: widget.isSending,
+      isRecording: widget.isRecording,
+      isHoldVideoStarting: widget.isHoldVideoStarting,
+      colorScheme: cs,
+      onVoiceHoldStart: widget.onVoiceHoldStart,
+      onVideoHoldStart: widget.onVideoHoldStart,
+      onHoldReleaseSend: widget.onHoldReleaseSend,
+      onHoldCancelDiscard: widget.onHoldCancelDiscard,
+      onHoldLockChanged: widget.onHoldRecordingLockChanged,
+      onLockedVideoPauseToggle: widget.onHoldVideoLockedPauseToggle,
+      lockedVideoPausedListenable: widget.holdVideoPausedListenable,
+      onLockedVoicePauseToggle: widget.onVoicePause,
+      lockedVoicePausedListenable: widget.voicePausedListenable,
+      onLockedVoiceTrimLastPart: widget.onVoiceTrimLastPart,
     );
   }
 
@@ -8915,7 +8966,9 @@ class _InputBarState extends State<_InputBar> {
                 ),
                 const SizedBox(width: 8),
                 ..._buildButtonsInOrder(cs, leftSide: false),
-                if (!widget.aiTextOnlyComposer && widget.allowMediaRecord) ...[
+                if (!widget.aiTextOnlyComposer &&
+                    widget.allowMediaRecord &&
+                    !_hasConfiguredRecordButton) ...[
                   TelegramMediaRecordButton(
                     isSending: widget.isSending,
                     isRecording: widget.isRecording,
