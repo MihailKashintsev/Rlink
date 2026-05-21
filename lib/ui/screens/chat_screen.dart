@@ -397,8 +397,8 @@ class _ChatScreenState extends State<ChatScreen> {
   /// base64. Web uses smaller chunks to keep the browser websocket and memory
   /// pressure stable during video/file uploads.
   static const _kRelayChunkBytes = 500 * 1024;
-  static const _kWebRelayChunkBytes = 96 * 1024;
-  static const _kWebLocalPreviewMaxBytes = 24 * 1024 * 1024;
+  static const _kWebRelayChunkBytes = 48 * 1024;
+  static const _kWebLocalPreviewMaxBytes = 6 * 1024 * 1024;
 
   static int _relayChunkBytesFor(int size) =>
       kIsWeb ? _kWebRelayChunkBytes : _kRelayChunkBytes;
@@ -602,8 +602,9 @@ class _ChatScreenState extends State<ChatScreen> {
           isSticker: isSticker,
           fileName: fileName,
         );
-        // Gentle pacing — relay allows ~30 msgs/sec, we stay at 20/sec.
-        await Future.delayed(Duration(milliseconds: kIsWeb ? 80 : 50));
+        // Gentle pacing: mobile browsers and proxies are more stable with
+        // smaller, less bursty WebSocket frames.
+        await Future.delayed(Duration(milliseconds: kIsWeb ? 120 : 50));
       }
       debugPrint(
         '[RLINK][Media] All $total blob chunks sent for $msgId to $relayRecipientKey',
@@ -3435,19 +3436,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (choice == null || !mounted) return;
 
     if (choice == 'photo') {
-      final r = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-        withReadStream: true,
-      );
-      final f = r?.files.firstOrNull;
-      if (f == null || !mounted) return;
-      await _sendWebPickedStream(
-        picked: f,
-        fileName: f.name.isNotEmpty ? f.name : 'photo.jpg',
-        myId: myId,
-        textFallback: '📷 Фото',
-      );
+      await _sendWebCompressedPhoto(myId);
       return;
     }
     if (choice == 'gif') {
@@ -3617,6 +3606,35 @@ class _ChatScreenState extends State<ChatScreen> {
       asImage: true,
       isSticker: true,
     );
+  }
+
+  Future<void> _sendWebCompressedPhoto(String myId) async {
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 78,
+        requestFullMetadata: false,
+      );
+      if (picked == null || !mounted) return;
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) {
+        _showErrorSnack('Не удалось прочитать фото в браузере');
+        return;
+      }
+      final fileName =
+          picked.name.trim().isNotEmpty ? picked.name.trim() : 'photo.jpg';
+      await _sendWebBytesAsFile(
+        bytes: bytes,
+        fileName: fileName,
+        myId: myId,
+        textFallback: '',
+        asImage: true,
+      );
+    } catch (e) {
+      _showErrorSnack('Ошибка фото: $e');
+    }
   }
 
   Future<void> _sendWebBytesAsFile({
@@ -3832,7 +3850,7 @@ class _ChatScreenState extends State<ChatScreen> {
         msgId,
         size <= 0 ? 0.99 : math.min(0.99, sent / size),
       );
-      await Future.delayed(Duration(milliseconds: kIsWeb ? 80 : 20));
+      await Future.delayed(Duration(milliseconds: kIsWeb ? 120 : 20));
     }
 
     await for (final part in stream) {

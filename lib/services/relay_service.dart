@@ -210,6 +210,9 @@ class RelayService with WidgetsBindingObserver {
   /// URL ретранслятора для UI и web-push (всегда [defaultServerUrl]).
   String? get serverUrl => defaultServerUrl;
 
+  static const _kCloseNormal = 1000;
+  static const _kCloseReconnect = 4000;
+
   Future<void> _safeSend(
     Map<String, dynamic> payload, {
     String context = '',
@@ -549,7 +552,7 @@ class RelayService with WidgetsBindingObserver {
         await ws.ready;
         if (connectEpoch != _connectEpoch) {
           try {
-            await ws.sink.close();
+            await ws.sink.close(_kCloseNormal, 'superseded_connect');
           } catch (_) {}
           return;
         }
@@ -559,7 +562,7 @@ class RelayService with WidgetsBindingObserver {
         break;
       } catch (e) {
         try {
-          await _channel?.sink.close();
+          await _channel?.sink.close(_kCloseNormal, 'connect_failed');
         } catch (_) {}
         _channel = null;
         _channelStream = null;
@@ -584,7 +587,7 @@ class RelayService with WidgetsBindingObserver {
       }
       if (connectEpoch != _connectEpoch) {
         try {
-          await _channel?.sink.close();
+          await _channel?.sink.close(_kCloseNormal, 'superseded_connect');
         } catch (_) {}
         _channel = null;
         _channelStream = null;
@@ -624,7 +627,7 @@ class RelayService with WidgetsBindingObserver {
           _relayTrace(
               '[RLINK][Relay] No pong for ${since.inSeconds}s — closing socket');
           try {
-            _channel?.sink.close();
+            unawaited(_channel?.sink.close(_kCloseReconnect, 'stale_pong'));
           } catch (_) {}
           return;
         }
@@ -671,7 +674,7 @@ class RelayService with WidgetsBindingObserver {
       _chunkQueue.clear();
       _draining = false;
       try {
-        await _channel?.sink.close();
+        await _channel?.sink.close(_kCloseReconnect, 'client_reconnect');
       } catch (_) {}
       _channel = null;
       _channelStream = null;
@@ -692,7 +695,7 @@ class RelayService with WidgetsBindingObserver {
     _chunkQueue.clear();
     _draining = false;
     try {
-      _channel?.sink.close();
+      _channel?.sink.close(_kCloseNormal, 'client_disconnect');
     } catch (_) {}
     _channel = null;
     _channelStream = null;

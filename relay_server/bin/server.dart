@@ -1980,7 +1980,7 @@ shelf.Handler _wsHandler() {
             final prev = _users[publicKey];
             if (prev != null) {
               try {
-                prev.ws.sink.close();
+                prev.ws.sink.close(4001, 'replaced_by_new_connection');
               } catch (_) {}
             }
 
