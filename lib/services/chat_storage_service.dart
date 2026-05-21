@@ -76,6 +76,65 @@ class ChatStorageService {
     await init();
   }
 
+  Future<void>? _webDbRecovery;
+
+  bool _isSqliteCorruption(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('database disk image is malformed') ||
+        text.contains('sqlite_error: 11') ||
+        text.contains('sqliteexception(11') ||
+        text.contains('sqlite_corrupt') ||
+        text.contains('database_corrupt') ||
+        text.contains('sqlite quick_check failed');
+  }
+
+  Future<T> _withWebDbRecovery<T>(
+    String context,
+    Future<T> Function() action,
+  ) async {
+    try {
+      return await action();
+    } catch (e) {
+      if (!kIsWeb || !_isSqliteCorruption(e)) rethrow;
+      await _recoverWebDatabaseAfterCorruption(e, context);
+      return action();
+    }
+  }
+
+  Future<void> _recoverWebDatabaseAfterCorruption(
+    Object error,
+    String context,
+  ) {
+    if (!kIsWeb) return Future.value();
+    final existing = _webDbRecovery;
+    if (existing != null) return existing;
+
+    final recovery = _recreateWebDatabaseAfterCorruption(error, context);
+    _webDbRecovery = recovery.whenComplete(() {
+      _webDbRecovery = null;
+    });
+    return _webDbRecovery!;
+  }
+
+  Future<void> _recreateWebDatabaseAfterCorruption(
+    Object error,
+    String context,
+  ) async {
+    final path = await _dbPath('rlink.db');
+    debugPrint(
+      '[RLINK][DB] Web database is corrupt during $context; '
+      'recreating $path: $error',
+    );
+    try {
+      await _db?.close();
+    } catch (_) {}
+    _db = null;
+    _contactsNotifier.value = [];
+    _messagesNotifiers.clear();
+    await deleteDatabase(path);
+    _db = await _openMainDatabase(path);
+  }
+
   /// Bumps when DM read cursors change — chat list refreshes unread badges.
   final readStateVersion = ValueNotifier<int>(0);
 
@@ -197,14 +256,20 @@ class ChatStorageService {
       databaseFactory = databaseFactoryFfi;
     }
     final path = await _dbPath('rlink.db');
-    _db = await openDatabase(
-      path,
-      version: 22,
-      onCreate: (db, v) async {
-        try {
-          await db.rawQuery('PRAGMA journal_mode = WAL');
-        } catch (_) {}
-        await db.execute('''
+    _db = await _openMainDatabase(path);
+    debugPrint('[RLINK][DB] Initialized');
+  }
+
+  Future<Database> _openMainDatabase(String path) async {
+    Future<Database> open() async {
+      final db = await openDatabase(
+        path,
+        version: 22,
+        onCreate: (db, v) async {
+          try {
+            await db.rawQuery('PRAGMA journal_mode = WAL');
+          } catch (_) {}
+          await db.execute('''
           CREATE TABLE contacts (
             id                TEXT PRIMARY KEY,
             nick              TEXT NOT NULL,
@@ -221,7 +286,7 @@ class ChatStorageService {
             status_emoji       TEXT
           )
         ''');
-        await db.execute('''
+          await db.execute('''
           CREATE TABLE messages (
             id                   TEXT PRIMARY KEY,
             peer_id              TEXT NOT NULL,
@@ -249,9 +314,9 @@ class ChatStorageService {
             gigachat_attachment_ids TEXT
           )
         ''');
-        await db.execute(
-            'CREATE INDEX idx_messages_peer ON messages(peer_id, timestamp)');
-        await db.execute('''
+          await db.execute(
+              'CREATE INDEX idx_messages_peer ON messages(peer_id, timestamp)');
+          await db.execute('''
           CREATE TABLE dm_chat_pins (
             peer_id    TEXT NOT NULL,
             message_id TEXT NOT NULL,
@@ -259,9 +324,9 @@ class ChatStorageService {
             PRIMARY KEY (peer_id, message_id)
           )
         ''');
-        await db.execute(
-            'CREATE INDEX idx_dm_pins_peer ON dm_chat_pins(peer_id, pinned_at)');
-        await db.execute('''
+          await db.execute(
+              'CREATE INDEX idx_dm_pins_peer ON dm_chat_pins(peer_id, pinned_at)');
+          await db.execute('''
           CREATE TABLE scheduled_dm (
             id                   TEXT PRIMARY KEY,
             peer_id              TEXT NOT NULL,
@@ -271,16 +336,16 @@ class ChatStorageService {
             created_at           INTEGER NOT NULL
           )
         ''');
-        await db.execute(
-            'CREATE INDEX idx_sched_dm_at ON scheduled_dm(send_at_ms)');
-        await db.execute('''
+          await db.execute(
+              'CREATE INDEX idx_sched_dm_at ON scheduled_dm(send_at_ms)');
+          await db.execute('''
           CREATE TABLE conversation_read_cursor (
             conv_key      TEXT PRIMARY KEY,
             last_read_ts  INTEGER NOT NULL,
             last_read_id  TEXT NOT NULL DEFAULT ''
           )
         ''');
-        await db.execute('''
+          await db.execute('''
           CREATE TABLE local_profile_cache (
             singleton       INTEGER PRIMARY KEY CHECK (singleton = 1),
             public_key_hex  TEXT NOT NULL,
@@ -289,104 +354,108 @@ class ChatStorageService {
             updated_at      INTEGER NOT NULL
           )
         ''');
-      },
-      onOpen: (db) async {
-        try {
-          await db.rawQuery('PRAGMA journal_mode = WAL');
-        } catch (_) {}
-      },
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
+        },
+        onOpen: (db) async {
           try {
-            await db.execute(
-              'ALTER TABLE messages ADD COLUMN reply_to_message_id TEXT',
-            );
+            await db.rawQuery('PRAGMA journal_mode = WAL');
           } catch (_) {}
-        }
-        if (oldVersion < 3) {
-          try {
-            await db.execute(
-              'ALTER TABLE contacts ADD COLUMN avatar_img_path TEXT',
-            );
-          } catch (_) {}
-          try {
-            await db.execute(
-              'ALTER TABLE messages ADD COLUMN image_path TEXT',
-            );
-          } catch (_) {}
-        }
-        if (oldVersion < 4) {
-          try {
-            await db.execute(
-              'ALTER TABLE messages ADD COLUMN reactions TEXT',
-            );
-          } catch (_) {}
-        }
-        if (oldVersion < 5) {
-          try {
-            await db.execute(
-              'ALTER TABLE messages ADD COLUMN voice_path TEXT',
-            );
-          } catch (_) {}
-        }
-        if (oldVersion < 6) {
-          try {
-            await db.execute(
-              'ALTER TABLE messages ADD COLUMN video_path TEXT',
-            );
-          } catch (_) {}
-        }
-        if (oldVersion < 7) {
-          try {
-            await db.execute('ALTER TABLE messages ADD COLUMN latitude REAL');
-          } catch (_) {}
-          try {
-            await db.execute('ALTER TABLE messages ADD COLUMN longitude REAL');
-          } catch (_) {}
-        }
-        if (oldVersion < 8) {
-          try {
-            await db.execute('ALTER TABLE messages ADD COLUMN file_path TEXT');
-          } catch (_) {}
-          try {
-            await db.execute('ALTER TABLE messages ADD COLUMN file_name TEXT');
-          } catch (_) {}
-          try {
-            await db
-                .execute('ALTER TABLE messages ADD COLUMN file_size INTEGER');
-          } catch (_) {}
-        }
-        if (oldVersion < 9) {
-          try {
-            await db.execute('ALTER TABLE contacts ADD COLUMN x25519_key TEXT');
-          } catch (_) {}
-        }
-        if (oldVersion < 10) {
-          try {
-            await db.execute('ALTER TABLE contacts ADD COLUMN tags TEXT');
-          } catch (_) {}
-          try {
-            await db.execute(
-                'ALTER TABLE contacts ADD COLUMN banner_img_path TEXT');
-          } catch (_) {}
-        }
-        if (oldVersion < 11) {
-          try {
-            await db.execute('ALTER TABLE contacts ADD COLUMN username TEXT');
-          } catch (_) {}
-        }
-        if (oldVersion < 12) {
-          try {
-            await db.execute(
-                'ALTER TABLE messages ADD COLUMN view_once INTEGER NOT NULL DEFAULT 0');
-          } catch (_) {}
-          try {
-            await db.execute(
-                'ALTER TABLE messages ADD COLUMN view_once_opened INTEGER NOT NULL DEFAULT 0');
-          } catch (_) {}
-        }
-        if (oldVersion < 13) {
-          await db.execute('''
+        },
+        onUpgrade: (db, oldVersion, newVersion) async {
+          if (oldVersion < 2) {
+            try {
+              await db.execute(
+                'ALTER TABLE messages ADD COLUMN reply_to_message_id TEXT',
+              );
+            } catch (_) {}
+          }
+          if (oldVersion < 3) {
+            try {
+              await db.execute(
+                'ALTER TABLE contacts ADD COLUMN avatar_img_path TEXT',
+              );
+            } catch (_) {}
+            try {
+              await db.execute(
+                'ALTER TABLE messages ADD COLUMN image_path TEXT',
+              );
+            } catch (_) {}
+          }
+          if (oldVersion < 4) {
+            try {
+              await db.execute(
+                'ALTER TABLE messages ADD COLUMN reactions TEXT',
+              );
+            } catch (_) {}
+          }
+          if (oldVersion < 5) {
+            try {
+              await db.execute(
+                'ALTER TABLE messages ADD COLUMN voice_path TEXT',
+              );
+            } catch (_) {}
+          }
+          if (oldVersion < 6) {
+            try {
+              await db.execute(
+                'ALTER TABLE messages ADD COLUMN video_path TEXT',
+              );
+            } catch (_) {}
+          }
+          if (oldVersion < 7) {
+            try {
+              await db.execute('ALTER TABLE messages ADD COLUMN latitude REAL');
+            } catch (_) {}
+            try {
+              await db
+                  .execute('ALTER TABLE messages ADD COLUMN longitude REAL');
+            } catch (_) {}
+          }
+          if (oldVersion < 8) {
+            try {
+              await db
+                  .execute('ALTER TABLE messages ADD COLUMN file_path TEXT');
+            } catch (_) {}
+            try {
+              await db
+                  .execute('ALTER TABLE messages ADD COLUMN file_name TEXT');
+            } catch (_) {}
+            try {
+              await db
+                  .execute('ALTER TABLE messages ADD COLUMN file_size INTEGER');
+            } catch (_) {}
+          }
+          if (oldVersion < 9) {
+            try {
+              await db
+                  .execute('ALTER TABLE contacts ADD COLUMN x25519_key TEXT');
+            } catch (_) {}
+          }
+          if (oldVersion < 10) {
+            try {
+              await db.execute('ALTER TABLE contacts ADD COLUMN tags TEXT');
+            } catch (_) {}
+            try {
+              await db.execute(
+                  'ALTER TABLE contacts ADD COLUMN banner_img_path TEXT');
+            } catch (_) {}
+          }
+          if (oldVersion < 11) {
+            try {
+              await db.execute('ALTER TABLE contacts ADD COLUMN username TEXT');
+            } catch (_) {}
+          }
+          if (oldVersion < 12) {
+            try {
+              await db.execute(
+                  'ALTER TABLE messages ADD COLUMN view_once INTEGER NOT NULL DEFAULT 0');
+            } catch (_) {}
+            try {
+              await db.execute(
+                  'ALTER TABLE messages ADD COLUMN view_once_opened INTEGER NOT NULL DEFAULT 0');
+            } catch (_) {}
+          }
+          if (oldVersion < 13) {
+            await db.execute('''
             CREATE TABLE scheduled_dm (
               id                   TEXT PRIMARY KEY,
               peer_id              TEXT NOT NULL,
@@ -396,19 +465,19 @@ class ChatStorageService {
               created_at           INTEGER NOT NULL
             )
           ''');
-          await db.execute(
-              'CREATE INDEX idx_sched_dm_at ON scheduled_dm(send_at_ms)');
-        }
-        if (oldVersion < 14) {
-          try {
             await db.execute(
-                'ALTER TABLE messages ADD COLUMN forward_from_id TEXT');
-          } catch (_) {}
-          try {
-            await db.execute(
-                'ALTER TABLE messages ADD COLUMN forward_from_nick TEXT');
-          } catch (_) {}
-          await db.execute('''
+                'CREATE INDEX idx_sched_dm_at ON scheduled_dm(send_at_ms)');
+          }
+          if (oldVersion < 14) {
+            try {
+              await db.execute(
+                  'ALTER TABLE messages ADD COLUMN forward_from_id TEXT');
+            } catch (_) {}
+            try {
+              await db.execute(
+                  'ALTER TABLE messages ADD COLUMN forward_from_nick TEXT');
+            } catch (_) {}
+            await db.execute('''
             CREATE TABLE dm_chat_pins (
               peer_id    TEXT NOT NULL,
               message_id TEXT NOT NULL,
@@ -416,58 +485,58 @@ class ChatStorageService {
               PRIMARY KEY (peer_id, message_id)
             )
           ''');
-          await db.execute(
-              'CREATE INDEX idx_dm_pins_peer ON dm_chat_pins(peer_id, pinned_at)');
-        }
-        if (oldVersion < 15) {
-          try {
             await db.execute(
-              'ALTER TABLE contacts ADD COLUMN profile_music_path TEXT',
-            );
-          } catch (_) {}
-        }
-        if (oldVersion < 16) {
-          await db.execute('''
+                'CREATE INDEX idx_dm_pins_peer ON dm_chat_pins(peer_id, pinned_at)');
+          }
+          if (oldVersion < 15) {
+            try {
+              await db.execute(
+                'ALTER TABLE contacts ADD COLUMN profile_music_path TEXT',
+              );
+            } catch (_) {}
+          }
+          if (oldVersion < 16) {
+            await db.execute('''
             CREATE TABLE IF NOT EXISTS conversation_read_cursor (
               conv_key      TEXT PRIMARY KEY,
               last_read_ts  INTEGER NOT NULL,
               last_read_id  TEXT NOT NULL DEFAULT ''
             )
           ''');
-          await _backfillDmReadCursors(db);
-        }
-        if (oldVersion < 17) {
-          try {
-            await db
-                .execute('ALTER TABLE contacts ADD COLUMN status_emoji TEXT');
-          } catch (_) {}
-        }
-        if (oldVersion < 18) {
-          try {
-            await db.execute(
-                'ALTER TABLE messages ADD COLUMN forward_from_channel_id TEXT');
-          } catch (_) {}
-        }
-        if (oldVersion < 19) {
-          try {
-            await db
-                .execute('ALTER TABLE messages ADD COLUMN invite_payload TEXT');
-          } catch (_) {}
-        }
-        if (oldVersion < 20) {
-          try {
-            await db.execute(
-                'ALTER TABLE messages ADD COLUMN gigachat_attachment_ids TEXT');
-          } catch (_) {}
-        }
-        if (oldVersion < 22) {
-          try {
-            await db.execute(
-                'ALTER TABLE messages ADD COLUMN is_sticker INTEGER NOT NULL DEFAULT 0');
-          } catch (_) {}
-        }
-        if (oldVersion < 21) {
-          await db.execute('''
+            await _backfillDmReadCursors(db);
+          }
+          if (oldVersion < 17) {
+            try {
+              await db
+                  .execute('ALTER TABLE contacts ADD COLUMN status_emoji TEXT');
+            } catch (_) {}
+          }
+          if (oldVersion < 18) {
+            try {
+              await db.execute(
+                  'ALTER TABLE messages ADD COLUMN forward_from_channel_id TEXT');
+            } catch (_) {}
+          }
+          if (oldVersion < 19) {
+            try {
+              await db.execute(
+                  'ALTER TABLE messages ADD COLUMN invite_payload TEXT');
+            } catch (_) {}
+          }
+          if (oldVersion < 20) {
+            try {
+              await db.execute(
+                  'ALTER TABLE messages ADD COLUMN gigachat_attachment_ids TEXT');
+            } catch (_) {}
+          }
+          if (oldVersion < 22) {
+            try {
+              await db.execute(
+                  'ALTER TABLE messages ADD COLUMN is_sticker INTEGER NOT NULL DEFAULT 0');
+            } catch (_) {}
+          }
+          if (oldVersion < 21) {
+            await db.execute('''
             CREATE TABLE IF NOT EXISTS local_profile_cache (
               singleton       INTEGER PRIMARY KEY CHECK (singleton = 1),
               public_key_hex  TEXT NOT NULL,
@@ -476,10 +545,43 @@ class ChatStorageService {
               updated_at      INTEGER NOT NULL
             )
           ''');
+          }
+        },
+      );
+      if (kIsWeb) {
+        try {
+          await _assertWebDatabaseHealthy(db);
+        } catch (_) {
+          try {
+            await db.close();
+          } catch (_) {}
+          rethrow;
         }
-      },
-    );
-    debugPrint('[RLINK][DB] Initialized');
+      }
+      return db;
+    }
+
+    try {
+      return await open();
+    } catch (e) {
+      if (!kIsWeb || !_isSqliteCorruption(e)) rethrow;
+      debugPrint(
+        '[RLINK][DB] Web database is corrupt while opening $path; '
+        'recreating it: $e',
+      );
+      await deleteDatabase(path);
+      return open();
+    }
+  }
+
+  Future<void> _assertWebDatabaseHealthy(Database db) async {
+    final rows = await db.rawQuery('PRAGMA quick_check');
+    final ok = rows.length == 1 &&
+        rows.first.values.length == 1 &&
+        rows.first.values.first?.toString().toLowerCase() == 'ok';
+    if (!ok) {
+      throw StateError('SQLite quick_check failed: $rows');
+    }
   }
 
   // ── Контакты ─────────────────────────────────────────────────
@@ -488,8 +590,13 @@ class ChatStorageService {
     await _ensureDbReady();
     final map = contact.toMap();
     map['id'] = normalizeDmPeerId(contact.publicKeyHex);
-    await _db?.insert('contacts', map,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _withWebDbRecovery('saveContact', () async {
+      await _db?.insert(
+        'contacts',
+        map,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
     _contactsNotifier.value = await getContacts();
     unawaited(_writeContactsCache());
   }
@@ -502,17 +609,21 @@ class ChatStorageService {
 
   Future<List<Contact>> getContacts() async {
     await _ensureDbReady();
-    final rows = await _db?.query('contacts', orderBy: 'nick ASC') ?? [];
-    return rows.map(Contact.fromMap).toList();
+    return _withWebDbRecovery('getContacts', () async {
+      final rows = await _db?.query('contacts', orderBy: 'nick ASC') ?? [];
+      return rows.map(Contact.fromMap).toList();
+    });
   }
 
   Future<Contact?> getContact(String id) async {
     await _ensureDbReady();
     final key = normalizeDmPeerId(id);
-    final rows =
-        await _db?.query('contacts', where: 'id = ?', whereArgs: [key]);
-    if (rows == null || rows.isEmpty) return null;
-    return Contact.fromMap(rows.first);
+    return _withWebDbRecovery('getContact', () async {
+      final rows =
+          await _db?.query('contacts', where: 'id = ?', whereArgs: [key]);
+      if (rows == null || rows.isEmpty) return null;
+      return Contact.fromMap(rows.first);
+    });
   }
 
   Future<void> updateContactLastSeen(String id) async {
@@ -613,8 +724,13 @@ class ChatStorageService {
     final peerKey = normalizeDmPeerId(message.peerId);
     final stored =
         peerKey == message.peerId ? message : message.copyWith(peerId: peerKey);
-    await _db?.insert('messages', stored.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _withWebDbRecovery('saveMessage', () async {
+      await _db?.insert(
+        'messages',
+        stored.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
     _notifyMessages(peerKey);
     _messageSavedController.add(stored);
   }
@@ -632,14 +748,17 @@ class ChatStorageService {
   }
 
   Future<ChatMessage?> getMessageById(String messageId) async {
-    final rows = await _db?.query(
-      'messages',
-      where: 'id = ?',
-      whereArgs: [messageId],
-      limit: 1,
-    );
-    if (rows == null || rows.isEmpty) return null;
-    return ChatMessage.fromMap(rows.first);
+    await _ensureDbReady();
+    return _withWebDbRecovery('getMessageById', () async {
+      final rows = await _db?.query(
+        'messages',
+        where: 'id = ?',
+        whereArgs: [messageId],
+        limit: 1,
+      );
+      if (rows == null || rows.isEmpty) return null;
+      return ChatMessage.fromMap(rows.first);
+    });
   }
 
   /// Сообщения со стикером (картинка `stk_*`) в чате с контактом, новые первыми.
@@ -794,46 +913,54 @@ class ChatStorageService {
       {int limit = 100}) async {
     await _ensureDbReady();
     final pid = normalizeDmPeerId(peerId);
-    final rows = await _db?.query(
-          'messages',
-          where: 'peer_id = ?',
-          whereArgs: [pid],
-          orderBy: 'timestamp ASC',
-          limit: limit,
-        ) ??
-        [];
-    return rows.map(ChatMessage.fromMap).toList();
+    return _withWebDbRecovery('getMessages', () async {
+      final rows = await _db?.query(
+            'messages',
+            where: 'peer_id = ?',
+            whereArgs: [pid],
+            orderBy: 'timestamp ASC',
+            limit: limit,
+          ) ??
+          [];
+      return rows.map(ChatMessage.fromMap).toList();
+    });
   }
 
   /// Последние [limit] сообщений в хронологическом порядке (для ИИ / контекста API).
   Future<List<ChatMessage>> getRecentMessagesAscending(String peerId,
       {int limit = 24}) async {
+    await _ensureDbReady();
     final pid = normalizeDmPeerId(peerId);
-    final rows = await _db?.rawQuery(
-          '''
+    return _withWebDbRecovery('getRecentMessagesAscending', () async {
+      final rows = await _db?.rawQuery(
+            '''
           SELECT * FROM messages
           WHERE peer_id = ?
           ORDER BY timestamp DESC, rowid DESC
           LIMIT ?
           ''',
-          [pid, limit],
-        ) ??
-        [];
-    final list = rows.map(ChatMessage.fromMap).toList();
-    return list.reversed.toList();
+            [pid, limit],
+          ) ??
+          [];
+      final list = rows.map(ChatMessage.fromMap).toList();
+      return list.reversed.toList();
+    });
   }
 
   /// Вся история диалога (для экспорта в файл).
   Future<List<ChatMessage>> getAllMessages(String peerId) async {
+    await _ensureDbReady();
     final pid = normalizeDmPeerId(peerId);
-    final rows = await _db?.query(
-          'messages',
-          where: 'peer_id = ?',
-          whereArgs: [pid],
-          orderBy: 'timestamp ASC',
-        ) ??
-        [];
-    return rows.map(ChatMessage.fromMap).toList();
+    return _withWebDbRecovery('getAllMessages', () async {
+      final rows = await _db?.query(
+            'messages',
+            where: 'peer_id = ?',
+            whereArgs: [pid],
+            orderBy: 'timestamp ASC',
+          ) ??
+          [];
+      return rows.map(ChatMessage.fromMap).toList();
+    });
   }
 
   /// JSON-файл во временной директории (пути к медиа — как в локальной БД).
@@ -859,32 +986,38 @@ class ChatStorageService {
   /// Все исходящие сообщения со статусом sending/failed — для очереди повторной отправки.
   /// Отсортированы по возрастанию времени, чтобы порядок доставки не ломался.
   Future<List<ChatMessage>> getPendingOutgoingMessages() async {
-    final rows = await _db?.query(
-          'messages',
-          where: 'is_outgoing = 1 AND (status = ? OR status = ?)',
-          whereArgs: [
-            MessageStatus.sending.index,
-            MessageStatus.failed.index,
-          ],
-          orderBy: 'timestamp ASC',
-        ) ??
-        [];
-    return rows.map(ChatMessage.fromMap).toList();
+    await _ensureDbReady();
+    return _withWebDbRecovery('getPendingOutgoingMessages', () async {
+      final rows = await _db?.query(
+            'messages',
+            where: 'is_outgoing = 1 AND (status = ? OR status = ?)',
+            whereArgs: [
+              MessageStatus.sending.index,
+              MessageStatus.failed.index,
+            ],
+            orderBy: 'timestamp ASC',
+          ) ??
+          [];
+      return rows.map(ChatMessage.fromMap).toList();
+    });
   }
 
   /// Все исходящие сообщения, которые ещё не подтверждены ACK'ом (не delivered).
   /// Используется для гарантированной доставки: сообщения могут быть отправлены,
   /// но ACK мог не дойти, поэтому статус остаётся sent/sending/failed.
   Future<List<ChatMessage>> getUndeliveredOutgoingMessages() async {
+    await _ensureDbReady();
     final deliveredIndex = MessageStatus.delivered.index;
-    final rows = await _db?.query(
-          'messages',
-          where: 'is_outgoing = 1 AND status != ?',
-          whereArgs: [deliveredIndex],
-          orderBy: 'timestamp ASC',
-        ) ??
-        [];
-    return rows.map(ChatMessage.fromMap).toList();
+    return _withWebDbRecovery('getUndeliveredOutgoingMessages', () async {
+      final rows = await _db?.query(
+            'messages',
+            where: 'is_outgoing = 1 AND status != ?',
+            whereArgs: [deliveredIndex],
+            orderBy: 'timestamp ASC',
+          ) ??
+          [];
+      return rows.map(ChatMessage.fromMap).toList();
+    });
   }
 
   Future<void> deleteChat(String peerId) async {
@@ -981,33 +1114,41 @@ class ChatStorageService {
   }
 
   Future<ChatMessage?> getLastMessage(String peerId) async {
+    await _ensureDbReady();
     final pid = normalizeDmPeerId(peerId);
-    final rows = await _db?.query(
-      'messages',
-      where: 'peer_id = ?',
-      whereArgs: [pid],
-      orderBy: 'timestamp DESC',
-      limit: 1,
-    );
-    if (rows == null || rows.isEmpty) return null;
-    return ChatMessage.fromMap(rows.first);
+    return _withWebDbRecovery('getLastMessage', () async {
+      final rows = await _db?.query(
+        'messages',
+        where: 'peer_id = ?',
+        whereArgs: [pid],
+        orderBy: 'timestamp DESC',
+        limit: 1,
+      );
+      if (rows == null || rows.isEmpty) return null;
+      return ChatMessage.fromMap(rows.first);
+    });
   }
 
   // ИСПРАВЛЕННЫЙ SQL — GROUP BY вместо DISTINCT с агрегатом
   Future<List<String>> getChatPeerIds() async {
-    final rows = await _db?.rawQuery('''
+    await _ensureDbReady();
+    return _withWebDbRecovery('getChatPeerIds', () async {
+      final rows = await _db?.rawQuery('''
       SELECT peer_id
       FROM messages
       GROUP BY peer_id
       ORDER BY MAX(timestamp) DESC
     ''') ?? [];
-    return rows.map((r) => r['peer_id'] as String).toList();
+      return rows.map((r) => r['peer_id'] as String).toList();
+    });
   }
 
   /// Возвращает сводку всех чатов одним SQL JOIN запросом.
   /// Избегает N+1 паттерна при загрузке списка чатов.
   Future<List<ChatSummary>> getChatSummaries() async {
-    final rows = await _db?.rawQuery('''
+    await _ensureDbReady();
+    return _withWebDbRecovery('getChatSummaries', () async {
+      final rows = await _db?.rawQuery('''
       SELECT
         m.peer_id,
         m.text,
@@ -1029,28 +1170,31 @@ class ChatStorageService {
       GROUP BY m.peer_id
       ORDER BY m.timestamp DESC
     ''') ?? [];
-    final resolve = ImageService.instance.resolveStoredPath;
-    return rows
-        .map((r) => ChatSummary(
-              peerId: r['peer_id'] as String,
-              lastText: (r['text'] as String?) ?? '',
-              lastImagePath: resolve(r['image_path'] as String?),
-              lastVoicePath: resolve(r['voice_path'] as String?),
-              lastVideoPath: resolve(r['video_path'] as String?),
-              timestamp:
-                  DateTime.fromMillisecondsSinceEpoch(r['timestamp'] as int),
-              nickname: r['nick'] as String?,
-              avatarColor: r['color'] as int?,
-              avatarEmoji: r['emoji'] as String?,
-              avatarImagePath: resolve(r['avatar_img_path'] as String?),
-            ))
-        .toList();
+      final resolve = ImageService.instance.resolveStoredPath;
+      return rows
+          .map((r) => ChatSummary(
+                peerId: r['peer_id'] as String,
+                lastText: (r['text'] as String?) ?? '',
+                lastImagePath: resolve(r['image_path'] as String?),
+                lastVoicePath: resolve(r['voice_path'] as String?),
+                lastVideoPath: resolve(r['video_path'] as String?),
+                timestamp:
+                    DateTime.fromMillisecondsSinceEpoch(r['timestamp'] as int),
+                nickname: r['nick'] as String?,
+                avatarColor: r['color'] as int?,
+                avatarEmoji: r['emoji'] as String?,
+                avatarImagePath: resolve(r['avatar_img_path'] as String?),
+              ))
+          .toList();
+    });
   }
 
   /// Per-peer count of incoming DM messages after the read cursor.
   Future<Map<String, int>> getDmUnreadCounts() async {
+    await _ensureDbReady();
     if (_db == null) return const {};
-    final rows = await _db!.rawQuery('''
+    return _withWebDbRecovery('getDmUnreadCounts', () async {
+      final rows = await _db!.rawQuery('''
       SELECT m.peer_id AS pid, COUNT(*) AS c
       FROM messages m
       LEFT JOIN conversation_read_cursor cr ON cr.conv_key = ('dm:' || m.peer_id)
@@ -1062,7 +1206,8 @@ class ChatStorageService {
       )
       GROUP BY m.peer_id
     ''');
-    return {for (final r in rows) r['pid'] as String: (r['c'] as int?) ?? 0};
+      return {for (final r in rows) r['pid'] as String: (r['c'] as int?) ?? 0};
+    });
   }
 
   /// Marks the whole thread as read up to the latest stored message.
