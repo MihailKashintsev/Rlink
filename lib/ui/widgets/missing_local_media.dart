@@ -30,6 +30,8 @@ bool isSyntheticMediaCaption(String t) =>
     t == '📹 Видео' ||
     t == '⬛ Видео' ||
     t == '📷' ||
+    t == '📷 Фото' ||
+    t == '🎞 GIF' ||
     t.startsWith('📎 ') ||
     t.isEmpty;
 

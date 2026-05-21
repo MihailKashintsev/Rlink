@@ -172,7 +172,7 @@ class MediaReceiver {
       final p = await img.assembleAndSaveFile(msgId);
       if (p != null) {
         img.markCompleted(msgId);
-        final sz = await File(p).length();
+        final sz = kIsWeb ? _dataUriSize(p) : await File(p).length();
         await ChannelService.instance.applyAssembledPostMedia(
           postId: msgId,
           filePath: p,
@@ -222,7 +222,7 @@ class MediaReceiver {
       final p = await img.assembleAndSaveFile(msgId);
       if (p != null) {
         img.markCompleted(msgId);
-        final sz = await File(p).length();
+        final sz = kIsWeb ? _dataUriSize(p) : await File(p).length();
         await ChannelService.instance.applyAssembledCommentMedia(
           commentId: msgId,
           filePath: p,

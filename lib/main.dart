@@ -132,6 +132,22 @@ Future<Uint8List?> _readProfileMediaBytes(String? rawPath) async {
   return null;
 }
 
+int? _dataUriByteLength(String value) {
+  if (!value.startsWith('data:')) return null;
+  final comma = value.indexOf(',');
+  if (comma <= 0) return null;
+  try {
+    return base64Decode(value.substring(comma + 1).trim()).length;
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<int> _storedMediaByteLength(String path) async {
+  if (kIsWeb) return _dataUriByteLength(path) ?? 0;
+  return File(path).length();
+}
+
 String _shortPeerId(String peerId) =>
     peerId.length > 8 ? '${peerId.substring(0, 8)}…' : peerId;
 
@@ -1348,7 +1364,7 @@ Future<void> initServices() async {
           ImageService.instance.markCompleted(msgId);
           if (isChannelPost ||
               await ChannelService.instance.getPost(msgId) != null) {
-            final sz = await File(path).length();
+            final sz = await _storedMediaByteLength(path);
             await ChannelService.instance.applyAssembledPostMedia(
               postId: msgId,
               filePath: path,
@@ -1358,7 +1374,7 @@ Future<void> initServices() async {
             return;
           }
           if (await ChannelService.instance.getComment(msgId) != null) {
-            final sz = await File(path).length();
+            final sz = await _storedMediaByteLength(path);
             await ChannelService.instance.applyAssembledCommentMedia(
               commentId: msgId,
               filePath: path,
@@ -1368,7 +1384,7 @@ Future<void> initServices() async {
             return;
           }
           final fileLabel = '📎 ${origName ?? 'Файл'}';
-          final fileBytes = await File(path).length();
+          final fileBytes = await _storedMediaByteLength(path);
           final msg = ChatMessage(
             id: msgId,
             peerId: senderKey,
@@ -3618,8 +3634,8 @@ Future<void> _processBlobAssemble({
       return;
     }
     ImageService.instance.markCompleted(msgId);
+    final fileBytes = await _storedMediaByteLength(path);
     if (await ChannelService.instance.getPost(msgId) != null) {
-      final fileBytes = await File(path).length();
       await ChannelService.instance.applyAssembledPostMedia(
         postId: msgId,
         filePath: path,
@@ -3629,7 +3645,6 @@ Future<void> _processBlobAssemble({
       return;
     }
     if (await ChannelService.instance.getComment(msgId) != null) {
-      final fileBytes = await File(path).length();
       await ChannelService.instance.applyAssembledCommentMedia(
         commentId: msgId,
         filePath: path,
@@ -3640,7 +3655,6 @@ Future<void> _processBlobAssemble({
     }
 
     final fileLabel = '📎 ${origName ?? 'Файл'}';
-    final fileBytes = await File(path).length();
     final msg = ChatMessage(
       id: msgId,
       peerId: senderKey,

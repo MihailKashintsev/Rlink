@@ -3860,7 +3860,11 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     RelayService.instance.updateSendProgress(msgId, 1);
     if (previewChunks == null) return null;
-    return createWebObjectUrl(previewChunks, previewMime);
+    final previewBytes = BytesBuilder(copy: false);
+    for (final chunk in previewChunks) {
+      previewBytes.add(chunk);
+    }
+    return 'data:$previewMime;base64,${base64Encode(previewBytes.toBytes())}';
   }
 
   Future<void> _sendWebVideoBytes({
@@ -7691,6 +7695,10 @@ class _MessageBubble extends StatelessWidget {
     final parsed = _parseBotButtons(msg.text);
     final plainText = parsed.text;
     final slashButtons = parsed.buttons;
+    final hasVisibleMedia = msg.imagePath != null ||
+        msg.videoPath != null ||
+        msg.voicePath != null ||
+        msg.filePath != null;
 
     // Check if this is a sticker message
     final isSticker = msg.isSticker ||
@@ -8091,6 +8099,7 @@ class _MessageBubble extends StatelessWidget {
               )
             else if (plainText.isNotEmpty &&
                 msg.voicePath == null &&
+                !(hasVisibleMedia && isSyntheticMediaCaption(plainText)) &&
                 !(missing && isSyntheticMediaCaption(plainText)))
               ValueListenableBuilder<List<Contact>>(
                 valueListenable: ChatStorageService.instance.contactsNotifier,

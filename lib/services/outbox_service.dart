@@ -37,6 +37,23 @@ class OutboxService {
 
   bool _isPublicKeyPeer(String peerId) => _publicKeyHex.hasMatch(peerId.trim());
 
+  bool _isPendingMediaPlaceholder(ChatMessage msg) {
+    if (msg.imagePath != null ||
+        msg.videoPath != null ||
+        msg.voicePath != null ||
+        msg.filePath != null) {
+      return false;
+    }
+    if (msg.fileName == null && msg.fileSize == null) return false;
+    final text = msg.text.trim();
+    return text == '📷 Фото' ||
+        text == '🎞 GIF' ||
+        text == '📹 Видео' ||
+        text == '⬛ Видео' ||
+        text == '🎤 Голосовое' ||
+        text.startsWith('📎 ');
+  }
+
   Future<void> init() async {
     if (_disposed) return;
     _timer?.cancel();
@@ -119,6 +136,7 @@ class OutboxService {
         msg.filePath != null) {
       return;
     }
+    if (_isPendingMediaPlaceholder(msg)) return;
     if (msg.text.trim().isEmpty) return;
 
     try {

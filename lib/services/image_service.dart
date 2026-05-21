@@ -12,8 +12,6 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
-import '../utils/web_object_url.dart';
-
 /// Сколько байт сырых данных помещается в один img_chunk-пакет.
 /// 90 байт → 120 байт base64. Итого JSON ≈ 274 байт < BLE MTU 290 байт.
 /// (overhead: id36+type+ttl+ts+msgId36+idx = ~154 байт; без rid и from)
@@ -43,7 +41,6 @@ class ImageService {
   }
 
   String _webMediaRef(Uint8List bytes, String mimeType) =>
-      createWebObjectUrl([bytes], mimeType) ??
       'data:$mimeType;base64,${base64Encode(bytes)}';
 
   /// Resolves a stored file path that may have become stale after a rebuild or
