@@ -414,6 +414,18 @@ class _CallScreenState extends State<CallScreen> {
               child: mainRemote ? bigRemote : bigLocal,
             ),
             Positioned(
+              width: 1,
+              height: 1,
+              left: -10,
+              top: -10,
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: 0.01,
+                  child: RTCVideoView(_remoteRenderer),
+                ),
+              ),
+            ),
+            Positioned(
               right: 12,
               top: 12,
               width: 120,

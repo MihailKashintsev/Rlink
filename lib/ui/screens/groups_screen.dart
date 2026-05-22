@@ -392,6 +392,74 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  List<Map<String, dynamic>> get _inputButtonConfig =>
+      AppSettings.instance.inputBarButtonConfig;
+
+  List<Widget> _buildGroupInputButtons(ColorScheme cs,
+      {required bool leftSide}) {
+    final out = <Widget>[];
+    for (final cfg in _inputButtonConfig) {
+      final id = cfg['id'] as String? ?? '';
+      final side = cfg['side'] as String? ?? 'left';
+      if (side != (leftSide ? 'left' : 'right')) continue;
+      switch (id) {
+        case 'emoji_stickers':
+          out.add(IconButton(
+            onPressed: _isSending
+                ? null
+                : () => unawaited(showChatEmojiInsertSheet(
+                      context,
+                      onInsert: _insertIntoComposer,
+                    )),
+            icon: Icon(
+              Icons.emoji_emotions_outlined,
+              color: _isSending
+                  ? cs.onSurface.withValues(alpha: 0.3)
+                  : cs.onSurfaceVariant,
+              size: 24,
+            ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            tooltip: 'Эмодзи и стикеры',
+          ));
+          break;
+        case 'media_menu':
+          out.add(IconButton(
+            onPressed:
+                _isSending ? null : () => unawaited(_openGroupMediaGallery()),
+            icon: Icon(
+              Icons.photo_library_outlined,
+              color: _isSending
+                  ? cs.onSurface.withValues(alpha: 0.3)
+                  : cs.onSurfaceVariant,
+              size: 24,
+            ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            tooltip: 'Галерея медиа',
+          ));
+          break;
+        case 'voice_video_square':
+          out.add(IconButton(
+            onPressed:
+                _isSending ? null : () => unawaited(_sendGroupSquareVideo()),
+            icon: Icon(
+              Icons.crop_square_rounded,
+              color: _isSending
+                  ? cs.onSurface.withValues(alpha: 0.3)
+                  : cs.onSurfaceVariant,
+              size: 24,
+            ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            tooltip: 'Квадратик',
+          ));
+          break;
+      }
+    }
+    return out;
+  }
+
   Future<void> _attachLinkToSelection() async {
     final sel = _controller.selection;
     if (!sel.isValid || sel.isCollapsed) return;
@@ -1113,10 +1181,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   Future<void> _openGroupMediaGallery() async {
     if (_isSending) return;
     if (!mounted) return;
-    if (kIsWeb) {
-      await _openGroupWebMediaPicker();
-      return;
-    }
     await showMediaGallerySendSheet(
       context,
       onPhotoPath: _groupGalleryPhoto,
@@ -1125,7 +1189,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       onStickerCropped: _groupGalleryStickerCrop,
       onStickerFromLibrary: _groupGalleryStickerLib,
       onFilePath: _groupGalleryFile,
-      onOpenEmojiInsert: null,
+      onOpenEmojiInsert: () => unawaited(showChatEmojiInsertSheet(
+        context,
+        onInsert: _insertIntoComposer,
+      )),
+      onLocation: _toggleLocation,
+      onTodo: _composeAndSendTodo,
+      onPoll: _sendPoll,
+      onCalendarEvent: _composeAndSendCalendar,
       isEmojiBot: false,
     );
   }
@@ -1224,6 +1295,35 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
+  static bool _isInlineWebUri(String value) =>
+      value.startsWith('data:') ||
+      value.startsWith('blob:') ||
+      value.startsWith('http://') ||
+      value.startsWith('https://') ||
+      value.startsWith('opfs://rlink/');
+
+  static Uint8List? _bytesFromDataUri(String value) {
+    if (!value.startsWith('data:')) return null;
+    final comma = value.indexOf(',');
+    if (comma < 0) return null;
+    final meta = value.substring(0, comma).toLowerCase();
+    final data = value.substring(comma + 1);
+    try {
+      return meta.contains(';base64')
+          ? base64Decode(data)
+          : Uint8List.fromList(utf8.encode(Uri.decodeComponent(data)));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _readInlineWebBytes(String path) async {
+    if (path.startsWith('data:')) return _bytesFromDataUri(path);
+    if (path.startsWith('blob:')) return readWebObjectUrlBytes(path);
+    if (path.startsWith('opfs://rlink/')) return readWebStoredFile(path);
+    return null;
+  }
+
   Future<void> _sendGroupWebBytes({
     required Uint8List bytes,
     required String fileName,
@@ -1320,6 +1420,19 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   Future<void> _groupGalleryGif(String rawPath) async {
     if (_isSending) return;
+    if (kIsWeb && _isInlineWebUri(rawPath)) {
+      final bytes = await _readInlineWebBytes(rawPath);
+      if (bytes == null || bytes.isEmpty) return;
+      await _sendGroupWebBytes(
+        bytes: bytes,
+        fileName: 'animation.gif',
+        isImage: true,
+        text: _controller.text.trim().isEmpty
+            ? '🎞 GIF'
+            : _controller.text.trim(),
+      );
+      return;
+    }
     setState(() {
       _isSending = true;
       _sendProgress = 0.0;
@@ -1393,6 +1506,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   Future<void> _groupGalleryPhoto(String rawPath) async {
     if (_isSending) return;
+    if (kIsWeb && _isInlineWebUri(rawPath)) {
+      final bytes = await _readInlineWebBytes(rawPath);
+      if (bytes == null || bytes.isEmpty) return;
+      await _sendGroupWebBytes(
+        bytes: bytes,
+        fileName: 'photo.jpg',
+        isImage: true,
+        text: _controller.text.trim().isEmpty ? '📷' : _controller.text.trim(),
+      );
+      return;
+    }
     if (rawPath.toLowerCase().endsWith('.gif')) {
       await _groupGalleryGif(rawPath);
       return;
@@ -1480,6 +1604,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   Future<void> _groupGalleryVideo(String rawPath) async {
     if (_isSending) return;
+    if (kIsWeb && _isInlineWebUri(rawPath)) {
+      final bytes = await _readInlineWebBytes(rawPath);
+      if (bytes == null || bytes.isEmpty) return;
+      await _sendGroupWebBytes(
+        bytes: bytes,
+        fileName: 'video.mp4',
+        isVideo: true,
+        text: _controller.text.trim().isEmpty ? '📹' : _controller.text.trim(),
+      );
+      return;
+    }
     setState(() {
       _isSending = true;
       _sendProgress = 0.0;
@@ -1661,6 +1796,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   Future<void> _groupGalleryFile(String srcPath) async {
     if (_isSending) return;
+    if (kIsWeb && _isInlineWebUri(srcPath)) {
+      final bytes = await _readInlineWebBytes(srcPath);
+      if (bytes == null || bytes.isEmpty) return;
+      await _sendGroupWebBytes(
+        bytes: bytes,
+        fileName: 'file.bin',
+        isFile: true,
+        text: '📎 file.bin',
+      );
+      return;
+    }
     if (!File(srcPath).existsSync()) return;
     final originalName = p.basename(srcPath);
     setState(() {
@@ -2494,41 +2640,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                               ? 'Скрыть формат'
                               : 'Формат выделенного текста',
                         ),
-                      IconButton(
-                        onPressed: _isSending
-                            ? null
-                            : () => unawaited(showChatEmojiInsertSheet(
-                                  context,
-                                  onInsert: _insertIntoComposer,
-                                )),
-                        icon: Icon(
-                          Icons.emoji_emotions_outlined,
-                          color: _isSending
-                              ? cs.onSurface.withValues(alpha: 0.3)
-                              : cs.onSurfaceVariant,
-                          size: 24,
-                        ),
-                        padding: EdgeInsets.zero,
-                        constraints:
-                            const BoxConstraints(minWidth: 36, minHeight: 36),
-                        tooltip: 'Эмодзи и стикеры',
-                      ),
-                      IconButton(
-                        onPressed: _isSending
-                            ? null
-                            : () => unawaited(_openGroupMediaGallery()),
-                        icon: Icon(
-                          Icons.photo_library_outlined,
-                          color: _isSending
-                              ? cs.onSurface.withValues(alpha: 0.3)
-                              : cs.onSurfaceVariant,
-                          size: 24,
-                        ),
-                        padding: EdgeInsets.zero,
-                        constraints:
-                            const BoxConstraints(minWidth: 36, minHeight: 36),
-                        tooltip: 'Галерея медиа',
-                      ),
+                      ..._buildGroupInputButtons(cs, leftSide: true),
                       const SizedBox(width: 2),
                       Expanded(
                         child: Container(
@@ -2562,6 +2674,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      ..._buildGroupInputButtons(cs, leftSide: false),
                       if (_composeHasText || _isSending)
                         GestureDetector(
                           onTap: _isSending || !_composeHasText ? null : _send,

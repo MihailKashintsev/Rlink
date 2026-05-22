@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'whisper_web_service.dart';
 import 'huggingface_stt_service.dart';
+import '../utils/web_file_store.dart';
 
 // Conditional imports: use IO-specific code on native platforms, stub on web
 import 'local_transcription_service_stub.dart'
@@ -135,8 +136,16 @@ class LocalTranscriptionService {
   }
 
   Future<String> _transcribeWeb(String audioPath, String language) async {
-    final text = await WhisperWebService.instance
-        .transcribe(audioPath, language: language);
+    var path = audioPath;
+    if (isWebStoredFile(path)) {
+      path = await webStoredFileObjectUrl(
+            path,
+            mimeType: 'audio/webm',
+          ) ??
+          path;
+    }
+    final text =
+        await WhisperWebService.instance.transcribe(path, language: language);
     if (text.trim().isEmpty) throw StateError('Речь не распознана');
     return text.trim();
   }

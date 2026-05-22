@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/sticker_pack.dart';
 import '../../services/runtime_platform.dart';
 import '../../services/sticker_collection_service.dart';
+import '../../utils/web_object_url.dart';
 import 'desktop_image_picker.dart';
 import 'sticker_crop_screen.dart';
 
@@ -244,9 +245,7 @@ class _TelegramMediaGallerySheetState extends State<_TelegramMediaGallerySheet>
   @override
   void initState() {
     super.initState();
-    // For official bots (except emoji bot), hide video tab
-    final tabCount = widget.isEmojiBot ? 4 : 3;
-    _tabController = TabController(length: tabCount, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -290,6 +289,7 @@ class _TelegramMediaGallerySheetState extends State<_TelegramMediaGallerySheet>
                   controller: _tabController,
                   children: [
                     _PhotoTab(onPhotoPath: widget.onPhotoPath),
+                    _VideoTab(onVideoPath: widget.onVideoPath),
                     _GalleryFilesTab(onFilePath: widget.onFilePath),
                     _OtherTab(
                       onLocation: widget.onLocation,
@@ -297,8 +297,6 @@ class _TelegramMediaGallerySheetState extends State<_TelegramMediaGallerySheet>
                       onPoll: widget.onPoll,
                       onCalendarEvent: widget.onCalendarEvent,
                     ),
-                    if (widget.isEmojiBot)
-                      _VideoTab(onVideoPath: widget.onVideoPath),
                   ],
                 ),
               ),
@@ -511,9 +509,9 @@ class _GalleryBottomTabSelector extends StatelessWidget {
               controller: tabController,
               tabs: [
                 const Tab(icon: Icon(Icons.photo_library)),
+                const Tab(icon: Icon(Icons.videocam)),
                 const Tab(icon: Icon(Icons.insert_drive_file)),
                 const Tab(icon: Icon(Icons.more_horiz)),
-                if (isEmojiBot) const Tab(icon: Icon(Icons.videocam)),
               ],
               indicatorSize: TabBarIndicatorSize.label,
             ),
@@ -1844,13 +1842,50 @@ class _FilesGalleryTabState extends State<_FilesGalleryTab> {
     final r = await FilePicker.platform.pickFiles(
       type: FileType.any,
       allowMultiple: false,
-      withData: false,
+      withData: kIsWeb,
     );
-    final path = r?.files.single.path;
+    final file = r?.files.single;
+    final path = kIsWeb
+        ? _webPickedFileUri(file, fallbackMime: 'application/octet-stream')
+        : file?.path;
     if (path == null || !mounted) return;
-    await _rememberFilePath(path);
+    if (!kIsWeb) await _rememberFilePath(path);
     sheetNav.pop();
     await widget.onFilePath(path);
+  }
+
+  String? _webPickedFileUri(PlatformFile? file,
+      {required String fallbackMime}) {
+    final bytes = file?.bytes;
+    if (bytes == null || bytes.isEmpty) return null;
+    final mime = _mimeForPickedName(file?.name ?? '', fallbackMime);
+    return createWebObjectUrl([bytes], mime) ??
+        'data:$mime;base64,${base64Encode(bytes)}';
+  }
+
+  String _mimeForPickedName(String name, String fallbackMime) {
+    switch (p.extension(name).toLowerCase()) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.webp':
+        return 'image/webp';
+      case '.webm':
+        return 'video/webm';
+      case '.mov':
+        return 'video/quicktime';
+      case '.mp4':
+      case '.m4v':
+        return 'video/mp4';
+      case '.pdf':
+        return 'application/pdf';
+      default:
+        return fallbackMime;
+    }
   }
 
   Future<void> _pickRecent(String path) async {
@@ -2129,25 +2164,85 @@ class _GalleryTabState extends State<_GalleryTab> {
         final r = await FilePicker.platform.pickFiles(
           type: FileType.custom,
           allowedExtensions: const ['gif'],
+          withData: kIsWeb,
         );
-        final path = r?.files.single.path;
+        final file = r?.files.single;
+        final path = kIsWeb
+            ? _webPickedFileUri(file, fallbackMime: 'image/gif')
+            : file?.path;
         if (path == null || !mounted) return;
         sheetNav.pop();
         await widget.onGifPath(path);
         break;
       case _GalleryMode.photo:
+        if (kIsWeb) {
+          final r = await FilePicker.platform.pickFiles(
+            type: FileType.image,
+            withData: true,
+          );
+          final path =
+              _webPickedFileUri(r?.files.single, fallbackMime: 'image/jpeg');
+          if (path == null || !mounted) return;
+          sheetNav.pop();
+          await widget.onPhotoPath(path);
+          break;
+        }
         final raw = await pickImagePathDesktopAware();
         if (raw == null || !mounted) return;
         sheetNav.pop();
         await widget.onPhotoPath(raw);
         break;
       case _GalleryMode.video:
+        if (kIsWeb) {
+          final r = await FilePicker.platform.pickFiles(
+            type: FileType.video,
+            withData: true,
+          );
+          final path =
+              _webPickedFileUri(r?.files.single, fallbackMime: 'video/mp4');
+          if (path == null || !mounted) return;
+          sheetNav.pop();
+          await widget.onVideoPath(path);
+          break;
+        }
         final picked =
             await ImagePicker().pickVideo(source: ImageSource.gallery);
         if (picked == null || !mounted) return;
         sheetNav.pop();
         await widget.onVideoPath(picked.path);
         break;
+    }
+  }
+
+  String? _webPickedFileUri(PlatformFile? file,
+      {required String fallbackMime}) {
+    final bytes = file?.bytes;
+    if (bytes == null || bytes.isEmpty) return null;
+    final mime = _mimeForPickedName(file?.name ?? '', fallbackMime);
+    return createWebObjectUrl([bytes], mime) ??
+        'data:$mime;base64,${base64Encode(bytes)}';
+  }
+
+  String _mimeForPickedName(String name, String fallbackMime) {
+    switch (p.extension(name).toLowerCase()) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.webp':
+        return 'image/webp';
+      case '.webm':
+        return 'video/webm';
+      case '.mov':
+        return 'video/quicktime';
+      case '.mp4':
+      case '.m4v':
+        return 'video/mp4';
+      default:
+        return fallbackMime;
     }
   }
 

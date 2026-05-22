@@ -1340,7 +1340,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final resolved = _dmResolveMsgPath(rawPath);
     final pathForTranscribe = resolved ?? rawPath;
-    if (!File(pathForTranscribe).existsSync()) {
+    final webReadable = kIsWeb && _isInlineWebUri(pathForTranscribe);
+    if (!webReadable && !File(pathForTranscribe).existsSync()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Файл голосового не найден')),
@@ -3648,11 +3649,19 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final msgId = _uuid.v4();
       final localPath = kIsWeb
-          ? _webMediaRefForPickedBytes(
-              bytes,
-              fileName,
-              fallbackMime: 'video/mp4',
-            )
+          ? (await writeWebStoredFile(
+                fileName: '${msgId}_$fileName',
+                bytes: bytes,
+                mimeType: _mimeTypeForFileName(
+                  fileName,
+                  fallbackMime: 'video/mp4',
+                ),
+              ) ??
+              _webMediaRefForPickedBytes(
+                bytes,
+                fileName,
+                fallbackMime: 'video/mp4',
+              ))
           : await _persistPickedBytes(
               bytes: bytes,
               fileName: fileName,

@@ -632,9 +632,14 @@ class CallService {
 
   Future<void> _attachRemoteTrack(dynamic event) async {
     final track = event.track as MediaStreamTrack;
-    final stream = remoteStream ?? await createLocalMediaStream('remote');
+    final eventStreams = event.streams as List<dynamic>?;
+    final eventStream = eventStreams != null && eventStreams.isNotEmpty
+        ? eventStreams.first as MediaStream?
+        : null;
+    final stream =
+        eventStream ?? remoteStream ?? await createLocalMediaStream('remote');
     final alreadyAdded = stream.getTracks().any((t) => t.id == track.id);
-    if (!alreadyAdded) {
+    if (!alreadyAdded && eventStream == null) {
       await stream.addTrack(track);
     }
     remoteStream = stream;
