@@ -580,7 +580,10 @@ Future<void> initServices() async {
   try {
     await initWebStorageIfNeeded();
     if (RuntimePlatform.isWeb) {
-      await WebIdentityPortable.hydrateLayeredStorageFromOpfsIfMissing();
+      await _runWebStartupStep(
+        'hydrate web identity from OPFS',
+        WebIdentityPortable.hydrateLayeredStorageFromOpfsIfMissing,
+      );
     }
     // Identity + profile must restore before any dart:io-heavy services: on web
     // StickerCollection / file scans can throw and previously aborted init before
@@ -591,8 +594,11 @@ Future<void> initServices() async {
     await _restoreAdminPasswordFromSealedIfNeeded();
     await ProfileService.instance.init();
     if (RuntimePlatform.isWeb) {
-      await WebIdentityPortable.syncIdentitySnapshotToOpfs(
-        profileJsonOverride: ProfileService.instance.profile?.encode(),
+      await _runWebStartupStep(
+        'sync web identity snapshot to OPFS',
+        () => WebIdentityPortable.syncIdentitySnapshotToOpfs(
+          profileJsonOverride: ProfileService.instance.profile?.encode(),
+        ),
       );
     }
 
@@ -645,7 +651,11 @@ Future<void> initServices() async {
       EtherService.instance.messages.value = const [];
       EtherService.instance.unreadCount.value = 0;
     } else if (RuntimePlatform.isWeb) {
-      await WebIdentityPortable.restoreStructuredDataFromBackupIfPresent();
+      await _runWebStartupStep(
+        'restore structured web backup',
+        WebIdentityPortable.restoreStructuredDataFromBackupIfPresent,
+        timeout: const Duration(seconds: 10),
+      );
     }
     await StoryService.instance.init();
     await MediaUploadQueue.instance.init();
@@ -2640,6 +2650,22 @@ Future<void> initServices() async {
   }
 }
 
+Future<void> _runWebStartupStep(
+  String label,
+  Future<void> Function() task, {
+  Duration timeout = const Duration(seconds: 6),
+}) async {
+  if (!RuntimePlatform.isWeb) {
+    await task();
+    return;
+  }
+  try {
+    await task().timeout(timeout);
+  } catch (e, st) {
+    debugPrint('[RLINK][Init] $label skipped: $e\n$st');
+  }
+}
+
 void _bindGossipFallbackHandlersIfMissing() {
   GossipRouter.instance.onEtherReceived ??=
       (id, text, color, senderId, senderNick, {double? lat, double? lng}) {
@@ -3820,7 +3846,16 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       if (RuntimePlatform.isDesktop) {
         await DesktopTrayService.instance.init();
       }
-      await initServices();
+      if (RuntimePlatform.isWeb) {
+        await initServices().timeout(
+          const Duration(seconds: 25),
+          onTimeout: () {
+            debugPrint('[RLINK][Init] Web startup timed out; continuing UI');
+          },
+        );
+      } else {
+        await initServices();
+      }
       if (mounted) {
         setState(() {
           _ready = true;
