@@ -13,6 +13,8 @@ import 'chat_storage_service.dart';
 import 'notification_service.dart';
 import 'relay_service.dart';
 import 'sound_effects_service.dart';
+import '../utils/web_file_store.dart';
+import '../utils/web_object_url.dart';
 
 enum CallPhase { idle, ringing, connecting, connected, ended, failed }
 
@@ -100,6 +102,7 @@ class CallService {
 
   MediaRecorder? _mediaRecorder;
   String? _recordingPath;
+  String _recordingMimeType = 'video/webm';
   Stopwatch? _callDurationSw;
   Timer? _callDurationTimer;
   Stopwatch? _recordingSw;
@@ -142,10 +145,6 @@ class CallService {
 
   /// Запись разговора (локально в Documents). Собеседнику уходит сигнал [recording].
   Future<void> setCallRecording(bool on) async {
-    if (kIsWeb) {
-      debugPrint('[RLINK][Call] Recording: не поддерживается в web-сборке.');
-      return;
-    }
     final peerId = _activePeerId;
     final callId = _activeCallId;
     if (peerId == null || callId == null) return;
@@ -153,44 +152,56 @@ class CallService {
       if (_mediaRecorder != null) return;
       if (phase.value != CallPhase.connected) return;
       try {
-        final dir = await getApplicationDocumentsDirectory();
-        final ext =
-            (_videoEnabled && remoteStream?.getVideoTracks().isNotEmpty == true)
-                ? 'mp4'
-                : 'm4a';
-        _recordingPath = p.join(
-          dir.path,
-          'call_${callId.substring(0, 8)}_${DateTime.now().millisecondsSinceEpoch}.$ext',
-        );
-        final rec = MediaRecorder();
-        final remote = remoteStream;
-        final vTracks = remote?.getVideoTracks() ?? const <MediaStreamTrack>[];
-        final aTracks = remote?.getAudioTracks() ?? const <MediaStreamTrack>[];
-        if (vTracks.isNotEmpty) {
-          await rec.start(
-            _recordingPath!,
-            videoTrack: vTracks.first,
-            audioChannel: RecorderAudioChannel.OUTPUT,
-          );
-        } else if (aTracks.isNotEmpty) {
-          await rec.start(
-            _recordingPath!,
-            audioChannel: RecorderAudioChannel.OUTPUT,
-          );
+        if (kIsWeb) {
+          final source = remoteStream ?? _localStream;
+          if (source == null) return;
+          final hasVideo =
+              _videoEnabled && source.getVideoTracks().isNotEmpty == true;
+          await _startWebRecording(source, hasVideo: hasVideo);
         } else {
-          await rec.start(
-            _recordingPath!,
-            audioChannel: RecorderAudioChannel.INPUT,
+          final dir = await getApplicationDocumentsDirectory();
+          final ext =
+              (_videoEnabled && remoteStream?.getVideoTracks().isNotEmpty == true)
+                  ? 'mp4'
+                  : 'm4a';
+          _recordingPath = p.join(
+            dir.path,
+            'call_${callId.substring(0, 8)}_${DateTime.now().millisecondsSinceEpoch}.$ext',
           );
+          final rec = MediaRecorder();
+          final remote = remoteStream;
+          final vTracks =
+              remote?.getVideoTracks() ?? const <MediaStreamTrack>[];
+          final aTracks =
+              remote?.getAudioTracks() ?? const <MediaStreamTrack>[];
+          if (vTracks.isNotEmpty) {
+            await rec.start(
+              _recordingPath!,
+              videoTrack: vTracks.first,
+              audioChannel: RecorderAudioChannel.OUTPUT,
+            );
+          } else if (aTracks.isNotEmpty) {
+            await rec.start(
+              _recordingPath!,
+              audioChannel: RecorderAudioChannel.OUTPUT,
+            );
+          } else {
+            await rec.start(
+              _recordingPath!,
+              audioChannel: RecorderAudioChannel.INPUT,
+            );
+          }
+          _mediaRecorder = rec;
+          _recordingMimeType = ext == 'mp4' ? 'video/mp4' : 'audio/mp4';
         }
-        _mediaRecorder = rec;
         localRecording.value = true;
         _recordingSw = Stopwatch()..start();
         recordingElapsed.value = Duration.zero;
         _recordingTimer?.cancel();
         _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-          if (_recordingSw != null)
+          if (_recordingSw != null) {
             recordingElapsed.value = _recordingSw!.elapsed;
+          }
         });
         await _sendSignal(peerId, callId, 'recording', {'on': true});
         debugPrint('[RLINK][Call] Recording started → $_recordingPath');
@@ -200,26 +211,90 @@ class CallService {
         _recordingPath = null;
       }
     } else {
-      if (_mediaRecorder == null) return;
+      if (_mediaRecorder == null) {
+        return;
+      }
       try {
         await _sendSignal(peerId, callId, 'recording', {'on': false});
       } catch (_) {}
       try {
-        final out = await _mediaRecorder!.stop();
-        debugPrint(
-            '[RLINK][Call] Recording stopped out=$out path=$_recordingPath');
-      } catch (e) {
-        debugPrint('[RLINK][Call] Recording stop failed: $e');
-      }
-      _mediaRecorder = null;
-      _recordingPath = null;
-      _recordingTimer?.cancel();
-      _recordingTimer = null;
-      _recordingSw?.stop();
-      _recordingSw = null;
-      recordingElapsed.value = Duration.zero;
-      localRecording.value = false;
+        await _stopActiveRecording();
+      } catch (_) {}
     }
+  }
+
+  Future<void> _startWebRecording(
+    MediaStream source, {
+    required bool hasVideo,
+  }) async {
+    final candidates = hasVideo
+        ? const <String>[
+            'video/webm;codecs=vp8,opus',
+            'video/webm',
+            'video/mp4',
+          ]
+        : const <String>[
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4',
+            'video/webm',
+          ];
+    Object? lastError;
+    for (final mime in candidates) {
+      try {
+        final rec = MediaRecorder();
+        rec.startWeb(source, mimeType: mime, timeSlice: 1000);
+        _mediaRecorder = rec;
+        _recordingMimeType = mime.split(';').first;
+        _recordingPath = null;
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw StateError('Web MediaRecorder start failed: $lastError');
+  }
+
+  Future<String?> _stopActiveRecording() async {
+    final recorder = _mediaRecorder;
+    if (recorder == null) return _recordingPath;
+    try {
+      final out = await recorder.stop();
+      if (kIsWeb) {
+        final objectUrl = out?.toString();
+        final bytes = objectUrl == null || objectUrl.isEmpty
+            ? null
+            : await readWebObjectUrlBytes(objectUrl);
+        if (bytes != null && bytes.isNotEmpty) {
+          final callId = _activeCallId ?? 'call';
+          final shortLen = callId.length < 8 ? callId.length : 8;
+          final shortCallId = callId.substring(0, shortLen);
+          final ts = DateTime.now().millisecondsSinceEpoch;
+          final ext = _recordingMimeType.contains('mp4')
+              ? (_recordingMimeType.startsWith('audio/') ? 'm4a' : 'mp4')
+              : 'webm';
+          final stored = await writeWebStoredFile(
+            fileName: 'call_${shortCallId}_$ts.$ext',
+            bytes: bytes,
+            mimeType: _recordingMimeType,
+          );
+          _recordingPath = stored ?? objectUrl;
+        } else {
+          _recordingPath = objectUrl;
+        }
+      }
+      debugPrint('[RLINK][Call] Recording stopped out=$out path=$_recordingPath');
+    } catch (e) {
+      debugPrint('[RLINK][Call] Recording stop failed: $e');
+    }
+    _mediaRecorder = null;
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    _recordingSw?.stop();
+    _recordingSw = null;
+    recordingElapsed.value = Duration.zero;
+    localRecording.value = false;
+    return _recordingPath;
   }
 
   Map<String, dynamic> _iceConfig() {
@@ -815,7 +890,6 @@ class CallService {
         _callDurationSw != null ? _callDurationSw!.elapsed : Duration.zero;
     final incomingSnapshot = _historyWasIncoming;
     final videoSnapshot = _videoEnabled;
-    final recordingPathSnapshot = _recordingPath;
     _stopCallDurationTimer();
     peerIsRecording.value = false;
     if (localRecording.value &&
@@ -826,14 +900,12 @@ class CallService {
             _activePeerId!, _activeCallId!, 'recording', {'on': false});
       } catch (_) {}
     }
-    localRecording.value = false;
     if (_mediaRecorder != null) {
-      try {
-        await _mediaRecorder!.stop();
-      } catch (_) {}
-      _mediaRecorder = null;
+      await _stopActiveRecording();
+    } else {
+      localRecording.value = false;
     }
-    _recordingPath = null;
+    final recordingPathSnapshot = _recordingPath;
     _connectTimeout?.cancel();
     _connectTimeout = null;
     _iceDiagTimer?.cancel();
@@ -893,6 +965,7 @@ class CallService {
         ),
       );
     }
+    _recordingPath = null;
     _historyWasIncoming = false;
     // Track handled call to prevent duplicate incoming from caller resend loop.
     if (callIdForRecent != null) {

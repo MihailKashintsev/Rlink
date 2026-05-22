@@ -51,6 +51,7 @@ class GoogleDriveChannelBackup {
   /// Web client ID нужен на Android/iOS/macOS, чтобы выдавался access token для Google APIs.
   static final GoogleSignIn _signIn = GoogleSignIn(
     scopes: _driveScopes,
+    clientId: kIsWeb ? _webClientId : null,
     serverClientId: kIsWeb ? null : _webClientId,
     forceCodeForRefreshToken:
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android,

@@ -435,6 +435,14 @@ class SettingsCategoryCards extends StatelessWidget {
             subtitle: 'BLE, интернет, ретранслятор',
             onTap: () => _open(context, const _NetworkPage()),
           ),
+          if (RuntimePlatform.isWeb)
+            _CategoryItem(
+              icon: Icons.ios_share_rounded,
+              color: const Color(0xFF4CAF50),
+              title: 'Установка на iPhone',
+              subtitle: 'Добавить Rlink на главный экран',
+              onTap: () => _open(context, const _WebInstallPage()),
+            ),
         ]),
         const SizedBox(height: 8),
         _CategoryGroup(isDark: isDark, items: [
@@ -1693,6 +1701,100 @@ class _ProfilePageState extends State<_ProfilePage> {
 // ─────────────────────────────────────────────────────────────────────
 // Sub-screen: Network
 // ─────────────────────────────────────────────────────────────────────
+
+class _WebInstallPage extends StatelessWidget {
+  const _WebInstallPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return _subScaffold(
+      context: context,
+      title: 'Установка на iPhone',
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
+        children: [
+          const _SectionHeader('Safari на iPhone'),
+          _InstallStepTile(
+            index: 1,
+            icon: Icons.open_in_browser_rounded,
+            title: 'Откройте Rlink в Safari',
+            subtitle:
+                'На iPhone установка на главный экран работает именно из Safari.',
+          ),
+          _InstallStepTile(
+            index: 2,
+            icon: Icons.ios_share_rounded,
+            title: 'Нажмите кнопку «Поделиться»',
+            subtitle: 'Она находится в нижней панели Safari.',
+          ),
+          _InstallStepTile(
+            index: 3,
+            icon: Icons.add_box_outlined,
+            title: 'Выберите «На экран Домой»',
+            subtitle: 'Если пункта не видно, прокрутите список действий ниже.',
+          ),
+          _InstallStepTile(
+            index: 4,
+            icon: Icons.check_circle_outline_rounded,
+            title: 'Нажмите «Добавить»',
+            subtitle:
+                'После этого Rlink будет запускаться с главного экрана как приложение.',
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: Icon(Icons.info_outline_rounded, color: cs.primary),
+            title: const Text('После установки'),
+            subtitle: const Text(
+              'Откройте Rlink с иконки на главном экране и разрешите уведомления, микрофон и камеру при первом запросе.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InstallStepTile extends StatelessWidget {
+  final int index;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _InstallStepTile({
+    required this.index,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: CircleAvatar(
+        radius: 18,
+        backgroundColor: cs.primaryContainer,
+        child: Text(
+          '$index',
+          style: TextStyle(
+            color: cs.onPrimaryContainer,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      title: Row(
+        children: [
+          Icon(icon, size: 19, color: cs.primary),
+          const SizedBox(width: 8),
+          Expanded(child: Text(title)),
+        ],
+      ),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+    );
+  }
+}
 
 class _NetworkPage extends StatefulWidget {
   const _NetworkPage();

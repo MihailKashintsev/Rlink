@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
@@ -330,8 +329,8 @@ class _CallScreenState extends State<CallScreen> {
                       icon: Icon(_micOn ? Icons.mic : Icons.mic_off),
                     ),
                     const SizedBox(width: 10),
-                    if (!kIsWeb) _recordControl(),
-                    if (!kIsWeb) const SizedBox(width: 10),
+                    _recordControl(),
+                    const SizedBox(width: 10),
                     IconButton.filled(
                       style: IconButton.styleFrom(backgroundColor: Colors.red),
                       onPressed: _end,
@@ -441,8 +440,8 @@ class _CallScreenState extends State<CallScreen> {
                         : null,
                     icon: const Icon(Icons.flip_camera_ios_outlined),
                   ),
-                  if (!kIsWeb) const SizedBox(width: 12),
-                  if (!kIsWeb) _recordControl(),
+                  const SizedBox(width: 12),
+                  _recordControl(),
                   const SizedBox(width: 12),
                   IconButton.filled(
                     style: IconButton.styleFrom(backgroundColor: Colors.red),

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -9,6 +9,8 @@ import '../../services/app_settings.dart';
 import '../../services/call_history_service.dart';
 import '../../services/local_transcription_service.dart';
 import '../../services/voice_service.dart';
+import '../../utils/video_controller_for_path.dart';
+import '../../utils/web_file_store.dart';
 import '../widgets/avatar_widget.dart';
 
 class CallRecordingPlaybackScreen extends StatefulWidget {
@@ -30,13 +32,14 @@ class _CallRecordingPlaybackScreenState
   List<_SpeakerSegment> _speakerSegments = [];
   int _highlightedSegment = -1;
   Timer? _positionTimer;
+  String? _videoPlaybackUrl;
 
   CallHistoryEntry get _entry => widget.entry;
 
   @override
   void initState() {
     super.initState();
-    _initPlayback();
+    unawaited(_initPlayback());
     _loadExistingTranscript();
   }
 
@@ -59,31 +62,43 @@ class _CallRecordingPlaybackScreenState
     }
   }
 
-  void _initPlayback() {
+  Future<void> _initPlayback() async {
     final path = _entry.recordingPath;
-    if (path == null || path.isEmpty || !File(path).existsSync()) return;
-    _isVideo = path.endsWith('.mp4');
+    if (path == null || path.isEmpty || !localFileExistsForPath(path)) {
+      return;
+    }
+    _isVideo = _entry.video || path.endsWith('.mp4');
     if (_isVideo) {
-      _videoCtrl = VideoPlayerController.file(File(path))
-        ..initialize().then((_) {
-          if (mounted) setState(() {});
-          _videoCtrl!.addListener(_onVideoState);
-        });
+      final playbackPath = await _playbackPathForRecording();
+      if (playbackPath == null || !mounted) return;
+      _videoPlaybackUrl = playbackPath;
+      _videoCtrl = videoControllerForPath(playbackPath);
+      await _videoCtrl!.initialize();
+      if (!mounted) return;
+      setState(() {});
+      _videoCtrl!.addListener(_onVideoState);
     }
   }
 
   void _onVideoState() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     final v = _videoCtrl;
-    if (v == null) return;
+    if (v == null) {
+      return;
+    }
     final wasPlaying = _playing;
     _playing = v.value.isPlaying;
-    if (wasPlaying != _playing && mounted) setState(() {});
+    if (wasPlaying != _playing && mounted) {
+      setState(() {});
+    }
     if (_speakerSegments.isNotEmpty && v.value.isPlaying) {
       final segIdx =
           (v.value.position.inSeconds ~/ 3) % _speakerSegments.length;
-      if (segIdx != _highlightedSegment)
+      if (segIdx != _highlightedSegment) {
         setState(() => _highlightedSegment = segIdx);
+      }
     }
   }
 
@@ -96,29 +111,44 @@ class _CallRecordingPlaybackScreenState
 
   Future<void> _togglePlayPause() async {
     final path = _entry.recordingPath;
-    if (path == null || path.isEmpty || !File(path).existsSync()) {
-      if (mounted)
+    if (path == null || path.isEmpty || !localFileExistsForPath(path)) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Файл записи не найден')));
+      }
       return;
     }
     if (_isVideo && _videoCtrl != null) {
       final v = _videoCtrl!;
       v.value.isPlaying ? await v.pause() : await v.play();
-      if (mounted) setState(() => _playing = v.value.isPlaying);
+      if (mounted) {
+        setState(() => _playing = v.value.isPlaying);
+      }
     } else {
       if (_playing) {
         await VoiceService.instance.stopPlayback();
-        if (mounted) setState(() => _playing = false);
+        if (mounted) {
+          setState(() => _playing = false);
+        }
       } else {
-        await VoiceService.instance.play(path, title: 'Запись звонка');
-        if (mounted) setState(() => _playing = true);
+        final playbackPath = await _playbackPathForRecording();
+        if (playbackPath == null) {
+          return;
+        }
+        await VoiceService.instance.play(playbackPath, title: 'Запись звонка');
+        if (mounted) {
+          setState(() => _playing = true);
+        }
         _positionTimer?.cancel();
         _positionTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-          if (!mounted) return;
+          if (!mounted) {
+            return;
+          }
           final s = VoiceService.instance.playbackSession.value;
-          if (s == null || s.path != path) {
-            if (mounted) setState(() => _playing = false);
+          if (s == null || s.path != playbackPath) {
+            if (mounted) {
+              setState(() => _playing = false);
+            }
             _positionTimer?.cancel();
           }
         });
@@ -128,17 +158,19 @@ class _CallRecordingPlaybackScreenState
 
   Future<void> _transcribeRecording() async {
     final path = _entry.recordingPath;
-    if (path == null || path.isEmpty || !File(path).existsSync()) {
-      if (mounted)
+    if (path == null || path.isEmpty || !localFileExistsForPath(path)) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Файл записи не найден')));
+      }
       return;
     }
     if (!LocalTranscriptionService.instance.isSupported) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text(
                 'Локальная расшифровка доступна на iOS, macOS, Android и Windows')));
+      }
       return;
     }
     setState(() => _transcribing = true);
@@ -146,8 +178,12 @@ class _CallRecordingPlaybackScreenState
       final transcriptionLanguage =
           LocalTranscriptionService.mapLocaleToWhisperLanguage(
               AppSettings.instance.locale);
+      final pathForTranscribe = await _playbackPathForRecording();
+      if (pathForTranscribe == null) {
+        throw StateError('Файл записи не найден');
+      }
       final text = await LocalTranscriptionService.instance
-          .transcribeFile(path, language: transcriptionLanguage);
+          .transcribeFile(pathForTranscribe, language: transcriptionLanguage);
       final segments = _simpleDiarization(text);
       if (!mounted) return;
       await CallHistoryService.instance.setTranscript(_entry.id, text,
@@ -184,12 +220,64 @@ class _CallRecordingPlaybackScreenState
   String _fmt(Duration d) =>
       '${d.inMinutes.remainder(60).toString().padLeft(2, '0')}:${d.inSeconds.remainder(60).toString().padLeft(2, '0')}';
 
+  String _recordingMimeType() {
+    final path = _entry.recordingPath ?? '';
+    if (_entry.video) {
+      return path.endsWith('.mp4') ? 'video/mp4' : 'video/webm';
+    }
+    return path.endsWith('.m4a') || path.endsWith('.mp4')
+        ? 'audio/mp4'
+        : 'audio/webm';
+  }
+
+  String _downloadFileName() {
+    final path = _entry.recordingPath ?? '';
+    final ext = path.endsWith('.mp4')
+        ? 'mp4'
+        : path.endsWith('.m4a')
+            ? 'm4a'
+            : 'webm';
+    return 'rlink_call_${_entry.endedAtMs}.$ext';
+  }
+
+  Future<String?> _playbackPathForRecording() async {
+    final path = _entry.recordingPath;
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+    if (kIsWeb && isWebStoredFile(path)) {
+      return webStoredFileObjectUrl(path, mimeType: _recordingMimeType());
+    }
+    return _videoPlaybackUrl ?? path;
+  }
+
+  Future<void> _downloadRecording() async {
+    final path = _entry.recordingPath;
+    if (path == null || path.isEmpty || !localFileExistsForPath(path)) {
+      return;
+    }
+    final fileName = _downloadFileName();
+    if (kIsWeb) {
+      await downloadWebFile(
+        path,
+        fileName: fileName,
+        mimeType: _recordingMimeType(),
+      );
+    } else {
+      await copyLocalFileToDownloads(path, fileName);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Запись сохранена')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final hasRecording = _entry.recordingPath != null &&
         _entry.recordingPath!.isNotEmpty &&
-        File(_entry.recordingPath!).existsSync();
+        localFileExistsForPath(_entry.recordingPath!);
 
     return Scaffold(
       appBar: AppBar(title: Text(_entry.peerDisplayName)),
@@ -237,6 +325,12 @@ class _CallRecordingPlaybackScreenState
                         : _isVideo
                             ? 'Смотреть'
                             : 'Слушать')),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: 'Скачать запись',
+                  onPressed: _downloadRecording,
+                  icon: const Icon(Icons.download_outlined),
+                ),
                 const SizedBox(width: 8),
               ],
               if (_transcriptText == null || _transcriptText!.isEmpty)

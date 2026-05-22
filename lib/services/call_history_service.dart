@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'chat_storage_service.dart';
 
@@ -75,19 +73,20 @@ class CallHistoryService {
   static final CallHistoryService instance = CallHistoryService._();
 
   static const int _kMaxEntries = 200;
+  static const String _prefsKey = 'rlink_call_history_v1';
 
   final ValueNotifier<int> version = ValueNotifier(0);
   List<CallHistoryEntry> _entries = [];
-  File? _file;
   Future<void>? _ready;
 
   List<CallHistoryEntry> get entries => List.unmodifiable(_entries);
 
   Future<void> _ensureReady() async {
-    if (_file != null) return;
+    if (_ready != null) {
+      await _ready;
+      return;
+    }
     _ready ??= () async {
-      final dir = await getApplicationDocumentsDirectory();
-      _file = File(p.join(dir.path, 'call_history.json'));
       await _load();
       version.value++;
     }();
@@ -98,13 +97,13 @@ class CallHistoryService {
   Future<void> ensureLoaded() => _ensureReady();
 
   Future<void> _load() async {
-    final f = _file;
-    if (f == null || !await f.exists()) {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsKey);
+    if (raw == null || raw.isEmpty) {
       _entries = [];
       return;
     }
     try {
-      final raw = await f.readAsString();
       final decoded = jsonDecode(raw);
       if (decoded is! List) {
         _entries = [];
@@ -122,11 +121,10 @@ class CallHistoryService {
   }
 
   Future<void> _save() async {
-    final f = _file;
-    if (f == null) return;
     try {
+      final prefs = await SharedPreferences.getInstance();
       final encoded = jsonEncode(_entries.map((e) => e.toJson()).toList());
-      await f.writeAsString(encoded);
+      await prefs.setString(_prefsKey, encoded);
     } catch (e) {
       debugPrint('[CallHistory] save failed: $e');
     }
