@@ -44,9 +44,19 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // Кэшированный FlutterEngine в [RlinkApplication] — не подменять на дефолтный FlutterApplication.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
         manifestPlaceholders["applicationName"] = "com.rendergames.rlink.RlinkApplication"
     }
+
+    // Commented out externalNativeBuild to disable whisper.cpp compilation
+    // externalNativeBuild {
+    //     cmake {
+    //         path = file("src/main/cpp/CMakeLists.txt")
+    //         version = "3.22.1"
+    //     }
+    // }
 
     buildTypes {
         release {

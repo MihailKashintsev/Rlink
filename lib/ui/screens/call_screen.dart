@@ -79,7 +79,8 @@ class _CallScreenState extends State<CallScreen> {
     CallService.instance.remoteStreamNotifier.addListener(_streamListener!);
 
     _remoteGenListener = _bindRemoteRenderer;
-    CallService.instance.remoteStreamGeneration.addListener(_remoteGenListener!);
+    CallService.instance.remoteStreamGeneration
+        .addListener(_remoteGenListener!);
 
     _phaseListener = () {
       if (!mounted) return;
@@ -133,7 +134,8 @@ class _CallScreenState extends State<CallScreen> {
             builder: (_, rec, __) {
               if (!rec) return const SizedBox.shrink();
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.red.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(20),
@@ -141,7 +143,8 @@ class _CallScreenState extends State<CallScreen> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.fiber_manual_record, color: Colors.white, size: 14),
+                    Icon(Icons.fiber_manual_record,
+                        color: Colors.white, size: 14),
                     SizedBox(width: 6),
                     Text(
                       'Идёт запись',
@@ -166,7 +169,8 @@ class _CallScreenState extends State<CallScreen> {
                 builder: (_, recElapsed, __) {
                   return Container(
                     margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.red.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(20),
@@ -174,7 +178,8 @@ class _CallScreenState extends State<CallScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
+                        const Icon(Icons.fiber_manual_record,
+                            color: Colors.white, size: 12),
                         const SizedBox(width: 6),
                         Text(
                           _formatElapsed(recElapsed),
@@ -197,7 +202,8 @@ class _CallScreenState extends State<CallScreen> {
             builder: (_, elapsed, __) {
               if (elapsed == Duration.zero) return const SizedBox.shrink();
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(20),
@@ -231,7 +237,8 @@ class _CallScreenState extends State<CallScreen> {
             await CallService.instance.setCallRecording(!rec);
             if (mounted) setState(() {});
           },
-          icon: Icon(rec ? Icons.stop_circle_outlined : Icons.fiber_manual_record),
+          icon: Icon(
+              rec ? Icons.stop_circle_outlined : Icons.fiber_manual_record),
         );
       },
     );
@@ -244,11 +251,13 @@ class _CallScreenState extends State<CallScreen> {
       _phaseListener = null;
     }
     if (_streamListener != null) {
-      CallService.instance.remoteStreamNotifier.removeListener(_streamListener!);
+      CallService.instance.remoteStreamNotifier
+          .removeListener(_streamListener!);
       _streamListener = null;
     }
     if (_remoteGenListener != null) {
-      CallService.instance.remoteStreamGeneration.removeListener(_remoteGenListener!);
+      CallService.instance.remoteStreamGeneration
+          .removeListener(_remoteGenListener!);
       _remoteGenListener = null;
     }
     _localRenderer.dispose();
@@ -277,6 +286,18 @@ class _CallScreenState extends State<CallScreen> {
       body: SafeArea(
         child: Stack(
           children: [
+            Positioned(
+              width: 1,
+              height: 1,
+              left: -10,
+              top: -10,
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: 0.01,
+                  child: RTCVideoView(_remoteRenderer),
+                ),
+              ),
+            ),
             Column(
               children: [
                 const SizedBox(height: 40),
@@ -312,7 +333,8 @@ class _CallScreenState extends State<CallScreen> {
                     };
                     return Text(
                       label,
-                      style: const TextStyle(color: Colors.white60, fontSize: 14),
+                      style:
+                          const TextStyle(color: Colors.white60, fontSize: 14),
                     );
                   },
                 ),

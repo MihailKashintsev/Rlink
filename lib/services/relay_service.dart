@@ -1898,7 +1898,13 @@ class RelayService with WidgetsBindingObserver {
     final to = msg['to'] as String?;
     final status = msg['status'] as String?;
     if (to == null || status == null) return;
-    if (status == 'offline' || status == 'queued_offline') {
+    if (status == 'queued_offline') {
+      final changed = _peerOnline[to] != false;
+      _peerOnline[to] = false;
+      if (changed) presenceVersion.value++;
+      debugPrint(
+          '[RLINK][Relay] Delivery queued offline → ${to.substring(0, 8)}');
+    } else if (status == 'offline') {
       final changed = _peerOnline[to] != false;
       _peerOnline[to] = false;
       if (changed) presenceVersion.value++;

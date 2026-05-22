@@ -81,7 +81,10 @@ class AvatarWidget extends StatelessWidget {
     Widget avatar = Container(
       width: innerSize,
       height: innerSize,
-      decoration: BoxDecoration(color: Color(color), shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: Color(color),
+        shape: BoxShape.circle,
+      ),
       child: ClipOval(
         child: hasImage
             ? Image.file(
@@ -89,8 +92,9 @@ class AvatarWidget extends StatelessWidget {
                 width: innerSize,
                 height: innerSize,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    Center(child: _buildEmojiOrInitials(innerSize)),
+                errorBuilder: (_, __, ___) => Center(
+                  child: _buildEmojiOrInitials(innerSize),
+                ),
               )
             : hasNetworkImage
                 ? Image.network(
@@ -98,10 +102,13 @@ class AvatarWidget extends StatelessWidget {
                     width: innerSize,
                     height: innerSize,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        Center(child: _buildEmojiOrInitials(innerSize)),
+                    errorBuilder: (_, __, ___) => Center(
+                      child: _buildEmojiOrInitials(innerSize),
+                    ),
                   )
-                : Center(child: _buildEmojiOrInitials(innerSize)),
+                : Center(
+                    child: _buildEmojiOrInitials(innerSize),
+                  ),
       ),
     );
 
@@ -124,7 +131,7 @@ class AvatarWidget extends StatelessWidget {
                         colors: [
                           Color(0xFFE91E63),
                           Color(0xFFFF9800),
-                          Color(0xFFFFEB3B),
+                          Color(0xFFFFEB3B)
                         ],
                       )
                     : LinearGradient(
@@ -173,9 +180,8 @@ class AvatarWidget extends StatelessWidget {
     if (emoji.isNotEmpty) {
       final m = _shortcodeRe.firstMatch(emoji.trim());
       if (m != null) {
-        final abs = EmojiPackService.instance.absolutePathForShortcode(
-          m.group(1)!,
-        );
+        final abs =
+            EmojiPackService.instance.absolutePathForShortcode(m.group(1)!);
         if (abs != null && File(abs).existsSync()) {
           return ClipRRect(
             borderRadius: BorderRadius.circular(innerSize * 0.16),
@@ -296,9 +302,8 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
   Future<void> _loadStickers() async {
     await StickerCollectionService.instance.init();
     final packs = await StickerCollectionService.instance.loadPacks();
-    final files = await StickerCollectionService.instance.stickerFilesForPack(
-      _filterStickerPackId,
-    );
+    final files = await StickerCollectionService.instance
+        .stickerFilesForPack(_filterStickerPackId);
     if (mounted) {
       setState(() {
         _stickerPacks = packs;
@@ -405,7 +410,10 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                             if (path == null) {
                               return const SizedBox();
                             }
-                            return Image.file(File(path), fit: BoxFit.contain);
+                            return Image.file(
+                              File(path),
+                              fit: BoxFit.contain,
+                            );
                           },
                         ),
                       );
@@ -466,7 +474,9 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                         if (_loadingEmojiPacks)
                           const Padding(
                             padding: EdgeInsets.all(16),
-                            child: Center(child: CircularProgressIndicator()),
+                            child: Center(
+                              child: CircularProgressIndicator(),
+                            ),
                           )
                         else if (_emojiPacks.isNotEmpty)
                           Column(
@@ -491,9 +501,8 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                                 height: 60,
                                 child: ListView.builder(
                                   scrollDirection: Axis.horizontal,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                  ),
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 8),
                                   itemCount: _emojiPacks.length,
                                   itemBuilder: (context, index) {
                                     final pack = _emojiPacks[index];
@@ -508,9 +517,8 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                                         decoration: BoxDecoration(
                                           color: cs.surfaceContainerHighest
                                               .withValues(alpha: 0.5),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                         child: Column(
                                           mainAxisAlignment:
@@ -519,12 +527,10 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                                             if (pack.emojis.isNotEmpty &&
                                                 _docsPath != null)
                                               Image.file(
-                                                File(
-                                                  p.join(
-                                                    _docsPath!,
-                                                    pack.emojis[0].relPath,
-                                                  ),
-                                                ),
+                                                File(p.join(
+                                                  _docsPath!,
+                                                  pack.emojis[0].relPath,
+                                                )),
                                                 width: 32,
                                                 height: 32,
                                               )
@@ -643,30 +649,26 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
             emojiTextStyle:
                 useNoto ? GoogleFonts.notoColorEmoji(fontSize: 26) : null,
             emojiViewConfig: epf.EmojiViewConfig(
-              backgroundColor: cs.surfaceContainerHighest.withValues(
-                alpha: 0.5,
-              ),
+              backgroundColor:
+                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
               columns: 8,
               emojiSizeMax: 26,
             ),
             categoryViewConfig: epf.CategoryViewConfig(
-              backgroundColor: cs.surfaceContainerHighest.withValues(
-                alpha: 0.5,
-              ),
+              backgroundColor:
+                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
               iconColorSelected: cs.primary,
               indicatorColor: cs.primary,
               iconColor: cs.onSurfaceVariant,
             ),
             bottomActionBarConfig: epf.BottomActionBarConfig(
-              backgroundColor: cs.surfaceContainerHighest.withValues(
-                alpha: 0.5,
-              ),
+              backgroundColor:
+                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
               buttonIconColor: cs.onSurfaceVariant,
             ),
             searchViewConfig: epf.SearchViewConfig(
-              backgroundColor: cs.surfaceContainerHighest.withValues(
-                alpha: 0.5,
-              ),
+              backgroundColor:
+                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
               buttonIconColor: cs.onSurfaceVariant,
             ),
           ),
@@ -733,20 +735,18 @@ class _StickerGrid extends StatelessWidget {
                             height: 50,
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.primaryContainer
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHighest,
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(8),
                               border: isSelected
                                   ? Border.all(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                      width: 2,
-                                    )
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      width: 2)
                                   : null,
                             ),
                             child: const Icon(Icons.apps, size: 28),
@@ -758,9 +758,9 @@ class _StickerGrid extends StatelessWidget {
                               fontSize: 11,
                               color: isSelected
                                   ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -788,17 +788,15 @@ class _StickerGrid extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? Theme.of(context).colorScheme.primaryContainer
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerHighest,
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(8),
                             border: isSelected
                                 ? Border.all(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    width: 2,
-                                  )
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    width: 2)
                                 : null,
                           ),
                           child: firstStickerRel != null
@@ -807,10 +805,8 @@ class _StickerGrid extends StatelessWidget {
                                   builder: (context, snapshot) {
                                     if (!snapshot.hasData ||
                                         snapshot.data == null) {
-                                      return const Icon(
-                                        Icons.sticky_note_2,
-                                        size: 24,
-                                      );
+                                      return const Icon(Icons.sticky_note_2,
+                                          size: 24);
                                     }
                                     return ClipRRect(
                                       borderRadius: BorderRadius.circular(6),
@@ -832,9 +828,9 @@ class _StickerGrid extends StatelessWidget {
                               fontSize: 11,
                               color: isSelected
                                   ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                             ),
                             textAlign: TextAlign.center,
                             maxLines: 2,
@@ -896,7 +892,10 @@ class _StickerGrid extends StatelessWidget {
                           onTap: () => onStickerPicked(file.path),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.file(file, fit: BoxFit.cover),
+                            child: Image.file(
+                              file,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         );
                       },
@@ -937,7 +936,9 @@ class _GifGrid extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     if (loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
     }
 
     if (gifUrls.isEmpty) {
@@ -1038,9 +1039,7 @@ class AvatarColorPicker extends StatelessWidget {
               boxShadow: isSelected
                   ? [
                       BoxShadow(
-                        color: Color(c).withValues(alpha: 0.6),
-                        blurRadius: 8,
-                      ),
+                          color: Color(c).withValues(alpha: 0.6), blurRadius: 8)
                     ]
                   : null,
             ),

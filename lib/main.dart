@@ -19,6 +19,7 @@ import 'utils/reaction_limit.dart';
 import 'utils/invite_dm_codec.dart';
 import 'utils/custom_emoji_text.dart';
 import 'utils/reaction_emoji_key.dart';
+import 'utils/web_file_store.dart';
 import 'utils/web_object_url.dart';
 import 'models/contact.dart';
 import 'models/group.dart';
@@ -146,10 +147,12 @@ int? _dataUriByteLength(String value) {
 
 Future<int> _storedMediaByteLength(String path) async {
   if (kIsWeb) {
-    final dataUriLength = _dataUriByteLength(path);
-    if (dataUriLength != null) return dataUriLength;
-    final blobBytes = await readWebObjectUrlBytes(path);
-    return blobBytes?.length ?? 0;
+    final dataUriSize = _dataUriByteLength(path);
+    if (dataUriSize != null) return dataUriSize;
+    final storedBytes = await readWebStoredFile(path.split('#').first);
+    if (storedBytes != null) return storedBytes.length;
+    final bytes = await readWebObjectUrlBytes(path);
+    return bytes?.length ?? 0;
   }
   return File(path).length();
 }
@@ -3241,10 +3244,6 @@ Future<bool> _handleIncomingMediaWhenAutoDownloadDisabled({
   bool isChannelPost = false,
 }) async {
   if (AppSettings.instance.autoDownloadMedia) return false;
-  // In the browser the relay blob is already in memory and can be rendered as a
-  // blob: URL, so keeping a "download from peer" placeholder only hides media
-  // that we are able to show immediately.
-  if (kIsWeb) return false;
   // Стикеры всегда скачиваем — они часть сообщения.
   if (isSticker) return false;
   if (msgId.startsWith('stickerpack_')) return false;

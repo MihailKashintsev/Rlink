@@ -42,10 +42,6 @@ bool dmMessageMissingLocalMedia(ChatMessage msg) {
       _hasLocalFile(msg.filePath)) {
     return false;
   }
-  // Web senders may intentionally keep large picked files out of local memory.
-  // In that case the outgoing row should remain a normal sent/uploading label,
-  // not a "download from peer" placeholder.
-  if (kIsWeb && msg.isOutgoing) return false;
   if (msg.replyToMessageId != null) return false;
   if (msg.latitude != null) return false;
   if (SharedTodoPayload.tryDecode(msg.text) != null) return false;

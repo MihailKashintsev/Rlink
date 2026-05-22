@@ -198,6 +198,17 @@ class _ChatListScreenState extends State<ChatListScreen>
                 if (ctx.mounted) Navigator.pop(ctx);
                 try {
                   final myId = CryptoService.instance.publicKeyHex;
+                  if (myId.isEmpty) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Профиль еще не готов, попробуйте ещё раз'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
                   final ch = await ChannelService.instance.createChannel(
                     name: name,
                     adminId: myId,
@@ -207,7 +218,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ? descCtrl.text.trim()
                         : null,
                   );
-                  await ch.broadcastGossipMeta();
+                  unawaited(ch.broadcastGossipMeta());
                   if (mounted) {
                     Navigator.push(
                         context,

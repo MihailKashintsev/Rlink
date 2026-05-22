@@ -27,7 +27,7 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks!
+  use_frameworks! :linkage => :static
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
@@ -36,8 +36,7 @@ target 'Runner' do
 end
 
 post_install do |installer|
-  # flutter pub get regenerates FlutterGeneratedPluginSwiftPackage with iOS 13.0;
-  # align it with `platform :ios` so SPM plugins (e.g. flutter_whisper_kit_apple) resolve.
+  # Keep generated iOS settings aligned with the app deployment target.
   ios_deployment = '16.0'
   podfile_src = File.read(File.join(__dir__, 'Podfile'))
   if (m = podfile_src.match(/platform\s+:ios,\s*['"]([^'"]+)['"]/))

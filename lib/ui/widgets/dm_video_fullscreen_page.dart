@@ -9,6 +9,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../services/embedded_video_pause_bus.dart';
 import '../../services/voice_service.dart';
+import '../../utils/web_file_store.dart';
 
 /// Полноэкранное воспроизведение DM-видео (в т.ч. квадратиков) с [VideoPlayer] в дереве.
 class DmVideoFullscreenPage extends StatefulWidget {
@@ -30,7 +31,7 @@ class DmVideoFullscreenPage extends StatefulWidget {
 
 class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
     with TickerProviderStateMixin {
-  late VideoPlayerController _ctrl;
+  VideoPlayerController? _ctrl;
   bool _initialized = false;
   bool _error = false;
   Timer? _hideTopTimer;
@@ -51,7 +52,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
     if (g != _embedPauseGen) {
       _embedPauseGen = g;
       try {
-        _ctrl.pause();
+        _ctrl?.pause();
       } catch (_) {}
       setState(() {});
     }
@@ -67,20 +68,22 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
   void _onPausePulse() {
     if (!mounted || !_initialized) return;
     try {
-      _ctrl.pause();
+      _ctrl?.pause();
     } catch (_) {}
   }
 
   void _onResumePulse() {
     if (!mounted || !_initialized) return;
     try {
-      _ctrl.play();
+      _ctrl?.play();
     } catch (_) {}
   }
 
   void _onCtrlTick() {
     if (!mounted) return;
-    final v = _ctrl.value;
+    final ctrl = _ctrl;
+    if (ctrl == null) return;
+    final v = ctrl.value;
     if (!v.isInitialized) return;
     final totalMs = v.duration.inMilliseconds;
     if (totalMs <= 0) return;
@@ -119,28 +122,41 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
         }
       });
 
+    _initPlayer();
+  }
+
+  Future<void> _initPlayer() async {
+    var playablePath = widget.path;
+    if (kIsWeb && playablePath.startsWith('opfs://rlink/')) {
+      playablePath = await webStoredFileObjectUrl(
+            playablePath.split('#').first,
+            mimeType: 'video/mp4',
+          ) ??
+          playablePath;
+    }
     final isInlineWeb = kIsWeb &&
-        (widget.path.startsWith('data:') ||
-            widget.path.startsWith('blob:') ||
-            widget.path.startsWith('http://') ||
-            widget.path.startsWith('https://'));
-    _ctrl = (isInlineWeb
-        ? VideoPlayerController.networkUrl(Uri.parse(widget.path))
-        : VideoPlayerController.file(File(widget.path)))
-      ..initialize().then((_) {
-        if (mounted) {
-          setState(() => _initialized = true);
-          _ctrl.addListener(_onCtrlTick);
-          try {
-            _ctrl.setPlaybackSpeed(_playbackRate);
-          } catch (_) {}
-          _ctrl.play();
-          _armHideTopBar();
-        }
-      }).catchError((e) {
-        debugPrint('[VideoPlayer] init error: $e');
-        if (mounted) setState(() => _error = true);
-      });
+        (playablePath.startsWith('data:') ||
+            playablePath.startsWith('blob:') ||
+            playablePath.startsWith('http://') ||
+            playablePath.startsWith('https://'));
+    final ctrl = isInlineWeb
+        ? VideoPlayerController.networkUrl(Uri.parse(playablePath))
+        : VideoPlayerController.file(File(playablePath));
+    _ctrl = ctrl;
+    await ctrl.initialize().then((_) {
+      if (mounted) {
+        setState(() => _initialized = true);
+        ctrl.addListener(_onCtrlTick);
+        try {
+          ctrl.setPlaybackSpeed(_playbackRate);
+        } catch (_) {}
+        ctrl.play();
+        _armHideTopBar();
+      }
+    }).catchError((e) {
+      debugPrint('[VideoPlayer] init error: $e');
+      if (mounted) setState(() => _error = true);
+    });
   }
 
   @override
@@ -158,12 +174,12 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
     _seekFlashTimer?.cancel();
     _doubleTapAnim?.dispose();
     try {
-      _ctrl.removeListener(_onCtrlTick);
+      _ctrl?.removeListener(_onCtrlTick);
     } catch (_) {}
     try {
-      _ctrl.setPlaybackSpeed(1.0);
+      _ctrl?.setPlaybackSpeed(1.0);
     } catch (_) {}
-    _ctrl.dispose();
+    _ctrl?.dispose();
     super.dispose();
   }
 
@@ -171,7 +187,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
     _hideTopTimer?.cancel();
     _hideTopTimer = Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
-      if (_ctrl.value.isPlaying) {
+      if (_ctrl?.value.isPlaying == true) {
         setState(() => _showTopBar = false);
       }
     });
@@ -186,11 +202,13 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
   }
 
   void _seekRelative(int deltaSec) {
-    final end = _ctrl.value.duration;
-    var pos = _ctrl.value.position + Duration(seconds: deltaSec);
+    final ctrl = _ctrl;
+    if (ctrl == null) return;
+    final end = ctrl.value.duration;
+    var pos = ctrl.value.position + Duration(seconds: deltaSec);
     if (pos < Duration.zero) pos = Duration.zero;
     if (pos > end) pos = end;
-    _ctrl.seekTo(pos);
+    ctrl.seekTo(pos);
     _flashSeek(deltaSec > 0 ? '+5 с' : '−5 с');
   }
 
@@ -205,11 +223,11 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
     if (!_initialized) return;
     if (_speedBoost) {
       try {
-        _ctrl.setPlaybackSpeed(rate * 2.0);
+        _ctrl?.setPlaybackSpeed(rate * 2.0);
       } catch (_) {}
     } else {
       try {
-        _ctrl.setPlaybackSpeed(rate);
+        _ctrl?.setPlaybackSpeed(rate);
       } catch (_) {}
     }
     setState(() {});
@@ -218,16 +236,18 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
   void _setSpeedBoost(bool on) {
     if (!_initialized) return;
     try {
-      _ctrl.setPlaybackSpeed(on ? _playbackRate * 2.0 : _playbackRate);
+      _ctrl?.setPlaybackSpeed(on ? _playbackRate * 2.0 : _playbackRate);
     } catch (_) {}
     setState(() => _speedBoost = on);
   }
 
   void _togglePlayPause() {
-    if (_ctrl.value.isPlaying) {
-      _ctrl.pause();
+    final ctrl = _ctrl;
+    if (ctrl == null) return;
+    if (ctrl.value.isPlaying) {
+      ctrl.pause();
     } else {
-      _ctrl.play();
+      ctrl.play();
     }
     setState(() {});
     setState(() => _showTopBar = true);
@@ -284,8 +304,16 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
       );
     }
 
-    final videoW = _ctrl.value.size.width;
-    final videoH = _ctrl.value.size.height;
+    final ctrl = _ctrl;
+    if (ctrl == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body:
+            Center(child: CircularProgressIndicator(color: Color(0xFF1DB954))),
+      );
+    }
+    final videoW = ctrl.value.size.width;
+    final videoH = ctrl.value.size.height;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -299,7 +327,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                 child: SizedBox(
                   width: videoW,
                   height: videoH,
-                  child: VideoPlayer(_ctrl),
+                  child: VideoPlayer(ctrl),
                 ),
               ),
             ),
@@ -461,7 +489,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                 ),
               ),
             ValueListenableBuilder<VideoPlayerValue>(
-              valueListenable: _ctrl,
+              valueListenable: ctrl,
               builder: (_, val, __) {
                 if (val.isPlaying) return const SizedBox.shrink();
                 return Center(
@@ -528,7 +556,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                       ),
                       const Spacer(),
                       ValueListenableBuilder<VideoPlayerValue>(
-                        valueListenable: _ctrl,
+                        valueListenable: ctrl,
                         builder: (_, v, __) => IconButton(
                           icon: Icon(
                             v.isPlaying ? Icons.pause : Icons.play_arrow,
@@ -550,7 +578,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(8, 4, 8, 8 + bottomInset),
                   child: ValueListenableBuilder<VideoPlayerValue>(
-                    valueListenable: _ctrl,
+                    valueListenable: ctrl,
                     builder: (_, val, __) {
                       final totalMs = val.duration.inMilliseconds;
                       final posMs = totalMs > 0
@@ -570,15 +598,15 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                               value: totalMs > 0 ? posMs.toDouble() : 0,
                               max: totalMs > 0 ? totalMs.toDouble() : 1,
                               onChangeStart: (_) {
-                                _ctrl.pause();
+                                ctrl.pause();
                                 setState(() => _showTopBar = true);
                               },
                               onChangeEnd: (_) {
-                                _ctrl.play();
+                                ctrl.play();
                                 _armHideTopBar();
                               },
                               onChanged: (v) {
-                                _ctrl.seekTo(Duration(milliseconds: v.round()));
+                                ctrl.seekTo(Duration(milliseconds: v.round()));
                               },
                             ),
                           ),

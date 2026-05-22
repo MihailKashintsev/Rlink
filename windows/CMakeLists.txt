@@ -52,6 +52,9 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
 
+# whisper.cpp native transcription
+add_subdirectory("../native" "${CMAKE_CURRENT_BINARY_DIR}/whisper_bridge")
+
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.

@@ -1494,6 +1494,9 @@ class _ChatScreenState extends State<ChatScreen> {
   static Future<Uint8List?> _readInlineWebMediaBytes(String value) async {
     final bytes = _bytesFromDataUri(value);
     if (bytes != null) return bytes;
+    if (value.startsWith('opfs://rlink/')) {
+      return readWebStoredFile(value.split('#').first);
+    }
     if (value.startsWith('blob:') ||
         value.startsWith('http://') ||
         value.startsWith('https://')) {
@@ -3734,6 +3737,7 @@ class _ChatScreenState extends State<ChatScreen> {
   static bool _isInlineWebUri(String value) =>
       value.startsWith('data:') ||
       value.startsWith('blob:') ||
+      value.startsWith('opfs://rlink/') ||
       value.startsWith('http://') ||
       value.startsWith('https://');
 
@@ -5550,7 +5554,8 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       if (kIsWeb) {
         final clean = videoPath.split('#').first;
-        final mime = clean.endsWith('.mp4') || clean.startsWith('data:video/mp4')
+        final mime = clean.endsWith('.mp4') ||
+                clean.startsWith('data:video/mp4')
             ? 'video/mp4'
             : clean.startsWith('data:video/quicktime') || clean.endsWith('.mov')
                 ? 'video/quicktime'
@@ -8630,8 +8635,14 @@ class _FileMessageBubble extends StatelessWidget {
 
   Future<void> _open(BuildContext context) async {
     if (kIsWeb && _ChatScreenState._isInlineWebUri(filePath)) {
-      await launchUrl(Uri.parse(filePath),
-          mode: LaunchMode.externalApplication);
+      await downloadWebFile(
+        filePath.split('#').first,
+        fileName: fileName,
+        mimeType: _ChatScreenState._mimeTypeForFileName(
+          fileName,
+          fallbackMime: 'application/octet-stream',
+        ),
+      );
       return;
     }
     if (!File(filePath).existsSync()) return;
@@ -9677,9 +9688,17 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   }
 
   Future<void> _initPlayer() async {
-    final ctrl = kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)
-        ? VideoPlayerController.networkUrl(Uri.parse(widget.videoPath))
-        : VideoPlayerController.file(File(widget.videoPath));
+    var playablePath = widget.videoPath;
+    if (kIsWeb && playablePath.startsWith('opfs://rlink/')) {
+      playablePath = await webStoredFileObjectUrl(
+            playablePath.split('#').first,
+            mimeType: 'video/mp4',
+          ) ??
+          playablePath;
+    }
+    final ctrl = kIsWeb && _ChatScreenState._isInlineWebUri(playablePath)
+        ? VideoPlayerController.networkUrl(Uri.parse(playablePath))
+        : VideoPlayerController.file(File(playablePath));
     try {
       await ctrl.initialize();
       if (_isSquare) {

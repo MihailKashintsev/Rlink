@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../utils/web_object_url.dart';
+import '../utils/web_file_store.dart';
 
 /// Сколько байт сырых данных помещается в один img_chunk-пакет.
 /// 90 байт → 120 байт base64. Итого JSON ≈ 274 байт < BLE MTU 290 байт.
@@ -387,7 +388,9 @@ class ImageService {
 
     final raw = assembly.assemble();
     final data = decompress(raw);
-    if (kIsWeb) return _webMediaRef(data, _imageMimeFromBytes(data));
+    if (kIsWeb) {
+      return _webMediaRef(data, _imageMimeFromBytes(data));
+    }
     final dir = await _imagesDir();
     String name;
     if (forContactKey != null) {
@@ -490,7 +493,7 @@ class ImageService {
 
   void cancelAssembly(String msgId) => _assemblies.remove(msgId);
 
-  /// Собирает голосовое сообщение, распаковывает zlib, сохраняет как .m4a.
+  /// Собирает голосовое сообщение, распаковывает zlib и сохраняет/возвращает.
   Future<String?> assembleAndSaveVoice(String msgId) async {
     final assembly = _assemblies.remove(msgId);
     if (assembly == null || !assembly.isComplete) return null;
@@ -679,10 +682,18 @@ class ImageService {
     final raw = assembly.assemble();
     final data = decompress(raw);
     if (kIsWeb) {
-      final ref = _webMediaRef(
-        data,
-        _videoMimeFromData(data, assembly.fileName),
+      final mime = _videoMimeFromData(data, assembly.fileName);
+      final ext = mime == 'video/webm'
+          ? 'webm'
+          : mime == 'video/quicktime'
+              ? 'mov'
+              : 'mp4';
+      final stored = await writeWebStoredFile(
+        fileName: '$msgId.${isSquare ? 'sq.' : ''}$ext',
+        bytes: data,
+        mimeType: mime,
       );
+      final ref = stored ?? _webMediaRef(data, mime);
       return isSquare ? '$ref#rlink_square' : ref;
     }
     final dir = await _videosDir();
@@ -701,7 +712,12 @@ class ImageService {
     final data = decompress(raw);
     if (kIsWeb) {
       final mime = _mimeFromFileName(assembly.fileName);
-      return _webMediaRef(data, mime);
+      final stored = await writeWebStoredFile(
+        fileName: '${msgId}_${assembly.fileName ?? 'file.bin'}',
+        bytes: data,
+        mimeType: mime,
+      );
+      return stored ?? _webMediaRef(data, mime);
     }
     final dir = await _filesDir();
     // Preserve original extension from fileName, else use .bin
@@ -766,21 +782,21 @@ class ImageService {
   }
 
   static String _videoMimeFromData(Uint8List data, String? fileName) {
-    final fromName = _mimeFromFileName(fileName);
-    if (fromName.startsWith('video/')) return fromName;
-    if (data.length >= 12 &&
-        data[4] == 0x66 &&
-        data[5] == 0x74 &&
-        data[6] == 0x79 &&
-        data[7] == 0x70) {
-      return 'video/mp4';
-    }
+    final byName = _mimeFromFileName(fileName);
+    if (byName.startsWith('video/')) return byName;
     if (data.length >= 4 &&
         data[0] == 0x1A &&
         data[1] == 0x45 &&
         data[2] == 0xDF &&
         data[3] == 0xA3) {
       return 'video/webm';
+    }
+    if (data.length >= 12) {
+      final box = String.fromCharCodes(data.sublist(4, 8));
+      if (box == 'ftyp') {
+        final brand = String.fromCharCodes(data.sublist(8, 12)).toLowerCase();
+        if (brand.contains('qt')) return 'video/quicktime';
+      }
     }
     return 'video/mp4';
   }

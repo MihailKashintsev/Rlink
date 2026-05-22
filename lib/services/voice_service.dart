@@ -10,6 +10,7 @@ import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 
 import 'embedded_video_pause_bus.dart';
+import '../utils/web_file_store.dart';
 
 /// Тип элемента очереди (квадратик в очереди идёт как видео с дорожкой).
 enum PlaybackMediaKind { voice, audioFile, squareVideo }
@@ -477,20 +478,35 @@ class VoiceService {
 
   Future<void> _startVideoItem(PlaybackQueueItem item) async {
     await _ensurePlaybackAudioSession();
-    if (kIsWeb) {
-      // На web локальный файл в VideoPlayer не поднимаем — пузырь в чате.
-      return;
-    }
     _squareEndDispatchedInService = false;
     VideoPlayerController? c;
     try {
-      final f = File(item.path);
-      if (!f.existsSync()) {
-        await _advanceQueue();
-        return;
-      }
       await _disposeSquareQueueController();
-      c = VideoPlayerController.file(f);
+      if (kIsWeb) {
+        var path = item.path;
+        if (path.startsWith('opfs://rlink/')) {
+          path = await webStoredFileObjectUrl(
+                path.split('#').first,
+                mimeType: 'video/mp4',
+              ) ??
+              path;
+        }
+        if (!(path.startsWith('blob:') ||
+            path.startsWith('data:') ||
+            path.startsWith('http://') ||
+            path.startsWith('https://'))) {
+          await _advanceQueue();
+          return;
+        }
+        c = VideoPlayerController.networkUrl(Uri.parse(path));
+      } else {
+        final f = File(item.path);
+        if (!f.existsSync()) {
+          await _advanceQueue();
+          return;
+        }
+        c = VideoPlayerController.file(f);
+      }
       await c.initialize();
       if (_queue.isEmpty ||
           _queuePos < 0 ||

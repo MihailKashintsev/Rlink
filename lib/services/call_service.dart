@@ -160,10 +160,10 @@ class CallService {
           await _startWebRecording(source, hasVideo: hasVideo);
         } else {
           final dir = await getApplicationDocumentsDirectory();
-          final ext =
-              (_videoEnabled && remoteStream?.getVideoTracks().isNotEmpty == true)
-                  ? 'mp4'
-                  : 'm4a';
+          final ext = (_videoEnabled &&
+                  remoteStream?.getVideoTracks().isNotEmpty == true)
+              ? 'mp4'
+              : 'm4a';
           _recordingPath = p.join(
             dir.path,
             'call_${callId.substring(0, 8)}_${DateTime.now().millisecondsSinceEpoch}.$ext',
@@ -283,7 +283,8 @@ class CallService {
           _recordingPath = objectUrl;
         }
       }
-      debugPrint('[RLINK][Call] Recording stopped out=$out path=$_recordingPath');
+      debugPrint(
+          '[RLINK][Call] Recording stopped out=$out path=$_recordingPath');
     } catch (e) {
       debugPrint('[RLINK][Call] Recording stop failed: $e');
     }
@@ -630,17 +631,18 @@ class CallService {
   }
 
   Future<void> _attachRemoteTrack(dynamic event) async {
-    MediaStream stream;
-    final streams = event.streams;
-    if (streams is List && streams.isNotEmpty && streams.first is MediaStream) {
-      stream = streams.first as MediaStream;
-    } else {
-      stream = remoteStream ?? await createLocalMediaStream('remote');
-      await stream.addTrack(event.track as MediaStreamTrack);
+    final track = event.track as MediaStreamTrack;
+    final stream = remoteStream ?? await createLocalMediaStream('remote');
+    final alreadyAdded = stream.getTracks().any((t) => t.id == track.id);
+    if (!alreadyAdded) {
+      await stream.addTrack(track);
     }
     remoteStream = stream;
     remoteStreamNotifier.value = stream;
     remoteStreamGeneration.value++;
+    debugPrint('[RLINK][Call] remote track: kind=${track.kind} '
+        'audio=${stream.getAudioTracks().length} '
+        'video=${stream.getVideoTracks().length}');
     _connectTimeout?.cancel();
     if (phase.value != CallPhase.connected) {
       _setPhase(CallPhase.connected);

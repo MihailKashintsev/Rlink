@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:image_picker/image_picker.dart';
@@ -34,6 +35,8 @@ import '../../services/outbound_dm_text.dart';
 import '../../services/profile_service.dart';
 import 'location_map_screen.dart';
 import '../../utils/external_message_share.dart';
+import '../../utils/web_file_store.dart';
+import '../../utils/web_object_url.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/reactions.dart';
 import '../widgets/rich_message_text.dart';
@@ -1110,6 +1113,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   Future<void> _openGroupMediaGallery() async {
     if (_isSending) return;
     if (!mounted) return;
+    if (kIsWeb) {
+      await _openGroupWebMediaPicker();
+      return;
+    }
     await showMediaGallerySendSheet(
       context,
       onPhotoPath: _groupGalleryPhoto,
@@ -1121,6 +1128,194 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       onOpenEmojiInsert: null,
       isEmojiBot: false,
     );
+  }
+
+  Future<void> _openGroupWebMediaPicker() async {
+    Widget tile(BuildContext ctx, IconData icon, String label, String value) {
+      final cs = Theme.of(ctx).colorScheme;
+      return ListTile(
+        leading: Icon(icon, color: cs.primary),
+        title: Text(label),
+        onTap: () => Navigator.pop(ctx, value),
+      );
+    }
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            tile(ctx, Icons.photo_library_rounded, 'Фото', 'photo'),
+            tile(ctx, Icons.gif_box_rounded, 'GIF', 'gif'),
+            tile(ctx, Icons.videocam_rounded, 'Видео', 'video'),
+            tile(ctx, Icons.insert_drive_file_rounded, 'Файл', 'file'),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+
+    FilePickerResult? result;
+    if (choice == 'gif') {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['gif'],
+        withData: true,
+      );
+    } else if (choice == 'video') {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        withData: true,
+      );
+    } else if (choice == 'photo') {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+    } else {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        withData: true,
+      );
+    }
+    final picked = result?.files.firstOrNull;
+    final bytes = picked?.bytes;
+    if (bytes == null || bytes.isEmpty || !mounted) return;
+    final name = picked!.name.isNotEmpty ? picked.name : 'file.bin';
+    await _sendGroupWebBytes(
+      bytes: bytes,
+      fileName: name,
+      isImage: choice == 'photo' || choice == 'gif',
+      isVideo: choice == 'video',
+      isFile: choice == 'file',
+      text: choice == 'gif'
+          ? '🎞 GIF'
+          : choice == 'video'
+              ? '📹'
+              : choice == 'file'
+                  ? '📎 $name'
+                  : (_controller.text.trim().isEmpty
+                      ? '📷'
+                      : _controller.text.trim()),
+    );
+  }
+
+  static String _webMimeForName(String name) {
+    switch (p.extension(name).toLowerCase()) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.webp':
+        return 'image/webp';
+      case '.webm':
+        return 'video/webm';
+      case '.mov':
+        return 'video/quicktime';
+      case '.mp4':
+      case '.m4v':
+        return 'video/mp4';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  Future<void> _sendGroupWebBytes({
+    required Uint8List bytes,
+    required String fileName,
+    required String text,
+    bool isImage = false,
+    bool isVideo = false,
+    bool isFile = false,
+  }) async {
+    if (_isSending) return;
+    setState(() {
+      _isSending = true;
+      _sendProgress = 0.0;
+    });
+    try {
+      final myId = _myId;
+      final msgId = const Uuid().v4();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final chunks = ImageService.instance.splitToBase64Chunks(bytes);
+      await GossipRouter.instance.sendImgMeta(
+        msgId: msgId,
+        totalChunks: chunks.length,
+        fromId: myId,
+        isAvatar: false,
+        isVideo: isVideo,
+        isSquare: false,
+        isFile: isFile,
+        fileName: isFile ? fileName : null,
+      );
+      for (var i = 0; i < chunks.length; i++) {
+        await GossipRouter.instance.sendImgChunk(
+          msgId: msgId,
+          index: i,
+          base64Data: chunks[i],
+          fromId: myId,
+        );
+        if (mounted) setState(() => _sendProgress = (i + 1) / chunks.length);
+      }
+      final mime = _webMimeForName(fileName);
+      final displayPath = isVideo || isFile
+          ? await writeWebStoredFile(
+              fileName: '${msgId}_$fileName',
+              bytes: bytes,
+              mimeType: mime,
+            )
+          : createWebObjectUrl([bytes], mime);
+      final msg = GroupMessage(
+        id: msgId,
+        groupId: widget.group.id,
+        senderId: myId,
+        text: text,
+        imagePath: isImage ? displayPath : null,
+        videoPath: isVideo ? displayPath : null,
+        latitude: _pendingLat,
+        longitude: _pendingLng,
+        isOutgoing: true,
+        timestamp: now,
+      );
+      await GroupService.instance.saveMessage(msg);
+      await BroadcastOutboxService.instance.enqueueGroupMessage(
+        groupId: widget.group.id,
+        senderId: myId,
+        text: text,
+        messageId: msgId,
+        timestamp: now,
+        latitude: _pendingLat,
+        longitude: _pendingLng,
+        hasImage: isImage,
+        hasVideo: isVideo,
+        hasFile: isFile,
+        fileName: isFile ? fileName : null,
+      );
+      _scrollToBottom();
+      if (mounted) {
+        setState(() {
+          _pendingLat = null;
+          _pendingLng = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Медиа: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+          _sendProgress = 0.0;
+        });
+      }
+    }
   }
 
   Future<void> _groupGalleryGif(String rawPath) async {
@@ -2542,8 +2737,34 @@ class _GroupBubble extends StatelessWidget {
                     child: Builder(builder: (_) {
                       final isSticker =
                           p.basename(msg.imagePath!).startsWith('stk_');
+                      final imagePath = msg.imagePath!;
+                      final bytes = imagePath.startsWith('data:')
+                          ? base64Decode(
+                              imagePath.substring(imagePath.indexOf(',') + 1))
+                          : null;
+                      if (kIsWeb && bytes != null) {
+                        return Image.memory(
+                          bytes,
+                          width: isSticker ? 132 : 200,
+                          height: isSticker ? 132 : null,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        );
+                      }
+                      if (kIsWeb &&
+                          (imagePath.startsWith('blob:') ||
+                              imagePath.startsWith('http://') ||
+                              imagePath.startsWith('https://'))) {
+                        return Image.network(
+                          imagePath,
+                          width: isSticker ? 132 : 200,
+                          height: isSticker ? 132 : null,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        );
+                      }
                       return Image.file(
-                        File(msg.imagePath!),
+                        File(imagePath),
                         width: isSticker ? 132 : 200,
                         height: isSticker ? 132 : null,
                         fit: BoxFit.cover,
@@ -2853,10 +3074,21 @@ class _GroupInlineVideoState extends State<_GroupInlineVideo> {
 
   String? get _abs {
     final r = ImageService.instance.resolveStoredPath(widget.storedPath);
+    if (kIsWeb &&
+        r != null &&
+        (r.startsWith('blob:') ||
+            r.startsWith('data:') ||
+            r.startsWith('http://') ||
+            r.startsWith('https://') ||
+            r.startsWith('opfs://rlink/'))) {
+      return r;
+    }
     return (r != null && File(r).existsSync()) ? r : null;
   }
 
-  bool get _isSquare => widget.storedPath.endsWith('_sq.mp4');
+  bool get _isSquare =>
+      widget.storedPath.endsWith('_sq.mp4') ||
+      widget.storedPath.contains('#rlink_square');
 
   @override
   void initState() {
@@ -2881,7 +3113,17 @@ class _GroupInlineVideoState extends State<_GroupInlineVideo> {
   }
 
   Future<void> _init(String path) async {
-    final ctrl = VideoPlayerController.file(File(path));
+    var playablePath = path;
+    if (kIsWeb && playablePath.startsWith('opfs://rlink/')) {
+      playablePath = await webStoredFileObjectUrl(
+            playablePath.split('#').first,
+            mimeType: 'video/mp4',
+          ) ??
+          playablePath;
+    }
+    final ctrl = kIsWeb
+        ? VideoPlayerController.networkUrl(Uri.parse(playablePath))
+        : VideoPlayerController.file(File(playablePath));
     try {
       await ctrl.initialize();
       if (_isSquare) {

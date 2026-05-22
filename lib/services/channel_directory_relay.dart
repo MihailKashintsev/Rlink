@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../models/channel.dart';
-import 'app_settings.dart';
 import 'crypto_service.dart';
 import 'relay_service.dart';
 
@@ -62,7 +61,6 @@ class ChannelDirectoryRelay {
     final myId = CryptoService.instance.publicKeyHex;
     if (myId.isEmpty || ch.adminId != myId) return;
     if (!RelayService.instance.isConnected) return;
-    if (AppSettings.instance.connectionMode < 1) return;
 
     final updatedAt = DateTime.now().millisecondsSinceEpoch;
     final m = _payloadMap(ch, updatedAt);
