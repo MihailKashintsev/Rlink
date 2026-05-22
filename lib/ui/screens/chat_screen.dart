@@ -477,7 +477,9 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         } else {
           // No persistent file — in-memory send (voice from RAM, etc.)
-          final compressed = ImageService.instance.compress(bytes);
+          final compressed = kIsWeb && (isVideo || isFile)
+              ? bytes
+              : ImageService.instance.compress(bytes);
           if (compressed.length <= _kMaxBlobBytes) {
             await RelayService.instance.sendBlob(
               recipientKey: _resolvedPeerId,

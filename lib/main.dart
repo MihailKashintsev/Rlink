@@ -19,6 +19,7 @@ import 'utils/reaction_limit.dart';
 import 'utils/invite_dm_codec.dart';
 import 'utils/custom_emoji_text.dart';
 import 'utils/reaction_emoji_key.dart';
+import 'utils/web_object_url.dart';
 import 'models/contact.dart';
 import 'models/group.dart';
 import 'models/user_profile.dart';
@@ -144,7 +145,12 @@ int? _dataUriByteLength(String value) {
 }
 
 Future<int> _storedMediaByteLength(String path) async {
-  if (kIsWeb) return _dataUriByteLength(path) ?? 0;
+  if (kIsWeb) {
+    final dataUriLength = _dataUriByteLength(path);
+    if (dataUriLength != null) return dataUriLength;
+    final blobBytes = await readWebObjectUrlBytes(path);
+    return blobBytes?.length ?? 0;
+  }
   return File(path).length();
 }
 
