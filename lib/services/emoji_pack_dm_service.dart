@@ -47,8 +47,9 @@ class EmojiPackDmService {
       if (rawBytes == null || rawBytes.isEmpty) continue;
       final encoded = base64Encode(rawBytes);
       totalBytes += encoded.length;
-      if (totalBytes > 2 * 1024 * 1024)
+      if (totalBytes > 2 * 1024 * 1024) {
         break; // Increased to 2MB for larger emoji packs
+      }
       emojis.add({
         'shortcode': sc,
         'data': encoded,

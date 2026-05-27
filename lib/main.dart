@@ -259,24 +259,49 @@ Future<void> broadcastMyProfileMusic() async {
   }
 }
 
+Future<Uint8List?> _sealServiceMediaForPeer(
+  Uint8List compressed,
+  String peerKey, {
+  Contact? contact,
+}) async {
+  final canonical = ChatStorageService.normalizeDmPeerId(peerKey);
+  var x25519 = RelayService.instance.getPeerX25519Key(canonical);
+  x25519 ??= contact?.x25519Key?.trim();
+  if (x25519 == null || x25519.isEmpty) {
+    final stored = await ChatStorageService.instance.getContact(canonical);
+    x25519 = stored?.x25519Key?.trim();
+  }
+  if (x25519 == null || x25519.isEmpty) return null;
+  return CryptoService.instance.sealMediaPayload(
+    plaintext: compressed,
+    recipientX25519KeyBase64: x25519,
+  );
+}
+
 Future<void> _broadcastProfileMusic(
     String myPublicKey, String musicPath) async {
   try {
     await Future.delayed(const Duration(milliseconds: 900));
     final bytes = await File(musicPath).readAsBytes();
+    final contacts = await ChatStorageService.instance.getContacts();
+    final compressed = ImageService.instance.compress(bytes);
     if (RelayService.instance.isConnected) {
-      final compressed = ImageService.instance.compress(bytes);
       final ts = DateTime.now().millisecondsSinceEpoch;
       final msgId = 'profile_music_${myPublicKey.substring(0, 16)}_$ts';
-      final contacts = await ChatStorageService.instance.getContacts();
       for (final c in contacts) {
         if (isDmBotPeerId(c.publicKeyHex)) continue;
         try {
+          final sealed = await _sealServiceMediaForPeer(
+            compressed,
+            c.publicKeyHex,
+            contact: c,
+          );
+          if (sealed == null) continue;
           await RelayService.instance.sendBlob(
             recipientKey: c.publicKeyHex,
             fromId: myPublicKey,
             msgId: msgId,
-            compressedData: compressed,
+            compressedData: sealed,
           );
         } catch (_) {}
       }
@@ -284,26 +309,39 @@ Future<void> _broadcastProfileMusic(
           '[RLINK][Music] Relay profile music → ${contacts.length} contacts');
     }
     if (AppSettings.instance.connectionMode != 1) {
-      final chunks = ImageService.instance.splitToBase64Chunks(bytes);
-      final bleMsgId =
-          'profile_music_${myPublicKey.substring(0, 16)}_${const Uuid().v4().substring(0, 8)}';
-      await GossipRouter.instance.sendImgMeta(
-        msgId: bleMsgId,
-        totalChunks: chunks.length,
-        fromId: myPublicKey,
-        isAvatar: false,
-      );
-      await Future.delayed(const Duration(milliseconds: 200));
-      for (var i = 0; i < chunks.length; i++) {
-        await GossipRouter.instance.sendImgChunk(
-          msgId: bleMsgId,
-          index: i,
-          base64Data: chunks[i],
-          fromId: myPublicKey,
+      for (final c in contacts) {
+        if (isDmBotPeerId(c.publicKeyHex)) continue;
+        final sealed = await _sealServiceMediaForPeer(
+          compressed,
+          c.publicKeyHex,
+          contact: c,
         );
-        if (i % 5 == 4) await Future.delayed(const Duration(milliseconds: 30));
+        if (sealed == null) continue;
+        final chunks = ImageService.instance.splitRawToBase64Chunks(sealed);
+        final bleMsgId =
+            'profile_music_${myPublicKey.substring(0, 16)}_${const Uuid().v4().substring(0, 8)}';
+        await GossipRouter.instance.sendImgMeta(
+          msgId: bleMsgId,
+          totalChunks: chunks.length,
+          fromId: myPublicKey,
+          recipientId: c.publicKeyHex,
+          isAvatar: false,
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+        for (var i = 0; i < chunks.length; i++) {
+          await GossipRouter.instance.sendImgChunk(
+            msgId: bleMsgId,
+            index: i,
+            base64Data: chunks[i],
+            fromId: myPublicKey,
+            recipientId: c.publicKeyHex,
+          );
+          if (i % 5 == 4) {
+            await Future.delayed(const Duration(milliseconds: 30));
+          }
+        }
       }
-      debugPrint('[RLINK][Music] BLE profile music ${chunks.length} chunks');
+      debugPrint('[RLINK][Music] BLE profile music sent privately');
     }
   } catch (e) {
     debugPrint('[RLINK][Music] broadcast failed: $e');
@@ -2267,11 +2305,16 @@ Future<void> initServices() async {
             if (file.existsSync()) {
               final bytes = await file.readAsBytes();
               final compressed = ImageService.instance.compress(bytes);
+              final sealed = await _sealServiceMediaForPeer(
+                compressed,
+                fromId,
+              );
+              if (sealed == null) continue;
               await RelayService.instance.sendBlob(
                 recipientKey: fromId,
                 fromId: myKey,
                 msgId: 'story_${story.id}',
-                compressedData: compressed,
+                compressedData: sealed,
               );
             }
           }
@@ -2852,6 +2895,8 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
     try {
       await Future.delayed(const Duration(milliseconds: 500));
       final compressed = ImageService.instance.compress(avatarBytes);
+      final sealed = await _sealServiceMediaForPeer(compressed, peerKey);
+      if (sealed == null) return;
       // Уникальный msgId на каждую отправку (обход дедупа приёмника).
       final ts = DateTime.now().millisecondsSinceEpoch;
       final msgId = 'avatar_${myProfile.publicKeyHex.substring(0, 16)}_$ts';
@@ -2859,7 +2904,7 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
         recipientKey: peerKey,
         fromId: myProfile.publicKeyHex,
         msgId: msgId,
-        compressedData: compressed,
+        compressedData: sealed,
         isSquare: true,
       );
       debugPrint(
@@ -2876,6 +2921,8 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
     try {
       await Future.delayed(const Duration(milliseconds: 500));
       final compressed = ImageService.instance.compress(bannerBytes);
+      final sealed = await _sealServiceMediaForPeer(compressed, peerKey);
+      if (sealed == null) return;
       // Уникальный msgId на каждую отправку, иначе дедуп на приёмнике
       // (wasAlreadyCompleted) молча отбрасывает все последующие обновления баннера.
       final ts = DateTime.now().millisecondsSinceEpoch;
@@ -2884,7 +2931,7 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
         recipientKey: peerKey,
         fromId: myProfile.publicKeyHex,
         msgId: msgId,
-        compressedData: compressed,
+        compressedData: sealed,
       );
       debugPrint(
           '[RLINK][Banner] Sent banner blob to ${peerKey.substring(0, 8)}');
@@ -2901,6 +2948,8 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
       await Future.delayed(const Duration(milliseconds: 500));
       final bytes = await File(musicPath).readAsBytes();
       final compressed = ImageService.instance.compress(bytes);
+      final sealed = await _sealServiceMediaForPeer(compressed, peerKey);
+      if (sealed == null) return;
       final ts = DateTime.now().millisecondsSinceEpoch;
       final msgId =
           'profile_music_${myProfile.publicKeyHex.substring(0, 16)}_$ts';
@@ -2908,7 +2957,7 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
         recipientKey: peerKey,
         fromId: myProfile.publicKeyHex,
         msgId: msgId,
-        compressedData: compressed,
+        compressedData: sealed,
       );
       debugPrint(
           '[RLINK][Music] Sent profile music blob to ${peerKey.substring(0, 8)}');
@@ -3073,11 +3122,17 @@ Future<void> _broadcastAvatar(String myPublicKey, String imagePath) async {
         for (final c in contacts) {
           if (isDmBotPeerId(c.publicKeyHex)) continue;
           try {
+            final sealed = await _sealServiceMediaForPeer(
+              compressed,
+              c.publicKeyHex,
+              contact: c,
+            );
+            if (sealed == null) continue;
             await RelayService.instance.sendBlob(
               recipientKey: c.publicKeyHex,
               fromId: myPublicKey,
               msgId: blobMsgId,
-              compressedData: compressed,
+              compressedData: sealed,
               isSquare: true,
             );
           } catch (_) {}
@@ -3091,29 +3146,42 @@ Future<void> _broadcastAvatar(String myPublicKey, String imagePath) async {
 
     // BLE chunk path — only in modes that use BLE (0=BLE only, 2=Both)
     if (AppSettings.instance.connectionMode != 1) {
-      final chunks = ImageService.instance.splitToBase64Chunks(bytes);
-      final msgId = const Uuid().v4();
-      debugPrint(
-          '[RLINK][Avatar] Starting BLE broadcast: ${chunks.length} chunks, ${bytes.length} bytes');
-      await GossipRouter.instance.sendImgMeta(
-        msgId: msgId,
-        totalChunks: chunks.length,
-        fromId: myPublicKey,
-        isAvatar: true,
-      );
-      await Future.delayed(const Duration(milliseconds: 200));
-      for (var i = 0; i < chunks.length; i++) {
-        await GossipRouter.instance.sendImgChunk(
-          msgId: msgId,
-          index: i,
-          base64Data: chunks[i],
-          fromId: myPublicKey,
+      final contacts = await ChatStorageService.instance.getContacts();
+      final compressed = ImageService.instance.compress(bytes);
+      for (final c in contacts) {
+        if (isDmBotPeerId(c.publicKeyHex)) continue;
+        final sealed = await _sealServiceMediaForPeer(
+          compressed,
+          c.publicKeyHex,
+          contact: c,
         );
-        if (i % 5 == 4) {
-          await Future.delayed(const Duration(milliseconds: 30));
+        if (sealed == null) continue;
+        final chunks = ImageService.instance.splitRawToBase64Chunks(sealed);
+        final msgId = const Uuid().v4();
+        debugPrint(
+            '[RLINK][Avatar] Starting private BLE send: ${chunks.length} chunks, ${bytes.length} bytes');
+        await GossipRouter.instance.sendImgMeta(
+          msgId: msgId,
+          totalChunks: chunks.length,
+          fromId: myPublicKey,
+          recipientId: c.publicKeyHex,
+          isAvatar: true,
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+        for (var i = 0; i < chunks.length; i++) {
+          await GossipRouter.instance.sendImgChunk(
+            msgId: msgId,
+            index: i,
+            base64Data: chunks[i],
+            fromId: myPublicKey,
+            recipientId: c.publicKeyHex,
+          );
+          if (i % 5 == 4) {
+            await Future.delayed(const Duration(milliseconds: 30));
+          }
         }
       }
-      debugPrint('[RLINK][Avatar] Sent ${chunks.length} chunks via BLE');
+      debugPrint('[RLINK][Avatar] Sent private BLE avatar chunks');
     }
   } catch (e) {
     debugPrint('[RLINK][Avatar] Send failed: $e');
@@ -3138,11 +3206,17 @@ Future<void> _broadcastBanner(String myPublicKey, String bannerPath) async {
       for (final c in contacts) {
         if (isDmBotPeerId(c.publicKeyHex)) continue;
         try {
+          final sealed = await _sealServiceMediaForPeer(
+            compressed,
+            c.publicKeyHex,
+            contact: c,
+          );
+          if (sealed == null) continue;
           await RelayService.instance.sendBlob(
             recipientKey: c.publicKeyHex,
             fromId: myPublicKey,
             msgId: msgId,
-            compressedData: compressed,
+            compressedData: sealed,
             isSquare: true,
           );
         } catch (_) {}
@@ -3152,26 +3226,41 @@ Future<void> _broadcastBanner(String myPublicKey, String bannerPath) async {
     }
     // BLE chunks — only in modes that use BLE (0=BLE only, 2=Both)
     if (AppSettings.instance.connectionMode != 1) {
-      final chunks = ImageService.instance.splitToBase64Chunks(bytes);
-      final bleMsgId =
-          'banner_${myPublicKey.substring(0, 16)}_${const Uuid().v4().substring(0, 8)}';
-      await GossipRouter.instance.sendImgMeta(
-        msgId: bleMsgId,
-        totalChunks: chunks.length,
-        fromId: myPublicKey,
-        isAvatar: false,
-      );
-      await Future.delayed(const Duration(milliseconds: 200));
-      for (var i = 0; i < chunks.length; i++) {
-        await GossipRouter.instance.sendImgChunk(
-          msgId: bleMsgId,
-          index: i,
-          base64Data: chunks[i],
-          fromId: myPublicKey,
+      final contacts = await ChatStorageService.instance.getContacts();
+      final compressed = ImageService.instance.compress(bytes);
+      for (final c in contacts) {
+        if (isDmBotPeerId(c.publicKeyHex)) continue;
+        final sealed = await _sealServiceMediaForPeer(
+          compressed,
+          c.publicKeyHex,
+          contact: c,
         );
-        if (i % 5 == 4) await Future.delayed(const Duration(milliseconds: 30));
+        if (sealed == null) continue;
+        final chunks = ImageService.instance.splitRawToBase64Chunks(sealed);
+        final bleMsgId =
+            'banner_${myPublicKey.substring(0, 16)}_${const Uuid().v4().substring(0, 8)}';
+        await GossipRouter.instance.sendImgMeta(
+          msgId: bleMsgId,
+          totalChunks: chunks.length,
+          fromId: myPublicKey,
+          recipientId: c.publicKeyHex,
+          isAvatar: false,
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+        for (var i = 0; i < chunks.length; i++) {
+          await GossipRouter.instance.sendImgChunk(
+            msgId: bleMsgId,
+            index: i,
+            base64Data: chunks[i],
+            fromId: myPublicKey,
+            recipientId: c.publicKeyHex,
+          );
+          if (i % 5 == 4) {
+            await Future.delayed(const Duration(milliseconds: 30));
+          }
+        }
       }
-      debugPrint('[RLINK][Banner] Sent banner via BLE chunks');
+      debugPrint('[RLINK][Banner] Sent banner via private BLE chunks');
     }
   } catch (e) {
     debugPrint('[RLINK][Banner] Send failed: $e');
