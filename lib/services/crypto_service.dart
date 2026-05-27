@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
@@ -29,7 +30,8 @@ class CryptoService {
   // On desktop (macOS/Windows/Linux) Keychain/secure storage isn't reliable;
   // use SharedPreferences as fallback (keys are still generated fresh each time
   // on desktop and persisted across launches).
-  static bool get _isMobile => RuntimePlatform.isIos || RuntimePlatform.isAndroid;
+  static bool get _isMobile =>
+      RuntimePlatform.isIos || RuntimePlatform.isAndroid;
 
   final _secureSt = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -210,7 +212,8 @@ class CryptoService {
       try {
         final edPrivBytes = await _identityKeyPair.extractPrivateKeyBytes();
         final edPubKey = await _identityKeyPair.extractPublicKey();
-        final xPrivBytes = await _x25519IdentityKeyPair.extractPrivateKeyBytes();
+        final xPrivBytes =
+            await _x25519IdentityKeyPair.extractPrivateKeyBytes();
         final xPubKey = await _x25519IdentityKeyPair.extractPublicKey();
         await WebAccountBundle.persistBundle(
           edPrivB64: base64.encode(edPrivBytes),
@@ -233,17 +236,17 @@ class CryptoService {
     // Ed25519 identity
     _identityKeyPair = await _ed25519.newKeyPair();
     final priv = await _identityKeyPair.extractPrivateKeyBytes();
-    final pub  = await _identityKeyPair.extractPublicKey();
+    final pub = await _identityKeyPair.extractPublicKey();
     await _write(_keyPrivate, base64.encode(priv));
-    await _write(_keyPublic,  base64.encode(pub.bytes));
+    await _write(_keyPublic, base64.encode(pub.bytes));
     publicKeyHex = _bytesToHex(pub.bytes);
 
     // X25519 ECDH
     _x25519IdentityKeyPair = await _x25519.newKeyPair();
     final xPriv = await _x25519IdentityKeyPair.extractPrivateKeyBytes();
-    final xPub  = await _x25519IdentityKeyPair.extractPublicKey();
+    final xPub = await _x25519IdentityKeyPair.extractPublicKey();
     await _write(_keyX25519Private, base64.encode(xPriv));
-    await _write(_keyX25519Public,  base64.encode(xPub.bytes));
+    await _write(_keyX25519Public, base64.encode(xPub.bytes));
     x25519PublicKeyBase64 = base64.encode(xPub.bytes);
 
     if (RuntimePlatform.isWeb) {
@@ -297,7 +300,8 @@ class CryptoService {
 
     final ephemeralPubKey = await ephemeralKeyPair.extractPublicKey();
 
-    debugPrint('[RLINK][Crypto] Encrypted: nonce=${base64.encode(nonce)}, ct=${secretBox.cipherText.length}b, mac=${secretBox.mac.bytes.length}b');
+    debugPrint(
+        '[RLINK][Crypto] Encrypted message: ct=${secretBox.cipherText.length}b');
 
     return EncryptedMessage(
       senderPublicKey: publicKeyHex,
@@ -307,6 +311,96 @@ class CryptoService {
       mac: base64.encode(secretBox.mac.bytes),
       signature: '',
     );
+  }
+
+  static const List<int> _mediaMagic = [0x52, 0x4C, 0x4D, 0x31]; // RLM1
+
+  bool isSealedMediaPayload(Uint8List data) {
+    return data.length > 4 + 1 + 32 + 12 + 16 &&
+        data[0] == _mediaMagic[0] &&
+        data[1] == _mediaMagic[1] &&
+        data[2] == _mediaMagic[2] &&
+        data[3] == _mediaMagic[3];
+  }
+
+  /// Шифрует произвольные байты медиа перед отправкой через relay/BLE.
+  /// Формат бинарный: magic + epkLen + ephemeralPub + nonce + mac + ciphertext.
+  Future<Uint8List> sealMediaPayload({
+    required Uint8List plaintext,
+    required String recipientX25519KeyBase64,
+  }) async {
+    final recipientPubKeyBytes = base64.decode(recipientX25519KeyBase64);
+    final recipientPubKey =
+        SimplePublicKey(recipientPubKeyBytes, type: KeyPairType.x25519);
+
+    final ephemeralKeyPair = await _x25519.newKeyPair();
+    final sharedSecret = await _x25519.sharedSecretKey(
+      keyPair: ephemeralKeyPair,
+      remotePublicKey: recipientPubKey,
+    );
+    final sharedSecretBytes = await sharedSecret.extractBytes();
+    final derivedKey = SecretKey(sharedSecretBytes.sublist(0, 32));
+
+    final rng = Random.secure();
+    final nonce = Uint8List.fromList(
+      List<int>.generate(12, (_) => rng.nextInt(256)),
+    );
+    final box = await _chacha.encrypt(
+      plaintext,
+      secretKey: derivedKey,
+      nonce: nonce,
+    );
+    final ephemeralPubKey = await ephemeralKeyPair.extractPublicKey();
+    final epk = Uint8List.fromList(ephemeralPubKey.bytes);
+    if (epk.length > 255) {
+      throw StateError('Unexpected media EPK length: ${epk.length}');
+    }
+
+    final out = BytesBuilder(copy: false)
+      ..add(_mediaMagic)
+      ..addByte(epk.length)
+      ..add(epk)
+      ..add(nonce)
+      ..add(box.mac.bytes)
+      ..add(box.cipherText);
+    return out.toBytes();
+  }
+
+  /// Дешифрует media payload, созданный [sealMediaPayload].
+  /// Возвращает null, если формат не наш или проверка AEAD не прошла.
+  Future<Uint8List?> openMediaPayload(Uint8List sealed) async {
+    if (!isSealedMediaPayload(sealed)) return null;
+    try {
+      final epkLen = sealed[4];
+      const epkStart = 5;
+      final epkEnd = epkStart + epkLen;
+      final nonceStart = epkEnd;
+      final nonceEnd = nonceStart + 12;
+      final macStart = nonceEnd;
+      final macEnd = macStart + 16;
+      if (epkLen <= 0 || sealed.length <= macEnd) return null;
+
+      final ephemeralPubKey = SimplePublicKey(
+        sealed.sublist(epkStart, epkEnd),
+        type: KeyPairType.x25519,
+      );
+      final sharedSecret = await _x25519.sharedSecretKey(
+        keyPair: _x25519IdentityKeyPair,
+        remotePublicKey: ephemeralPubKey,
+      );
+      final sharedSecretBytes = await sharedSecret.extractBytes();
+      final derivedKey = SecretKey(sharedSecretBytes.sublist(0, 32));
+      final box = SecretBox(
+        sealed.sublist(macEnd),
+        nonce: sealed.sublist(nonceStart, nonceEnd),
+        mac: Mac(sealed.sublist(macStart, macEnd)),
+      );
+      final plain = await _chacha.decrypt(box, secretKey: derivedKey);
+      return Uint8List.fromList(plain);
+    } catch (e) {
+      debugPrint('[RLINK][Crypto] Media decrypt failed: $e');
+      return null;
+    }
   }
 
   /// Дешифрует сообщение, зашифрованное для нас.
@@ -356,13 +450,13 @@ class CryptoService {
       final cipherText = base64.decode(msg.cipherText);
       final mac = Mac(base64.decode(msg.mac));
 
-      debugPrint('[RLINK][Crypto] Decrypt: epk=${msg.ephemeralPublicKey.substring(0, 8)}, nonce=${nonce.length}b, ct=${cipherText.length}b, mac=${mac.bytes.length}b');
+      debugPrint('[RLINK][Crypto] Decrypt message: ct=${cipherText.length}b');
 
       final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
-      final plainBytes = await _chacha.decrypt(secretBox, secretKey: derivedKey);
-      final result = utf8.decode(plainBytes);
-      debugPrint('[RLINK][Crypto] Decrypt OK: ${result.substring(0, result.length.clamp(0, 20))}');
-      return result;
+      final plainBytes =
+          await _chacha.decrypt(secretBox, secretKey: derivedKey);
+      debugPrint('[RLINK][Crypto] Decrypt OK');
+      return utf8.decode(plainBytes);
     } catch (e) {
       debugPrint('[RLINK][Crypto] Decrypt FAILED: $e');
       return null;

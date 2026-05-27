@@ -187,9 +187,18 @@ typedef OnEtherReceived = void Function(
 });
 
 /// Вызывается при получении сторис от пира.
-typedef OnStoryReceived = void Function(String storyId, String authorId,
-    String text, int bgColor, double textX, double textY, double textSize,
-    int textColor, bool textBold, bool textItalic, double textBgOpacity,
+typedef OnStoryReceived = void Function(
+    String storyId,
+    String authorId,
+    String text,
+    int bgColor,
+    double textX,
+    double textY,
+    double textSize,
+    int textColor,
+    bool textBold,
+    bool textItalic,
+    double textBgOpacity,
     List<Map<String, dynamic>> overlays);
 
 /// Вызывается при получении запроса историй от пира.
@@ -278,7 +287,8 @@ typedef OnImgMeta = void Function(
   String? forwardFromId,
   String? forwardFromNick,
   String? forwardFromChannelId,
-  bool isChannelPost, // true — медиа канального поста (ждём channel_post перед DM)
+  bool
+      isChannelPost, // true — медиа канального поста (ждём channel_post перед DM)
 });
 
 /// Вызывается при получении очередного img_chunk.
@@ -329,8 +339,7 @@ class GossipRouter {
   /// [channelIds] — список каналов для синхронизации подписок между устройствами.
   /// [botIds] — список разрешённых/включённых ботов аккаунта.
   void Function(String hash, int revision, List<String> channelIds,
-      List<String> botIds)?
-      onAdminConfigSecure;
+      List<String> botIds)? onAdminConfigSecure;
   OnPairRequest? onPairRequest;
   OnPairAccepted? onPairAccepted;
   OnDeviceLinkRequest? onDeviceLinkRequest;
@@ -526,7 +535,8 @@ class GossipRouter {
       recipientId: recipientId,
       payload: payload,
     );
-    _gossipTrace('[RLINK][Gossip][TX] type=raw id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+    _gossipTrace(
+        '[RLINK][Gossip][TX] type=raw id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
         'to=${_rid8From(recipientId) ?? '-'} from=${senderId.substring(0, senderId.length.clamp(0, 8))}');
     _markSeen(packet.id);
     for (var i = 0; i < 3; i++) {
@@ -627,7 +637,8 @@ class GossipRouter {
       recipientId: recipientId,
       payload: payload,
     );
-    _gossipTrace('[RLINK][Gossip][TX] type=msg id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+    _gossipTrace(
+        '[RLINK][Gossip][TX] type=msg id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
         'to=${_rid8From(recipientId) ?? '-'} from=${senderId.substring(0, senderId.length.clamp(0, 8))}');
     _markSeen(packet.id);
     for (var i = 0; i < 3; i++) {
@@ -753,7 +764,8 @@ class GossipRouter {
     bool isSquare = false,
     bool isFile = false,
     bool isSticker = false,
-    bool isChannelPost = false, // канальный пост: подписчики кэшируют медиа до прихода channel_post
+    bool isChannelPost =
+        false, // канальный пост: подписчики кэшируют медиа до прихода channel_post
     String? fileName,
     bool viewOnce = false,
     String? forwardFromId,
@@ -903,7 +915,8 @@ class GossipRouter {
       timestamp: DateTime.now().millisecondsSinceEpoch,
       payload: payload,
     );
-    _gossipTrace('[RLINK][Gossip][TX] type=ether id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+    _gossipTrace(
+        '[RLINK][Gossip][TX] type=ether id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
         'len=${text.length} from=${(senderId ?? '').substring(0, (senderId ?? '').length.clamp(0, 8))}');
     _markSeen(packet.id);
     // Ether is broadcast — retry 3 times for reliability over flaky BLE.
@@ -1156,7 +1169,8 @@ class GossipRouter {
           'stp': statusEmojiAutoPayloadJson,
       },
     );
-    _gossipTrace('[RLINK][Gossip][TX] type=pair_req id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+    _gossipTrace(
+        '[RLINK][Gossip][TX] type=pair_req id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
         'to=$rid8 from=${publicKey.substring(0, publicKey.length.clamp(0, 8))}');
     _markSeen(packet.id);
     // Retry for reliability over BLE
@@ -1202,7 +1216,8 @@ class GossipRouter {
           'stp': statusEmojiAutoPayloadJson,
       },
     );
-    _gossipTrace('[RLINK][Gossip][TX] type=pair_acc id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+    _gossipTrace(
+        '[RLINK][Gossip][TX] type=pair_acc id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
         'to=$rid8 from=${publicKey.substring(0, publicKey.length.clamp(0, 8))}');
     _markSeen(packet.id);
     // Retry for reliability
@@ -1354,9 +1369,20 @@ class GossipRouter {
     required String recipientId,
     required String callId,
     required String signalType,
+    required String recipientX25519KeyBase64,
     Map<String, dynamic> payload = const <String, dynamic>{},
   }) async {
     final rid8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : null;
+    final inner = jsonEncode(<String, dynamic>{
+      'from': fromId,
+      'cid': callId,
+      'st': signalType,
+      if (payload.isNotEmpty) 'd': payload,
+    });
+    final encrypted = await CryptoService.instance.encryptMessage(
+      plaintext: inner,
+      recipientX25519KeyBase64: recipientX25519KeyBase64,
+    );
     final packet = GossipPacket(
       id: _uuid.v4(),
       type: 'call_sig',
@@ -1364,11 +1390,8 @@ class GossipRouter {
       timestamp: DateTime.now().millisecondsSinceEpoch,
       recipientId: recipientId,
       payload: <String, dynamic>{
-        'from': fromId,
-        'cid': callId,
-        'st': signalType,
+        ...encrypted.toJson(),
         if (rid8 != null) 'r': rid8,
-        if (payload.isNotEmpty) 'd': payload,
       },
     );
     _markSeen(packet.id);
@@ -1509,53 +1532,7 @@ class GossipRouter {
       }
 
       if (packet.type == 'raw') {
-        final text = packet.payload['text'] as String?;
-        final from = packet.payload['from'] as String? ?? 'unknown';
-        final rid8 = packet.payload['r'] as String?;
-        // Поддерживаем оба формата: новый компактный 'rt' и старый 'replyToMessageId'
-        final replyToMessageId = (packet.payload['rt'] ??
-            packet.payload['replyToMessageId']) as String?;
-
-        // Фильтрация по префиксу получателя: если 'r' задан и не совпадает с нашим ключом
-        // значит сообщение предназначено другому пользователю — пропускаем
-        final myKey = myPublicKey;
-        if (!_matchesRid8(myKey, rid8)) {
-          debugPrint(
-              '[RLINK][Gossip] Raw message not for us (rid prefix mismatch)');
-          return;
-        }
-
-        debugPrint('[Gossip] Raw message from=$from len=${text?.length}');
-        if (text != null) {
-          final handler = onMessageReceived;
-          if (handler != null) {
-            final lat = (packet.payload['lat'] as num?)?.toDouble();
-            final lng = (packet.payload['lng'] as num?)?.toDouble();
-            final ffid = packet.payload['ffid'] as String?;
-            final ffn = packet.payload['ffn'] as String?;
-            final ffch = packet.payload['ffch'] as String?;
-            final eap = packet.payload['eap'] as String?;
-            await handler(
-              from,
-              EncryptedMessage(
-                senderPublicKey: from,
-                ephemeralPublicKey: '',
-                nonce: '',
-                cipherText: text,
-                mac: '',
-                signature: '',
-              ),
-              packet.id,
-              replyToMessageId,
-              latitude: lat,
-              longitude: lng,
-              forwardFromId: ffid,
-              forwardFromNick: ffn,
-              forwardFromChannelId: ffch,
-              emojiAutoPayloadJson: eap,
-            );
-          }
-        }
+        debugPrint('[RLINK][Gossip] Dropping unencrypted raw DM packet');
         return;
       }
 
@@ -1619,9 +1596,10 @@ class GossipRouter {
         final String? statusEmojiPayload = packet.payload.containsKey('st')
             ? (packet.payload['st'] as String? ?? '')
             : null;
-        final String? statusEmojiAutoPayloadJson = packet.payload.containsKey('stp')
-            ? (packet.payload['stp'] as String? ?? '')
-            : null;
+        final String? statusEmojiAutoPayloadJson =
+            packet.payload.containsKey('stp')
+                ? (packet.payload['stp'] as String? ?? '')
+                : null;
 
         // Валидация: публичный ключ Ed25519 = 64 hex символа
         final isValidKey = publicKey != null &&
@@ -1632,8 +1610,16 @@ class GossipRouter {
           // sourceId — BLE ID пира, который прислал пакет напрямую.
           // onProfile в main.dart проверит isDirectBleId(bleId) перед регистрацией маппинга.
           final bleId = sourceId ?? publicKey;
-          onProfileReceived?.call(bleId, publicKey, nick, username, color,
-              emoji, x25519Key, tags, statusEmojiPayload,
+          onProfileReceived?.call(
+              bleId,
+              publicKey,
+              nick,
+              username,
+              color,
+              emoji,
+              x25519Key,
+              tags,
+              statusEmojiPayload,
               statusEmojiAutoPayloadJson);
         } else {
           debugPrint(
@@ -1647,12 +1633,14 @@ class GossipRouter {
         final rid8 = packet.payload['r'] as String?;
         final myKey = myPublicKey;
         if (!_matchesRid8(myKey, rid8)) {
-          _gossipTrace('[RLINK][Gossip][DROP] type=msg id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+          _gossipTrace(
+              '[RLINK][Gossip][DROP] type=msg id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
               'my=${(myKey ?? '').substring(0, (myKey ?? '').length.clamp(0, 8))} rid8=${rid8 ?? '-'}');
           // Не нам — пакет будет переслан в onPacketReceived
           return;
         }
-        _gossipTrace('[RLINK][Gossip][RX] type=msg id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} rid8=${rid8 ?? '-'}');
+        _gossipTrace(
+            '[RLINK][Gossip][RX] type=msg id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} rid8=${rid8 ?? '-'}');
         final encrypted = EncryptedMessage.fromJson(packet.payload);
         // Drop malformed encrypted messages — prevents ciphertext leaking as plaintext
         if (encrypted.ephemeralPublicKey.isEmpty ||
@@ -1739,7 +1727,8 @@ class GossipRouter {
       if (packet.type == 'ether') {
         final text = packet.payload['text'] as String?;
         final color = _jsonIntLoose(packet.payload['col']);
-        _gossipTrace('[RLINK][Gossip][RX] type=ether id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+        _gossipTrace(
+            '[RLINK][Gossip][RX] type=ether id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
             'textLen=${text?.length ?? 0} col=$color handler=${onEtherReceived != null}');
         if (text != null && text.isNotEmpty && color != null) {
           final senderId = packet.payload['from'] as String?;
@@ -1880,13 +1869,15 @@ class GossipRouter {
         final String? statusEmojiPayload = packet.payload.containsKey('st')
             ? (packet.payload['st'] as String? ?? '')
             : null;
-        final String? statusEmojiAutoPayloadJson = packet.payload.containsKey('stp')
-            ? (packet.payload['stp'] as String? ?? '')
-            : null;
+        final String? statusEmojiAutoPayloadJson =
+            packet.payload.containsKey('stp')
+                ? (packet.payload['stp'] as String? ?? '')
+                : null;
         final bleId = sourceId ?? publicKey ?? '';
         // Drop pair_req not addressed to us (directed pairing)
         if (!_matchesRid8(myPublicKey, rid8)) {
-          _gossipTrace('[RLINK][Gossip][DROP] type=pair_req id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+          _gossipTrace(
+              '[RLINK][Gossip][DROP] type=pair_req id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
               'my=${(myPublicKey ?? '').substring(0, (myPublicKey ?? '').length.clamp(0, 8))} r=$rid8');
           return;
         }
@@ -1894,8 +1885,7 @@ class GossipRouter {
           _gossipTrace(
               '[RLINK][Gossip][RX] type=pair_req from=${publicKey.substring(0, 8)} nick=$nick');
           onPairRequest?.call(bleId, publicKey, nick, username, color, emoji,
-              x25519Key, tags, statusEmojiPayload,
-              statusEmojiAutoPayloadJson);
+              x25519Key, tags, statusEmojiPayload, statusEmojiAutoPayloadJson);
         }
         return;
       }
@@ -1914,13 +1904,15 @@ class GossipRouter {
         final String? statusEmojiPayload = packet.payload.containsKey('st')
             ? (packet.payload['st'] as String? ?? '')
             : null;
-        final String? statusEmojiAutoPayloadJson = packet.payload.containsKey('stp')
-            ? (packet.payload['stp'] as String? ?? '')
-            : null;
+        final String? statusEmojiAutoPayloadJson =
+            packet.payload.containsKey('stp')
+                ? (packet.payload['stp'] as String? ?? '')
+                : null;
         final bleId = sourceId ?? publicKey ?? '';
         // Drop pair_acc not addressed to us (directed pairing)
         if (!_matchesRid8(myPublicKey, rid8)) {
-          _gossipTrace('[RLINK][Gossip][DROP] type=pair_acc id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
+          _gossipTrace(
+              '[RLINK][Gossip][DROP] type=pair_acc id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} '
               'my=${(myPublicKey ?? '').substring(0, (myPublicKey ?? '').length.clamp(0, 8))} r=$rid8');
           return;
         }
@@ -1928,8 +1920,7 @@ class GossipRouter {
           _gossipTrace(
               '[RLINK][Gossip][RX] type=pair_acc from=${publicKey.substring(0, 8)} nick=$nick');
           onPairAccepted?.call(bleId, publicKey, nick, username, color, emoji,
-              x25519Key, tags, statusEmojiPayload,
-              statusEmojiAutoPayloadJson);
+              x25519Key, tags, statusEmojiPayload, statusEmojiAutoPayloadJson);
         }
         return;
       }
@@ -2027,15 +2018,28 @@ class GossipRouter {
       }
 
       if (packet.type == 'call_sig') {
-        final from = packet.payload['from'] as String?;
-        final callId = packet.payload['cid'] as String?;
-        final signalType = packet.payload['st'] as String?;
         final rid8 = packet.payload['r'] as String?;
-        if (from == null || callId == null || signalType == null) return;
         if (!_matchesRid8(myPublicKey, rid8)) {
           return;
         }
-        final data = (packet.payload['d'] as Map?)?.cast<String, dynamic>() ??
+        final encrypted = EncryptedMessage.fromJson(packet.payload);
+        if (encrypted.ephemeralPublicKey.isEmpty ||
+            encrypted.nonce.isEmpty ||
+            encrypted.cipherText.isEmpty ||
+            encrypted.mac.isEmpty) {
+          debugPrint('[RLINK][Gossip] Dropping unencrypted call_sig packet');
+          return;
+        }
+        final plain = await CryptoService.instance.decryptMessage(encrypted);
+        if (plain == null || plain.isEmpty) return;
+        final decoded = jsonDecode(plain);
+        if (decoded is! Map) return;
+        final callMap = Map<String, dynamic>.from(decoded);
+        final from = callMap['from'] as String?;
+        final callId = callMap['cid'] as String?;
+        final signalType = callMap['st'] as String?;
+        if (from == null || callId == null || signalType == null) return;
+        final data = (callMap['d'] as Map?)?.cast<String, dynamic>() ??
             const <String, dynamic>{};
         onCallSignal?.call(from, callId, signalType, data);
         return;

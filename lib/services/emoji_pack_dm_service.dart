@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:uuid/uuid.dart';
 
+import '../services/chat_storage_service.dart';
+import '../services/crypto_service.dart';
 import '../services/image_service.dart';
 import '../services/relay_service.dart';
 import 'emoji_pack_service.dart';
@@ -14,6 +16,15 @@ class EmojiPackDmService {
   static const _uuid = Uuid();
   static const _blobFileName = 'rlink_emoji_pack_auto.json';
   static final RegExp _shortcodeRe = RegExp(r':([a-zA-Z0-9_]{1,48}):');
+
+  static Future<String?> _recipientX25519(String canonicalPeerId) async {
+    final relayKey = RelayService.instance.getPeerX25519Key(canonicalPeerId);
+    if (relayKey != null && relayKey.isNotEmpty) return relayKey;
+    final contact =
+        await ChatStorageService.instance.getContact(canonicalPeerId);
+    final stored = contact?.x25519Key?.trim();
+    return stored != null && stored.isNotEmpty ? stored : null;
+  }
 
   static Future<Map<String, dynamic>?> _buildPayloadFromShortcodes({
     required Iterable<String> shortcodes,
@@ -90,15 +101,24 @@ class EmojiPackDmService {
     required Map<String, dynamic> payload,
   }) async {
     if (!RelayService.instance.isConnected) return;
+    final canonical = ChatStorageService.normalizeDmPeerId(targetPeerId);
+    final x25519 = await _recipientX25519(canonical);
+    if (x25519 == null || x25519.isEmpty) {
+      throw StateError('missing_peer_encryption_key');
+    }
     final jsonBytes = utf8.encode(jsonEncode(payload));
     final compressed =
         ImageService.instance.compress(Uint8List.fromList(jsonBytes));
+    final sealed = await CryptoService.instance.sealMediaPayload(
+      plaintext: compressed,
+      recipientX25519KeyBase64: x25519,
+    );
     final msgId = 'emojiauto_${_uuid.v4()}';
     await RelayService.instance.sendBlob(
-      recipientKey: targetPeerId,
+      recipientKey: canonical,
       fromId: fromId,
       msgId: msgId,
-      compressedData: compressed,
+      compressedData: sealed,
       isFile: true,
       fileName: _blobFileName,
     );
@@ -126,7 +146,9 @@ class EmojiPackDmService {
     required String fromId,
     required Uint8List compressedData,
   }) async {
-    final decoded = ImageService.instance.decompress(compressedData);
+    final decoded = await ImageService.instance.openAndDecompressIncoming(
+      compressedData,
+    );
     final m = jsonDecode(utf8.decode(decoded));
     if (m is! Map) return 0;
     final payload = Map<String, dynamic>.from(m);

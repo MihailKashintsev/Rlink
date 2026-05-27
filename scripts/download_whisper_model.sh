@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"
 MODEL_DIR=""
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -19,7 +19,7 @@ else
 fi
 
 mkdir -p "$MODEL_DIR"
-MODEL_PATH="$MODEL_DIR/ggml-base.bin"
+MODEL_PATH="$MODEL_DIR/ggml-tiny.bin"
 
 if [[ -f "$MODEL_PATH" ]]; then
     echo "Model already exists: $MODEL_PATH"
@@ -27,7 +27,7 @@ if [[ -f "$MODEL_PATH" ]]; then
     exit 0
 fi
 
-echo "Downloading whisper base model (~142 MB)..."
+echo "Downloading whisper tiny model (~74 MB)..."
 curl -L --progress-bar "$MODEL_URL" -o "$MODEL_PATH"
 
 echo "Done: $MODEL_PATH"

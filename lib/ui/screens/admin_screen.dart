@@ -340,7 +340,8 @@ class _AdminScreenState extends State<AdminScreen>
           ListTile(
             leading: const Icon(Icons.settings_ethernet_outlined),
             title: const Text('Relay-боты (админ)'),
-            subtitle: const Text('Поиск по @нику, названию и botId (64 hex)'),
+            subtitle:
+                const Text('Поиск по @нику, названию, botId или коду бота'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -850,6 +851,7 @@ class _RequestTile extends StatelessWidget {
 
 class _RelayAdminBot {
   final String botId;
+  final String adminCode;
   final String handle;
   final String displayName;
   final String ownerEd25519Pub;
@@ -857,10 +859,22 @@ class _RelayAdminBot {
   final bool verified;
   final bool blocked;
   final bool revoked;
+  final bool online;
   final int createdAt;
+  final int updatedAt;
+  final int lastSeenAt;
+  final int lastActivityAt;
+  final int lastConnectedAt;
+  final int lastDisconnectedAt;
+  final int connectCount;
+  final int messagesIn;
+  final int messagesOut;
+  final int apiCalls;
+  final List<_RelayBotActivity> activity;
 
   const _RelayAdminBot({
     required this.botId,
+    required this.adminCode,
     required this.handle,
     required this.displayName,
     required this.ownerEd25519Pub,
@@ -868,12 +882,25 @@ class _RelayAdminBot {
     required this.verified,
     required this.blocked,
     required this.revoked,
+    required this.online,
     required this.createdAt,
+    required this.updatedAt,
+    required this.lastSeenAt,
+    required this.lastActivityAt,
+    required this.lastConnectedAt,
+    required this.lastDisconnectedAt,
+    required this.connectCount,
+    required this.messagesIn,
+    required this.messagesOut,
+    required this.apiCalls,
+    required this.activity,
   });
 
   bool matches(String q) {
     final x = q.toLowerCase();
     return botId.toLowerCase().contains(x) ||
+        adminCode.toLowerCase().contains(x) ||
+        adminCode.toLowerCase().replaceAll('-', '').contains(x) ||
         handle.toLowerCase().contains(x) ||
         displayName.toLowerCase().contains(x) ||
         ownerEd25519Pub.toLowerCase().contains(x) ||
@@ -881,14 +908,45 @@ class _RelayAdminBot {
   }
 
   String get createdAtFormatted {
-    if (createdAt <= 0) return '';
-    final d = DateTime.fromMillisecondsSinceEpoch(createdAt);
+    return _formatDate(createdAt);
+  }
+
+  String get lastSeenFormatted {
+    if (online) return 'сейчас онлайн';
+    final s = _formatDateTime(lastSeenAt);
+    return s.isEmpty ? 'активности ещё нет' : s;
+  }
+
+  static String _formatDate(int ms) {
+    if (ms <= 0) return '';
+    final d = DateTime.fromMillisecondsSinceEpoch(ms);
     return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
   }
 
+  static String _formatDateTime(int ms) {
+    if (ms <= 0) return '';
+    final d = DateTime.fromMillisecondsSinceEpoch(ms);
+    final date =
+        '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+    final time =
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    return '$date $time';
+  }
+
   factory _RelayAdminBot.fromJson(Map<String, dynamic> j) {
+    final rawActivity = j['activity'];
+    final activity = <_RelayBotActivity>[];
+    if (rawActivity is List) {
+      for (final item in rawActivity) {
+        if (item is Map) {
+          activity.add(
+              _RelayBotActivity.fromJson(Map<String, dynamic>.from(item)));
+        }
+      }
+    }
     return _RelayAdminBot(
       botId: (j['botId'] as String? ?? '').toLowerCase(),
+      adminCode: (j['adminCode'] as String? ?? '').toUpperCase(),
       handle: j['handle'] as String? ?? '',
       displayName: j['displayName'] as String? ?? '',
       ownerEd25519Pub: (j['ownerEd25519Pub'] as String? ?? '').toLowerCase(),
@@ -896,8 +954,84 @@ class _RelayAdminBot {
       verified: j['verified'] == true,
       blocked: j['blocked'] == true,
       revoked: j['revoked'] == true,
+      online: j['online'] == true,
       createdAt: (j['createdAt'] as num?)?.toInt() ?? 0,
+      updatedAt: (j['updatedAt'] as num?)?.toInt() ?? 0,
+      lastSeenAt: (j['lastSeenAt'] as num?)?.toInt() ?? 0,
+      lastActivityAt: (j['lastActivityAt'] as num?)?.toInt() ?? 0,
+      lastConnectedAt: (j['lastConnectedAt'] as num?)?.toInt() ?? 0,
+      lastDisconnectedAt: (j['lastDisconnectedAt'] as num?)?.toInt() ?? 0,
+      connectCount: (j['connectCount'] as num?)?.toInt() ?? 0,
+      messagesIn: (j['messagesIn'] as num?)?.toInt() ?? 0,
+      messagesOut: (j['messagesOut'] as num?)?.toInt() ?? 0,
+      apiCalls: (j['apiCalls'] as num?)?.toInt() ?? 0,
+      activity: activity,
     );
+  }
+}
+
+class _RelayBotActivity {
+  final int timestamp;
+  final String type;
+  final String peer;
+  final int bytes;
+  final String detail;
+
+  const _RelayBotActivity({
+    required this.timestamp,
+    required this.type,
+    required this.peer,
+    required this.bytes,
+    required this.detail,
+  });
+
+  factory _RelayBotActivity.fromJson(Map<String, dynamic> j) {
+    return _RelayBotActivity(
+      timestamp: (j['t'] as num?)?.toInt() ?? 0,
+      type: j['type'] as String? ?? '',
+      peer: j['peer'] as String? ?? '',
+      bytes: (j['bytes'] as num?)?.toInt() ?? 0,
+      detail: j['detail'] as String? ?? '',
+    );
+  }
+
+  String get label {
+    switch (type) {
+      case 'connect':
+        return 'подключился';
+      case 'disconnect':
+        return 'отключился';
+      case 'packet_in':
+      case 'blob_in':
+        return 'получил сообщение';
+      case 'packet_out':
+      case 'blob_out':
+        return 'ответил';
+      case 'api_call':
+        return 'Bot API';
+      case 'commands_set':
+        return 'команды обновлены';
+      case 'owner_patch':
+        return 'владелец изменил профиль';
+      case 'owner_revoke':
+        return 'владелец отозвал';
+      case 'admin_update':
+        return 'админ изменил статус';
+      case 'claim':
+        return 'зарегистрирован';
+      default:
+        return type.isEmpty ? 'событие' : type;
+    }
+  }
+
+  String get subtitle {
+    final parts = <String>[];
+    final time = _RelayAdminBot._formatDateTime(timestamp);
+    if (time.isNotEmpty) parts.add(time);
+    if (peer.isNotEmpty) parts.add('peer $peer…');
+    if (bytes > 0) parts.add('$bytes b');
+    if (detail.isNotEmpty) parts.add(detail);
+    return parts.join(' · ');
   }
 }
 
@@ -940,20 +1074,30 @@ class _RelayBotAdminTile extends StatelessWidget {
                             fontSize: 15, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        bot.botId,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+	                      Text(
+	                        bot.botId,
+	                        maxLines: 1,
+	                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11,
                           fontFamily: 'monospace',
                           color: cs.onSurfaceVariant,
                         ),
+	                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Код: ${bot.adminCode.isEmpty ? (bot.botId.length >= 12 ? bot.botId.substring(0, 12) : bot.botId).toUpperCase() : bot.adminCode}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          color: cs.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-              ],
+	                    ],
+	                  ),
+	                ),
+	              ],
             ),
             if (bot.description.trim().isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -973,22 +1117,69 @@ class _RelayBotAdminTile extends StatelessWidget {
             ),
             if (bot.createdAtFormatted.isNotEmpty) ...[
               const SizedBox(height: 2),
-              Text(
-                'Зарегистрирован: ${bot.createdAtFormatted}',
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-              ),
-            ],
-            const SizedBox(height: 8),
+	              Text(
+	                'Зарегистрирован: ${bot.createdAtFormatted}',
+	                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+	              ),
+	            ],
+            const SizedBox(height: 2),
+            Text(
+              'Последняя активность: ${bot.lastSeenFormatted}',
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 6),
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: [
-                if (bot.verified) _chip('VERIFIED', Colors.blue),
-                if (bot.blocked) _chip('BLOCKED', Colors.red),
-                if (bot.revoked) _chip('REVOKED', Colors.red.shade900),
+                _miniStat('IN', bot.messagesIn),
+                _miniStat('OUT', bot.messagesOut),
+                _miniStat('API', bot.apiCalls),
+                _miniStat('CONNECT', bot.connectCount),
               ],
             ),
-            const SizedBox(height: 8),
+	            const SizedBox(height: 8),
+	            Wrap(
+	              spacing: 6,
+	              runSpacing: 6,
+	              children: [
+                if (bot.online) _chip('ONLINE', Colors.green),
+	                if (bot.verified) _chip('VERIFIED', Colors.blue),
+	                if (bot.blocked) _chip('BLOCKED', Colors.red),
+	                if (bot.revoked) _chip('REVOKED', Colors.red.shade900),
+	              ],
+	            ),
+            if (bot.activity.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Theme(
+                data: Theme.of(context)
+                    .copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    'История активности',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  children: bot.activity.take(6).map((a) {
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.history, size: 18),
+                      title: Text(a.label,
+                          style: const TextStyle(fontSize: 12)),
+                      subtitle: a.subtitle.isEmpty
+                          ? null
+                          : Text(a.subtitle,
+                              style: TextStyle(
+                                  fontSize: 11, color: cs.onSurfaceVariant)),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+	            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 4,
@@ -1038,6 +1229,23 @@ class _RelayBotAdminTile extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.w700,
           color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _miniStat(String label, int value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        '$label $value',
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

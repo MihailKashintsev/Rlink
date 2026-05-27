@@ -30,7 +30,8 @@ class OutboundDmText {
   static String _resolveTargetPeerId(String peerIdOrBle) {
     var t = peerIdOrBle.trim();
     if (_pkRe.hasMatch(t)) return t;
-    final resolved = PeerKeyDirectory.instance.resolvePeerPublicKey(peerIdOrBle);
+    final resolved =
+        PeerKeyDirectory.instance.resolvePeerPublicKey(peerIdOrBle);
     if (_pkRe.hasMatch(resolved)) return resolved;
     throw StateError('Нет публичного ключа собеседника для отправки');
   }
@@ -102,13 +103,11 @@ class OutboundDmText {
           messageId: msgId,
         );
       } else {
-        await GossipRouter.instance.sendRawMessage(
-          text: partText,
-          senderId: myId,
-          recipientId: targetPeerId,
-          messageId: msgId,
-          replyToMessageId: isFirst ? replyToMessageId : null,
+        await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+          msgId,
+          MessageStatus.failed,
         );
+        throw StateError('missing_peer_encryption_key');
       }
 
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(

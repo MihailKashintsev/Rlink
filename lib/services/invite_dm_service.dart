@@ -75,12 +75,7 @@ class InviteDmService {
           messageId: msgId,
         );
       } else {
-        await GossipRouter.instance.sendRawMessage(
-          text: wireText,
-          senderId: myId,
-          recipientId: targetPublicKey,
-          messageId: msgId,
-        );
+        throw StateError('missing_peer_encryption_key');
       }
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
         msgId,

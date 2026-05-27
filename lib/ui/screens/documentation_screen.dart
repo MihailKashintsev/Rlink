@@ -523,11 +523,13 @@ const String _docRu = '''
 | :--- | :--- |
 | 1 | В каталоге **`tools/rlink_bot`**: `python -m pip install -e .` и `python -m rlink_bot keys init --file bot_keys.json` |
 | 2 | В Rlink: **Боты → Lib** — `/newbot ваш_ник` и публичный ключ (**64 hex** из `keys show-pub`) |
-| 3 | На ПК: **`python -m rlink_bot onboard КОД_ИЗ_LIB --file bot_keys.json`** — relay по умолчанию как в приложении; затем **`python -m rlink_bot run --file bot_keys.json`** |
+| 3 | На ПК: **`python -m rlink_bot onboard КОД_ИЗ_LIB --file bot_keys.json`** — relay по умолчанию как в приложении; затем **`python -m rlink_bot run --file rlink_bot_config.json`** |
 
 **КОД_ИЗ_LIB** — **claimCode** (коротко) или **claimId** (32 hex); оба приходят в ответе Lib.
 
-Пример «вставил код в Python-файл»: **`tools/rlink_bot/example_echo_bot.py`** (переменная `RELAY_CLAIM`).
+Быстрый запуск без своего кода: `python -m rlink_bot run`. Для своей логики скопируйте **`tools/rlink_bot/example_echo_bot.py`**.
+
+Админ relay видит уникальный код бота, последнюю активность, счётчики сообщений/API и может по коду заблокировать бота или выдать verified.
 
 Подробности и Windows PowerShell — **`tools/rlink_bot/README.md`**.
 
@@ -604,11 +606,13 @@ Registration creates a claim on the **relay**; the bot’s **private keys** stay
 | :--- | :--- |
 | 1 | In **`tools/rlink_bot`**: `python -m pip install -e .` and `python -m rlink_bot keys init --file bot_keys.json` |
 | 2 | In Rlink: **Bots → Lib** — `/newbot your_handle` and the public key (**64 hex** from `keys show-pub`) |
-| 3 | On your machine: **`python -m rlink_bot onboard PASTE_FROM_LIB --file bot_keys.json`** — default relay matches the Rlink app; then **`python -m rlink_bot run --file bot_keys.json`** |
+| 3 | On your machine: **`python -m rlink_bot onboard PASTE_FROM_LIB --file bot_keys.json`** — default relay matches the Rlink app; then **`python -m rlink_bot run --file rlink_bot_config.json`** |
 
 **PASTE_FROM_LIB** is **claimCode** (short) or **claimId** (32 hex) from Lib’s reply.
 
-Minimal “paste into code” sample: **`tools/rlink_bot/example_echo_bot.py`** (`RELAY_CLAIM`).
+Fast no-code start: `python -m rlink_bot run`. For custom logic, copy **`tools/rlink_bot/example_echo_bot.py`**.
+
+Relay admins see each bot’s unique code, last activity, message/API counters and can block or verify by that code.
 
 Full notes: **`tools/rlink_bot/README.md`**.
 

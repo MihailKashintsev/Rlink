@@ -165,7 +165,7 @@ def main() -> int:
     log("[echo_bot] online. Ctrl+C — стоп.")
 
     def on_dm(sender: str, text: str) -> None:
-        log(f"[dm {sender[:8]}…] {text[:80]!r}")
+        log(f"[dm {sender[:8]}…] received {len(text)} chars")
         try:
             reply = handle(sender, text)
             sess.send_dm(sender, reply)

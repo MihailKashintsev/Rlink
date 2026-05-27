@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
@@ -16,6 +17,17 @@ class LocalTranscriptionServiceIO {
     final modelDir = p.join(dir.path, 'whisper_models');
     await Directory(modelDir).create(recursive: true);
     final modelPath = p.join(modelDir, 'ggml-tiny.bin');
+    if (!File(modelPath).existsSync()) {
+      try {
+        final data = await rootBundle.load('assets/models/ggml-tiny.bin');
+        await File(modelPath).writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          flush: true,
+        );
+      } catch (_) {
+        // Fall through to the explicit error in ensureModel().
+      }
+    }
     _cppModelPath = modelPath;
     return modelPath;
   }
@@ -29,7 +41,7 @@ class LocalTranscriptionServiceIO {
     if (!File(modelPath).existsSync()) {
       throw StateError(
         'Локальная модель Whisper не установлена. '
-        'Cloud STT используется первым; для офлайн-режима скачайте модель через scripts/download_whisper_model.sh.',
+        'Добавьте assets/models/ggml-tiny.bin или скачайте модель через scripts/download_whisper_model.sh.',
       );
     }
     WhisperFfi.instance.load();

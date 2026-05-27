@@ -20,7 +20,10 @@ class LocalTranscriptionService {
 
   bool _modelReady = false;
   bool _loadingModel = false;
-  bool preferCloud = true;
+
+  /// Приватность по умолчанию: голосовые не уходят во внешний STT.
+  /// Cloud STT можно включить явно из кода/настроек, если пользователь согласится.
+  bool preferCloud = false;
 
   /// Все платформы поддерживают локальную расшифровку.
   bool get isSupported => true;

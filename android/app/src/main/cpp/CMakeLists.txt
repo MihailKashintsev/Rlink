@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18.1)
 project(whisper_bridge LANGUAGES C CXX)
 
-set(WHISPER_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../native/whisper.cpp")
+set(WHISPER_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../native/whisper.cpp")
 
 if(EXISTS "${WHISPER_CPP_DIR}/whisper.h")
     set(WHISPER_AVAILABLE TRUE)
@@ -24,17 +24,17 @@ endif()
 
 if(WHISPER_AVAILABLE)
     add_library(whisper_bridge SHARED
-        ../../../../native/whisper_bridge.c
+        ../../../../../native/whisper_bridge.c
         ${WHISPER_SOURCES}
     )
 else()
     add_library(whisper_bridge SHARED
-        ../../../../native/whisper_bridge.c
+        ../../../../../native/whisper_bridge.c
     )
 endif()
 
 target_include_directories(whisper_bridge PRIVATE
-    ../../../../native
+    ../../../../../native
 )
 
 if(WHISPER_AVAILABLE)
@@ -44,6 +44,8 @@ if(WHISPER_AVAILABLE)
     target_compile_definitions(whisper_bridge PRIVATE
         GGML_USE_CPU
     )
+else()
+    target_compile_definitions(whisper_bridge PRIVATE RLINK_NO_WHISPER)
 endif()
 
 target_compile_features(whisper_bridge PRIVATE cxx_std_17)

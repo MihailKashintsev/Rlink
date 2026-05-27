@@ -74,7 +74,7 @@ python -m pip install "websocket-client>=1.7" "cryptography>=42"
    python3 -m pip install -e .
    python3 -m rlink_bot onboard КОД_ИЗ_LIB --file rlink_help_bot_keys.json --out rlink_help_bot_config.json
    ```
-   Другой relay: `--relay ws://127.0.0.1:8080`. Сохраните **API token** из stdout.
+   Другой relay: `--relay ws://127.0.0.1:8080`. **API token** сохраняется в конфиг и не печатается в stdout.
 
 6. **(Опционально) HTTP Bot API** — описание и имя в каталоге:
    ```bash

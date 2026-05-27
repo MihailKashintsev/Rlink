@@ -24,6 +24,29 @@ class StickerPackDmService {
   static const _blobFileName = 'rlink_sticker_pack.json';
   static const _uuid = Uuid();
 
+  static Future<String?> _recipientX25519(String canonicalPeerId) async {
+    final relayKey = RelayService.instance.getPeerX25519Key(canonicalPeerId);
+    if (relayKey != null && relayKey.isNotEmpty) return relayKey;
+    final contact =
+        await ChatStorageService.instance.getContact(canonicalPeerId);
+    final stored = contact?.x25519Key?.trim();
+    return stored != null && stored.isNotEmpty ? stored : null;
+  }
+
+  static Future<Uint8List> _sealForPeer(
+    String canonicalPeerId,
+    Uint8List compressed,
+  ) async {
+    final x25519 = await _recipientX25519(canonicalPeerId);
+    if (x25519 == null || x25519.isEmpty) {
+      throw StateError('missing_peer_encryption_key');
+    }
+    return CryptoService.instance.sealMediaPayload(
+      plaintext: compressed,
+      recipientX25519KeyBase64: x25519,
+    );
+  }
+
   /// Собирает payload для БД и передачи (включает base64 байтов файлов).
   static Future<Map<String, dynamic>> buildStickerPackPayload(
     StickerPack pack,
@@ -59,8 +82,7 @@ class StickerPackDmService {
     final myId = CryptoService.instance.publicKeyHex;
     if (myId.isEmpty) return;
 
-    final canonical =
-        ChatStorageService.normalizeDmPeerId(targetPeerId.trim());
+    final canonical = ChatStorageService.normalizeDmPeerId(targetPeerId.trim());
     final payload = await buildStickerPackPayload(pack);
     if ((payload['stickers'] as List?)?.isEmpty != false) {
       _snack(context, 'В наборе нет файлов для отправки');
@@ -105,24 +127,25 @@ class StickerPackDmService {
       final jsonBytes = utf8.encode(jsonEncode(payload));
       final compressed =
           ImageService.instance.compress(Uint8List.fromList(jsonBytes));
+      final sealed = await _sealForPeer(canonical, compressed);
 
-      if (compressed.length <= _maxSingleBlob) {
+      if (sealed.length <= _maxSingleBlob) {
         await RelayService.instance.sendBlob(
           recipientKey: canonical,
           fromId: myId,
           msgId: msgId,
-          compressedData: compressed,
+          compressedData: sealed,
           isFile: true,
           fileName: _blobFileName,
         );
       } else {
-        final total = (compressed.length / _relayChunkBytes).ceil();
+        final total = (sealed.length / _relayChunkBytes).ceil();
         for (var i = 0; i < total; i++) {
           final offset = i * _relayChunkBytes;
-          final end = (offset + _relayChunkBytes) > compressed.length
-              ? compressed.length
+          final end = (offset + _relayChunkBytes) > sealed.length
+              ? sealed.length
               : offset + _relayChunkBytes;
-          final chunk = Uint8List.sublistView(compressed, offset, end);
+          final chunk = Uint8List.sublistView(sealed, offset, end);
           await RelayService.instance.sendBlobChunk(
             recipientKey: canonical,
             fromId: myId,
@@ -163,8 +186,7 @@ class StickerPackDmService {
     if (myId.isEmpty) return;
     if (payload['type'] != ChatMessage.kStickerPackPayloadType) return;
 
-    final canonical =
-        ChatStorageService.normalizeDmPeerId(targetPeerId.trim());
+    final canonical = ChatStorageService.normalizeDmPeerId(targetPeerId.trim());
     final msgId = 'stickerpack_${_uuid.v4()}';
     final rawTitle = (payload['title'] as String?)?.trim() ?? '';
     final title = rawTitle.isEmpty ? 'Набор' : rawTitle;
@@ -203,23 +225,24 @@ class StickerPackDmService {
       final jsonBytes = utf8.encode(jsonEncode(payload));
       final compressed =
           ImageService.instance.compress(Uint8List.fromList(jsonBytes));
-      if (compressed.length <= _maxSingleBlob) {
+      final sealed = await _sealForPeer(canonical, compressed);
+      if (sealed.length <= _maxSingleBlob) {
         await RelayService.instance.sendBlob(
           recipientKey: canonical,
           fromId: myId,
           msgId: msgId,
-          compressedData: compressed,
+          compressedData: sealed,
           isFile: true,
           fileName: _blobFileName,
         );
       } else {
-        final total = (compressed.length / _relayChunkBytes).ceil();
+        final total = (sealed.length / _relayChunkBytes).ceil();
         for (var i = 0; i < total; i++) {
           final offset = i * _relayChunkBytes;
-          final end = (offset + _relayChunkBytes) > compressed.length
-              ? compressed.length
+          final end = (offset + _relayChunkBytes) > sealed.length
+              ? sealed.length
               : offset + _relayChunkBytes;
-          final chunk = Uint8List.sublistView(compressed, offset, end);
+          final chunk = Uint8List.sublistView(sealed, offset, end);
           await RelayService.instance.sendBlobChunk(
             recipientKey: canonical,
             fromId: myId,
@@ -262,7 +285,9 @@ class StickerPackDmService {
       return null;
     }
 
-    final raw = ImageService.instance.decompress(compressedData);
+    final raw = await ImageService.instance.openAndDecompressIncoming(
+      compressedData,
+    );
     final jsonStr = utf8.decode(raw);
     final payload = jsonDecode(jsonStr) as Map<String, dynamic>;
     if (payload['type'] != ChatMessage.kStickerPackPayloadType) return null;
@@ -278,7 +303,7 @@ class StickerPackDmService {
       final docs = await getApplicationDocumentsDirectory();
       final imgDir = Directory(p.join(docs.path, 'images'));
       if (!imgDir.existsSync()) imgDir.createSync(recursive: true);
-      
+
       final downloadedPaths = <String>[];
       for (var i = 0; i < stickers.length; i++) {
         try {
@@ -286,7 +311,7 @@ class StickerPackDmService {
           if (e == null) continue;
           final b64 = e['bytes'] as String?;
           if (b64 == null || b64.isEmpty) continue;
-          
+
           final bytes = base64Decode(b64);
           final safeExt = '.png';
           final destName = 'stk_downloaded_${msgId}_$i$safeExt';
@@ -297,7 +322,7 @@ class StickerPackDmService {
           debugPrint('[StickerPackDm] download sticker $i failed: $e');
         }
       }
-      
+
       // Update payload with downloaded paths
       payload['downloadedPaths'] = downloadedPaths;
     }
@@ -344,26 +369,26 @@ class StickerPackDmService {
       final jsonBytes = utf8.encode(jsonEncode(payload));
       final compressed =
           ImageService.instance.compress(Uint8List.fromList(jsonBytes));
-      final canonical =
-          ChatStorageService.normalizeDmPeerId(msg.peerId.trim());
+      final canonical = ChatStorageService.normalizeDmPeerId(msg.peerId.trim());
+      final sealed = await _sealForPeer(canonical, compressed);
 
-      if (compressed.length <= _maxSingleBlob) {
+      if (sealed.length <= _maxSingleBlob) {
         await RelayService.instance.sendBlob(
           recipientKey: canonical,
           fromId: myId,
           msgId: msg.id,
-          compressedData: compressed,
+          compressedData: sealed,
           isFile: true,
           fileName: _blobFileName,
         );
       } else {
-        final total = (compressed.length / _relayChunkBytes).ceil();
+        final total = (sealed.length / _relayChunkBytes).ceil();
         for (var i = 0; i < total; i++) {
           final offset = i * _relayChunkBytes;
-          final end = (offset + _relayChunkBytes) > compressed.length
-              ? compressed.length
+          final end = (offset + _relayChunkBytes) > sealed.length
+              ? sealed.length
               : offset + _relayChunkBytes;
-          final chunk = Uint8List.sublistView(compressed, offset, end);
+          final chunk = Uint8List.sublistView(sealed, offset, end);
           await RelayService.instance.sendBlobChunk(
             recipientKey: canonical,
             fromId: myId,

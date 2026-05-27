@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import 'image_service.dart';
 import 'relay_service.dart';
 import 'chat_storage_service.dart';
+import 'crypto_service.dart';
 import '../models/chat_message.dart';
 
 /// Status of an upload task.
@@ -275,6 +276,26 @@ class MediaUploadQueue {
       return;
     }
 
+    final recipientX25519 = await _recipientX25519(task.recipientKey);
+    if (recipientX25519 == null || recipientX25519.isEmpty) {
+      final shortKey = task.recipientKey.length > 8
+          ? task.recipientKey.substring(0, 8)
+          : task.recipientKey;
+      debugPrint('[UploadQueue] Missing X25519 for $shortKey; waiting');
+      await db.update(
+        'upload_queue',
+        {'status': UploadStatus.pending.index},
+        where: 'id = ?',
+        whereArgs: [task.id],
+      );
+      await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+        task.msgId,
+        MessageStatus.sending,
+      );
+      _setProgress(task.msgId, 0);
+      return;
+    }
+
     // Mark uploading
     await db.update(
       'upload_queue',
@@ -297,12 +318,16 @@ class MediaUploadQueue {
     try {
       final bytes = await File(task.filePath).readAsBytes();
       final compressed = ImageService.instance.compress(bytes);
+      final sealed = await CryptoService.instance.sealMediaPayload(
+        plaintext: compressed,
+        recipientX25519KeyBase64: recipientX25519,
+      );
       showIsland = compressed.length >= kLiveActivityMinCompressedBytes;
       if (showIsland) {
         onLiveActivityMediaProgress?.call(label, 0.06);
       }
 
-      if (compressed.length <= _kMaxBlobBytes) {
+      if (sealed.length <= _kMaxBlobBytes) {
         // ── Single blob send ──────────────────────────────────────
         if (showIsland) {
           onLiveActivityMediaProgress?.call(label, 0.12);
@@ -311,7 +336,7 @@ class MediaUploadQueue {
           recipientKey: task.recipientKey,
           fromId: task.fromId,
           msgId: task.msgId,
-          compressedData: compressed,
+          compressedData: sealed,
           isVoice: task.isVoice,
           isVideo: task.isVideo,
           isSquare: task.isSquare,
@@ -330,7 +355,7 @@ class MediaUploadQueue {
         _setProgress(task.msgId, 0.99);
       } else {
         // ── Chunked send for large files ──────────────────────────
-        final total = (compressed.length / _kRelayChunkBytes).ceil();
+        final total = (sealed.length / _kRelayChunkBytes).ceil();
         debugPrint('[UploadQueue] Large file: $total chunks for ${task.msgId}');
         for (var i = 0; i < total; i++) {
           if (!RelayService.instance.isConnected) {
@@ -345,8 +370,8 @@ class MediaUploadQueue {
             return;
           }
           final offset = i * _kRelayChunkBytes;
-          final end = (offset + _kRelayChunkBytes).clamp(0, compressed.length);
-          final chunk = Uint8List.sublistView(compressed, offset, end);
+          final end = (offset + _kRelayChunkBytes).clamp(0, sealed.length);
+          final chunk = Uint8List.sublistView(sealed, offset, end);
           await RelayService.instance.sendBlobChunk(
             recipientKey: task.recipientKey,
             fromId: task.fromId,
@@ -456,6 +481,15 @@ class MediaUploadQueue {
       return 'Файл';
     }
     return 'Фото';
+  }
+
+  Future<String?> _recipientX25519(String recipientKey) async {
+    final key = recipientKey.trim().toLowerCase();
+    final relayKey = RelayService.instance.getPeerX25519Key(key);
+    if (relayKey != null && relayKey.isNotEmpty) return relayKey;
+    final contact = await ChatStorageService.instance.getContact(key);
+    final stored = contact?.x25519Key?.trim();
+    return stored != null && stored.isNotEmpty ? stored : null;
   }
 
   void _setProgress(String msgId, double progress) {

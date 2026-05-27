@@ -204,7 +204,7 @@ class CallService {
           }
         });
         await _sendSignal(peerId, callId, 'recording', {'on': true});
-        debugPrint('[RLINK][Call] Recording started → $_recordingPath');
+        debugPrint('[RLINK][Call] Recording started');
       } catch (e) {
         debugPrint('[RLINK][Call] Recording start failed: $e');
         _mediaRecorder = null;
@@ -283,8 +283,7 @@ class CallService {
           _recordingPath = objectUrl;
         }
       }
-      debugPrint(
-          '[RLINK][Call] Recording stopped out=$out path=$_recordingPath');
+      debugPrint('[RLINK][Call] Recording stopped');
     } catch (e) {
       debugPrint('[RLINK][Call] Recording stop failed: $e');
     }
@@ -382,6 +381,10 @@ class CallService {
     }
     if (!RelayService.instance.isConnected) {
       throw StateError('peer_offline');
+    }
+    final recipientX25519 = await _x25519ForRecipient(recipientKey);
+    if (recipientX25519 == null || recipientX25519.isEmpty) {
+      throw StateError('missing_peer_encryption_key');
     }
     _historyWasIncoming = false;
     final callId = _uuid.v4();
@@ -734,15 +737,14 @@ class CallService {
     Map<String, dynamic> payload,
   ) async {
     final f8 = fromId.length >= 8 ? fromId.substring(0, 8) : fromId;
-    debugPrint('[RLINK][Call][RX] $signalType call=$callId from=$f8');
+    debugPrint('[RLINK][Call][RX] $signalType from=$f8');
     switch (signalType) {
       case 'invite':
         final now = DateTime.now();
         // Dedup: ignore re-invites for calls we've already handled.
         final recentTs = _recentlyHandledCallIds[callId];
         if (recentTs != null && now.difference(recentTs) < _recentCallTtl) {
-          debugPrint(
-              '[RLINK][Call] ignoring re-invite for handled call $callId');
+          debugPrint('[RLINK][Call] ignoring re-invite for handled call');
           break;
         }
         // De-duplicate: if we're already ringing for this exact call, ignore
@@ -815,7 +817,6 @@ class CallService {
         final peerMatch = _activePeerId == fromId;
         debugPrint(
             '[RLINK][Call] accept gate: callMatch=$callMatch peerMatch=$peerMatch '
-            'myCall=${_activeCallId?.substring(0, 8) ?? '-'} rxCall=${callId.substring(0, 8)} '
             'myPeer=${_activePeerId?.substring(0, 8) ?? '-'} rxPeer=${fromId.substring(0, 8)}');
         if (callMatch && peerMatch) {
           _setPhase(CallPhase
@@ -892,14 +893,30 @@ class CallService {
     if (myId.isEmpty) return;
     final r8 =
         recipientId.length >= 8 ? recipientId.substring(0, 8) : recipientId;
-    debugPrint('[RLINK][Call][TX] $signalType call=$callId to=$r8');
+    final x25519 = await _x25519ForRecipient(recipientId);
+    if (x25519 == null || x25519.isEmpty) {
+      debugPrint(
+          '[RLINK][Call][DROP] $signalType reason=missing_peer_key to=$r8');
+      return;
+    }
+    debugPrint('[RLINK][Call][TX] $signalType to=$r8');
     await GossipRouter.instance.sendCallSignal(
       fromId: myId,
       recipientId: recipientId,
       callId: callId,
       signalType: signalType,
+      recipientX25519KeyBase64: x25519,
       payload: payload,
     );
+  }
+
+  Future<String?> _x25519ForRecipient(String recipientId) async {
+    final relayKey = RelayService.instance.getPeerX25519Key(recipientId);
+    if (relayKey != null && relayKey.isNotEmpty) return relayKey;
+    final contact = await ChatStorageService.instance.getContact(recipientId);
+    final stored = contact?.x25519Key?.trim();
+    if (stored != null && stored.isNotEmpty) return stored;
+    return null;
   }
 
   String? _resolveRecipientKey(String peerId) {
@@ -1027,8 +1044,7 @@ class CallService {
         _stopAcceptResendLoop();
         return;
       }
-      debugPrint(
-          '[RLINK][Call] resend accept #$_acceptResendAttempts call=$callId');
+      debugPrint('[RLINK][Call] resend accept #$_acceptResendAttempts');
       await _sendSignal(peerId, callId, 'accept');
     });
   }
@@ -1049,7 +1065,7 @@ class CallService {
         _stopOfferResendLoop();
         return;
       }
-      debugPrint('[RLINK][Call] resend offer (ringing retry) call=$callId');
+      debugPrint('[RLINK][Call] resend offer (ringing retry)');
       if (_lastLocalOffer != null) {
         await _sendSignal(peerId, callId, 'offer', _lastLocalOffer!);
       }
@@ -1069,7 +1085,7 @@ class CallService {
         return;
       }
       debugPrint(
-        '[RLINK][Call] connect timeout: call=${_activeCallId ?? '-'} phase=${phase.value}',
+        '[RLINK][Call] connect timeout: phase=${phase.value}',
       );
       _logIceCandidateSummary(
           _localRelayCount,
@@ -1100,7 +1116,7 @@ class CallService {
     _connectTimeout = Timer(_ringingTimeoutDuration, () {
       if (phase.value != CallPhase.ringing) return;
       debugPrint(
-        '[RLINK][Call] ringing timeout: call=${_activeCallId ?? '-'} phase=${phase.value}',
+        '[RLINK][Call] ringing timeout: phase=${phase.value}',
       );
       unawaited(_cleanup(CallPhase.failed));
     });

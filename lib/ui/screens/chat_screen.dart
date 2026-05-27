@@ -392,6 +392,38 @@ class _ChatScreenState extends State<ChatScreen> {
   static int _relayChunkBytesFor(int size) =>
       kIsWeb ? _kWebRelayChunkBytes : _kRelayChunkBytes;
 
+  Future<String?> _recipientX25519ForMedia(String recipientKey) async {
+    final key = recipientKey.trim().toLowerCase();
+    final relayKey = RelayService.instance.getPeerX25519Key(key);
+    if (relayKey != null && relayKey.isNotEmpty) return relayKey;
+    final contact = await ChatStorageService.instance.getContact(key);
+    final stored = contact?.x25519Key?.trim();
+    return stored != null && stored.isNotEmpty ? stored : null;
+  }
+
+  Future<Uint8List?> _sealMediaForRecipient(
+    Uint8List preparedBytes,
+    String recipientKey,
+  ) async {
+    final x25519 = await _recipientX25519ForMedia(recipientKey);
+    if (x25519 == null || x25519.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Нет ключа шифрования получателя. Откройте чат, дождитесь online/presence и повторите.',
+            ),
+          ),
+        );
+      }
+      return null;
+    }
+    return CryptoService.instance.sealMediaPayload(
+      plaintext: preparedBytes,
+      recipientX25519KeyBase64: x25519,
+    );
+  }
+
   /// Send media: relay blob over internet, BLE chunks for mesh.
   /// Returns true if the file was queued for background upload (status = sending).
   Future<bool> _sendMedia({
@@ -467,12 +499,15 @@ class _ChatScreenState extends State<ChatScreen> {
           final compressed = kIsWeb && (isVideo || isFile)
               ? bytes
               : ImageService.instance.compress(bytes);
-          if (compressed.length <= _kMaxBlobBytes) {
+          final sealed =
+              await _sealMediaForRecipient(compressed, _resolvedPeerId);
+          if (sealed == null) return false;
+          if (sealed.length <= _kMaxBlobBytes) {
             await RelayService.instance.sendBlob(
               recipientKey: _resolvedPeerId,
               fromId: myId,
               msgId: msgId,
-              compressedData: compressed,
+              compressedData: sealed,
               isVoice: isVoice,
               isVideo: isVideo,
               isSquare: isSquare,
@@ -482,13 +517,13 @@ class _ChatScreenState extends State<ChatScreen> {
             );
             blobSent = true;
             debugPrint(
-                '[RLINK][Media] In-memory blob sent: ${compressed.length} bytes to ${_resolvedPeerId.substring(0, 8)}');
+                '[RLINK][Media] In-memory encrypted blob sent: ${sealed.length} bytes to ${_resolvedPeerId.substring(0, 8)}');
           } else {
-            final chunkBytes = _relayChunkBytesFor(compressed.length);
-            final total = (compressed.length / chunkBytes).ceil();
+            final chunkBytes = _relayChunkBytesFor(sealed.length);
+            final total = (sealed.length / chunkBytes).ceil();
             debugPrint('[RLINK][Media] Fallback in-memory chunks: $total');
             _sendBlobChunksInBackground(
-              compressed: compressed,
+              compressed: sealed,
               msgId: msgId,
               myId: myId,
               total: total,
@@ -511,9 +546,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // 2. BLE gossip chunks — only when relay is unavailable.
     if (!blobSent) {
-      final chunks = ImageService.instance.splitToBase64Chunks(bytes);
+      final compressed = ImageService.instance.compress(bytes);
+      final sealed = await _sealMediaForRecipient(compressed, _resolvedPeerId);
+      if (sealed == null) return false;
+      final chunks = ImageService.instance.splitRawToBase64Chunks(sealed);
       debugPrint(
-          '[RLINK][Media] Relay unavailable — sending ${chunks.length} BLE gossip chunks');
+          '[RLINK][Media] Relay unavailable — sending ${chunks.length} encrypted BLE gossip chunks');
       await GossipRouter.instance.sendImgMeta(
         msgId: msgId,
         totalChunks: chunks.length,
@@ -590,7 +628,9 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         // Gentle pacing: mobile browsers and proxies are more stable with
         // smaller, less bursty WebSocket frames.
-        await Future.delayed(Duration(milliseconds: kIsWeb ? 120 : 50));
+        await Future.delayed(
+          const Duration(milliseconds: kIsWeb ? 120 : 50),
+        );
       }
       debugPrint(
           '[RLINK][Media] All $total blob chunks sent for $msgId to $relayRecipientKey');
@@ -2423,15 +2463,12 @@ class _ChatScreenState extends State<ChatScreen> {
             forwardFromChannelId: fch,
           );
         } else {
-          await GossipRouter.instance.sendRawMessage(
-            text: text,
-            senderId: myId,
-            recipientId: target,
-            messageId: msgId,
-            forwardFromId: fid,
-            forwardFromNick: fnk,
-            forwardFromChannelId: fch,
+          await ChatStorageService.instance
+              .updateMessageStatusPreserveDelivered(
+            msgId,
+            MessageStatus.failed,
           );
+          throw StateError('missing_peer_encryption_key');
         }
       }
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
@@ -2454,7 +2491,10 @@ class _ChatScreenState extends State<ChatScreen> {
         await File(m.imagePath!).copy(dest);
         if (!skipNet) {
           final bytes = await File(dest).readAsBytes();
-          final chunks = ImageService.instance.splitToBase64Chunks(bytes);
+          final compressed = ImageService.instance.compress(bytes);
+          final sealed = await _sealMediaForRecipient(compressed, target);
+          if (sealed == null) return false;
+          final chunks = ImageService.instance.splitRawToBase64Chunks(sealed);
           await GossipRouter.instance.sendImgMeta(
             msgId: msgId,
             totalChunks: chunks.length,
@@ -2495,7 +2535,10 @@ class _ChatScreenState extends State<ChatScreen> {
         await File(m.videoPath!).copy(dest);
         if (!skipNet) {
           final bytes = await File(dest).readAsBytes();
-          final chunks = ImageService.instance.splitToBase64Chunks(bytes);
+          final compressed = ImageService.instance.compress(bytes);
+          final sealed = await _sealMediaForRecipient(compressed, target);
+          if (sealed == null) return false;
+          final chunks = ImageService.instance.splitRawToBase64Chunks(sealed);
           final isSq = _videoPathIsSquare(m.videoPath!);
           await GossipRouter.instance.sendImgMeta(
             msgId: msgId,
@@ -2762,16 +2805,12 @@ class _ChatScreenState extends State<ChatScreen> {
             );
             debugPrint('[RLINK][Chat] Sent ENCRYPTED msg $msgId');
           } else {
-            await GossipRouter.instance.sendRawMessage(
-              text: chunk,
-              senderId: myId,
-              recipientId: canonicalTargetPeerId,
-              messageId: msgId,
-              replyToMessageId: isFirst ? _replyToMessageId : null,
-              latitude: isFirst ? lat : null,
-              longitude: isFirst ? lng : null,
+            await ChatStorageService.instance
+                .updateMessageStatusPreserveDelivered(
+              msgId,
+              MessageStatus.failed,
             );
-            debugPrint('[RLINK][Chat] Sent RAW msg $msgId');
+            throw StateError('missing_peer_encryption_key');
           }
         } else {
           debugPrint(
@@ -3884,8 +3923,10 @@ class _ChatScreenState extends State<ChatScreen> {
       final jsonBytes = utf8.encode(jsonEncode(payload));
       final compressed =
           ImageService.instance.compress(Uint8List.fromList(jsonBytes));
+      final sealed = await _sealMediaForRecipient(compressed, targetPeerId);
+      if (sealed == null) return;
       final emojiMsgId = 'emojiauto_${_uuid.v4()}';
-      final chunks = ImageService.instance.splitToBase64Chunks(compressed);
+      final chunks = ImageService.instance.splitRawToBase64Chunks(sealed);
       await GossipRouter.instance.sendImgMeta(
         msgId: emojiMsgId,
         totalChunks: chunks.length,

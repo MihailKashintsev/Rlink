@@ -146,6 +146,7 @@ flutter:
   assets:
     - assets/branding/rlink_mark.png
     - assets/branding/rlink_icon_ai.png
+    - assets/models/ggml-tiny.bin
     - assets/sticker_packs/default/
 
 flutter_launcher_icons:

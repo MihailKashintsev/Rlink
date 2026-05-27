@@ -244,6 +244,7 @@ int _droppedOversizePackets = 0;
 
 final Map<String, Map<String, dynamic>> _botDirectory = {};
 final Map<String, Map<String, dynamic>> _botClaims = {};
+const _botActivityMaxEvents = 80;
 
 /// Канонический короткий код `AAAA-BBBB-CCCC` (верхний регистр) → 32 hex claimId.
 final Map<String, String> _botClaimCodeToClaimId = {};
@@ -425,6 +426,8 @@ void _loadBotDirectory() {
       if (id == null || !RegExp(r'^[0-9a-f]{64}$').hasMatch(id)) continue;
       m['commands'] =
           _parseBotCommandsInput(m['commands']) ?? <Map<String, dynamic>>[];
+      m['adminCode'] = _botAdminCode(id);
+      m['activity'] = (m['activity'] is List) ? m['activity'] : <dynamic>[];
       _botDirectory[id] = m;
     }
     stdout.writeln(
@@ -448,7 +451,7 @@ void _sendBotDirSnapshot(WebSocketChannel ws) {
   if (_botDirectory.isEmpty) return;
   final out = <Map<String, dynamic>>[];
   for (final m in _botDirectory.values) {
-    if (m['revoked'] == true) continue;
+    if (m['revoked'] == true || m['blocked'] == true) continue;
     final id = m['botId'] as String? ?? '';
     final handle = m['handle'] as String? ?? '';
     if (id.isEmpty || handle.isEmpty) continue;
@@ -499,6 +502,99 @@ bool _isBotBlockedOrRevoked(String botId) {
   return row['revoked'] == true || row['blocked'] == true;
 }
 
+String _botAdminCode(String botId) {
+  final clean = botId.toLowerCase().replaceAll(RegExp(r'[^0-9a-f]'), '');
+  if (clean.length < 12) return clean.toUpperCase();
+  final s = clean.substring(0, 12).toUpperCase();
+  return '${s.substring(0, 4)}-${s.substring(4, 8)}-${s.substring(8, 12)}';
+}
+
+String _normalizeBotAdminCode(String raw) {
+  final clean = raw.trim().toLowerCase().replaceAll(RegExp(r'[^0-9a-f]'), '');
+  return clean.length == 12 ? clean : '';
+}
+
+String? _resolveBotIdForAdmin(Map<String, dynamic> msg) {
+  final botId = _jsonString(msg['botId']).toLowerCase().trim();
+  if (RegExp(r'^[0-9a-f]{64}$').hasMatch(botId)) return botId;
+  final code = _normalizeBotAdminCode(_jsonString(msg['botCode']));
+  if (code.isEmpty) return null;
+  String? found;
+  for (final id in _botDirectory.keys) {
+    if (!id.startsWith(code)) continue;
+    if (found != null) return null;
+    found = id;
+  }
+  return found;
+}
+
+bool _isKnownBot(String botId) => _botDirectory.containsKey(botId);
+
+int _jsonIntField(Map<String, dynamic> row, String key) =>
+    (row[key] as num?)?.toInt() ?? 0;
+
+void _recordBotActivity(
+  String botId,
+  String type, {
+  String peerId = '',
+  int bytes = 0,
+  String detail = '',
+  bool persist = true,
+}) {
+  final id = botId.toLowerCase();
+  final row = _botDirectory[id];
+  if (row == null) return;
+  final now = DateTime.now().millisecondsSinceEpoch;
+  row['adminCode'] = _botAdminCode(id);
+  row['lastSeenAt'] = now;
+  row['lastActivityAt'] = now;
+  switch (type) {
+    case 'connect':
+      row['lastConnectedAt'] = now;
+      row['connectCount'] = _jsonIntField(row, 'connectCount') + 1;
+      break;
+    case 'disconnect':
+      row['lastDisconnectedAt'] = now;
+      break;
+    case 'packet_in':
+    case 'blob_in':
+      row['messagesIn'] = _jsonIntField(row, 'messagesIn') + 1;
+      break;
+    case 'packet_out':
+    case 'blob_out':
+      row['messagesOut'] = _jsonIntField(row, 'messagesOut') + 1;
+      break;
+    case 'api_call':
+      row['apiCalls'] = _jsonIntField(row, 'apiCalls') + 1;
+      break;
+  }
+  final raw = row['activity'];
+  final list = raw is List ? List<dynamic>.from(raw) : <dynamic>[];
+  list.insert(0, {
+    't': now,
+    'type': type,
+    if (peerId.isNotEmpty)
+      'peer': peerId.substring(0, peerId.length.clamp(0, 12)),
+    if (bytes > 0) 'bytes': bytes,
+    if (detail.isNotEmpty)
+      'detail': detail.length > 96 ? detail.substring(0, 96) : detail,
+  });
+  if (list.length > _botActivityMaxEvents) {
+    list.removeRange(_botActivityMaxEvents, list.length);
+  }
+  row['activity'] = list;
+  if (persist) _persistBotDirectory();
+}
+
+void _disconnectBotIfOnline(String botId, String reason) {
+  final onlineBot = _users.remove(botId.toLowerCase());
+  if (onlineBot == null) return;
+  try {
+    onlineBot.ws.sink.close(4003, reason);
+  } catch (_) {}
+  _broadcastPresence(botId.toLowerCase(), false);
+}
+
 String? _normalizeBotHandleQuery(String raw) {
   var s = raw.trim().toLowerCase();
   if (s.startsWith('@')) s = s.substring(1);
@@ -535,7 +631,7 @@ List<Map<String, dynamic>>? _parseBotCommandsInput(dynamic raw) {
 
 Map<String, dynamic>? _botRowByHandleNorm(String handleNorm) {
   for (final m in _botDirectory.values) {
-    if (m['revoked'] == true) continue;
+    if (m['revoked'] == true || m['blocked'] == true) continue;
     final h = (m['handle'] as String?)?.toLowerCase() ?? '';
     if (h == handleNorm) return m;
   }
@@ -682,6 +778,8 @@ Future<void> _handleBotCommandsSetAsync(
     }
     row['commands'] = parsed;
     row['updatedAt'] = nowMs;
+    _recordBotActivity(botId, 'commands_set',
+        peerId: owner, detail: '${parsed.length} commands', persist: false);
     _persistBotDirectory();
     _broadcastBotDirSnapshotToAll();
     stdout.writeln(
@@ -728,6 +826,8 @@ Future<void> _handleBotCommandsSetAsync(
   }
   row['commands'] = parsed;
   row['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+  _recordBotActivity(botId, 'commands_set',
+      detail: '${parsed.length} commands via apiToken', persist: false);
   _persistBotDirectory();
   _broadcastBotDirSnapshotToAll();
   stdout.writeln(
@@ -975,14 +1075,25 @@ void _handleBotClaim(_User user, Map<String, dynamic> msg) {
   final tokenHash = _sha256HexUtf8(apiToken);
 
   _removeBotClaim(claimId);
+  final nowMs = DateTime.now().millisecondsSinceEpoch;
   _botDirectory[botPk] = {
     'botId': botPk,
+    'adminCode': _botAdminCode(botPk),
     'x25519Pub': user.x25519Key,
     'handle': handleNorm,
     'ownerEd25519Pub': claim['owner'],
     'displayName': claim['displayName'] ?? handleNorm,
     'description': claim['description'] ?? '',
-    'createdAt': DateTime.now().millisecondsSinceEpoch,
+    'createdAt': nowMs,
+    'updatedAt': nowMs,
+    'lastSeenAt': nowMs,
+    'lastActivityAt': nowMs,
+    'lastConnectedAt': nowMs,
+    'lastDisconnectedAt': 0,
+    'connectCount': 1,
+    'messagesIn': 0,
+    'messagesOut': 0,
+    'apiCalls': 0,
     'revoked': false,
     'apiTokenHash': tokenHash,
     'webhookUrl': '',
@@ -991,6 +1102,13 @@ void _handleBotClaim(_User user, Map<String, dynamic> msg) {
     'verified': false,
     'blocked': false,
     'commands': <Map<String, dynamic>>[],
+    'activity': <Map<String, dynamic>>[
+      {
+        't': nowMs,
+        'type': 'claim',
+        'detail': '@$handleNorm',
+      }
+    ],
   };
   _persistBotDirectory();
 
@@ -1098,7 +1216,7 @@ Future<void> _handleBotOwnerListAsync(
 
   final bots = <Map<String, dynamic>>[];
   for (final m in _botDirectory.values) {
-    if (m['revoked'] == true) continue;
+    if (m['revoked'] == true || m['blocked'] == true) continue;
     final op = (m['ownerEd25519Pub'] as String?)?.toLowerCase() ?? '';
     if (op != owner) continue;
     final id = m['botId'] as String? ?? '';
@@ -1111,6 +1229,11 @@ Future<void> _handleBotOwnerListAsync(
       'description': m['description'] ?? '',
       'avatarUrl': m['avatarUrl'] ?? '',
       'bannerUrl': m['bannerUrl'] ?? '',
+      'verified': m['verified'] == true,
+      'blocked': m['blocked'] == true,
+      'lastSeenAt': m['lastSeenAt'] ?? 0,
+      'messagesIn': m['messagesIn'] ?? 0,
+      'messagesOut': m['messagesOut'] ?? 0,
     });
   }
   bots.sort((a, b) => (a['handle'] as String)
@@ -1242,13 +1365,8 @@ Future<void> _handleBotOwnerPatchAsync(
     row['revoked'] = true;
     row['updatedAt'] = nowMs;
     // Если бот онлайн — немедленно отключаем, чтобы он исчез из presence и поиска.
-    final onlineBot = _users.remove(botId);
-    if (onlineBot != null) {
-      try {
-        onlineBot.ws.sink.close(4003, 'bot_revoked');
-      } catch (_) {}
-      _broadcastPresence(botId, false);
-    }
+    _disconnectBotIfOnline(botId, 'bot_revoked');
+    _recordBotActivity(botId, 'owner_revoke', peerId: owner, persist: false);
     _persistBotDirectory();
     _broadcastBotDirSnapshotToAll();
     stdout.writeln(
@@ -1305,6 +1423,8 @@ Future<void> _handleBotOwnerPatchAsync(
   }
 
   if (changed) {
+    row['updatedAt'] = nowMs;
+    _recordBotActivity(botId, 'owner_patch', peerId: owner, persist: false);
     _persistBotDirectory();
     _broadcastBotDirSnapshotToAll();
     stdout.writeln('[RLINK][Relay] bot_owner_patch bot=$botId owner=$owner');
@@ -1830,6 +1950,9 @@ void _handleAdminBotList(_User user, Map<String, dynamic> msg) {
     final revoked = m['revoked'] == true;
     if (revoked && !includeRevoked) continue;
     final id = _jsonString(m['botId']);
+    final adminCode = _jsonString(m['adminCode']).isEmpty
+        ? _botAdminCode(id)
+        : _jsonString(m['adminCode']);
     final handle = _jsonString(m['handle']);
     final displayName = _jsonString(m['displayName']).isEmpty
         ? handle
@@ -1837,26 +1960,47 @@ void _handleAdminBotList(_User user, Map<String, dynamic> msg) {
     final owner = _jsonString(m['ownerEd25519Pub']);
     final blocked = m['blocked'] == true;
     final verified = m['verified'] == true;
+    final online = _users.containsKey(id.toLowerCase());
     if (query.isNotEmpty) {
       final hay =
-          '$id $handle $displayName $owner ${_jsonString(m['description'])}'
+          '$id $adminCode $handle $displayName $owner ${_jsonString(m['description'])}'
               .toLowerCase();
       if (!hay.contains(query)) continue;
     }
+    final activityRaw = m['activity'];
+    final activity = activityRaw is List
+        ? activityRaw
+            .whereType<Map>()
+            .take(12)
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList()
+        : <Map<String, dynamic>>[];
     out.add({
       'botId': id,
+      'adminCode': adminCode,
       'handle': handle,
       'displayName': displayName,
       'description': _jsonString(m['description']),
       'ownerEd25519Pub': owner,
       'createdAt': m['createdAt'] ?? 0,
+      'updatedAt': m['updatedAt'] ?? 0,
+      'lastSeenAt': m['lastSeenAt'] ?? 0,
+      'lastActivityAt': m['lastActivityAt'] ?? 0,
+      'lastConnectedAt': m['lastConnectedAt'] ?? 0,
+      'lastDisconnectedAt': m['lastDisconnectedAt'] ?? 0,
+      'connectCount': m['connectCount'] ?? 0,
+      'messagesIn': m['messagesIn'] ?? 0,
+      'messagesOut': m['messagesOut'] ?? 0,
+      'apiCalls': m['apiCalls'] ?? 0,
+      'online': online,
       'blocked': blocked,
       'verified': verified,
       'revoked': revoked,
+      'activity': activity,
     });
   }
-  out.sort((a, b) => ((b['createdAt'] as num?)?.toInt() ?? 0)
-      .compareTo((a['createdAt'] as num?)?.toInt() ?? 0));
+  out.sort((a, b) => ((b['lastActivityAt'] as num?)?.toInt() ?? 0)
+      .compareTo((a['lastActivityAt'] as num?)?.toInt() ?? 0));
   ack({'ok': true, 'bots': out});
 }
 
@@ -1877,8 +2021,8 @@ void _handleAdminBotUpdate(_User user, Map<String, dynamic> msg) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
   }
-  final botId = _jsonString(msg['botId']).toLowerCase().trim();
-  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(botId)) {
+  final botId = _resolveBotIdForAdmin(msg);
+  if (botId == null) {
     ack({'ok': false, 'error': 'bad_bot_id'});
     return;
   }
@@ -1894,11 +2038,15 @@ void _handleAdminBotUpdate(_User user, Map<String, dynamic> msg) {
   }
   if (msg.containsKey('blocked')) {
     row['blocked'] = msg['blocked'] == true;
+    if (row['blocked'] == true) {
+      _disconnectBotIfOnline(botId, 'bot_blocked');
+    }
     changed = true;
   }
   if (msg['revoke'] == true) {
     row['revoked'] = true;
     row['blocked'] = true;
+    _disconnectBotIfOnline(botId, 'bot_revoked');
     changed = true;
   }
   if (!changed) {
@@ -1906,6 +2054,10 @@ void _handleAdminBotUpdate(_User user, Map<String, dynamic> msg) {
     return;
   }
   row['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+  _recordBotActivity(botId, 'admin_update',
+      detail:
+          'verified=${row['verified'] == true} blocked=${row['blocked'] == true} revoked=${row['revoked'] == true}',
+      persist: false);
   _persistBotDirectory();
   _broadcastBotDirSnapshotToAll();
   ack({'ok': true});
@@ -1935,6 +2087,12 @@ void _handlePacket(_User sender, Map<String, dynamic> msg) {
   final to = toRaw.toLowerCase();
   final relayMsgId = (msg['msgId'] as String?) ??
       'pkt_${DateTime.now().microsecondsSinceEpoch}';
+  final senderIsBot = _isKnownBot(sender.publicKey);
+  final recipientIsBot = _isKnownBot(to);
+  if (senderIsBot) {
+    _recordBotActivity(sender.publicKey, 'packet_out',
+        peerId: to, bytes: data.length);
+  }
 
   final envelope = <String, dynamic>{
     'type': 'packet',
@@ -1960,6 +2118,10 @@ void _handlePacket(_User sender, Map<String, dynamic> msg) {
     return;
   }
   try {
+    if (recipientIsBot) {
+      _recordBotActivity(to, 'packet_in',
+          peerId: sender.publicKey, bytes: data.length);
+    }
     recipient.ws.sink.add(jsonEncode(envelope));
     _forwardedPackets++;
     if (_verbosePacketLogs) {
@@ -2030,6 +2192,12 @@ void _handleBlob(_User sender, Map<String, dynamic> msg) {
     // 10 MB max for blobs (base64)
     return;
   }
+  final senderIsBot = _isKnownBot(sender.publicKey);
+  final recipientIsBot = _isKnownBot(routeKey);
+  if (senderIsBot) {
+    _recordBotActivity(sender.publicKey, 'blob_out',
+        peerId: routeKey, bytes: data.length);
+  }
 
   // Forward the entire blob as-is, replacing 'to' with 'from'
   final forwarded = Map<String, dynamic>.from(msg);
@@ -2054,6 +2222,10 @@ void _handleBlob(_User sender, Map<String, dynamic> msg) {
   }
 
   try {
+    if (recipientIsBot) {
+      _recordBotActivity(routeKey, 'blob_in',
+          peerId: sender.publicKey, bytes: data.length);
+    }
     recipient.ws.sink.add(jsonEncode(forwarded));
     _forwardedBlobs++;
     final dataLen = (msg['data'] as String?)?.length ?? 0;
@@ -2197,6 +2369,10 @@ shelf.Handler _wsHandler() {
             }
 
             final shortId = publicKey.substring(0, 8);
+            if (_isKnownBot(publicKey)) {
+              _recordBotActivity(publicKey, 'connect',
+                  detail: nick.isEmpty ? '@${shortId}' : nick);
+            }
             ws.sink.add(jsonEncode({
               'type': 'registered',
               'shortId': shortId,
@@ -2246,10 +2422,16 @@ shelf.Handler _wsHandler() {
         if (user != null) {
           final cc = ws.closeCode;
           final cr = ws.closeReason;
-          _users.remove(user!.publicKey);
-          _rateLimits
-              .remove(user!.publicKey); // free rate-limit memory on disconnect
-          _broadcastPresence(user!.publicKey, false);
+          final publicKey = user!.publicKey;
+          if (_isKnownBot(publicKey)) {
+            _recordBotActivity(publicKey, 'disconnect',
+                detail: cc == null
+                    ? ''
+                    : '$cc${cr == null || cr.isEmpty ? '' : ' $cr'}');
+          }
+          _users.remove(publicKey);
+          _rateLimits.remove(publicKey); // free rate-limit memory on disconnect
+          _broadcastPresence(publicKey, false);
           final id = user!.nick.isEmpty ? user!.shortId : user!.nick;
           final detail = cc == null
               ? ''
@@ -2260,7 +2442,11 @@ shelf.Handler _wsHandler() {
       },
       onError: (e) {
         if (user != null) {
-          _users.remove(user!.publicKey);
+          final publicKey = user!.publicKey;
+          if (_isKnownBot(publicKey)) {
+            _recordBotActivity(publicKey, 'disconnect', detail: 'ws_error');
+          }
+          _users.remove(publicKey);
           stdout.writeln('[-] ${user!.shortId} ws error: $e');
         }
       },
@@ -2408,6 +2594,11 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
     if (row == null || row['revoked'] == true || row['blocked'] == true) {
       return _jsonResponse({'ok': false, 'error': 'not_found'}, status: 404);
     }
+    void markApiCall(String action) {
+      _recordBotActivity(botId, 'api_call', detail: action, persist: false);
+      row['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+    }
+
     try {
       final raw = await request.readAsString();
       final decoded = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw);
@@ -2434,10 +2625,12 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
             }
             row['webhookUrl'] = url;
           }
+          markApiCall(action);
           _persistBotDirectory();
           return _jsonResponse({'ok': true});
         case 'deleteWebhook':
           row['webhookUrl'] = '';
+          markApiCall(action);
           _persistBotDirectory();
           return _jsonResponse({'ok': true});
         case 'setMyDescription':
@@ -2447,6 +2640,7 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
                 status: 400);
           }
           row['description'] = d;
+          markApiCall(action);
           _persistBotDirectory();
           _broadcastBotDirSnapshotToAll();
           return _jsonResponse({'ok': true});
@@ -2457,6 +2651,7 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
                 status: 400);
           }
           row['displayName'] = n;
+          markApiCall(action);
           _persistBotDirectory();
           _broadcastBotDirSnapshotToAll();
           return _jsonResponse({'ok': true});
@@ -2467,6 +2662,7 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
                 status: 400);
           }
           row['avatarUrl'] = u;
+          markApiCall(action);
           _persistBotDirectory();
           _broadcastBotDirSnapshotToAll();
           return _jsonResponse({'ok': true});
@@ -2477,12 +2673,14 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
                 status: 400);
           }
           row['bannerUrl'] = bu;
+          markApiCall(action);
           _persistBotDirectory();
           _broadcastBotDirSnapshotToAll();
           return _jsonResponse({'ok': true});
         case 'revokeToken':
           final apiToken = _randomUrlToken();
           row['apiTokenHash'] = _sha256HexUtf8(apiToken);
+          markApiCall(action);
           _persistBotDirectory();
           return _jsonResponse({'ok': true, 'apiToken': apiToken});
         default:

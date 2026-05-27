@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import sys
+import time
 from pathlib import Path
 
 from rlink_bot.bootstrap import claim_and_save_config, normalize_claim_from_lib
@@ -78,7 +79,7 @@ def _do_claim_save(args: argparse.Namespace, *, label: str) -> int:
     bot_id = cfg.get("bot_id")
     print("OK handle=@%s botId=%s" % (handle, bot_id))
     if token:
-        print("API token (save once):", token)
+        print("API token saved to config.")
     print("Wrote", out)
     print("Relay:", cfg.get("relay_url"))
     return 0
@@ -100,19 +101,107 @@ def cmd_code(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _btn(label: str, command: str) -> str:
+    return f"[btn:{label}|{command}]"
+
+
+def _btns(*pairs: tuple[str, str]) -> str:
+    return " ".join(_btn(label, command) for label, command in pairs)
+
+
+_DEFAULT_COMMANDS: list[tuple[str, str]] = [
+    ("/start", "Главное меню"),
+    ("/menu", "Главное меню"),
+    ("/help", "Справка"),
+    ("/ping", "Проверка связи"),
+]
+
+
+def _default_reply(text: str) -> str:
+    t = text.strip().lower()
+    menu = _btns(("Помощь", "/help"), ("Ping", "/ping"), ("Меню", "/menu"))
+    if t in ("/start", "/menu", "start", "menu", "меню"):
+        return "Бот онлайн. Выберите действие:\n\n" + menu
+    if t in ("/help", "help", "помощь"):
+        return (
+            "Это базовый Python-бот Rlink.\n\n"
+            "Замените функцию ответа в своём файле или используйте "
+            "`tools/rlink_bot/example_echo_bot.py` как шаблон.\n\n"
+            + menu
+        )
+    if t == "/ping":
+        return "pong\n\n" + _btns(("Ещё ping", "/ping"), ("Меню", "/menu"))
+    return f"Получил: {text[:240]}\n\n" + menu
+
+
 def cmd_run(args: argparse.Namespace) -> int:
-    _ = args
-    print(
-        "Echo mode is disabled in this repository.",
-        file=sys.stderr,
+    p = Path(args.file).expanduser().resolve()
+    if not p.exists():
+        print(f"Missing {p}", file=sys.stderr)
+        print(
+            "Run onboard first: python -m rlink_bot onboard CLAIM_CODE --file bot_keys.json",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        loaded = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"Cannot read JSON {p}: {e}", file=sys.stderr)
+        return 1
+
+    config_mode = isinstance(loaded, dict) and (
+        "relay_url" in loaded or "keys_path" in loaded or "bot_id" in loaded
     )
-    print(
-        "Use the help bot instead:\n"
-        "  cd tools/rlink_help_bot\n"
-        "  python -m rlink_help_bot --config rlink_help_bot_config.json",
-        file=sys.stderr,
-    )
-    return 2
+    if config_mode:
+        cfg = loaded
+        keys_path = Path(cfg.get("keys_path") or "rlink_bot_keys.json").expanduser()
+        if not keys_path.is_absolute():
+            keys_path = (p.parent / keys_path).resolve()
+        relay = (args.relay or cfg.get("relay_url") or DEFAULT_RELAY_WS).strip()
+        handle = str(cfg.get("handle") or "bot").strip().lstrip("@")
+        nick = args.nick or f"@{handle[:32]}"
+        api_token = str(cfg.get("api_token") or "").strip()
+    else:
+        cfg = {}
+        keys_path = p
+        relay = (args.relay or DEFAULT_RELAY_WS).strip()
+        nick = args.nick or None
+        api_token = ""
+
+    if not keys_path.exists():
+        print(f"Missing keys file {keys_path}", file=sys.stderr)
+        return 1
+    keys = BotKeys.from_json_dict(json.loads(keys_path.read_text(encoding="utf-8")))
+    sess = RelayBotSession(relay, keys)
+    if api_token:
+        sess.api_token = api_token
+
+    print(f"[rlink_bot] connecting {relay} nick={nick or '@' + keys.ed25519_public_hex[:10]}")
+    try:
+        sess.connect(nick=nick)
+        if api_token and not args.no_commands:
+            ack = sess.set_commands(_DEFAULT_COMMANDS)
+            if ack.get("ok") is not True:
+                print(f"[commands] not updated: {ack}", file=sys.stderr)
+        print("[rlink_bot] online. Ctrl+C — stop.")
+
+        def on_dm(sender: str, text: str) -> None:
+            print(f"[dm {sender[:8]}…] received {len(text)} chars", flush=True)
+            try:
+                sess.send_dm(sender, _default_reply(text))
+            except Exception as e:
+                print(f"[send] {e}", file=sys.stderr, flush=True)
+            time.sleep(0.05)
+
+        sess.recv_loop(on_dm, log=lambda s: print(s, flush=True))
+    except KeyboardInterrupt:
+        print("bye")
+    except Exception as e:
+        print(f"run failed: {e}", file=sys.stderr)
+        return 1
+    finally:
+        sess.close()
+    return 0
 
 
 def main() -> None:
@@ -166,15 +255,20 @@ def main() -> None:
 
     r = sub.add_parser(
         "run",
-        help="Disabled: use tools/rlink_help_bot for production bot behavior",
+        help="Run a simple ready-to-use DM bot from onboard config or keys JSON",
     )
     r.add_argument(
         "--file",
-        default="rlink_bot_keys.json",
-        help="Ключи бота (JSON) или rlink_bot_config.json из onboard",
+        default="rlink_bot_config.json",
+        help="rlink_bot_config.json из onboard или файл ключей бота",
     )
     r.add_argument("--relay", default=DEFAULT_RELAY)
     r.add_argument("--nick", default=None)
+    r.add_argument(
+        "--no-commands",
+        action="store_true",
+        help="Не публиковать стандартные slash-команды при старте",
+    )
     r.set_defaults(func=cmd_run)
 
     args = ap.parse_args()

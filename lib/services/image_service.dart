@@ -14,6 +14,7 @@ import 'package:uuid/uuid.dart';
 
 import '../utils/web_object_url.dart';
 import '../utils/web_file_store.dart';
+import 'crypto_service.dart';
 
 /// Сколько байт сырых данных помещается в один img_chunk-пакет.
 /// 90 байт → 120 байт base64. Итого JSON ≈ 274 байт < BLE MTU 290 байт.
@@ -287,7 +288,7 @@ class ImageService {
     final assembly = _assemblies.remove(msgId);
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
-    final data = decompress(raw);
+    final data = await _openAndDecompress(raw);
     return saveProfileMusic(senderPublicKey, data);
   }
 
@@ -308,7 +309,7 @@ class ImageService {
   /// Для уже сжатых форматов (JPEG, M4A, MP4) выигрыш ~5-10%.
   /// Для документов (PDF, TXT, DOCX) выигрыш 30-70%.
   Uint8List compress(Uint8List data) {
-    final compressed = archive.ZLibEncoder().encodeBytes(data, level: 6);
+    final compressed = const archive.ZLibEncoder().encodeBytes(data, level: 6);
     debugPrint('[ImageService] compress: ${data.length} → ${compressed.length} '
         '(${(100 - compressed.length * 100 / data.length).toStringAsFixed(0)}% saved)');
     // Используем сжатое только если оно меньше оригинала
@@ -318,7 +319,7 @@ class ImageService {
   /// Распаковывает zlib-сжатые данные на приёмнике.
   Uint8List decompress(Uint8List data) {
     try {
-      return archive.ZLibDecoder().decodeBytes(data);
+      return const archive.ZLibDecoder().decodeBytes(data);
     } catch (_) {
       // Если данные не сжаты (обратная совместимость) — возвращаем как есть
       return data;
@@ -330,11 +331,16 @@ class ImageService {
   /// Сжимает данные zlib → разбивает на base64-чанки для BLE.
   List<String> splitToBase64Chunks(Uint8List data) {
     final compressed = compress(data);
+    return splitRawToBase64Chunks(compressed);
+  }
+
+  /// Разбивает уже подготовленные байты без повторного сжатия.
+  List<String> splitRawToBase64Chunks(Uint8List data) {
     final chunks = <String>[];
     int offset = 0;
-    while (offset < compressed.length) {
-      final end = (offset + kImgChunkBytes).clamp(0, compressed.length);
-      final slice = compressed.sublist(offset, end);
+    while (offset < data.length) {
+      final end = (offset + kImgChunkBytes).clamp(0, data.length);
+      final slice = data.sublist(offset, end);
       chunks.add(base64Encode(slice));
       offset = end;
     }
@@ -387,7 +393,7 @@ class ImageService {
     if (assembly == null || !assembly.isComplete) return null;
 
     final raw = assembly.assemble();
-    final data = decompress(raw);
+    final data = await _openAndDecompress(raw);
     if (kIsWeb) {
       return _webMediaRef(data, _imageMimeFromBytes(data));
     }
@@ -498,7 +504,7 @@ class ImageService {
     final assembly = _assemblies.remove(msgId);
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
-    final data = decompress(raw);
+    final data = await _openAndDecompress(raw);
     if (kIsWeb) return _webMediaRef(data, _audioMimeFromMagic(data));
     final dir = await _voicesDir();
     final path = p.join(dir.path, '$msgId.${_audioExtFromMagic(data)}');
@@ -507,6 +513,19 @@ class ImageService {
   }
 
   // ── Helpers ───────────────────────────────────────────────────
+
+  Future<Uint8List> openAndDecompressIncoming(Uint8List raw) =>
+      _openAndDecompress(raw);
+
+  Future<Uint8List> _openAndDecompress(Uint8List raw) async {
+    final isSealed = CryptoService.instance.isSealedMediaPayload(raw);
+    final opened =
+        isSealed ? await CryptoService.instance.openMediaPayload(raw) : null;
+    if (isSealed && opened == null) {
+      throw StateError('Media decrypt failed');
+    }
+    return decompress(opened ?? raw);
+  }
 
   Future<Directory> _imagesDir() async {
     final base = await getApplicationDocumentsDirectory();
@@ -680,7 +699,7 @@ class ImageService {
     final assembly = _assemblies.remove(msgId);
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
-    final data = decompress(raw);
+    final data = await _openAndDecompress(raw);
     if (kIsWeb) {
       final mime = _videoMimeFromData(data, assembly.fileName);
       final ext = mime == 'video/webm'
@@ -709,7 +728,7 @@ class ImageService {
     final assembly = _assemblies.remove(msgId);
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
-    final data = decompress(raw);
+    final data = await _openAndDecompress(raw);
     if (kIsWeb) {
       final mime = _mimeFromFileName(assembly.fileName);
       final stored = await writeWebStoredFile(

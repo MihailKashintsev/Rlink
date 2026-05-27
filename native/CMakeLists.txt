@@ -45,6 +45,8 @@ if(WHISPER_AVAILABLE)
     target_compile_definitions(whisper_bridge PRIVATE
         GGML_USE_CPU
     )
+else()
+    target_compile_definitions(whisper_bridge PRIVATE RLINK_NO_WHISPER)
 endif()
 
 if(WIN32)

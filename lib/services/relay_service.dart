@@ -907,13 +907,13 @@ class RelayService with WidgetsBindingObserver {
     bool viewOnce = false,
   }) async {
     debugPrint(
-        '[RLINK][Relay] sendBlob called: recipient=$recipientKey from=$fromId msgId=$msgId size=${compressedData.length} voice=$isVoice video=$isVideo file=$isFile sticker=$isSticker');
+        '[RLINK][Relay] sendBlob size=${compressedData.length} voice=$isVoice video=$isVideo file=$isFile sticker=$isSticker');
     if (!isConnected) {
       debugPrint('[RLINK][Relay] sendBlob: NOT CONNECTED, aborting');
       return;
     }
     final b64 = base64Encode(compressedData);
-    debugPrint('[RLINK][Relay] sendBlob: base64 encoded length=${b64.length}');
+    debugPrint('[RLINK][Relay] sendBlob encoded length=${b64.length}');
     // Route by the full public key. Older relay deployments do not understand
     // fullTo-only routing, so using rid8 in "to" makes media look offline even
     // while text packets work.
@@ -935,12 +935,10 @@ class RelayService with WidgetsBindingObserver {
       if (fileName != null) 'fname': fileName,
       if (viewOnce) 'vo': true,
     };
-    debugPrint(
-        '[RLINK][Relay] sendBlob: message prepared with to=$routeKey, sending...');
+    debugPrint('[RLINK][Relay] sendBlob prepared, sending...');
     try {
       await _safeSend(msg, context: 'sendBlob');
-      debugPrint(
-          '[RLINK][Relay] Sent blob ${compressedData.length} bytes for $msgId to $routeKey');
+      debugPrint('[RLINK][Relay] Sent blob ${compressedData.length} bytes');
     } catch (e) {
       debugPrint('[RLINK][Relay] Failed to send blob: $e');
     }

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import json
-import ssl
 import uuid
 from typing import Any, Callable
 
@@ -38,10 +37,7 @@ class RelayBotSession:
         self.api_token: str | None = None
 
     def connect(self, nick: str | None = None) -> None:
-        sslopt: dict[str, Any] = {}
-        if self.relay_url.startswith("wss://"):
-            sslopt = {"cert_reqs": ssl.CERT_NONE}
-        self.ws = websocket.create_connection(self.relay_url, sslopt=sslopt, timeout=60)
+        self.ws = websocket.create_connection(self.relay_url, timeout=60)
         nk = nick if nick else ("@" + self.keys.ed25519_public_hex[:10])
         reg = {
             "type": "register",

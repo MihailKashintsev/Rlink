@@ -278,7 +278,7 @@ def main() -> int:
 
     def on_dm(sender: str, text: str) -> None:
         sid = sender.lower()
-        log(f"[dm {sid[:8]}…] {text[:120]!r}")
+        log(f"[dm {sid[:8]}…] received {len(text)} chars")
         try:
             reply = build_reply(text)
             _send_chunks(sess, sid, reply, log)

@@ -61,7 +61,8 @@ class LibBotService {
       '• /setcommands @ник /cmd1 Описание, /cmd2 Описание — команды в профиле и автодополнение\n'
       '• /delbot @ник — удалить (отозвать) бота из каталога relay\n'
       '• /newbot <ник> — затем **в чат Lib** одним сообщением публичный ключ бота Ed25519 (64 hex). '
-      'Ключ копируют с ПК: `python -m rlink_bot keys show-pub` (в терминал ключ вводить не нужно).\n'
+      'Ключ копируют с ПК: `python -m rlink_bot keys show-pub --file bot_keys.json` '
+      '(в терминал ключ вводить не нужно).\n'
       '• Или одной строкой: /newbot <ник> <64hex>\n'
       '• /cancel — отменить ожидание ключа\n'
       '• /guide — краткая памятка\n\n'
@@ -111,10 +112,11 @@ class LibBotService {
   static const _guideLines = <String>[
     'Чеклист: создать бота',
     '',
-    '1) На ПК: python -m rlink_bot keys init → keys show-pub',
-    '2) Здесь: /newbot ваш_ник, затем вставить 64 hex ключа',
-    '3) На ПК: python -m rlink_bot onboard <код из Lib> --file bot_keys.json',
-    '4) python -m rlink_bot run — держать процесс онлайн',
+    '1) На ПК: python -m rlink_bot keys init --file bot_keys.json',
+    '2) На ПК: python -m rlink_bot keys show-pub --file bot_keys.json',
+    '3) Здесь: /newbot ваш_ник, затем вставить 64 hex ключа',
+    '4) На ПК: python -m rlink_bot onboard <код из Lib> --file bot_keys.json',
+    '5) python -m rlink_bot run --file rlink_bot_config.json — держать процесс онлайн',
     '',
     'Подробно: Настройки → «Документация» (вкладки Русский / English).',
   ];
@@ -375,7 +377,7 @@ class LibBotService {
         '',
         'Следующим сообщением пришлите **публичный** ключ Ed25519 бота (64 hex).',
         'Вставьте ключ **сюда, в этот чат с Lib** (не только в терминал).',
-        'На ПК: `python -m rlink_bot keys show-pub` — скопируйте одну строку из вывода.',
+        'На ПК: `python -m rlink_bot keys show-pub --file bot_keys.json` — скопируйте одну строку из вывода.',
       ];
     }
 
@@ -579,8 +581,7 @@ class LibBotService {
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(botId)) {
       return const ['Внутренняя ошибка: некорректный botId.'];
     }
-    final ack =
-        await RelayService.instance.sendBotCommandsSetOwner(
+    final ack = await RelayService.instance.sendBotCommandsSetOwner(
       botId: botId,
       commands: commands,
     );
@@ -739,9 +740,9 @@ class LibBotService {
         'Relay по умолчанию как в приложении Rlink; другой сервер: добавьте --relay wss://…',
         '',
         'Токен API — один раз в stdout; затем держите бота онлайн:',
-        '  python -m rlink_bot run --file bot_keys.json',
+        '  python -m rlink_bot run --file rlink_bot_config.json',
         '',
-        'Пример «вставил код в файл»: tools/rlink_bot/example_echo_bot.py',
+        'Шаблон для своей логики: tools/rlink_bot/example_echo_bot.py',
       ];
       return lines;
     } catch (e, st) {

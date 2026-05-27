@@ -360,18 +360,7 @@ Future<void> flushOutbox() async {
             forwardFromChannelId: m.forwardFromChannelId,
           );
         } else {
-          await GossipRouter.instance.sendRawMessage(
-            text: m.text,
-            senderId: myId,
-            recipientId: m.peerId,
-            messageId: m.id,
-            replyToMessageId: m.replyToMessageId,
-            latitude: m.latitude,
-            longitude: m.longitude,
-            forwardFromId: m.forwardFromId,
-            forwardFromNick: m.forwardFromNick,
-            forwardFromChannelId: m.forwardFromChannelId,
-          );
+          throw StateError('missing_peer_encryption_key');
         }
         await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
           m.id,

@@ -10,6 +10,7 @@ import '../../services/app_settings.dart';
 import '../../services/ble_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/gossip_router.dart';
+import '../../services/relay_service.dart';
 import '../widgets/update_available_banner.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,7 +20,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with UpdateAvailableBannerMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with UpdateAvailableBannerMixin {
   final _messages = <ChatMessage>[];
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
@@ -77,16 +79,28 @@ class _HomeScreenState extends State<HomeScreen> with UpdateAvailableBannerMixin
     _controller.clear();
 
     try {
-      await GossipRouter.instance.sendRawMessage(
-        text: text,
-        recipientId: _targetPeerId!,
-        senderId: CryptoService.instance.publicKeyHex,
+      final peerId = _targetPeerId!;
+      final myId = CryptoService.instance.publicKeyHex;
+      final x25519 = BleService.instance.getPeerX25519Key(peerId) ??
+          RelayService.instance.getPeerX25519Key(peerId);
+      if (x25519 == null || x25519.isEmpty) {
+        throw StateError('missing_peer_encryption_key');
+      }
+      final encrypted = await CryptoService.instance.encryptMessage(
+        plaintext: text,
+        recipientX25519KeyBase64: x25519,
+      );
+      await GossipRouter.instance.sendEncryptedMessage(
+        encrypted: encrypted,
+        recipientId: peerId,
+        senderId: myId,
+        messageId: DateTime.now().microsecondsSinceEpoch.toString(),
       );
 
       setState(() {
         _messages.add(ChatMessage(
           text: text,
-          fromId: CryptoService.instance.publicKeyHex,
+          fromId: myId,
           timestamp: DateTime.now(),
           isOutgoing: true,
         ));
@@ -388,11 +402,9 @@ class _MessageInput extends StatelessWidget {
               ),
               maxLines: sendOnEnter ? 1 : 4,
               minLines: 1,
-              textInputAction: sendOnEnter
-                  ? TextInputAction.send
-                  : TextInputAction.newline,
-              onSubmitted:
-                  sendOnEnter ? (_) => onSend() : null,
+              textInputAction:
+                  sendOnEnter ? TextInputAction.send : TextInputAction.newline,
+              onSubmitted: sendOnEnter ? (_) => onSend() : null,
             ),
           ),
           const SizedBox(width: 8),

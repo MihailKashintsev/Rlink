@@ -37,7 +37,7 @@ PYTHONPATH=. python -m rlink_bot keys init
    ```bash
    cd relay_server && dart run bin/server.dart
    ```
-   По умолчанию `ws://127.0.0.1:8080`. В приложении Rlink для теста нужен relay с этим адресом (если у вас только прод `wss://rlink.ru.tuna.am`, там должен быть задеплоен новый server).
+   По умолчанию SDK использует тот же публичный relay, что приложение: `wss://185.244.172.90.nip.io`. Для локального теста укажите `--relay ws://127.0.0.1:8080`.
 
 2. **Ключи бота** на машине, где будет крутиться процесс:
    ```bash
@@ -51,14 +51,14 @@ PYTHONPATH=. python -m rlink_bot keys init
 4. **Завершить регистрацию на relay** (тот же ключ, что в Lib):
    ```bash
    export RLINK_RELAY_URL=ws://127.0.0.1:8080   # или ваш wss://
-   python -m rlink_bot claim <claimId> --file bot_keys.json --relay "$RLINK_RELAY_URL"
+   python -m rlink_bot onboard <claimId или claimCode> --file bot_keys.json --relay "$RLINK_RELAY_URL"
    ```
    В ответе Lib также есть короткий **claimCode** (формат `ABCD-EFGH-JKLM`, без 0/O/1/I/L) — его можно передать в `claim` вместо 32 hex **claimId**.
-   В stdout один раз покажется **API token**; конфиг пишется в `rlink_bot_config.json`.
+   **API token** сохраняется в `rlink_bot_config.json` и не печатается в stdout.
 
 5. **Запуск echo-бота** (пользователь должен быть **онлайн**, чтобы пришёл `presence` с X25519 — иначе ответ зашифровать некуда):
    ```bash
-   python -m rlink_bot run --file bot_keys.json --relay "$RLINK_RELAY_URL"
+   python -m rlink_bot run --file rlink_bot_config.json
    ```
 
 6. **Пользователь** в Rlink: поиск `@myhandle` → написать боту. Первое сообщение может прийти, когда у бота уже есть ваш `x25519` из presence (оба онлайн на одном relay).
@@ -75,6 +75,7 @@ curl -sS -X POST "http://127.0.0.1:8080/bot-api/v1/setMyDescription" \
 ```
 
 Другие пути: `setWebhook`, `deleteWebhook`, `setMyName`, `revokeToken`.
+Bot API и WebSocket-события отображаются в истории активности бота в админке relay.
 
 Аватар и баннер в каталоге (публичные URL, `https` или `http`, до 2048 символов; пустая строка сбрасывает):
 

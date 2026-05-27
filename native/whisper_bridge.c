@@ -1,4 +1,39 @@
 #include "whisper_bridge.h"
+#ifdef RLINK_NO_WHISPER
+#include <string.h>
+#include <stddef.h>
+
+static char g_last_error[512] = {0};
+
+static void set_error(const char* msg) {
+    strncpy(g_last_error, msg, sizeof(g_last_error) - 1);
+    g_last_error[sizeof(g_last_error) - 1] = '\0';
+}
+
+int whisper_bridge_load(const char* model_path) {
+    (void)model_path;
+    set_error("whisper.cpp is not bundled in native/whisper.cpp");
+    return -1;
+}
+
+char* whisper_bridge_transcribe(const char* audio_path, const char* language) {
+    (void)audio_path;
+    (void)language;
+    set_error("whisper.cpp is not bundled in native/whisper.cpp");
+    return NULL;
+}
+
+void whisper_bridge_free_text(char* text) {
+    (void)text;
+}
+
+void whisper_bridge_free_model(void) {}
+
+const char* whisper_bridge_last_error(void) {
+    return g_last_error;
+}
+
+#else
 #include "whisper.h"
 #include <string.h>
 #include <stdlib.h>
@@ -95,3 +130,4 @@ void whisper_bridge_free_model(void) {
 const char* whisper_bridge_last_error(void) {
     return g_last_error;
 }
+#endif

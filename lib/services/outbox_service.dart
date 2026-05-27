@@ -168,18 +168,7 @@ class OutboxService {
           forwardFromChannelId: msg.forwardFromChannelId,
         );
       } else {
-        await GossipRouter.instance.sendRawMessage(
-          text: msg.text,
-          senderId: myId,
-          recipientId: msg.peerId,
-          messageId: msg.id,
-          replyToMessageId: msg.replyToMessageId,
-          latitude: msg.latitude,
-          longitude: msg.longitude,
-          forwardFromId: msg.forwardFromId,
-          forwardFromNick: msg.forwardFromNick,
-          forwardFromChannelId: msg.forwardFromChannelId,
-        );
+        throw StateError('missing_peer_encryption_key');
       }
 
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
