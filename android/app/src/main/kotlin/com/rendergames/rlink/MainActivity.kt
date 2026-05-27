@@ -212,7 +212,7 @@ class MainActivity : FlutterActivity() {
             else -> "классическая"
         }
         val bigText =
-            "Установлена иконка: $variantLabel. На рабочем столе появится новый ярлык; старый можно удалить вручную, если лаунчер его ещё показывает."
+            "Установлена иконка: $variantLabel. Если лаунчер кэширует значок, обновление может занять несколько секунд."
 
         val openApp = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

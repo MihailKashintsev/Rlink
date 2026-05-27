@@ -340,6 +340,11 @@ class CallService {
     };
   }
 
+  Map<String, dynamic> _offerAnswerConstraints() => <String, dynamic>{
+        'offerToReceiveAudio': true,
+        'offerToReceiveVideo': _videoEnabled,
+      };
+
   /// Сбор статистики типов ICE-кандидатов; вызывается через несколько секунд
   /// после старта «connecting» — помогает отлавливать «нет relay-кандидатов»
   /// (TURN не работает) и symmetric NAT-проблемы.
@@ -464,11 +469,12 @@ class CallService {
       await _pc!.setRemoteDescription(RTCSessionDescription(sdp, type));
       await _flushPendingIce(callId);
     }
-    final answer = await _pc!.createAnswer();
+    final answer = await _pc!.createAnswer(_offerAnswerConstraints());
     await _pc!.setLocalDescription(answer);
+    final local = await _pc!.getLocalDescription();
     await _sendSignal(peerId, callId, 'answer', {
-      'sdp': answer.sdp,
-      'type': answer.type,
+      'sdp': local?.sdp ?? answer.sdp,
+      'type': local?.type ?? answer.type,
     });
   }
 
@@ -533,11 +539,12 @@ class CallService {
     final peerId = _activePeerId;
     final callId = _activeCallId;
     if (pc == null || peerId == null || callId == null) return;
-    final offer = await pc.createOffer();
+    final offer = await pc.createOffer(_offerAnswerConstraints());
     await pc.setLocalDescription(offer);
+    final local = await pc.getLocalDescription();
     final payload = <String, dynamic>{
-      'sdp': offer.sdp,
-      'type': offer.type,
+      'sdp': local?.sdp ?? offer.sdp,
+      'type': local?.type ?? offer.type,
     };
     _lastLocalOffer = payload;
     await _sendSignal(peerId, callId, 'offer', payload);
@@ -579,6 +586,10 @@ class CallService {
 
     pc.onTrack = (event) {
       unawaited(_attachRemoteTrack(event));
+    };
+
+    pc.onAddStream = (stream) {
+      _attachRemoteStream(stream);
     };
 
     pc.onIceConnectionState = (state) {
@@ -646,6 +657,21 @@ class CallService {
     remoteStreamNotifier.value = stream;
     remoteStreamGeneration.value++;
     debugPrint('[RLINK][Call] remote track: kind=${track.kind} '
+        'audio=${stream.getAudioTracks().length} '
+        'video=${stream.getVideoTracks().length}');
+    _connectTimeout?.cancel();
+    if (phase.value != CallPhase.connected) {
+      _setPhase(CallPhase.connected);
+      unawaited(
+          SoundEffectsService.instance.playAction(ActionSound.callConnected));
+    }
+  }
+
+  void _attachRemoteStream(MediaStream stream) {
+    remoteStream = stream;
+    remoteStreamNotifier.value = stream;
+    remoteStreamGeneration.value++;
+    debugPrint('[RLINK][Call] remote stream: '
         'audio=${stream.getAudioTracks().length} '
         'video=${stream.getVideoTracks().length}');
     _connectTimeout?.cancel();

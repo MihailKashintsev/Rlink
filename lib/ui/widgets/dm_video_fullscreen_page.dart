@@ -130,7 +130,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
     if (kIsWeb && playablePath.startsWith('opfs://rlink/')) {
       playablePath = await webStoredFileObjectUrl(
             playablePath.split('#').first,
-            mimeType: 'video/mp4',
+            mimeType: webVideoMimeForPath(playablePath),
           ) ??
           playablePath;
     }

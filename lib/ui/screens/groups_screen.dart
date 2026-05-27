@@ -3230,7 +3230,7 @@ class _GroupInlineVideoState extends State<_GroupInlineVideo> {
     if (kIsWeb && playablePath.startsWith('opfs://rlink/')) {
       playablePath = await webStoredFileObjectUrl(
             playablePath.split('#').first,
-            mimeType: 'video/mp4',
+            mimeType: webVideoMimeForPath(playablePath),
           ) ??
           playablePath;
     }

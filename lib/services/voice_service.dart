@@ -487,7 +487,7 @@ class VoiceService {
         if (path.startsWith('opfs://rlink/')) {
           path = await webStoredFileObjectUrl(
                 path.split('#').first,
-                mimeType: 'video/mp4',
+                mimeType: webVideoMimeForPath(path),
               ) ??
               path;
         }

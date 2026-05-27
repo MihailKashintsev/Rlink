@@ -9402,6 +9402,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   VideoPlayerController? _ctrl;
   bool _initialized = false;
   bool _playing = false;
+  bool _initFailed = false;
   int _embedPauseGen = 0;
 
   /// Воспроизведение квадратика из очереди голосовых (без полноэкранного плеера).
@@ -9504,6 +9505,17 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         oldWidget.onPlaySquareWithQueue != null;
     final newSq = _isSquare && widget.onPlaySquareWithQueue != null;
     if (oldWidget.videoPath != widget.videoPath || oldSq != newSq) {
+      if (oldWidget.videoPath != widget.videoPath) {
+        _ctrl?.dispose();
+        _ctrl = null;
+        _initialized = false;
+        _playing = false;
+        _initFailed = false;
+        if ((kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)) ||
+            (!kIsWeb && File(widget.videoPath).existsSync())) {
+          _initPlayer();
+        }
+      }
       if (oldSq) {
         VoiceService.instance
             .reportSquareBubbleViewportCoverage(oldWidget.videoPath, false);
@@ -9701,7 +9713,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     if (kIsWeb && playablePath.startsWith('opfs://rlink/')) {
       playablePath = await webStoredFileObjectUrl(
             playablePath.split('#').first,
-            mimeType: 'video/mp4',
+            mimeType: webVideoMimeForPath(playablePath),
           ) ??
           playablePath;
     }
@@ -9720,6 +9732,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         setState(() {
           _ctrl = ctrl;
           _initialized = true;
+          _initFailed = false;
         });
         _onCurrentlyPlayingChanged();
         if (_squareUsesQueue) {
@@ -9731,6 +9744,9 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     } catch (e) {
       debugPrint('[VideoMessage] init error: $e');
       ctrl.dispose();
+      if (mounted) {
+        setState(() => _initFailed = true);
+      }
     }
   }
 
@@ -9930,7 +9946,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     final h = (w / ar).clamp(80.0, 320.0);
 
     return GestureDetector(
-      onTap: exists
+      onTap: exists && !_initFailed
           ? () => Navigator.of(context, rootNavigator: true).push(
                 MaterialPageRoute(
                   fullscreenDialog: true,
@@ -9958,42 +9974,63 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                         textAlign: TextAlign.center),
                   ),
                 )
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Dark backdrop
-                    Container(color: const Color(0xFF111111)),
-                    // Превью без обрезки до квадрата — сохраняем пропорции ролика.
-                    if (_initialized && _ctrl != null)
-                      FittedBox(
-                        fit: BoxFit.contain,
-                        child: SizedBox(
-                          width: _ctrl!.value.size.width,
-                          height: _ctrl!.value.size.height,
-                          child: VideoPlayer(_ctrl!),
-                        ),
-                      ),
-                    // Semi-transparent overlay so play icon pops
-                    Container(color: Colors.black.withValues(alpha: 0.28)),
-                    // Play button
-                    const Center(
-                      child: Icon(Icons.play_circle_fill,
-                          color: Colors.white, size: 54),
-                    ),
-                    // Videocam badge
-                    const Positioned(
-                      bottom: 6,
-                      right: 8,
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.videocam, color: Colors.white70, size: 14),
-                        SizedBox(width: 4),
-                        Text('Видео',
+              : _initFailed
+                  ? Container(
+                      color: const Color(0xFF151515),
+                      padding: const EdgeInsets.all(12),
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.videocam_off_outlined,
+                              color: Colors.white70, size: 28),
+                          SizedBox(height: 8),
+                          Text(
+                            'Видео',
                             style:
-                                TextStyle(color: Colors.white70, fontSize: 11)),
-                      ]),
+                                TextStyle(color: Colors.white70, fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    )
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Dark backdrop
+                        Container(color: const Color(0xFF111111)),
+                        // Превью без обрезки до квадрата — сохраняем пропорции ролика.
+                        if (_initialized && _ctrl != null)
+                          FittedBox(
+                            fit: BoxFit.contain,
+                            child: SizedBox(
+                              width: _ctrl!.value.size.width,
+                              height: _ctrl!.value.size.height,
+                              child: VideoPlayer(_ctrl!),
+                            ),
+                          ),
+                        // Semi-transparent overlay so play icon pops
+                        Container(color: Colors.black.withValues(alpha: 0.28)),
+                        // Play button
+                        const Center(
+                          child: Icon(Icons.play_circle_fill,
+                              color: Colors.white, size: 54),
+                        ),
+                        // Videocam badge
+                        const Positioned(
+                          bottom: 6,
+                          right: 8,
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.videocam,
+                                color: Colors.white70, size: 14),
+                            SizedBox(width: 4),
+                            Text('Видео',
+                                style: TextStyle(
+                                    color: Colors.white70, fontSize: 11)),
+                          ]),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
         ),
       ),
     );

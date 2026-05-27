@@ -7,6 +7,17 @@ const webStoredFilePrefix = 'opfs://rlink/';
 
 bool isWebStoredFile(String path) => path.startsWith(webStoredFilePrefix);
 
+String webVideoMimeForPath(String path, {String fallback = 'video/mp4'}) {
+  final clean = path.split('#').first.split('?').first.toLowerCase();
+  if (clean.startsWith('data:video/webm')) return 'video/webm';
+  if (clean.startsWith('data:video/quicktime')) return 'video/quicktime';
+  if (clean.startsWith('data:video/mp4')) return 'video/mp4';
+  if (clean.endsWith('.webm')) return 'video/webm';
+  if (clean.endsWith('.mov')) return 'video/quicktime';
+  if (clean.endsWith('.m4v') || clean.endsWith('.mp4')) return 'video/mp4';
+  return fallback;
+}
+
 Future<String?> writeWebStoredFile({
   required String fileName,
   required Uint8List bytes,
