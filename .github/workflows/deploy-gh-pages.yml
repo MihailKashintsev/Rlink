@@ -31,7 +31,12 @@ jobs:
         run: flutter pub get
 
       - name: Build web
-        run: flutter build web --release --pwa-strategy=none --base-href "/${{ github.event.repository.name }}/"
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          flutter build web --release \
+            --pwa-strategy=none \
+            --base-href "/${{ github.event.repository.name }}/" \
+            --dart-define="RLINK_WEB_PUSH_ID=${GITHUB_RUN_NUMBER}-${short_sha}"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
