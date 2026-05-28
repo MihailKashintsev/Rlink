@@ -655,6 +655,8 @@ class GossipRouter {
     required String fromId,
   }) async {
     final rid8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : null;
+    // Keep call signaling plaintext for mixed web/mobile builds. The receiver
+    // below still accepts the encrypted shape used by newer intermediate builds.
     final packet = GossipPacket(
       id: _uuid.v4(),
       type: 'dm_pin',
@@ -1373,16 +1375,6 @@ class GossipRouter {
     Map<String, dynamic> payload = const <String, dynamic>{},
   }) async {
     final rid8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : null;
-    final inner = jsonEncode(<String, dynamic>{
-      'from': fromId,
-      'cid': callId,
-      'st': signalType,
-      if (payload.isNotEmpty) 'd': payload,
-    });
-    final encrypted = await CryptoService.instance.encryptMessage(
-      plaintext: inner,
-      recipientX25519KeyBase64: recipientX25519KeyBase64,
-    );
     final packet = GossipPacket(
       id: _uuid.v4(),
       type: 'call_sig',
@@ -1390,8 +1382,11 @@ class GossipRouter {
       timestamp: DateTime.now().millisecondsSinceEpoch,
       recipientId: recipientId,
       payload: <String, dynamic>{
-        ...encrypted.toJson(),
+        'from': fromId,
+        'cid': callId,
+        'st': signalType,
         if (rid8 != null) 'r': rid8,
+        if (payload.isNotEmpty) 'd': payload,
       },
     );
     _markSeen(packet.id);
@@ -2022,19 +2017,20 @@ class GossipRouter {
         if (!_matchesRid8(myPublicKey, rid8)) {
           return;
         }
+        Map<String, dynamic> callMap;
         final encrypted = EncryptedMessage.fromJson(packet.payload);
-        if (encrypted.ephemeralPublicKey.isEmpty ||
-            encrypted.nonce.isEmpty ||
-            encrypted.cipherText.isEmpty ||
-            encrypted.mac.isEmpty) {
-          debugPrint('[RLINK][Gossip] Dropping unencrypted call_sig packet');
-          return;
+        if (encrypted.ephemeralPublicKey.isNotEmpty &&
+            encrypted.nonce.isNotEmpty &&
+            encrypted.cipherText.isNotEmpty &&
+            encrypted.mac.isNotEmpty) {
+          final plain = await CryptoService.instance.decryptMessage(encrypted);
+          if (plain == null || plain.isEmpty) return;
+          final decoded = jsonDecode(plain);
+          if (decoded is! Map) return;
+          callMap = Map<String, dynamic>.from(decoded);
+        } else {
+          callMap = packet.payload;
         }
-        final plain = await CryptoService.instance.decryptMessage(encrypted);
-        if (plain == null || plain.isEmpty) return;
-        final decoded = jsonDecode(plain);
-        if (decoded is! Map) return;
-        final callMap = Map<String, dynamic>.from(decoded);
         final from = callMap['from'] as String?;
         final callId = callMap['cid'] as String?;
         final signalType = callMap['st'] as String?;

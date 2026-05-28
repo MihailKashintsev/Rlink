@@ -9458,6 +9458,17 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   bool get _squareUsesQueue =>
       _isSquare && widget.onPlaySquareWithQueue != null;
 
+  Size _videoPaintSize({double fallbackWidth = 1280}) {
+    final value = _ctrl?.value;
+    final size = value?.size ?? Size.zero;
+    if (size.width > 0 && size.height > 0) return size;
+    final aspect = value?.aspectRatio ?? 0;
+    if (aspect.isFinite && aspect > 0) {
+      return Size(fallbackWidth, fallbackWidth / aspect);
+    }
+    return Size(fallbackWidth, fallbackWidth * 9 / 16);
+  }
+
   void _onEmbedPauseBus() {
     if (!mounted) return;
     final g = EmbeddedVideoPauseBus.instance.generation.value;
@@ -10042,14 +10053,17 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                         Container(color: const Color(0xFF111111)),
                         // Превью без обрезки до квадрата — сохраняем пропорции ролика.
                         if (_initialized && _ctrl != null)
-                          FittedBox(
-                            fit: BoxFit.contain,
-                            child: SizedBox(
-                              width: _ctrl!.value.size.width,
-                              height: _ctrl!.value.size.height,
-                              child: VideoPlayer(_ctrl!),
-                            ),
-                          ),
+                          Builder(builder: (_) {
+                            final paintSize = _videoPaintSize();
+                            return FittedBox(
+                              fit: BoxFit.contain,
+                              child: SizedBox(
+                                width: paintSize.width,
+                                height: paintSize.height,
+                                child: VideoPlayer(_ctrl!),
+                              ),
+                            );
+                          }),
                         // Semi-transparent overlay so play icon pops
                         Container(color: Colors.black.withValues(alpha: 0.28)),
                         // Play button

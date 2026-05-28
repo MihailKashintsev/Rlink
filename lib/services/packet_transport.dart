@@ -16,7 +16,8 @@ class DefaultPacketTransport implements PacketTransport {
   final MeshForwarder _meshForwarder = createMeshForwarder();
 
   static final RegExp _pubKeyHex = RegExp(r'^[0-9a-fA-F]{64}$');
-  String _short(String v) => v.isEmpty ? 'empty' : (v.length > 8 ? v.substring(0, 8) : v);
+  String _short(String v) =>
+      v.isEmpty ? 'empty' : (v.length > 8 ? v.substring(0, 8) : v);
 
   @override
   Future<void> forward(GossipPacket packet) async {
@@ -31,7 +32,8 @@ class DefaultPacketTransport implements PacketTransport {
           packet.type == 'raw' ||
           packet.type == 'pair_req' ||
           packet.type == 'pair_acc' ||
-          packet.type == 'ether') {
+          packet.type == 'ether' ||
+          packet.type == 'call_sig') {
         final line =
             '[RLINK][Transport][DROP] type=${packet.type} reason=mode_${mode}_no_relay';
         debugPrint(line);
@@ -79,7 +81,9 @@ class DefaultPacketTransport implements PacketTransport {
             packet.type == 'pair_acc' ||
             packet.type == 'ether' ||
             packet.type == 'call_sig') {
-          final route = (recipientKey != null && recipientKey.isNotEmpty) ? 'direct' : 'drop/broadcast';
+          final route = (recipientKey != null && recipientKey.isNotEmpty)
+              ? 'direct'
+              : 'drop/broadcast';
           // Detailed routing trace for DM/pair/ether/call_sig diagnostics.
           final line = '[RLINK][Transport] type=${packet.type} route=$route '
               'rid=${_short(packet.recipientId ?? '')} r8=${packet.payload['r'] ?? '-'} '
@@ -90,7 +94,8 @@ class DefaultPacketTransport implements PacketTransport {
         final hasValidRecipient =
             recipientKey != null && _pubKeyHex.hasMatch(recipientKey);
         if (hasValidRecipient) {
-          await RelayService.instance.sendPacket(packet, recipientKey: recipientKey);
+          await RelayService.instance
+              .sendPacket(packet, recipientKey: recipientKey);
         } else if (isDirectedType) {
           final line =
               '[RLINK][Transport][DROP] type=${packet.type} reason=invalid_direct_recipient '
@@ -106,7 +111,8 @@ class DefaultPacketTransport implements PacketTransport {
         packet.type == 'raw' ||
         packet.type == 'pair_req' ||
         packet.type == 'pair_acc' ||
-        packet.type == 'ether') {
+        packet.type == 'ether' ||
+        packet.type == 'call_sig') {
       final line =
           '[RLINK][Transport][DROP] type=${packet.type} reason=relay_not_connected';
       debugPrint(line);
