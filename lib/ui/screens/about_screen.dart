@@ -64,6 +64,7 @@ class _AboutScreenState extends State<AboutScreen> {
             child: Builder(
               builder: (context) {
                 final version = AppVersion.label;
+                final webPushLabel = AppVersion.webPushLabel;
                 return Column(children: [
                   Container(
                     width: 88,
@@ -95,6 +96,16 @@ class _AboutScreenState extends State<AboutScreen> {
                     '${AppL10n.t('about_version')} $version',
                     style: TextStyle(color: Theme.of(context).hintColor),
                   ),
+                  if (webPushLabel.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      webPushLabel,
+                      style: TextStyle(
+                        color: Theme.of(context).hintColor,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -168,10 +179,14 @@ class _AboutScreenState extends State<AboutScreen> {
           // ── Tech info ────────────────────────────────────────────
           Center(
             child: Text(
-              'Rlink v${AppVersion.label} • BLE Mesh Messenger\nFlutter • Dart • Ed25519 + ChaCha20',
+              '${[
+                'Rlink v${AppVersion.label}',
+                if (AppVersion.webPushLabel.isNotEmpty) AppVersion.webPushLabel,
+                'BLE Mesh Messenger',
+              ].join(' • ')}\nFlutter • Dart • Ed25519 + ChaCha20',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 11, color: Theme.of(context).hintColor),
+              style:
+                  TextStyle(fontSize: 11, color: Theme.of(context).hintColor),
             ),
           ),
           const SizedBox(height: 24),
@@ -210,8 +225,7 @@ class _LinkTile extends StatelessWidget {
       ),
       title: Text(title),
       subtitle: Text(subtitle,
-          style: TextStyle(
-              fontSize: 12, color: Theme.of(context).hintColor)),
+          style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
       trailing: Icon(Icons.open_in_new_rounded,
           size: 16, color: Theme.of(context).hintColor),
       onTap: onTap,

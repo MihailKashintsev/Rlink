@@ -50,8 +50,7 @@ Scaffold _subScaffold({
 }) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   return Scaffold(
-    backgroundColor:
-        isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8),
+    backgroundColor: isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8),
     appBar: AppBar(
       title: Text(title),
       elevation: 0,
@@ -101,6 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = AppSettings.instance;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final webPushLabel = AppVersion.webPushLabel;
 
     if (settings.isLinkedChildDevice && !RuntimePlatform.isWeb) {
       return _buildChildLinkedScreen(context, settings, isDark);
@@ -133,9 +133,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
               child: Text(
-                'Rlink v${AppVersion.label} • ${AppL10n.t('footer_ble_mesh')}',
-                style: TextStyle(
-                    color: Theme.of(context).hintColor, fontSize: 12),
+                [
+                  'Rlink v${AppVersion.label}',
+                  if (webPushLabel.isNotEmpty) webPushLabel,
+                  AppL10n.t('footer_ble_mesh'),
+                ].join(' • '),
+                style:
+                    TextStyle(color: Theme.of(context).hintColor, fontSize: 12),
               ),
             ),
           ),
@@ -346,8 +350,7 @@ class _CategoryGroup extends StatelessWidget {
   Widget _buildTile(BuildContext context, _CategoryItem item) {
     final cs = Theme.of(context).colorScheme;
     return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
       leading: Container(
         width: 34,
         height: 34,
@@ -464,7 +467,10 @@ class SettingsCategoryCards extends StatelessWidget {
             icon: Icons.info_outline_rounded,
             color: const Color(0xFF607D8B),
             title: AppL10n.t('about_title'),
-            subtitle: 'Rlink v${AppVersion.label}',
+            subtitle: [
+              'Rlink v${AppVersion.label}',
+              if (AppVersion.webPushLabel.isNotEmpty) AppVersion.webPushLabel,
+            ].join(' • '),
             onTap: () => _open(context, const AboutScreen()),
           ),
         ]),
@@ -569,8 +575,7 @@ class _AppearancePageState extends State<_AppearancePage> {
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
-                  children:
-                      List.generate(AppSettings.accentColors.length, (i) {
+                  children: List.generate(AppSettings.accentColors.length, (i) {
                     final color = AppSettings.accentColors[i];
                     final selected = settings.accentColorIndex == i;
                     return GestureDetector(
@@ -657,24 +662,24 @@ class _AppearancePageState extends State<_AppearancePage> {
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               _SizeChip(
                 label: 'A',
-                style: const TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                 selected: settings.fontSize == 0,
                 onTap: () => settings.setFontSize(0),
               ),
               const SizedBox(width: 6),
               _SizeChip(
                 label: 'A',
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 selected: settings.fontSize == 1,
                 onTap: () => settings.setFontSize(1),
               ),
               const SizedBox(width: 6),
               _SizeChip(
                 label: 'A',
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 selected: settings.fontSize == 2,
                 onTap: () => settings.setFontSize(2),
               ),
@@ -683,8 +688,7 @@ class _AppearancePageState extends State<_AppearancePage> {
 
           if (RuntimePlatform.isAndroid)
             SwitchListTile(
-              secondary:
-                  Icon(Icons.emoji_emotions_outlined, color: cs.primary),
+              secondary: Icon(Icons.emoji_emotions_outlined, color: cs.primary),
               title: Text(AppL10n.t('settings_ios_emoji')),
               subtitle: Text(AppL10n.t('settings_ios_emoji_sub'),
                   style: const TextStyle(fontSize: 12)),
@@ -775,16 +779,16 @@ class _AppearancePageState extends State<_AppearancePage> {
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               _SizeChip(
                 label: '24',
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700),
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                 selected: settings.clockFormat == 0,
                 onTap: () => settings.setClockFormat(0),
               ),
               const SizedBox(width: 6),
               _SizeChip(
                 label: '12',
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700),
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                 selected: settings.clockFormat == 1,
                 onTap: () => settings.setClockFormat(1),
               ),
@@ -793,8 +797,7 @@ class _AppearancePageState extends State<_AppearancePage> {
 
           // Reactions
           SwitchListTile(
-            secondary:
-                Icon(Icons.emoji_emotions_outlined, color: cs.primary),
+            secondary: Icon(Icons.emoji_emotions_outlined, color: cs.primary),
             title: Text(AppL10n.t('settings_reaction_quick_bar')),
             subtitle: Text(AppL10n.t('settings_reaction_quick_bar_sub'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
@@ -816,8 +819,7 @@ class _AppearancePageState extends State<_AppearancePage> {
                   statusEmoji: settings.quickReactionEmoji,
                   fontSize: 16,
                   emptyPlaceholder: '😀',
-                  style:
-                      TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
+                  style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
                 ),
               ],
             ),
@@ -879,21 +881,17 @@ class _AppearancePageState extends State<_AppearancePage> {
                   children: [
                     Text(AppL10n.t('locale_ui_partial_note'),
                         style: TextStyle(
-                            fontSize: 11,
-                            height: 1.25,
-                            color: cs.tertiary)),
+                            fontSize: 11, height: 1.25, color: cs.tertiary)),
                     const SizedBox(height: 2),
                     Text(locale.name,
                         style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).hintColor)),
+                            fontSize: 12, color: Theme.of(context).hintColor)),
                   ],
                 );
               } else if (locale.code != 'system') {
                 subtitle = Text(locale.name,
                     style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).hintColor));
+                        fontSize: 12, color: Theme.of(context).hintColor));
               } else {
                 subtitle = null;
               }
@@ -1034,10 +1032,9 @@ class _NotificationsPageState extends State<_NotificationsPage> {
           ),
           SwitchListTile(
             secondary: Icon(Icons.campaign_outlined,
-                color:
-                    settings.notifyChannels && settings.notificationsEnabled
-                        ? cs.primary
-                        : Theme.of(context).hintColor),
+                color: settings.notifyChannels && settings.notificationsEnabled
+                    ? cs.primary
+                    : Theme.of(context).hintColor),
             title: Text(AppL10n.t('settings_notif_channels')),
             value: settings.notifyChannels,
             onChanged: settings.notificationsEnabled
@@ -1093,8 +1090,7 @@ class _NotificationsPageState extends State<_NotificationsPage> {
     }
   }
 
-  Future<void> _pickRingtone(
-      BuildContext context, AppSettings settings) async {
+  Future<void> _pickRingtone(BuildContext context, AppSettings settings) async {
     final picked = await showModalBottomSheet<int>(
       context: context,
       showDragHandle: true,
@@ -1290,7 +1286,8 @@ class _MessagingPageState extends State<_MessagingPage> {
     );
   }
 
-  void _showInputBarButtonOrderPicker(BuildContext context, AppSettings settings) {
+  void _showInputBarButtonOrderPicker(
+      BuildContext context, AppSettings settings) {
     final buttonLabels = {
       'emoji': 'Эмодзи',
       'sticker': 'Стикеры',
@@ -1464,8 +1461,7 @@ class _ProfilePageState extends State<_ProfilePage> {
           _SectionHeader(AppL10n.t('settings_profile')),
           if (profile != null)
             ListTile(
-              leading:
-                  Icon(Icons.emoji_emotions_outlined, color: cs.primary),
+              leading: Icon(Icons.emoji_emotions_outlined, color: cs.primary),
               title: const Text('Эмодзи-статус'),
               subtitle: profile.statusEmoji.isEmpty
                   ? Text(
@@ -1529,8 +1525,7 @@ class _ProfilePageState extends State<_ProfilePage> {
                 if (profile == null) return;
                 Clipboard.setData(ClipboardData(text: profile.publicKeyHex));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content: Text(AppL10n.t('settings_key_copied'))),
+                  SnackBar(content: Text(AppL10n.t('settings_key_copied'))),
                 );
               },
             ),
@@ -1563,8 +1558,7 @@ class _ProfilePageState extends State<_ProfilePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text('Эмодзи-статус',
-                  style:
-                      TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               SizedBox(
                 height: 300,
@@ -1639,8 +1633,7 @@ class _ProfilePageState extends State<_ProfilePage> {
             unawaited(ChatStorageService.instance
                 .updateContactX25519Key(publicKey, relayX25519Key));
           }
-          var contact =
-              await ChatStorageService.instance.getContact(publicKey);
+          var contact = await ChatStorageService.instance.getContact(publicKey);
           final finalNick = contact?.nickname ?? nickname;
           final finalColor = contact?.avatarColor ?? color;
           final finalEmoji = contact?.avatarEmoji ?? emoji;
@@ -1672,8 +1665,7 @@ class _ProfilePageState extends State<_ProfilePage> {
               x25519Key: mergedX25519,
             ));
           }
-          contact =
-              await ChatStorageService.instance.getContact(publicKey);
+          contact = await ChatStorageService.instance.getContact(publicKey);
           final openNick = contact?.nickname ?? finalNick;
           final openColor = contact?.avatarColor ?? finalColor;
           final openEmoji = contact?.avatarEmoji ?? finalEmoji;
@@ -1852,12 +1844,10 @@ class _NetworkPageState extends State<_NetworkPage> {
               ),
             ),
             ListTile(
-              leading:
-                  const Icon(Icons.link_off_rounded, color: Colors.red),
+              leading: const Icon(Icons.link_off_rounded, color: Colors.red),
               title: const Text('Отвязать устройство',
                   style: TextStyle(color: Colors.red)),
-              subtitle: const Text(
-                  'Связка будет снята на обоих устройствах',
+              subtitle: const Text('Связка будет снята на обоих устройствах',
                   style: TextStyle(fontSize: 12)),
               onTap: () => _doUnlinkDevice(context),
             ),
@@ -1924,8 +1914,7 @@ class _NetworkPageState extends State<_NetworkPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text('В web-версии доступен только интернет-режим.',
-                  style: TextStyle(
-                      fontSize: 12, color: cs.onSurfaceVariant)),
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             ),
           if (RuntimePlatform.isWeb)
             ListTile(
@@ -2007,8 +1996,7 @@ class _NetworkPageState extends State<_NetworkPage> {
                 final connecting = relayState == RelayState.connecting;
                 return ValueListenableBuilder<int>(
                   valueListenable: RelayService.instance.onlineCount,
-                  builder: (_, count, __) =>
-                      ValueListenableBuilder<String?>(
+                  builder: (_, count, __) => ValueListenableBuilder<String?>(
                     valueListenable: RelayService.instance.lastError,
                     builder: (_, lastErr, __) => ListTile(
                       leading: Icon(
@@ -2033,8 +2021,8 @@ class _NetworkPageState extends State<_NetworkPage> {
                             : ((lastErr != null && lastErr.isNotEmpty)
                                 ? '${AppL10n.t('relay_no_connection')}\n$lastErr'
                                 : AppL10n.t('relay_no_connection')),
-                        style: TextStyle(
-                            fontSize: 12, color: cs.onSurfaceVariant),
+                        style:
+                            TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                       ),
                       trailing: SizedBox(
                         width: 60,
@@ -2045,7 +2033,8 @@ class _NetworkPageState extends State<_NetworkPage> {
                               const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               ),
                             IconButton(
                               icon: const Icon(Icons.refresh, size: 20),
@@ -2072,16 +2061,14 @@ class _NetworkPageState extends State<_NetworkPage> {
                   final pk = CryptoService.instance.publicKeyHex;
                   final shortPk =
                       pk.isEmpty ? 'empty' : '${pk.substring(0, 8)}...';
-                  final relayState =
-                      RelayService.instance.state.value.name;
+                  final relayState = RelayService.instance.state.value.name;
                   final online = RelayService.instance.onlineCount.value;
                   final err = (lastErr == null || lastErr.isEmpty)
                       ? '-'
                       : lastErr.replaceAll('\n', ' ');
                   return Text(
                     'pk=$shortPk, relay=$relayState, online=$online, err=$err',
-                    style: TextStyle(
-                        fontSize: 12, color: cs.onSurfaceVariant),
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                   );
                 },
               ),
@@ -2089,11 +2076,9 @@ class _NetworkPageState extends State<_NetworkPage> {
               onTap: () async {
                 final messenger = ScaffoldMessenger.of(context);
                 final pk = CryptoService.instance.publicKeyHex;
-                final relayState =
-                    RelayService.instance.state.value.name;
+                final relayState = RelayService.instance.state.value.name;
                 final online = RelayService.instance.onlineCount.value;
-                final err =
-                    RelayService.instance.lastError.value ?? '-';
+                final err = RelayService.instance.lastError.value ?? '-';
                 final diag = [
                   'pk=${pk.isEmpty ? 'empty' : pk}',
                   'relay=$relayState',
@@ -2104,8 +2089,7 @@ class _NetworkPageState extends State<_NetworkPage> {
                 await Clipboard.setData(ClipboardData(text: diag));
                 if (!context.mounted) return;
                 messenger.showSnackBar(
-                  const SnackBar(
-                      content: Text('Диагностика скопирована')),
+                  const SnackBar(content: Text('Диагностика скопирована')),
                 );
               },
             ),
@@ -2118,8 +2102,7 @@ class _NetworkPageState extends State<_NetworkPage> {
               ),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const DiagnosticsScreen()),
+                MaterialPageRoute(builder: (_) => const DiagnosticsScreen()),
               ),
             ),
           ],
@@ -2134,8 +2117,7 @@ class _NetworkPageState extends State<_NetworkPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content:
-                Text('В web-версии доступен только интернет-режим')),
+            content: Text('В web-версии доступен только интернет-режим')),
       );
       return;
     }
@@ -2166,8 +2148,8 @@ class _NetworkPageState extends State<_NetworkPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text(
-                  'Не удалось подключиться к интернет-ретранслятору')),
+              content:
+                  Text('Не удалось подключиться к интернет-ретранслятору')),
         );
       }
       return;
@@ -2181,8 +2163,7 @@ class _NetworkPageState extends State<_NetworkPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(
-              'Запрос на связку отправлен: ${contact.nickname}')),
+          content: Text('Запрос на связку отправлен: ${contact.nickname}')),
     );
   }
 
@@ -2191,8 +2172,7 @@ class _NetworkPageState extends State<_NetworkPage> {
     if (!context.mounted) return null;
     if (contacts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Нет контактов для связки устройств')),
+        const SnackBar(content: Text('Нет контактов для связки устройств')),
       );
       return null;
     }
@@ -2301,16 +2281,14 @@ class _ThemeChip extends StatelessWidget {
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon,
-              size: 16,
-              color: selected ? cs.onPrimary : cs.onSurfaceVariant),
+              size: 16, color: selected ? cs.onPrimary : cs.onSurfaceVariant),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
               fontSize: 13,
               color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-              fontWeight:
-                  selected ? FontWeight.w600 : FontWeight.normal,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
         ]),
@@ -2385,16 +2363,14 @@ class _NetChip extends StatelessWidget {
           ),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon,
-                size: 20,
-                color: selected ? cs.onPrimary : cs.onSurfaceVariant),
+                size: 20, color: selected ? cs.onPrimary : cs.onSurfaceVariant),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 11,
                 color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-                fontWeight:
-                    selected ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
           ]),
@@ -2415,14 +2391,13 @@ class _ChatBgTile extends StatelessWidget {
     if (picked == null || !context.mounted) return;
     if (RuntimePlatform.isWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Фон чата на web пока не поддерживается')),
+        const SnackBar(content: Text('Фон чата на web пока не поддерживается')),
       );
       return;
     }
     final appDir = await getApplicationDocumentsDirectory();
-    final dest = File(p.join(appDir.path,
-        'chat_bg_${DateTime.now().millisecondsSinceEpoch}.jpg'));
+    final dest = File(p.join(
+        appDir.path, 'chat_bg_${DateTime.now().millisecondsSinceEpoch}.jpg'));
     await File(picked.path).copy(dest.path);
     await settings.setChatBgForPeer('__global__', dest.path);
   }
@@ -2431,9 +2406,8 @@ class _ChatBgTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bgPath = settings.chatBgForPeer('__global__');
-    final hasBg = !RuntimePlatform.isWeb &&
-        bgPath != null &&
-        File(bgPath).existsSync();
+    final hasBg =
+        !RuntimePlatform.isWeb && bgPath != null && File(bgPath).existsSync();
 
     return ListTile(
       leading: ClipRRect(
@@ -2444,8 +2418,8 @@ class _ChatBgTile extends StatelessWidget {
                 width: 44,
                 height: 44,
                 color: cs.surfaceContainerHigh,
-                child: Icon(Icons.wallpaper_outlined,
-                    color: cs.onSurfaceVariant),
+                child:
+                    Icon(Icons.wallpaper_outlined, color: cs.onSurfaceVariant),
               ),
       ),
       title: Text(AppL10n.t('settings_chat_bg')),
@@ -2462,8 +2436,7 @@ class _ChatBgTile extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.red),
             tooltip: AppL10n.t('settings_chat_bg_remove_tooltip'),
-            onPressed: () =>
-                settings.setChatBgForPeer('__global__', null),
+            onPressed: () => settings.setChatBgForPeer('__global__', null),
           ),
         IconButton(
           icon: const Icon(Icons.photo_library_outlined),
@@ -2504,8 +2477,7 @@ class _OnlineStatusSelector extends StatelessWidget {
   final int current;
   final ValueChanged<int> onChanged;
 
-  const _OnlineStatusSelector(
-      {required this.current, required this.onChanged});
+  const _OnlineStatusSelector({required this.current, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -2538,15 +2510,13 @@ class _OnlineStatusSelector extends StatelessWidget {
             onChanged: (v) {
               if (v != null) onChanged(v);
             },
-            secondary: Icon(statuses[i].icon,
-                color: statuses[i].color, size: 14),
+            secondary:
+                Icon(statuses[i].icon, color: statuses[i].color, size: 14),
             title: Text(statuses[i].label),
             subtitle: Text(statuses[i].sub,
                 style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant)),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
             dense: true,
           ),
         Padding(
@@ -2556,8 +2526,7 @@ class _OnlineStatusSelector extends StatelessWidget {
             const SizedBox(width: 8),
             Text(AppL10n.t('online_status_gray_hint'),
                 style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).hintColor)),
+                    fontSize: 12, color: Theme.of(context).hintColor)),
           ]),
         ),
         const SizedBox(height: 8),
@@ -2674,8 +2643,8 @@ class _PeerSearchSheetState extends State<_PeerSearchSheet> {
               relayConnected
                   ? AppL10n.t('peer_search_sub_connected')
                   : AppL10n.t('peer_search_sub_disconnected'),
-              style: TextStyle(
-                  fontSize: 12, color: Theme.of(context).hintColor),
+              style:
+                  TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
             ),
             const SizedBox(height: 12),
             Padding(
@@ -2683,8 +2652,7 @@ class _PeerSearchSheetState extends State<_PeerSearchSheet> {
               child: TextField(
                 controller: _ctrl,
                 autofocus: true,
-                style:
-                    const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
                 decoration: InputDecoration(
                   hintText: AppL10n.t('peer_search_hint'),
                   hintStyle: TextStyle(
@@ -2697,16 +2665,15 @@ class _PeerSearchSheetState extends State<_PeerSearchSheet> {
                           icon: const Icon(Icons.clear, size: 18),
                           onPressed: () {
                             _ctrl.clear();
-                            RelayService.instance.searchResults.value =
-                                [];
+                            RelayService.instance.searchResults.value = [];
                           },
                         )
                       : null,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
               ),
             ),
@@ -2737,17 +2704,15 @@ class _PeerSearchSheetState extends State<_PeerSearchSheet> {
                               ? AppL10n.t('peer_not_found_online')
                               : AppL10n.t('peer_relay_off_no_search'),
                           style: TextStyle(
-                              color: Theme.of(context).hintColor,
-                              fontSize: 13),
+                              color: Theme.of(context).hintColor, fontSize: 13),
                         ),
                         if (_ctrl.text.trim().length >= 8) ...[
                           const SizedBox(height: 12),
                           FilledButton.icon(
                             onPressed: _openDirect,
-                            icon: const Icon(Icons.chat_bubble_outline,
-                                size: 18),
-                            label: Text(
-                                AppL10n.t('peer_open_chat_by_key')),
+                            icon:
+                                const Icon(Icons.chat_bubble_outline, size: 18),
+                            label: Text(AppL10n.t('peer_open_chat_by_key')),
                             style: FilledButton.styleFrom(
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -2771,8 +2736,7 @@ class _PeerSearchSheetState extends State<_PeerSearchSheet> {
                       final peer = results[i];
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor:
-                              cs.primary.withValues(alpha: 0.15),
+                          backgroundColor: cs.primary.withValues(alpha: 0.15),
                           child: Text(
                             peer.nick.isNotEmpty
                                 ? peer.nick[0].toUpperCase()
@@ -2785,8 +2749,7 @@ class _PeerSearchSheetState extends State<_PeerSearchSheet> {
                         ),
                         title: Text(
                           peer.nick.isNotEmpty ? peer.nick : peer.shortId,
-                          style:
-                              const TextStyle(fontWeight: FontWeight.w500),
+                          style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                         subtitle: Text(
                           peer.shortId,
@@ -2807,23 +2770,18 @@ class _PeerSearchSheetState extends State<_PeerSearchSheet> {
                             const SizedBox(width: 4),
                             Text(AppL10n.t('peer_online'),
                                 style: TextStyle(
-                                    fontSize: 11,
-                                    color: cs.onSurfaceVariant)),
+                                    fontSize: 11, color: cs.onSurfaceVariant)),
                           ],
                         ),
                         onTap: () => widget.onOpenChat(
                           peer.publicKey,
-                          peer.nick.isNotEmpty
-                              ? peer.nick
-                              : peer.shortId,
+                          peer.nick.isNotEmpty ? peer.nick : peer.shortId,
                           0xFF607D8B,
                           '',
-                          relayX25519Key: peer.x25519Key.isNotEmpty
-                              ? peer.x25519Key
-                              : null,
-                          relayUsername: peer.username.isNotEmpty
-                              ? peer.username
-                              : null,
+                          relayX25519Key:
+                              peer.x25519Key.isNotEmpty ? peer.x25519Key : null,
+                          relayUsername:
+                              peer.username.isNotEmpty ? peer.username : null,
                         ),
                       );
                     },
