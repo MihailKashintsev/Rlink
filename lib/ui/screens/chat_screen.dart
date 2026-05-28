@@ -143,6 +143,7 @@ String? _dmResolveMsgPath(String? raw) {
   if (kIsWeb &&
       (r.startsWith('data:') ||
           r.startsWith('blob:') ||
+          r.startsWith('opfs://rlink/') ||
           r.startsWith('http://') ||
           r.startsWith('https://'))) {
     return r;
@@ -522,7 +523,7 @@ class _ChatScreenState extends State<ChatScreen> {
             final chunkBytes = _relayChunkBytesFor(sealed.length);
             final total = (sealed.length / chunkBytes).ceil();
             debugPrint('[RLINK][Media] Fallback in-memory chunks: $total');
-            _sendBlobChunksInBackground(
+            await _sendBlobChunks(
               compressed: sealed,
               msgId: msgId,
               myId: myId,
@@ -587,10 +588,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }();
   }
 
-  /// Send large blob as relay-native chunks in background. Each chunk is a
-  /// standalone 'packet' envelope so relay routes them reliably (no 500-byte
-  /// gossip size cap).
-  void _sendBlobChunksInBackground({
+  /// Send large blob as relay-native chunks. Each chunk is a standalone
+  /// 'packet' envelope so relay routes them reliably (no 500-byte gossip cap).
+  Future<void> _sendBlobChunks({
     required Uint8List compressed,
     required String msgId,
     required String myId,
@@ -602,39 +602,37 @@ class _ChatScreenState extends State<ChatScreen> {
     bool isFile = false,
     bool isSticker = false,
     String? fileName,
-  }) {
+  }) async {
     // Use full public key for relay routing
     final relayRecipientKey = _resolvedPeerId;
-    () async {
-      for (var i = 0; i < total; i++) {
-        final offset = i * chunkBytes;
-        final end = (offset + chunkBytes) > compressed.length
-            ? compressed.length
-            : offset + chunkBytes;
-        final chunk = Uint8List.sublistView(compressed, offset, end);
-        await RelayService.instance.sendBlobChunk(
-          recipientKey: relayRecipientKey,
-          fromId: myId,
-          msgId: msgId,
-          chunkIdx: i,
-          chunkTotal: total,
-          chunkData: chunk,
-          isVoice: isVoice,
-          isVideo: isVideo,
-          isSquare: isSquare,
-          isFile: isFile,
-          isSticker: isSticker,
-          fileName: fileName,
-        );
-        // Gentle pacing: mobile browsers and proxies are more stable with
-        // smaller, less bursty WebSocket frames.
-        await Future.delayed(
-          const Duration(milliseconds: kIsWeb ? 120 : 50),
-        );
-      }
-      debugPrint(
-          '[RLINK][Media] All $total blob chunks sent for $msgId to $relayRecipientKey');
-    }();
+    for (var i = 0; i < total; i++) {
+      final offset = i * chunkBytes;
+      final end = (offset + chunkBytes) > compressed.length
+          ? compressed.length
+          : offset + chunkBytes;
+      final chunk = Uint8List.sublistView(compressed, offset, end);
+      await RelayService.instance.sendBlobChunk(
+        recipientKey: relayRecipientKey,
+        fromId: myId,
+        msgId: msgId,
+        chunkIdx: i,
+        chunkTotal: total,
+        chunkData: chunk,
+        isVoice: isVoice,
+        isVideo: isVideo,
+        isSquare: isSquare,
+        isFile: isFile,
+        isSticker: isSticker,
+        fileName: fileName,
+      );
+      // Gentle pacing: mobile browsers and proxies are more stable with
+      // smaller, less bursty WebSocket frames.
+      await Future.delayed(
+        const Duration(milliseconds: kIsWeb ? 120 : 50),
+      );
+    }
+    debugPrint(
+        '[RLINK][Media] All $total blob chunks sent for $msgId to $relayRecipientKey');
   }
 
   /// Повтор исходящего после [MessageStatus.failed] (тот же id сообщения).
@@ -3439,9 +3437,14 @@ class _ChatScreenState extends State<ChatScreen> {
         withData: true,
       );
       final f = r?.files.firstOrNull;
-      if (f?.bytes == null || !mounted) return;
+      if (f == null || !mounted) return;
+      final videoBytes = f.bytes;
+      if (videoBytes == null || videoBytes.isEmpty) {
+        _showErrorSnack('Не удалось прочитать видео в браузере');
+        return;
+      }
       await _sendWebVideoBytes(
-        bytes: f!.bytes!,
+        bytes: videoBytes,
         fileName: f.name.isNotEmpty ? f.name : 'video.mp4',
         myId: myId,
       );
@@ -3621,11 +3624,21 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final msgId = _uuid.v4();
       final localPath = kIsWeb
-          ? _webMediaRefForPickedBytes(
-              bytes,
-              fileName,
-              fallbackMime: asImage ? 'image/jpeg' : 'application/octet-stream',
-            )
+          ? (await writeWebStoredFile(
+                fileName: '${msgId}_$fileName',
+                bytes: bytes,
+                mimeType: _mimeTypeForFileName(
+                  fileName,
+                  fallbackMime:
+                      asImage ? 'image/jpeg' : 'application/octet-stream',
+                ),
+              ) ??
+              _webMediaRefForPickedBytes(
+                bytes,
+                fileName,
+                fallbackMime:
+                    asImage ? 'image/jpeg' : 'application/octet-stream',
+              ))
           : await _persistPickedBytes(
               bytes: bytes,
               fileName: fileName,
@@ -10840,12 +10853,11 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
     if (e.kind == _DmMaterialKind.photo && e.mediaPath != null) {
       leading = ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.file(
-          File(e.mediaPath!),
+        child: _DmImage(
+          imagePath: e.mediaPath!,
           width: 48,
           height: 48,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Icon(Icons.photo),
         ),
       );
     } else {
@@ -11456,6 +11468,34 @@ class _DmImage extends StatelessWidget {
               return loadingBox();
             },
           ),
+        );
+      }
+      if (imagePath.startsWith('opfs://rlink/')) {
+        return FutureBuilder<Uint8List?>(
+          future: readWebStoredFile(imagePath.split('#').first),
+          builder: (context, snapshot) {
+            final data = snapshot.data;
+            if (data == null) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return constrain(loadingBox());
+              }
+              return constrain(errorBox('missing_web_stored_image'));
+            }
+            return constrain(
+              Image.memory(
+                data,
+                width: width,
+                height: height,
+                fit: fit,
+                filterQuality: filterQuality,
+                errorBuilder: (_, error, __) => errorBox(error),
+                frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
+                  if (wasSynchronouslyLoaded || frame != null) return child;
+                  return loadingBox();
+                },
+              ),
+            );
+          },
         );
       }
       if (_ChatScreenState._isInlineWebUri(imagePath)) {
