@@ -75,9 +75,19 @@
         const relayBase = _rlinkHttpBase(relayUrl);
         const me = (publicKey || '').trim().toLowerCase();
         if (!relayBase || !me) return;
+        const syncKey = `${relayBase}|${me}`;
+        const now = Date.now();
+        window.__rlinkPushSync = window.__rlinkPushSync || { key: '', at: 0, failedAt: 0 };
+        if (window.__rlinkPushSync.key === syncKey && now - window.__rlinkPushSync.at < 10 * 60 * 1000) return;
+        if (window.__rlinkPushSync.key === syncKey && now - window.__rlinkPushSync.failedAt < 60 * 60 * 1000) return;
+        window.__rlinkPushSync.key = syncKey;
+        window.__rlinkPushSync.at = now;
 
         const keyResp = await fetch(`${relayBase}/push/public_key`, { method: 'GET' });
-        if (!keyResp.ok) return;
+        if (!keyResp.ok) {
+          window.__rlinkPushSync.failedAt = Date.now();
+          return;
+        }
         const keyJson = await keyResp.json();
         const vapid = (keyJson && keyJson.publicKey) ? String(keyJson.publicKey).trim() : '';
         if (!vapid) return;
@@ -97,7 +107,7 @@
         const p256 = sub.getKey('p256dh');
         const auth = sub.getKey('auth');
         if (!p256 || !auth) return;
-        await fetch(`${relayBase}/push/subscribe`, {
+        const subscribeResp = await fetch(`${relayBase}/push/subscribe`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
@@ -112,6 +122,7 @@
             },
           }),
         });
+        if (!subscribeResp.ok) window.__rlinkPushSync.failedAt = Date.now();
       } catch (_) {}
     };
   </script>

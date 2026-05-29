@@ -9457,6 +9457,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   bool _initialized = false;
   bool _playing = false;
   bool _initFailed = false;
+  String? _initError;
   int _embedPauseGen = 0;
 
   /// Воспроизведение квадратика из очереди голосовых (без полноэкранного плеера).
@@ -9774,44 +9775,68 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   }
 
   Future<void> _initPlayer() async {
+    final candidates = <String>[];
     var playablePath = widget.videoPath;
     if (kIsWeb && playablePath.startsWith('opfs://rlink/')) {
-      playablePath = await webStoredFileObjectUrl(
-            playablePath.split('#').first,
-            mimeType: webVideoMimeForPath(playablePath),
-          ) ??
-          playablePath;
-    }
-    final ctrl = kIsWeb && _ChatScreenState._isInlineWebUri(playablePath)
-        ? VideoPlayerController.networkUrl(Uri.parse(playablePath))
-        : VideoPlayerController.file(File(playablePath));
-    try {
-      await ctrl.initialize();
-      if (_isSquare) {
-        ctrl.setLooping(!_squareUsesQueue);
-      } else {
-        // Seek to first frame so it shows as a thumbnail; don't auto-play.
-        await ctrl.seekTo(Duration.zero);
+      final cleanPath = playablePath.split('#').first;
+      final inferredMime = webVideoMimeForPath(playablePath);
+      final inferredUrl = await webStoredFileObjectUrl(
+        cleanPath,
+        mimeType: inferredMime,
+      );
+      if (inferredUrl != null) candidates.add(inferredUrl);
+      if (inferredMime != 'video/mp4') {
+        final mp4Url = await webStoredFileObjectUrl(
+          cleanPath,
+          mimeType: 'video/mp4',
+        );
+        if (mp4Url != null && mp4Url != inferredUrl) candidates.add(mp4Url);
       }
-      if (mounted) {
-        setState(() {
-          _ctrl = ctrl;
-          _initialized = true;
-          _initFailed = false;
-        });
-        _onCurrentlyPlayingChanged();
-        if (_squareUsesQueue) {
-          _scheduleSquareViewportReportForPip();
+    } else {
+      candidates.add(playablePath);
+    }
+    if (candidates.isEmpty) candidates.add(playablePath);
+
+    Object? lastError;
+    for (final candidate in candidates) {
+      final ctrl = kIsWeb && _ChatScreenState._isInlineWebUri(candidate)
+          ? VideoPlayerController.networkUrl(Uri.parse(candidate))
+          : VideoPlayerController.file(File(candidate));
+      try {
+        await ctrl.initialize();
+        if (_isSquare) {
+          ctrl.setLooping(!_squareUsesQueue);
+        } else {
+          // Seek to first frame so it shows as a thumbnail; don't auto-play.
+          await ctrl.seekTo(Duration.zero);
         }
-      } else {
+        if (mounted) {
+          setState(() {
+            _ctrl = ctrl;
+            _initialized = true;
+            _initFailed = false;
+            _initError = null;
+          });
+          _onCurrentlyPlayingChanged();
+          if (_squareUsesQueue) {
+            _scheduleSquareViewportReportForPip();
+          }
+        } else {
+          ctrl.dispose();
+        }
+        return;
+      } catch (e) {
+        lastError = e;
+        debugPrint('[VideoMessage] init candidate error: $e');
         ctrl.dispose();
       }
-    } catch (e) {
-      debugPrint('[VideoMessage] init error: $e');
-      ctrl.dispose();
-      if (mounted) {
-        setState(() => _initFailed = true);
-      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _initFailed = true;
+        _initError = lastError?.toString();
+      });
     }
   }
 
@@ -9907,21 +9932,33 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                   ? VideoPlayer(ctrl)
                   : Container(
                       color: const Color(0xFF1A1A1A),
-                      child: exists
-                          ? const Center(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white54),
+                      child: _initFailed
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Text(
+                                  kIsWeb ? 'Браузер не открыл видео' : 'Видео',
+                                  style: const TextStyle(
+                                      color: Colors.white54, fontSize: 11),
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
                             )
-                          : const Center(
-                              child: Text('Файл не найден',
-                                  style: TextStyle(
-                                      color: Colors.white54, fontSize: 11),
-                                  textAlign: TextAlign.center),
-                            ),
+                          : exists
+                              ? const Center(
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white54),
+                                  ),
+                                )
+                              : const Center(
+                                  child: Text('Файл не найден',
+                                      style: TextStyle(
+                                          color: Colors.white54, fontSize: 11),
+                                      textAlign: TextAlign.center),
+                                ),
                     ),
               if (exists && !_playing)
                 Positioned.fill(
@@ -10043,19 +10080,30 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                   ? Container(
                       color: const Color(0xFF151515),
                       padding: const EdgeInsets.all(12),
-                      child: const Column(
+                      child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.videocam_off_outlined,
+                          const Icon(Icons.videocam_off_outlined,
                               color: Colors.white70, size: 28),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Text(
-                            'Видео',
-                            style:
-                                TextStyle(color: Colors.white70, fontSize: 12),
+                            kIsWeb ? 'Браузер не открыл видео' : 'Видео',
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12),
                             textAlign: TextAlign.center,
                           ),
+                          if (kIsWeb && _initError != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _initError!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white38, fontSize: 9),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ],
                       ),
                     )
