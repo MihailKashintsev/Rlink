@@ -661,15 +661,17 @@ Future<void> initServices() async {
 
     await ChatInboxService.instance.init();
     EtherService.instance.init();
-    try {
-      await StickerCollectionService.instance.init();
-    } catch (e, st) {
-      debugPrint('[RLINK][Init] StickerCollectionService skipped: $e\n$st');
-    }
-    try {
-      await EmojiPackService.instance.ensureInitialized();
-    } catch (e, st) {
-      debugPrint('[RLINK][Init] EmojiPackService skipped: $e\n$st');
+    if (!RuntimePlatform.isWeb) {
+      try {
+        await StickerCollectionService.instance.init();
+      } catch (e, st) {
+        debugPrint('[RLINK][Init] StickerCollectionService skipped: $e\n$st');
+      }
+      try {
+        await EmojiPackService.instance.ensureInitialized();
+      } catch (e, st) {
+        debugPrint('[RLINK][Init] EmojiPackService skipped: $e\n$st');
+      }
     }
     await ChatStorageService.instance.init();
     await ChannelService.instance.init();
@@ -687,7 +689,9 @@ Future<void> initServices() async {
         timeout: const Duration(seconds: 10),
       );
     }
-    await StoryService.instance.init();
+    if (!RuntimePlatform.isWeb) {
+      await StoryService.instance.init();
+    }
     await MediaUploadQueue.instance.init();
     await MediaUploadQueue.instance.cleanUp();
     await OutboxService.instance.init();
@@ -4122,7 +4126,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       scaffoldBackgroundColor:
           isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF5F5F5),
       colorScheme: cs,
-      pageTransitionsTheme: PageTransitionsTheme(
+      pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
           TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),

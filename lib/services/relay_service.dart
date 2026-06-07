@@ -165,6 +165,8 @@ class RelayService with WidgetsBindingObserver {
       {};
   final Map<String, Completer<Map<String, dynamic>>> _adminBotAckCompleters =
       {};
+  final Map<String, Completer<Map<String, dynamic>>>
+      _adminPasswordAckCompleters = {};
   final Map<String, Completer<Map<String, dynamic>>> _botInfoAckCompleters = {};
   final Map<String, Completer<Map<String, dynamic>>>
       _botCommandsSetAckCompleters = {};
@@ -357,8 +359,9 @@ class RelayService with WidgetsBindingObserver {
     if (cached != null && exp != null && now.isBefore(exp)) {
       return Map<String, dynamic>.from(cached);
     }
-    if (!isConnected)
+    if (!isConnected) {
       return cached != null ? Map<String, dynamic>.from(cached) : null;
+    }
     final reqId = _newBotOwnerReqId();
     final c = Completer<Map<String, dynamic>>();
     _botInfoAckCompleters[reqId] = c;
@@ -748,6 +751,12 @@ class RelayService with WidgetsBindingObserver {
       }
     }
     _botCommandsSetAckCompleters.clear();
+    for (final c in _adminPasswordAckCompleters.values) {
+      if (!c.isCompleted) {
+        c.complete(<String, dynamic>{'ok': false, 'error': 'disconnected'});
+      }
+    }
+    _adminPasswordAckCompleters.clear();
     if (!_intentionalClose && !_disposed) {
       _scheduleReconnect();
     }
@@ -780,16 +789,12 @@ class RelayService with WidgetsBindingObserver {
     }
   }
 
-  // Параметр назван `lifecycle`, чтобы не затенять поле класса `state`
-  // (ValueNotifier<RelayState>). Линт avoid_renaming_method_parameters
-  // здесь игнорируется осознанно.
   @override
-  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
-    // ignore: avoid_renaming_method_parameters
-    if (lifecycle != AppLifecycleState.resumed) return;
-    if (state.value != RelayState.connected) {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (this.state.value != RelayState.connected) {
       _relayTrace(
-          '[RLINK][Relay] Lifecycle resumed (state=${state.value}) → reconnect');
+          '[RLINK][Relay] Lifecycle resumed (state=${this.state.value}) → reconnect');
       reconnect();
       return;
     }
@@ -1245,6 +1250,18 @@ class RelayService with WidgetsBindingObserver {
             }
           }
           break;
+        case 'admin_password_update_ack':
+          final pwdRid = msg['reqId']?.toString() ?? '';
+          if (pwdRid.isNotEmpty) {
+            final c = _adminPasswordAckCompleters.remove(pwdRid);
+            if (c != null && !c.isCompleted) {
+              final copy = Map<String, dynamic>.from(msg);
+              scheduleMicrotask(() {
+                if (!c.isCompleted) c.complete(copy);
+              });
+            }
+          }
+          break;
 
         case 'bot_info_result':
           final infoRid = msg['reqId']?.toString() ?? '';
@@ -1567,6 +1584,42 @@ class RelayService with WidgetsBindingObserver {
       );
     } catch (e) {
       _adminBotAckCompleters.remove(reqId);
+      return {'ok': false, 'error': e.toString()};
+    }
+  }
+
+  /// Обновить пароль админ-панели на relay. Сервер принимает смену только если
+  /// старый hash совпадает с уже настроенным hash на relay.
+  Future<Map<String, dynamic>> sendAdminPasswordUpdate({
+    required String oldHash,
+    required String newHash,
+  }) async {
+    if (!isConnected) return {'ok': false, 'error': 'offline'};
+    final oldH = oldHash.trim().toLowerCase();
+    final newH = newHash.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(oldH) ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(newH)) {
+      return {'ok': false, 'error': 'bad_hash'};
+    }
+    final reqId = _newBotOwnerReqId();
+    final c = Completer<Map<String, dynamic>>();
+    _adminPasswordAckCompleters[reqId] = c;
+    try {
+      await _safeSend({
+        'type': 'admin_password_update',
+        'oldHash': oldH,
+        'newHash': newH,
+        'reqId': reqId,
+      }, context: 'admin_password_update');
+      return await c.future.timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {
+          _adminPasswordAckCompleters.remove(reqId);
+          return {'ok': false, 'error': 'timeout'};
+        },
+      );
+    } catch (e) {
+      _adminPasswordAckCompleters.remove(reqId);
       return {'ok': false, 'error': e.toString()};
     }
   }

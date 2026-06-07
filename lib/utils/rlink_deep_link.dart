@@ -17,6 +17,9 @@ class RlinkDeepLink {
   static Uri channelUri(String channelId) =>
       Uri(scheme: 'rlink', host: 'channel', pathSegments: [channelId]);
 
+  static Uri botUri(String botId) =>
+      Uri(scheme: 'rlink', host: 'bot', pathSegments: [botId]);
+
   /// Ссылка для шаринга и браузера: откроется сайт; при настроенных App Links — приложение.
   static Uri channelInviteWebUri(String channelId) => Uri.parse(
         '$channelWebInvitePage?channel=${Uri.encodeQueryComponent(channelId)}',
@@ -78,8 +81,10 @@ class RlinkDeepLink {
       if (uri.pathSegments.isNotEmpty) return uri.pathSegments.first;
       final p = uri.path;
       if (p.length > 1 && p.startsWith('/')) {
-        final seg = p.substring(1).split('/').firstWhere((s) => s.isNotEmpty,
-            orElse: () => '');
+        final seg = p
+            .substring(1)
+            .split('/')
+            .firstWhere((s) => s.isNotEmpty, orElse: () => '');
         if (seg.isNotEmpty) return seg;
       }
     }
@@ -90,6 +95,30 @@ class RlinkDeepLink {
 
       final segs = uri.pathSegments;
       final i = segs.indexOf('channel');
+      if (i >= 0 && i + 1 < segs.length) return segs[i + 1];
+    }
+    return null;
+  }
+
+  static String? parseBotId(Uri uri) {
+    if (uri.scheme == 'rlink' && uri.host == 'bot') {
+      if (uri.pathSegments.isNotEmpty) return uri.pathSegments.first;
+      final p = uri.path;
+      if (p.length > 1 && p.startsWith('/')) {
+        final seg = p
+            .substring(1)
+            .split('/')
+            .firstWhere((s) => s.isNotEmpty, orElse: () => '');
+        if (seg.isNotEmpty) return seg;
+      }
+    }
+    if (uri.scheme == 'https' || uri.scheme == 'http') {
+      final q = uri.queryParameters;
+      final fromQuery = q['bot'] ?? q['b'];
+      if (fromQuery != null && fromQuery.isNotEmpty) return fromQuery;
+
+      final segs = uri.pathSegments;
+      final i = segs.indexOf('bot');
       if (i >= 0 && i + 1 < segs.length) return segs[i + 1];
     }
     return null;

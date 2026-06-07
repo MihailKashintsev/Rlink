@@ -19,35 +19,95 @@ String _sha256Digest(List<int> data) {
   var h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
 
   const k = <int>[
-    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
-    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
-    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
-    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
-    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
-    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
-    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2,
+    0x428a2f98,
+    0x71374491,
+    0xb5c0fbcf,
+    0xe9b5dba5,
+    0x3956c25b,
+    0x59f111f1,
+    0x923f82a4,
+    0xab1c5ed5,
+    0xd807aa98,
+    0x12835b01,
+    0x243185be,
+    0x550c7dc3,
+    0x72be5d74,
+    0x80deb1fe,
+    0x9bdc06a7,
+    0xc19bf174,
+    0xe49b69c1,
+    0xefbe4786,
+    0x0fc19dc6,
+    0x240ca1cc,
+    0x2de92c6f,
+    0x4a7484aa,
+    0x5cb0a9dc,
+    0x76f988da,
+    0x983e5152,
+    0xa831c66d,
+    0xb00327c8,
+    0xbf597fc7,
+    0xc6e00bf3,
+    0xd5a79147,
+    0x06ca6351,
+    0x14292967,
+    0x27b70a85,
+    0x2e1b2138,
+    0x4d2c6dfc,
+    0x53380d13,
+    0x650a7354,
+    0x766a0abb,
+    0x81c2c92e,
+    0x92722c85,
+    0xa2bfe8a1,
+    0xa81a664b,
+    0xc24b8b70,
+    0xc76c51a3,
+    0xd192e819,
+    0xd6990624,
+    0xf40e3585,
+    0x106aa070,
+    0x19a4c116,
+    0x1e376c08,
+    0x2748774c,
+    0x34b0bcb5,
+    0x391c0cb3,
+    0x4ed8aa4a,
+    0x5b9cca4f,
+    0x682e6ff3,
+    0x748f82ee,
+    0x78a5636f,
+    0x84c87814,
+    0x8cc70208,
+    0x90befffa,
+    0xa4506ceb,
+    0xbef9a3f7,
+    0xc67178f2,
   ];
 
   int rotr(int x, int n) => ((x >> n) | (x << (32 - n))) & 0xFFFFFFFF;
 
   final bitLen = data.length * 8;
   final padded = List<int>.from(data)..add(0x80);
-  while (padded.length % 64 != 56) { padded.add(0); }
-  for (var i = 56; i >= 0; i -= 8) { padded.add((bitLen >> i) & 0xFF); }
+  while (padded.length % 64 != 56) {
+    padded.add(0);
+  }
+  for (var i = 56; i >= 0; i -= 8) {
+    padded.add((bitLen >> i) & 0xFF);
+  }
 
   for (var offset = 0; offset < padded.length; offset += 64) {
     final w = List<int>.filled(64, 0);
     for (var i = 0; i < 16; i++) {
       w[i] = (padded[offset + i * 4] << 24) |
-             (padded[offset + i * 4 + 1] << 16) |
-             (padded[offset + i * 4 + 2] << 8) |
-             padded[offset + i * 4 + 3];
+          (padded[offset + i * 4 + 1] << 16) |
+          (padded[offset + i * 4 + 2] << 8) |
+          padded[offset + i * 4 + 3];
     }
     for (var i = 16; i < 64; i++) {
-      final s0 = rotr(w[i-15], 7) ^ rotr(w[i-15], 18) ^ (w[i-15] >> 3);
-      final s1 = rotr(w[i-2], 17) ^ rotr(w[i-2], 19) ^ (w[i-2] >> 10);
-      w[i] = (w[i-16] + s0 + w[i-7] + s1) & 0xFFFFFFFF;
+      final s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >> 3);
+      final s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) & 0xFFFFFFFF;
     }
 
     var a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
@@ -58,13 +118,23 @@ String _sha256Digest(List<int> data) {
       final s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
       final maj = (a & b) ^ (a & c) ^ (b & c);
       final temp2 = (s0 + maj) & 0xFFFFFFFF;
-      h = g; g = f; f = e; e = (d + temp1) & 0xFFFFFFFF;
-      d = c; c = b; b = a; a = (temp1 + temp2) & 0xFFFFFFFF;
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temp1) & 0xFFFFFFFF;
+      d = c;
+      c = b;
+      b = a;
+      a = (temp1 + temp2) & 0xFFFFFFFF;
     }
-    h0 = (h0 + a) & 0xFFFFFFFF; h1 = (h1 + b) & 0xFFFFFFFF;
-    h2 = (h2 + c) & 0xFFFFFFFF; h3 = (h3 + d) & 0xFFFFFFFF;
-    h4 = (h4 + e) & 0xFFFFFFFF; h5 = (h5 + f) & 0xFFFFFFFF;
-    h6 = (h6 + g) & 0xFFFFFFFF; h7 = (h7 + h) & 0xFFFFFFFF;
+    h0 = (h0 + a) & 0xFFFFFFFF;
+    h1 = (h1 + b) & 0xFFFFFFFF;
+    h2 = (h2 + c) & 0xFFFFFFFF;
+    h3 = (h3 + d) & 0xFFFFFFFF;
+    h4 = (h4 + e) & 0xFFFFFFFF;
+    h5 = (h5 + f) & 0xFFFFFFFF;
+    h6 = (h6 + g) & 0xFFFFFFFF;
+    h7 = (h7 + h) & 0xFFFFFFFF;
   }
 
   String hex(int v) => v.toRadixString(16).padLeft(8, '0');
@@ -261,8 +331,7 @@ class _AdminScreenState extends State<AdminScreen>
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemBuilder: (_, i) => _ChannelAdminTile(
                 channel: filtered[i],
-                onToggleForeignAgent: () =>
-                    _toggleForeignAgent(filtered[i]),
+                onToggleForeignAgent: () => _toggleForeignAgent(filtered[i]),
                 onToggleBlock: () => _toggleBlock(filtered[i]),
                 onDelete: () => _deleteChannel(filtered[i]),
               ),
@@ -355,7 +424,9 @@ class _AdminScreenState extends State<AdminScreen>
                 ),
                 IconButton(
                   tooltip: 'Обновить',
-                  onPressed: _relayBotsLoading ? null : () => unawaited(_loadRelayBots()),
+                  onPressed: _relayBotsLoading
+                      ? null
+                      : () => unawaited(_loadRelayBots()),
                   icon: _relayBotsLoading
                       ? const SizedBox(
                           width: 18,
@@ -367,19 +438,25 @@ class _AdminScreenState extends State<AdminScreen>
               ],
             ),
           ),
-          if (relayFiltered.isEmpty && !_relayBotsLoading && _relayBotsError == null)
+          if (relayFiltered.isEmpty &&
+              !_relayBotsLoading &&
+              _relayBotsError == null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
-                _query.isNotEmpty ? 'Ничего не найдено по "$_query"' : 'Нет зарегистрированных ботов',
+                _query.isNotEmpty
+                    ? 'Ничего не найдено по "$_query"'
+                    : 'Нет зарегистрированных ботов',
                 style: TextStyle(color: cs.onSurfaceVariant),
               ),
             )
           else
             ...relayFiltered.map((b) => _RelayBotAdminTile(
                   bot: b,
-                  onToggleVerified: () => _updateRelayBot(botId: b.botId, verified: !b.verified),
-                  onToggleBlocked: () => _updateRelayBot(botId: b.botId, blocked: !b.blocked),
+                  onToggleVerified: () =>
+                      _updateRelayBot(botId: b.botId, verified: !b.verified),
+                  onToggleBlocked: () =>
+                      _updateRelayBot(botId: b.botId, blocked: !b.blocked),
                   onRevoke: () => _confirmAndRevokeRelayBot(b),
                 )),
           const Divider(height: 26),
@@ -396,14 +473,15 @@ class _AdminScreenState extends State<AdminScreen>
                 value: isEnabled,
                 secondary: CircleAvatar(
                   backgroundColor: Color(bot.avatarColor),
-                  child: Text(bot.avatarEmoji, style: const TextStyle(fontSize: 18)),
+                  child: Text(bot.avatarEmoji,
+                      style: const TextStyle(fontSize: 18)),
                 ),
                 title: Text(
                   bot.name,
-                  style:
-                      const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 16),
                 ),
-                subtitle: Text(bot.description),
+                subtitle: Text('${bot.description}\n${bot.link}'),
                 onChanged: (_) => _toggleBot(bot.id),
               ),
             );
@@ -634,7 +712,8 @@ class _AdminScreenState extends State<AdminScreen>
     final myId = CryptoService.instance.publicKeyHex;
     final chans = myId.isEmpty
         ? <String>[]
-        : await ChannelService.instance.subscribedChannelIdsForAccountSync(myId);
+        : await ChannelService.instance
+            .subscribedChannelIdsForAccountSync(myId);
     final bots = AppSettings.instance.enabledBotIds;
     final inner = jsonEncode({
       'hash': hash,
@@ -722,6 +801,24 @@ class _AdminScreenState extends State<AdminScreen>
                 return;
               }
               final newHash = sha256Hex(newCtrl.text);
+              if (RelayService.instance.isConnected) {
+                final relayAck =
+                    await RelayService.instance.sendAdminPasswordUpdate(
+                  oldHash: oldHash,
+                  newHash: newHash,
+                );
+                if (relayAck['ok'] != true) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Relay не сменил пароль: ${_translateBotError(relayAck['error']?.toString() ?? 'request_failed')}',
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+              }
               final rev = DateTime.now().millisecondsSinceEpoch;
               final myId = CryptoService.instance.publicKeyHex;
               final chans = myId.isEmpty
@@ -750,7 +847,7 @@ class _AdminScreenState extends State<AdminScreen>
               messenger.showSnackBar(
                 const SnackBar(
                   content: Text(
-                    'Пароль изменён — зашифрованная синхронизация с вашими устройствами',
+                    'Пароль изменён — relay и устройства синхронизированы',
                   ),
                 ),
               );
@@ -810,16 +907,14 @@ class _RequestTile extends StatelessWidget {
                   ),
                 ),
                 Text(dateStr,
-                    style:
-                        TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
               ],
             ),
             if (request.description != null &&
                 request.description!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(request.description!,
-                  style:
-                      TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+                  style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
             ],
             const SizedBox(height: 4),
             Text(
@@ -939,8 +1034,8 @@ class _RelayAdminBot {
     if (rawActivity is List) {
       for (final item in rawActivity) {
         if (item is Map) {
-          activity.add(
-              _RelayBotActivity.fromJson(Map<String, dynamic>.from(item)));
+          activity
+              .add(_RelayBotActivity.fromJson(Map<String, dynamic>.from(item)));
         }
       }
     }
@@ -1074,16 +1169,16 @@ class _RelayBotAdminTile extends StatelessWidget {
                             fontSize: 15, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),
-	                      Text(
-	                        bot.botId,
-	                        maxLines: 1,
-	                        overflow: TextOverflow.ellipsis,
+                      Text(
+                        bot.botId,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11,
                           fontFamily: 'monospace',
                           color: cs.onSurfaceVariant,
                         ),
-	                      ),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         'Код: ${bot.adminCode.isEmpty ? (bot.botId.length >= 12 ? bot.botId.substring(0, 12) : bot.botId).toUpperCase() : bot.adminCode}',
@@ -1094,10 +1189,10 @@ class _RelayBotAdminTile extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-	                    ],
-	                  ),
-	                ),
-	              ],
+                    ],
+                  ),
+                ),
+              ],
             ),
             if (bot.description.trim().isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -1117,11 +1212,11 @@ class _RelayBotAdminTile extends StatelessWidget {
             ),
             if (bot.createdAtFormatted.isNotEmpty) ...[
               const SizedBox(height: 2),
-	              Text(
-	                'Зарегистрирован: ${bot.createdAtFormatted}',
-	                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-	              ),
-	            ],
+              Text(
+                'Зарегистрирован: ${bot.createdAtFormatted}',
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
+            ],
             const SizedBox(height: 2),
             Text(
               'Последняя активность: ${bot.lastSeenFormatted}',
@@ -1138,17 +1233,17 @@ class _RelayBotAdminTile extends StatelessWidget {
                 _miniStat('CONNECT', bot.connectCount),
               ],
             ),
-	            const SizedBox(height: 8),
-	            Wrap(
-	              spacing: 6,
-	              runSpacing: 6,
-	              children: [
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
                 if (bot.online) _chip('ONLINE', Colors.green),
-	                if (bot.verified) _chip('VERIFIED', Colors.blue),
-	                if (bot.blocked) _chip('BLOCKED', Colors.red),
-	                if (bot.revoked) _chip('REVOKED', Colors.red.shade900),
-	              ],
-	            ),
+                if (bot.verified) _chip('VERIFIED', Colors.blue),
+                if (bot.blocked) _chip('BLOCKED', Colors.red),
+                if (bot.revoked) _chip('REVOKED', Colors.red.shade900),
+              ],
+            ),
             if (bot.activity.isNotEmpty) ...[
               const SizedBox(height: 8),
               Theme(
@@ -1167,8 +1262,8 @@ class _RelayBotAdminTile extends StatelessWidget {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.history, size: 18),
-                      title: Text(a.label,
-                          style: const TextStyle(fontSize: 12)),
+                      title:
+                          Text(a.label, style: const TextStyle(fontSize: 12)),
                       subtitle: a.subtitle.isEmpty
                           ? null
                           : Text(a.subtitle,
@@ -1179,7 +1274,7 @@ class _RelayBotAdminTile extends StatelessWidget {
                 ),
               ),
             ],
-	            const SizedBox(height: 8),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 4,
@@ -1190,7 +1285,8 @@ class _RelayBotAdminTile extends StatelessWidget {
                     bot.verified ? Icons.verified : Icons.verified_outlined,
                     size: 16,
                   ),
-                  label: Text(bot.verified ? 'Снять галочку' : 'Выдать галочку'),
+                  label:
+                      Text(bot.verified ? 'Снять галочку' : 'Выдать галочку'),
                 ),
                 OutlinedButton.icon(
                   onPressed: bot.revoked ? null : onToggleBlocked,
@@ -1294,13 +1390,11 @@ class _ChannelAdminTile extends StatelessWidget {
                             child: Text(channel.name,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16)),
+                                    fontWeight: FontWeight.w600, fontSize: 16)),
                           ),
                           if (channel.verified) ...[
                             const SizedBox(width: 4),
-                            Icon(Icons.verified,
-                                size: 16, color: cs.primary),
+                            Icon(Icons.verified, size: 16, color: cs.primary),
                           ],
                         ],
                       ),
@@ -1326,8 +1420,7 @@ class _ChannelAdminTile extends StatelessWidget {
               Wrap(
                 spacing: 6,
                 children: [
-                  if (channel.foreignAgent)
-                    _chip('ИНОАГЕНТ', Colors.orange),
+                  if (channel.foreignAgent) _chip('ИНОАГЕНТ', Colors.orange),
                   if (channel.blocked) _chip('ЗАБЛОКИРОВАН', Colors.red),
                 ],
               ),
@@ -1342,8 +1435,7 @@ class _ChannelAdminTile extends StatelessWidget {
                   onPressed: onToggleForeignAgent,
                   icon: Icon(Icons.flag_outlined,
                       size: 16,
-                      color:
-                          channel.foreignAgent ? Colors.orange : null),
+                      color: channel.foreignAgent ? Colors.orange : null),
                   label: Text(
                     channel.foreignAgent ? 'Снять ИА' : 'ИНОАГЕНТ',
                     style: const TextStyle(fontSize: 12),
@@ -1352,8 +1444,7 @@ class _ChannelAdminTile extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: onToggleBlock,
                   icon: Icon(Icons.block,
-                      size: 16,
-                      color: channel.blocked ? Colors.red : null),
+                      size: 16, color: channel.blocked ? Colors.red : null),
                   label: Text(
                     channel.blocked ? 'Разблок.' : 'Блок.',
                     style: const TextStyle(fontSize: 12),
@@ -1366,8 +1457,7 @@ class _ChannelAdminTile extends StatelessWidget {
                           horizontal: 12, vertical: 8)),
                   onPressed: onDelete,
                   icon: const Icon(Icons.delete_outline, size: 16),
-                  label: const Text('Удалить',
-                      style: TextStyle(fontSize: 12)),
+                  label: const Text('Удалить', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),

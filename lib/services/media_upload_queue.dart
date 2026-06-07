@@ -229,6 +229,8 @@ class MediaUploadQueue {
         if (!RelayService.instance.isConnected) break;
         await _processTask(_taskFromRow(row));
       }
+    } catch (e, st) {
+      debugPrint('[UploadQueue] Process failed: $e\n$st');
     } finally {
       _processing = false;
     }

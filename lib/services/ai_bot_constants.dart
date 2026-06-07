@@ -17,6 +17,7 @@ class AiBotDefinition {
   final int avatarColor;
   final String avatarEmoji;
   final String description;
+  final String link;
   final bool enabledByDefault;
 
   const AiBotDefinition({
@@ -25,6 +26,7 @@ class AiBotDefinition {
     required this.avatarColor,
     required this.avatarEmoji,
     required this.description,
+    required this.link,
     this.enabledByDefault = false,
   });
 }
@@ -37,6 +39,8 @@ const AiBotDefinition kGigachatBot = AiBotDefinition(
   description:
       'ИИ-ассистент от Сбера. В Rlink — только текст (без файлов, голоса и звонков). '
       'Ответы приходят с серверов Сбера; нужен интернет и настроенный GigaChat.',
+  link:
+      'rlink://bot/726c696e6b6169626f7400000000000000000000000000000000000000000001',
   enabledByDefault: true,
 );
 
@@ -49,6 +53,8 @@ const AiBotDefinition kLibBot = AiBotDefinition(
       'Регистратор сторонних ботов для разработчиков: команды /start, /newbot и др. '
       'Диалоги с Lib и с ботами из каталога — только текст. '
       'Переписка с пользователями и ботами шифруется end-to-end; relay не читает содержимое.',
+  link:
+      'rlink://bot/726c696e6b6169626f7400000000000000000000000000000000000000000002',
   enabledByDefault: true,
 );
 
@@ -60,6 +66,8 @@ const AiBotDefinition kEmojiBot = AiBotDefinition(
   description:
       'Свои картинки-эмодзи как :shortcode: в сообщениях. Команды /start, /newpack, /add, /share. '
       'Данные только на устройстве; карточка набора передаётся вместе с сообщением в чате.',
+  link:
+      'rlink://bot/726c696e6b6169626f7400000000000000000000000000000000000000000003',
   enabledByDefault: true,
 );
 

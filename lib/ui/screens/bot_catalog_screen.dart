@@ -57,8 +57,8 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
                     title: Text(bot.name),
                     subtitle: Text(
                       isEnabled
-                          ? bot.description
-                          : '${bot.description}\nНе активирован',
+                          ? '${bot.description}\n${bot.link}'
+                          : '${bot.description}\n${bot.link}\nНе активирован',
                     ),
                     trailing: FilledButton(
                       onPressed: _starting ? null : () => _startBot(bot),
