@@ -42,7 +42,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 ///
 /// Security guarantees:
 ///   1. E2E encryption — server forwards opaque base64 blobs
-///   2. No message storage — relay only (packets not saved to disk)
+///   2. Offline mailbox stores only encrypted envelopes until recipient ACK
 ///   3. No IP logging — no access logs written
 ///   4. Challenge-response ready — clients can prove key ownership
 ///

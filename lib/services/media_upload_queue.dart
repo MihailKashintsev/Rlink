@@ -564,6 +564,24 @@ class MediaUploadQueue {
     debugPrint('[UploadQueue] Cleared all tasks');
   }
 
+  /// Отменяет все задачи загрузки для сообщения и убирает его прогресс из UI.
+  Future<bool> cancelTaskForMsgId(String msgId) async {
+    final db = _db;
+    if (db == null) return false;
+    final n = await db.delete(
+      'upload_queue',
+      where: 'msgId = ?',
+      whereArgs: [msgId],
+    );
+    final map = Map<String, double>.from(progressMap.value)..remove(msgId);
+    progressMap.value = map;
+    if (n > 0) {
+      debugPrint('[UploadQueue] Canceled $n task(s) for $msgId');
+      return true;
+    }
+    return false;
+  }
+
   /// Сброс задачи(ч) по [msgId] в pending — после ошибки или ручного «Повторить».
   Future<bool> retryTaskForMsgId(String msgId) async {
     final db = _db;

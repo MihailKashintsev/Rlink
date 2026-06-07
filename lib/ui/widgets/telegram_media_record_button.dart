@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// Как в Telegram: короткое нажатие переключает голос ↔ видеоквадратик;
-/// удержание — запись, отпускание — отправка; вверх — закрепить; в закрепе — отправка/корзина сверху.
+/// удержание — запись, отпускание — отправка; вверх — закрепить; в закрепе — отправка/пауза/корзина сверху.
 class TelegramMediaRecordButton extends StatefulWidget {
   final bool isSending;
   final bool isRecording;
@@ -15,14 +15,18 @@ class TelegramMediaRecordButton extends StatefulWidget {
   final Future<void> Function() onVideoHoldStart;
   final Future<void> Function() onHoldReleaseSend;
   final Future<void> Function() onHoldCancelDiscard;
+
   /// Вызывается при свайпе вверх в закреп (и для голоса, и для видео).
   final void Function(bool locked)? onHoldLockChanged;
+
   /// Пауза/продолжение записи видео только в закреплённом режиме.
   final Future<void> Function()? onLockedVideoPauseToggle;
   final ValueListenable<bool>? lockedVideoPausedListenable;
+
   /// Пауза/продолжение записи голоса только в закреплённом режиме.
   final Future<void> Function()? onLockedVoicePauseToggle;
   final ValueListenable<bool>? lockedVoicePausedListenable;
+
   /// Обрезать последний сегмент записи голоса в закреплённом режиме.
   final Future<void> Function()? onLockedVoiceTrimLastPart;
 
@@ -51,7 +55,7 @@ class TelegramMediaRecordButton extends StatefulWidget {
 
 class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
   static const _holdMs = 280;
-  static const _lockDy = -64.0;
+  static const _lockDy = -34.0;
 
   bool _videoMode = false;
   bool _holdActivated = false;
@@ -155,17 +159,16 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
             },
           );
         }
-        
+
         Widget? trimBtn;
-        if (!_videoMode &&
-            widget.onLockedVoiceTrimLastPart != null) {
+        if (!_videoMode && widget.onLockedVoiceTrimLastPart != null) {
           trimBtn = IconButton(
             tooltip: 'Обрезать',
             icon: Icon(Icons.content_cut_rounded, color: cs.onSurface),
             onPressed: () => unawaited(widget.onLockedVoiceTrimLastPart!()),
           );
         }
-        
+
         return SafeArea(
           child: Align(
             alignment: Alignment.topCenter,

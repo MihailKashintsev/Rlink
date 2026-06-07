@@ -998,6 +998,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
     BleService.instance.peersCount.addListener(_bleListener!);
     RelayService.instance.state.addListener(_relayListener!);
     RelayService.instance.onlineCount.addListener(_relayListener!);
+    RelayService.instance.presenceVersion.addListener(_relayListener!);
     WifiDirectService.instance.peersCount.addListener(_wifiListener!);
     ChatStorageService.instance.contactsNotifier.addListener(_contactListener!);
     _readStateListener = () => _debouncedLoad();
@@ -1033,6 +1034,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
     if (_relayListener != null) {
       RelayService.instance.state.removeListener(_relayListener!);
       RelayService.instance.onlineCount.removeListener(_relayListener!);
+      RelayService.instance.presenceVersion.removeListener(_relayListener!);
     }
     if (_wifiListener != null) {
       WifiDirectService.instance.peersCount.removeListener(_wifiListener!);
@@ -1263,7 +1265,8 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
     if (BleService.instance.isPeerConnected(peerId)) {
       transports.add(AvatarPresenceTransport.bluetooth);
     }
-    if (RelayService.instance.isPeerOnline(peerId)) {
+    if (RelayService.instance.isConnected &&
+        RelayService.instance.isPeerOnline(peerId)) {
       transports.add(AvatarPresenceTransport.internet);
     }
     if (wifiConnected && transports.isEmpty) {

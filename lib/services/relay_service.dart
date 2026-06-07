@@ -244,6 +244,16 @@ class RelayService with WidgetsBindingObserver {
     return value == false;
   }
 
+  void _clearPresenceOnlineCache() {
+    if (_peerOnline.isEmpty) {
+      _recomputeOnlineCountFromPresence();
+      return;
+    }
+    _peerOnline.clear();
+    presenceVersion.value++;
+    _recomputeOnlineCountFromPresence();
+  }
+
   /// Register a peer's username from gossip profile packet
   void registerPeerUsername(String publicKey, String username) {
     if (username.isNotEmpty) _peerUsernames[publicKey] = username;
@@ -575,6 +585,7 @@ class RelayService with WidgetsBindingObserver {
       debugPrint('[RLINK][Relay] Connection failed: $msg');
       lastError.value = msg;
       state.value = RelayState.disconnected;
+      _clearPresenceOnlineCache();
       _scheduleReconnect();
       return;
     }
@@ -647,6 +658,7 @@ class RelayService with WidgetsBindingObserver {
       debugPrint('[RLINK][Relay] Connection failed: $e');
       lastError.value = e.toString();
       state.value = RelayState.disconnected;
+      _clearPresenceOnlineCache();
       _scheduleReconnect();
     }
   }
@@ -679,6 +691,7 @@ class RelayService with WidgetsBindingObserver {
       _channel = null;
       _channelStream = null;
       state.value = RelayState.disconnected;
+      _clearPresenceOnlineCache();
       _intentionalClose = false;
       await connect();
     } finally {
@@ -700,6 +713,7 @@ class RelayService with WidgetsBindingObserver {
     _channel = null;
     _channelStream = null;
     state.value = RelayState.disconnected;
+    _clearPresenceOnlineCache();
     lastError.value = null;
     _relayTrace('[RLINK][Relay] Disconnected');
   }
@@ -716,6 +730,7 @@ class RelayService with WidgetsBindingObserver {
     _draining = false;
     _blobAssemblies.clear();
     state.value = RelayState.disconnected;
+    _clearPresenceOnlineCache();
     final detail = cc == null
         ? ''
         : ' (closeCode=$cc${cr == null || cr.isEmpty ? '' : ', $cr'})';

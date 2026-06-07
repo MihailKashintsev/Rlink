@@ -765,6 +765,15 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _cancelPendingOutgoing(ChatMessage msg) async {
+    if (_tearingDown || !mounted) return;
+    if (!msg.isOutgoing || msg.status != MessageStatus.sending) return;
+    await MediaUploadQueue.instance.cancelTaskForMsgId(msg.id);
+    _uploadingMsgIds.remove(msg.id);
+    await ChatStorageService.instance.deleteMessage(msg.id);
+    if (mounted) setState(() {});
+  }
+
   static final _publicKeyRegExp = RegExp(r'^[0-9a-fA-F]{64}$');
 
   bool _looksLikePublicKey(String id) => _publicKeyRegExp.hasMatch(id.trim());
@@ -904,6 +913,7 @@ class _ChatScreenState extends State<ChatScreen> {
     // Следим за изменением маппингов BLE UUID → public key
     BleService.instance.peersCount.addListener(_onPeersChanged);
     BleService.instance.peerMappingsVersion.addListener(_onPeersChanged);
+    RelayService.instance.presenceVersion.addListener(_onPeersChanged);
     // Следим за изменением списка контактов
     _contactListener = () => _checkContactStatus();
     ChatStorageService.instance.contactsNotifier.addListener(_contactListener!);
@@ -1102,6 +1112,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _controller.removeListener(_onComposeBotSlashHints);
     BleService.instance.peersCount.removeListener(_onPeersChanged);
     BleService.instance.peerMappingsVersion.removeListener(_onPeersChanged);
+    RelayService.instance.presenceVersion.removeListener(_onPeersChanged);
     if (_contactListener != null) {
       ChatStorageService.instance.contactsNotifier
           .removeListener(_contactListener!);
@@ -1342,6 +1353,25 @@ class _ChatScreenState extends State<ChatScreen> {
     final done = _voiceSegmentDurations.fold<double>(0, (a, b) => a + b);
     _recordingSecondsNotifier.value = done;
     if (mounted) setState(() {});
+  }
+
+  Future<void> _previewPausedVoiceRecording() async {
+    if (!_isRecording || !_isVoiceRecordingPaused || _dmHoldVideoCam != null) {
+      return;
+    }
+    final path = _voiceSegments.isNotEmpty
+        ? _voiceSegments.last
+        : _activeVoiceSegmentPath;
+    if (path == null || path.isEmpty) return;
+    try {
+      if (VoiceService.instance.currentlyPlaying.value == path) {
+        await VoiceService.instance.stopPlayback();
+      } else {
+        await VoiceService.instance.play(path, title: 'Предпросмотр');
+      }
+    } catch (e) {
+      debugPrint('[Voice] preview paused recording failed: $e');
+    }
   }
 
   Future<void> _hydrateVoiceTranscriptsFromDisk(
@@ -6518,6 +6548,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                   !_savedMessagesLocalOnly)
                                                               ? _retryFailedOutgoing
                                                               : null,
+                                                          onCancelPending: (!_isDmBot &&
+                                                                  !_savedMessagesLocalOnly)
+                                                              ? _cancelPendingOutgoing
+                                                              : null,
                                                           onTranscribeVoice:
                                                               _transcribeVoiceMessage,
                                                           isVoiceTranscribing:
@@ -6787,6 +6821,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     onHoldCancelDiscard: _cancelActiveMediaRecording,
                     onVoicePause: _pauseVoiceRecording,
                     onVoiceResume: _resumeVoiceRecording,
+                    onVoicePreview: _previewPausedVoiceRecording,
                     onVoiceTrimLastPart: _trimLastVoiceSegment,
                     onLocation: _toggleLocation,
                     holdVideoPausedListenable: _dmHoldVideoPausedNotifier,
@@ -7280,6 +7315,7 @@ class _MessageBubble extends StatelessWidget {
   final void Function(ChatMessage msg)? onForwardContextTap;
   final void Function(ChatMessage msg)? onRequestMissingMedia;
   final Future<void> Function(ChatMessage msg)? onRetryFailed;
+  final Future<void> Function(ChatMessage msg)? onCancelPending;
   final Future<void> Function(ChatMessage msg)? onTranscribeVoice;
   final bool Function(String messageId)? isVoiceTranscribing;
   final String? Function(String messageId)? voiceTranscript;
@@ -7309,6 +7345,7 @@ class _MessageBubble extends StatelessWidget {
     this.onForwardContextTap,
     this.onRequestMissingMedia,
     this.onRetryFailed,
+    this.onCancelPending,
     this.onTranscribeVoice,
     this.isVoiceTranscribing,
     this.voiceTranscript,
@@ -7513,27 +7550,33 @@ class _MessageBubble extends StatelessWidget {
             if (msg.videoPath != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: _VideoMessageBubble(
-                  videoPath: msg.videoPath!,
-                  isOut: isOut,
-                  onPlaySquareWithQueue: playbackThread != null &&
-                          playbackIndex != null &&
-                          _dmVideoPathIsSquare(msg.videoPath!)
-                      ? () {
-                          VoiceService.instance
-                              .playQueue(_dmPlaybackQueueFrom(
-                                  playbackThread!, playbackIndex!))
-                              .catchError((e) {
-                            debugPrint('[Voice] playQueue sq error: $e');
-                          });
-                        }
-                      : null,
-                  onLongPressSaveToGallery: onLongPressSaveVideoToGallery ==
-                              null ||
-                          kIsWeb ||
-                          !File(msg.videoPath!).existsSync()
+                child: _UploadProgressOverlay(
+                  msgId: msg.id,
+                  onCancel: onCancelPending == null
                       ? null
-                      : () => onLongPressSaveVideoToGallery!(msg.videoPath!),
+                      : () => onCancelPending!(msg),
+                  child: _VideoMessageBubble(
+                    videoPath: msg.videoPath!,
+                    isOut: isOut,
+                    onPlaySquareWithQueue: playbackThread != null &&
+                            playbackIndex != null &&
+                            _dmVideoPathIsSquare(msg.videoPath!)
+                        ? () {
+                            VoiceService.instance
+                                .playQueue(_dmPlaybackQueueFrom(
+                                    playbackThread!, playbackIndex!))
+                                .catchError((e) {
+                              debugPrint('[Voice] playQueue sq error: $e');
+                            });
+                          }
+                        : null,
+                    onLongPressSaveToGallery: onLongPressSaveVideoToGallery ==
+                                null ||
+                            kIsWeb ||
+                            !File(msg.videoPath!).existsSync()
+                        ? null
+                        : () => onLongPressSaveVideoToGallery!(msg.videoPath!),
+                  ),
                 ),
               ),
             if (msg.imagePath != null)
@@ -7548,6 +7591,9 @@ class _MessageBubble extends StatelessWidget {
                             .startsWith('stk_downloaded_');
                     return _UploadProgressOverlay(
                       msgId: msg.id,
+                      onCancel: onCancelPending == null
+                          ? null
+                          : () => onCancelPending!(msg),
                       child: GestureDetector(
                         onTap: () {
                           if (isSticker &&
@@ -7628,6 +7674,9 @@ class _MessageBubble extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: _UploadProgressOverlay(
                   msgId: msg.id,
+                  onCancel: onCancelPending == null
+                      ? null
+                      : () => onCancelPending!(msg),
                   child: _FileMessageBubble(
                     msgId: msg.id,
                     filePath: msg.filePath!,
@@ -7843,33 +7892,9 @@ class _MessageBubble extends StatelessWidget {
                                 : cs.onSurface,
                           ),
                         ),
-                        if (isOut &&
-                            msg.status == MessageStatus.failed &&
-                            onRetryFailed != null) ...[
-                          const SizedBox(width: 6),
-                          Tooltip(
-                            message: 'Повторить отправку',
-                            child: Material(
-                              color: Colors.red,
-                              shape: const CircleBorder(),
-                              child: InkWell(
-                                customBorder: const CircleBorder(),
-                                onTap: () => onRetryFailed!(msg),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(5),
-                                  child: Icon(
-                                    Icons.refresh_rounded,
-                                    size: 16,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ] else if (isOut &&
-                            AppSettings.instance.showReadReceipts) ...[
+                        if (isOut) ...[
                           const SizedBox(width: 4),
-                          _statusIcon(msg.status, cs),
+                          _sendStateAction(msg, cs),
                         ],
                       ],
                     ),
@@ -7884,33 +7909,9 @@ class _MessageBubble extends StatelessWidget {
                           : cs.onSurfaceVariant,
                     ),
                   ),
-                  if (isOut &&
-                      msg.status == MessageStatus.failed &&
-                      onRetryFailed != null) ...[
-                    const SizedBox(width: 6),
-                    Tooltip(
-                      message: 'Повторить отправку',
-                      child: Material(
-                        color: Colors.red,
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: () => onRetryFailed!(msg),
-                          child: const Padding(
-                            padding: EdgeInsets.all(5),
-                            child: Icon(
-                              Icons.refresh_rounded,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ] else if (isOut &&
-                      AppSettings.instance.showReadReceipts) ...[
+                  if (isOut) ...[
                     const SizedBox(width: 4),
-                    _statusIcon(msg.status, cs),
+                    _sendStateAction(msg, cs),
                   ],
                 ],
               ],
@@ -7919,6 +7920,89 @@ class _MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _sendStateAction(ChatMessage msg, ColorScheme cs) {
+    if (msg.status == MessageStatus.sending) {
+      final expired = DateTime.now().difference(msg.timestamp) >=
+          const Duration(minutes: 1);
+      if (expired && onRetryFailed != null) {
+        return Tooltip(
+          message: 'Повторить отправку',
+          child: Material(
+            color: cs.error,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => onRetryFailed!(msg),
+              child: const Padding(
+                padding: EdgeInsets.all(5),
+                child: Icon(
+                  Icons.refresh_rounded,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              color: cs.onPrimary.withValues(alpha: 0.7),
+            ),
+          ),
+          if (onCancelPending != null) ...[
+            const SizedBox(width: 5),
+            Tooltip(
+              message: 'Отменить отправку',
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => onCancelPending!(msg),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 14,
+                  color: cs.onPrimary.withValues(alpha: 0.85),
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    if (msg.status == MessageStatus.failed && onRetryFailed != null) {
+      return Tooltip(
+        message: 'Повторить отправку',
+        child: Material(
+          color: cs.error,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => onRetryFailed!(msg),
+            child: const Padding(
+              padding: EdgeInsets.all(5),
+              child: Icon(
+                Icons.refresh_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!AppSettings.instance.showReadReceipts) {
+      return const SizedBox.shrink();
+    }
+    return _statusIcon(msg.status, cs);
   }
 
   Widget _statusIcon(MessageStatus status, ColorScheme cs) {
@@ -8130,6 +8214,7 @@ class _InputBar extends StatefulWidget {
   final Future<void> Function() onHoldCancelDiscard;
   final Future<void> Function() onVoicePause;
   final Future<void> Function() onVoiceResume;
+  final Future<void> Function() onVoicePreview;
   final Future<void> Function() onVoiceTrimLastPart;
   final VoidCallback onLocation;
   final ValueListenable<bool> holdVideoPausedListenable;
@@ -8167,6 +8252,7 @@ class _InputBar extends StatefulWidget {
     required this.onHoldCancelDiscard,
     required this.onVoicePause,
     required this.onVoiceResume,
+    required this.onVoicePreview,
     required this.onVoiceTrimLastPart,
     required this.onLocation,
     required this.holdVideoPausedListenable,
@@ -8190,7 +8276,6 @@ class _InputBarState extends State<_InputBar> {
     if (mounted) setState(() {});
   }
 
-  List<String> get _buttonOrder => AppSettings.instance.inputBarButtonOrder;
   List<Map<String, dynamic>> get _buttonConfig =>
       AppSettings.instance.inputBarButtonConfig;
 
@@ -8488,6 +8573,31 @@ class _InputBarState extends State<_InputBar> {
                                 },
                               ),
                               const SizedBox(width: 6),
+                              if (widget.voiceControlsEnabled &&
+                                  widget.recordingPaused)
+                                ValueListenableBuilder<String?>(
+                                  valueListenable:
+                                      VoiceService.instance.currentlyPlaying,
+                                  builder: (_, playing, __) {
+                                    final isPreviewing =
+                                        playing != null && playing.isNotEmpty;
+                                    return GestureDetector(
+                                      onTap: () => unawaited(
+                                        widget.onVoicePreview(),
+                                      ),
+                                      child: Icon(
+                                        isPreviewing
+                                            ? Icons.stop_circle_outlined
+                                            : Icons.play_circle_outline,
+                                        color: cs.primary,
+                                        size: 24,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              if (widget.voiceControlsEnabled &&
+                                  widget.recordingPaused)
+                                const SizedBox(width: 6),
                               GestureDetector(
                                 onTap: widget.voiceControlsEnabled &&
                                         widget.recordingPaused
@@ -11379,8 +11489,13 @@ enum _ImageSendMode { compressed, asFile }
 class _UploadProgressOverlay extends StatelessWidget {
   final String msgId;
   final Widget child;
+  final Future<void> Function()? onCancel;
 
-  const _UploadProgressOverlay({required this.msgId, required this.child});
+  const _UploadProgressOverlay({
+    required this.msgId,
+    required this.child,
+    this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -11401,14 +11516,36 @@ class _UploadProgressOverlay extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: CircularProgressIndicator(
-                            value: progress > 0.02 ? progress : null,
-                            color: Colors.white,
-                            strokeWidth: 3,
-                          ),
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: 44,
+                              height: 44,
+                              child: CircularProgressIndicator(
+                                value: progress > 0.02 ? progress : null,
+                                color: Colors.white,
+                                strokeWidth: 3,
+                              ),
+                            ),
+                            if (onCancel != null)
+                              Material(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                shape: const CircleBorder(),
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: () => unawaited(onCancel!()),
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(6),
+                                    child: Icon(
+                                      Icons.close_rounded,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 6),
                         Text(
