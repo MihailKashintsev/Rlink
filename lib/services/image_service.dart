@@ -395,7 +395,14 @@ class ImageService {
     final raw = assembly.assemble();
     final data = await _openAndDecompress(raw);
     if (kIsWeb) {
-      return _webMediaRef(data, _imageMimeFromBytes(data));
+      final mime = _imageMimeFromBytes(data);
+      final ext = _imageExtFromMime(mime);
+      final stored = await writeWebStoredFile(
+        fileName: '${msgId}_${_uuid.v4()}.$ext',
+        bytes: data,
+        mimeType: mime,
+      );
+      return stored ?? _webMediaRef(data, mime);
     }
     final dir = await _imagesDir();
     String name;
@@ -846,6 +853,19 @@ class ImageService {
       return 'image/gif';
     }
     return 'image/jpeg';
+  }
+
+  static String _imageExtFromMime(String mime) {
+    switch (mime) {
+      case 'image/png':
+        return 'png';
+      case 'image/gif':
+        return 'gif';
+      case 'image/webp':
+        return 'webp';
+      default:
+        return 'jpg';
+    }
   }
 }
 

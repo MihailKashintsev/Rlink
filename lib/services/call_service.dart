@@ -470,6 +470,7 @@ class CallService {
     final type = offer['type'] as String?;
     if (sdp != null && type != null) {
       await _pc!.setRemoteDescription(RTCSessionDescription(sdp, type));
+      await _refreshRemoteTracksFromReceivers();
       await _flushPendingIce(callId);
     }
     final answer = await _pc!.createAnswer(_offerAnswerConstraints());
@@ -606,6 +607,7 @@ class CallService {
             unawaited(SoundEffectsService.instance
                 .playAction(ActionSound.callConnected));
           }
+          unawaited(_refreshRemoteTracksFromReceivers());
           break;
         case RTCIceConnectionState.RTCIceConnectionStateFailed:
           if (phase.value != CallPhase.ended &&
@@ -640,8 +642,38 @@ class CallService {
           unawaited(SoundEffectsService.instance
               .playAction(ActionSound.callConnected));
         }
+        unawaited(_refreshRemoteTracksFromReceivers());
       }
     };
+  }
+
+  Future<void> _refreshRemoteTracksFromReceivers() async {
+    final pc = _pc;
+    if (pc == null) return;
+    try {
+      final receivers = await pc.getReceivers();
+      if (receivers.isEmpty) return;
+      final stream = remoteStream ?? await createLocalMediaStream('remote');
+      var added = false;
+      for (final receiver in receivers) {
+        final track = receiver.track;
+        if (track == null) continue;
+        final alreadyAdded = stream.getTracks().any((t) => t.id == track.id);
+        if (!alreadyAdded) {
+          await stream.addTrack(track);
+          added = true;
+        }
+      }
+      if (!added && remoteStream == stream) return;
+      remoteStream = stream;
+      remoteStreamNotifier.value = stream;
+      remoteStreamGeneration.value++;
+      debugPrint('[RLINK][Call] remote receivers refresh: '
+          'audio=${stream.getAudioTracks().length} '
+          'video=${stream.getVideoTracks().length}');
+    } catch (e) {
+      debugPrint('[RLINK][Call] remote receivers refresh failed: $e');
+    }
   }
 
   Future<void> _attachRemoteTrack(dynamic event) async {
@@ -834,6 +866,7 @@ class CallService {
           final type = payload['type'] as String?;
           if (sdp != null && type != null) {
             await _pc!.setRemoteDescription(RTCSessionDescription(sdp, type));
+            await _refreshRemoteTracksFromReceivers();
             await _flushPendingIce(callId);
             if (phase.value == CallPhase.connecting) {
               _armConnectTimeout();
