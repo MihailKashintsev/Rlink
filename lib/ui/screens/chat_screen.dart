@@ -46,6 +46,7 @@ import '../../services/ble_service.dart';
 import '../../services/block_service.dart';
 import '../../services/chat_storage_service.dart';
 import '../../services/channel_service.dart';
+import '../../services/call_history_service.dart';
 import '../../services/call_service.dart';
 import '../../services/connection_transport.dart';
 import '../../services/device_link_sync_service.dart';
@@ -90,6 +91,7 @@ import 'story_viewer_screen.dart';
 import 'collab_compose_dialogs.dart';
 import 'channels_screen.dart';
 import 'call_screen.dart';
+import 'call_recording_playback_screen.dart';
 import 'groups_screen.dart';
 import 'location_map_screen.dart';
 import 'contact_edit_screen.dart';
@@ -889,6 +891,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     _syncHeaderPathsFromWidgetAndRelay();
     unawaited(_loadAndMarkRead());
+    unawaited(CallHistoryService.instance.ensureLoaded());
     unawaited((() async {
       await EmojiPackService.instance.ensureInitialized();
       EmojiPackService.instance.refreshIndexSync();
@@ -1298,15 +1301,18 @@ class _ChatScreenState extends State<ChatScreen> {
     _recordingTimer = null;
     _voiceAmpSub?.cancel();
     _voiceAmpSub = null;
-    await VoiceService.instance.pauseRecording();
+    final stoppedPath = await VoiceService.instance.stopRecording();
     final current = _activeVoiceSegmentPath;
-    if (current != null &&
-        current.isNotEmpty &&
-        !_voiceSegments.contains(current) &&
+    final segmentPath =
+        (stoppedPath != null && stoppedPath.isNotEmpty) ? stoppedPath : current;
+    if (segmentPath != null &&
+        segmentPath.isNotEmpty &&
+        !_voiceSegments.contains(segmentPath) &&
         _activeVoiceSegmentSeconds > 0) {
-      _voiceSegments.add(current);
+      _voiceSegments.add(segmentPath);
       _voiceSegmentDurations.add(_activeVoiceSegmentSeconds);
     }
+    _activeVoiceSegmentPath = null;
     final done = _voiceSegmentDurations.fold<double>(0, (a, b) => a + b);
     _recordingSecondsNotifier.value = done;
     if (mounted) {
@@ -1322,21 +1328,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!_isRecording || !_isVoiceRecordingPaused || _dmHoldVideoCam != null) {
       return;
     }
-    await VoiceService.instance.resumeRecording();
     _isVoiceRecordingPaused = false;
     _voicePausedNotifier.value = false;
-    _activeVoiceSegmentSeconds = 0;
-    _startVoiceWaveform();
-    _recordingTimer?.cancel();
-    _recordingTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      if (!mounted || !_isRecording || _isVoiceRecordingPaused) return;
-      _activeVoiceSegmentSeconds += 0.5;
-      final done = _voiceSegmentDurations.fold<double>(0, (a, b) => a + b);
-      _recordingSecondsNotifier.value = done + _activeVoiceSegmentSeconds;
-      if (_recordingSecondsNotifier.value >= 60) {
-        unawaited(_stopAndSendVoice());
-      }
-    });
+    await _startVoiceSegment();
     if (mounted) {
       setState(() {});
     }
@@ -1481,7 +1475,10 @@ class _ChatScreenState extends State<ChatScreen> {
     _recordingTimer = null;
     _voiceAmpSub?.cancel();
     _voiceAmpSub = null;
-    final path = await VoiceService.instance.stopRecording();
+    String? path;
+    if (!_isVoiceRecordingPaused) {
+      path = await VoiceService.instance.stopRecording();
+    }
     final duration = _recordingSecondsNotifier.value;
     setState(() {
       _isRecording = false;
@@ -1490,13 +1487,19 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     _sendActivity(Activity.stopped);
 
-    if (path == null || duration < 0.5) {
+    if (duration < 0.5) {
       _resetVoiceRecordingUiState();
       return;
     }
     final segments = <String>[..._voiceSegments];
-    if (segments.isEmpty || segments.last != path) {
+    if (path != null &&
+        path.isNotEmpty &&
+        (segments.isEmpty || segments.last != path)) {
       segments.add(path);
+    }
+    if (segments.isEmpty) {
+      _resetVoiceRecordingUiState();
+      return;
     }
     _voiceSegments.clear();
     _voiceSegmentDurations.clear();
@@ -1873,10 +1876,15 @@ class _ChatScreenState extends State<ChatScreen> {
     if (cam == null || !cam.value.isInitialized) return;
     try {
       if (_dmHoldVideoPausedNotifier.value) {
-        await cam.resumeVideoRecording();
+        await cam.startVideoRecording();
         if (mounted) _dmHoldVideoPausedNotifier.value = false;
       } else {
-        await cam.pauseVideoRecording();
+        if (cam.value.isRecordingVideo) {
+          final stopped = await cam.stopVideoRecording();
+          if (stopped.path.isNotEmpty) {
+            _dmHoldVideoSegments.add(stopped.path);
+          }
+        }
         if (mounted) _dmHoldVideoPausedNotifier.value = true;
       }
     } catch (e) {
@@ -1889,7 +1897,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final ctrl = _dmHoldVideoCam;
     if (ctrl == null ||
         !ctrl.value.isInitialized ||
-        !ctrl.value.isRecordingVideo ||
         _dmHoldSwitchingCam ||
         _dmHoldCameraList.length < 2) {
       return;
@@ -1897,8 +1904,12 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _dmHoldSwitchingCam = true);
     CameraController? newCam;
     try {
-      final stopped = await ctrl.stopVideoRecording();
-      _dmHoldVideoSegments.add(stopped.path);
+      if (ctrl.value.isRecordingVideo) {
+        final stopped = await ctrl.stopVideoRecording();
+        if (stopped.path.isNotEmpty) {
+          _dmHoldVideoSegments.add(stopped.path);
+        }
+      }
       final next = (_dmHoldCameraIndex + 1) % _dmHoldCameraList.length;
       await ctrl.dispose();
       _dmHoldVideoCam = null;
@@ -1929,13 +1940,8 @@ class _ChatScreenState extends State<ChatScreen> {
         _dmHoldVideoSegments.clear();
         return;
       }
-      await newCam.startVideoRecording();
-      if (_dmHoldVideoPausedNotifier.value) {
-        try {
-          await newCam.pauseVideoRecording();
-        } catch (_) {
-          if (mounted) _dmHoldVideoPausedNotifier.value = false;
-        }
+      if (!_dmHoldVideoPausedNotifier.value) {
+        await newCam.startVideoRecording();
       }
       if (!mounted || session != _dmHoldSession) {
         try {
@@ -6946,7 +6952,12 @@ Map<String, dynamic>? _dmInviteMap(ChatMessage msg) {
       final m = jsonDecode(raw) as Map<String, dynamic>;
       final k = m['kind'] as String?;
       final t = m['type'] as String?;
-      if (k == 'channel' || k == 'group' || k == 'device_link') return m;
+      if (k == 'channel' ||
+          k == 'group' ||
+          k == 'device_link' ||
+          k == 'call_history') {
+        return m;
+      }
       if (k == 'emoji_pack' || t == 'emoji_pack') {
         return {...m, 'kind': 'emoji_pack'};
       }
@@ -7298,6 +7309,131 @@ class _DmInviteBubbleActions extends StatelessWidget {
       );
     }
     return const SizedBox.shrink();
+  }
+}
+
+class _CallHistoryMessageCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String fallbackText;
+  final bool isOutgoing;
+  final ColorScheme colorScheme;
+
+  const _CallHistoryMessageCard({
+    required this.data,
+    required this.fallbackText,
+    required this.isOutgoing,
+    required this.colorScheme,
+  });
+
+  static String _fmt(Duration d) {
+    if (d.inSeconds <= 0) return 'не состоялся';
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    if (h > 0) {
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
+  CallHistoryEntry? _entry() {
+    final id = (data['callId'] as String?) ?? '';
+    if (id.isEmpty) return null;
+    for (final e in CallHistoryService.instance.entries) {
+      if (e.id == id) return e;
+    }
+    return null;
+  }
+
+  Future<void> _open(BuildContext context, CallHistoryEntry entry) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CallRecordingPlaybackScreen(entry: entry),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: CallHistoryService.instance.version,
+      builder: (_, __, ___) {
+        final entry = _entry();
+        final video = entry?.video ?? data['video'] == true;
+        final incoming = entry?.incoming ?? data['incoming'] == true;
+        final duration = entry?.duration ??
+            Duration(
+              milliseconds: (data['durationMs'] as num?)?.toInt() ?? 0,
+            );
+        final transcript = entry?.transcript?.trim() ?? '';
+        final fg = isOutgoing ? colorScheme.onPrimary : colorScheme.onSurface;
+        final muted = fg.withValues(alpha: 0.72);
+        return InkWell(
+          onTap: entry == null ? null : () => unawaited(_open(context, entry)),
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: 260,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isOutgoing
+                  ? Colors.black.withValues(alpha: 0.12)
+                  : colorScheme.surface.withValues(alpha: 0.58),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: fg.withValues(alpha: 0.10)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      video ? Icons.videocam_outlined : Icons.call_outlined,
+                      size: 20,
+                      color: fg,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        video ? 'Видеозвонок' : 'Звонок',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: fg,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${incoming ? 'Входящий' : 'Исходящий'} • ${_fmt(duration)}',
+                  style: TextStyle(color: muted, fontSize: 12),
+                ),
+                if (transcript.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    transcript,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: muted, fontSize: 12, height: 1.25),
+                  ),
+                ] else if (fallbackText.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    fallbackText.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: muted, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -7768,6 +7904,13 @@ class _MessageBubble extends StatelessWidget {
               EmojiPackCardBubble(
                 data: inviteMap,
                 isOutgoing: isOut,
+              )
+            else if (inviteMap != null && inviteMap['kind'] == 'call_history')
+              _CallHistoryMessageCard(
+                data: inviteMap,
+                fallbackText: msg.text,
+                isOutgoing: isOut,
+                colorScheme: cs,
               )
             else if (inviteMap != null)
               Column(
@@ -9687,8 +9830,9 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         _initialized = false;
         _playing = false;
         _initFailed = false;
-        if ((kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)) ||
-            (!kIsWeb && File(widget.videoPath).existsSync())) {
+        if (_isSquare &&
+            ((kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)) ||
+                (!kIsWeb && File(widget.videoPath).existsSync()))) {
           _initPlayer();
         }
       }
@@ -9724,8 +9868,9 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         .addListener(_onSquarePausePulse);
     VoiceService.instance.squareVideoUiResumePulse
         .addListener(_onSquareResumePulse);
-    if ((kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)) ||
-        (!kIsWeb && File(widget.videoPath).existsSync())) {
+    if (_isSquare &&
+        ((kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)) ||
+            (!kIsWeb && File(widget.videoPath).existsSync()))) {
       _initPlayer();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -10039,7 +10184,15 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
             fit: StackFit.expand,
             children: [
               _initialized && ctrl != null
-                  ? VideoPlayer(ctrl)
+                  ? FittedBox(
+                      fit: BoxFit.cover,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: _videoPaintSize().width,
+                        height: _videoPaintSize().height,
+                        child: VideoPlayer(ctrl),
+                      ),
+                    )
                   : Container(
                       color: const Color(0xFF1A1A1A),
                       child: _initFailed
@@ -10266,6 +10419,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
 // ── Профиль пира (из меню чата) ──────────────────────────────────
 
 enum _DmMaterialKind {
+  call,
   squareVideo,
   voice,
   video,
@@ -10278,7 +10432,8 @@ enum _DmMaterialKind {
 
 class _DmMaterialEntry {
   final _DmMaterialKind kind;
-  final ChatMessage message;
+  final ChatMessage? message;
+  final CallHistoryEntry? callEntry;
   final DateTime timestamp;
   final String title;
   final String? subtitle;
@@ -10287,7 +10442,8 @@ class _DmMaterialEntry {
 
   const _DmMaterialEntry({
     required this.kind,
-    required this.message,
+    this.message,
+    this.callEntry,
     required this.timestamp,
     required this.title,
     this.subtitle,
@@ -10406,6 +10562,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
 
   Future<void> _loadAll() async {
     final contact = await ChatStorageService.instance.getContact(widget.peerId);
+    await CallHistoryService.instance.ensureLoaded();
     final msgs = await ChatStorageService.instance
         .getMessages(widget.peerId, limit: 1000);
     if (!mounted) return;
@@ -10436,6 +10593,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
 
   List<_DmMaterialEntry> _collectMaterials(List<ChatMessage> msgs) {
     final out = <_DmMaterialEntry>[];
+    final seenCallIds = <String>{};
     final linkRx = RegExp(r'https?://\S+');
     final fenceRx = RegExp(r'```([^\n`]*)\r?\n?([\s\S]*?)```');
     final inlineCodeRx = RegExp(r'`([^`\n]+)`');
@@ -10446,6 +10604,24 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       final voicePath = _dmResolveMsgPath(m.voicePath);
       final videoPath = _dmResolveMsgPath(m.videoPath);
       final filePath = _dmResolveMsgPath(m.filePath);
+      final callPayload = _dmInviteMap(m);
+
+      if (callPayload != null && callPayload['kind'] == 'call_history') {
+        final callId = (callPayload['callId'] as String?) ?? '';
+        final durationMs = (callPayload['durationMs'] as num?)?.toInt() ?? 0;
+        final incoming = callPayload['incoming'] == true;
+        final video = callPayload['video'] == true;
+        if (callId.isNotEmpty) seenCallIds.add(callId);
+        out.add(_DmMaterialEntry(
+          kind: _DmMaterialKind.call,
+          message: m,
+          timestamp: ts,
+          title: video ? 'Видеозвонок' : 'Звонок',
+          subtitle:
+              '${incoming ? 'Входящий' : 'Исходящий'} • ${_fmtCallDuration(Duration(milliseconds: durationMs))}',
+          payload: callId,
+        ));
+      }
 
       if (imagePath != null) {
         out.add(_DmMaterialEntry(
@@ -10552,6 +10728,22 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       }
     }
 
+    final normalizedPeer = ChatStorageService.normalizeDmPeerId(widget.peerId);
+    for (final call in CallHistoryService.instance.entries) {
+      if (call.peerId != normalizedPeer || seenCallIds.contains(call.id)) {
+        continue;
+      }
+      out.add(_DmMaterialEntry(
+        kind: _DmMaterialKind.call,
+        callEntry: call,
+        timestamp: call.endedAt,
+        title: call.video ? 'Видеозвонок' : 'Звонок',
+        subtitle:
+            '${call.incoming ? 'Входящий' : 'Исходящий'} • ${_fmtCallDuration(call.duration)}',
+        payload: call.id,
+      ));
+    }
+
     out.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     return out;
   }
@@ -10566,6 +10758,28 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       out.add(raw);
     }
     return out;
+  }
+
+  static String _fmtCallDuration(Duration d) {
+    if (d.inSeconds <= 0) return 'не состоялся';
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    if (h > 0) {
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
+  CallHistoryEntry? _callEntryForMaterial(_DmMaterialEntry e) {
+    final existing = e.callEntry;
+    if (existing != null) return existing;
+    final id = e.payload;
+    if (id == null || id.isEmpty) return null;
+    for (final call in CallHistoryService.instance.entries) {
+      if (call.id == id) return call;
+    }
+    return null;
   }
 
   bool _looksLikeCodeLine(String line) {
@@ -10892,7 +11106,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
     if (_selectedKind == _DmMaterialKind.file && _fileTypeFilter != 'all') {
       items = items.where((m) {
         final ext = p
-            .extension((m.message.fileName ?? m.mediaPath ?? ''))
+            .extension((m.message?.fileName ?? m.mediaPath ?? ''))
             .toLowerCase();
         switch (_fileTypeFilter) {
           case 'image':
@@ -10964,6 +11178,8 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
 
   String _kindTitle(_DmMaterialKind k) {
     switch (k) {
+      case _DmMaterialKind.call:
+        return 'Звонки';
       case _DmMaterialKind.squareVideo:
         return 'Квадратики';
       case _DmMaterialKind.voice:
@@ -10985,6 +11201,8 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
 
   IconData _kindIcon(_DmMaterialKind k) {
     switch (k) {
+      case _DmMaterialKind.call:
+        return Icons.call_outlined;
       case _DmMaterialKind.squareVideo:
         return Icons.crop_square_rounded;
       case _DmMaterialKind.voice:
@@ -11046,7 +11264,21 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
         overflow: TextOverflow.ellipsis,
       ),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () => Navigator.pop(context, e.message.id),
+      onTap: () async {
+        if (e.kind == _DmMaterialKind.call) {
+          final call = _callEntryForMaterial(e);
+          if (call != null) {
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => CallRecordingPlaybackScreen(entry: call),
+              ),
+            );
+            return;
+          }
+        }
+        final msg = e.message;
+        if (msg != null) Navigator.pop(context, msg.id);
+      },
     );
   }
 
@@ -11595,12 +11827,12 @@ class _DmImage extends StatelessWidget {
         height: height ?? 148,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest,
+          color: Colors.black.withValues(alpha: 0.82),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
           Icons.broken_image_outlined,
-          color: cs.onSurfaceVariant,
+          color: cs.onInverseSurface.withValues(alpha: 0.72),
           size: 32,
         ),
       );
@@ -11612,7 +11844,7 @@ class _DmImage extends StatelessWidget {
         width: width ?? 220,
         height: height ?? 148,
         alignment: Alignment.center,
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+        color: Colors.black.withValues(alpha: 0.28),
         child: SizedBox(
           width: 22,
           height: 22,

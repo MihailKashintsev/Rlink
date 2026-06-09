@@ -46,6 +46,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
   int _selectedCamera = -1;
   bool _isRecording = false;
   bool _recordingPaused = false;
+
   /// Прогресс записи без setState на каждый тик — меньше лагов превью.
   final ValueNotifier<double> _recordingSeconds = ValueNotifier(0);
   Timer? _recordingTimer;
@@ -97,8 +98,8 @@ class _VideoOverlayState extends State<_VideoOverlay>
         return;
       }
       // Default to front camera
-      int idx = _cameras.indexWhere(
-          (c) => c.lensDirection == CameraLensDirection.front);
+      int idx = _cameras
+          .indexWhere((c) => c.lensDirection == CameraLensDirection.front);
       if (idx < 0) idx = 0;
       await _setupController(idx);
     } catch (e) {
@@ -135,12 +136,28 @@ class _VideoOverlayState extends State<_VideoOverlay>
       _isSwitching = false;
     });
     if (old != null && old != controller) {
-      try { await old.dispose(); } catch (_) {}
+      try {
+        await old.dispose();
+      } catch (_) {}
     }
   }
 
   Future<void> _switchCamera() async {
     if (_cameras.length < 2 || _isSwitching) return;
+    if (_isRecording && _recordingPaused) {
+      setState(() => _isSwitching = true);
+      final next = (_selectedCamera + 1) % _cameras.length;
+      try {
+        final old = _controller;
+        _controller = null;
+        await old?.dispose();
+        await _setupController(next);
+      } catch (e) {
+        debugPrint('[SquareVideo] switch paused camera error: $e');
+        if (mounted) setState(() => _isSwitching = false);
+      }
+      return;
+    }
     if (_isRecording) {
       await _switchCameraWhileRecording();
       return;
@@ -218,8 +235,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
       _recordingSeconds.value = 0;
       setState(() => _isRecording = true);
       _recordingTimer?.cancel();
-      _recordingTimer =
-          Timer.periodic(const Duration(milliseconds: 250), (_) {
+      _recordingTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
         if (!mounted || !_isRecording) return;
         if (_recordingPaused) return;
         _recordingSeconds.value += 0.25;
@@ -235,10 +251,15 @@ class _VideoOverlayState extends State<_VideoOverlay>
     if (ctrl == null || !ctrl.value.isInitialized || !_isRecording) return;
     try {
       if (_recordingPaused) {
-        await ctrl.resumeVideoRecording();
+        await ctrl.startVideoRecording();
         if (mounted) setState(() => _recordingPaused = false);
       } else {
-        await ctrl.pauseVideoRecording();
+        if (ctrl.value.isRecordingVideo) {
+          final file = await ctrl.stopVideoRecording();
+          if (file.path.isNotEmpty) {
+            _recordedSegmentPaths.add(file.path);
+          }
+        }
         if (mounted) setState(() => _recordingPaused = true);
       }
     } catch (e) {
@@ -260,11 +281,24 @@ class _VideoOverlayState extends State<_VideoOverlay>
     final ctrl = _controller;
     if (ctrl == null) return;
     try {
-      final file = await ctrl.stopVideoRecording();
+      XFile? file;
+      if (ctrl.value.isRecordingVideo) {
+        file = await ctrl.stopVideoRecording();
+      }
       if (!mounted) return;
 
-      final paths = [..._recordedSegmentPaths, file.path];
+      final paths = [
+        ..._recordedSegmentPaths,
+        if (file != null && file.path.isNotEmpty) file.path,
+      ];
       _recordedSegmentPaths.clear();
+      if (paths.isEmpty) {
+        setState(() {
+          _isRecording = false;
+          _recordingPaused = false;
+        });
+        return;
+      }
 
       String outPath;
       if (paths.length == 1) {
@@ -356,107 +390,105 @@ class _VideoOverlayState extends State<_VideoOverlay>
         _initError == null;
 
     return Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              previewReady
-                  ? SquareVideoFramedCameraView(
-                      controller: ctrl,
-                      squareSize: squareSize,
-                      isRecording: _isRecording,
-                      recordingSeconds: _recordingSeconds,
-                      maxDuration: _maxDuration,
-                      showFlipButton: _cameras.length > 1,
-                      onFlipCamera: _switchCamera,
-                      isSwitchingCamera: _isSwitching,
-                      pulseController: _pulseController,
-                      isPaused: _recordingPaused,
-                      onToggleRecordingPause: _isRecording
-                          ? () => unawaited(_toggleRecordingPause())
-                          : null,
-                      recordingPaused: _recordingPaused,
-                    )
-                  : SizedBox(
-                      width: squareSize + 6,
-                      height: squareSize + 6,
-                      child: Center(child: _buildPlaceholderPreview()),
-                    ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  GestureDetector(
-                    onTap: _isRecording ? null : () => Navigator.pop(context),
-                    child: Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: _isRecording
-                            ? Colors.grey.shade800.withValues(alpha: 0.3)
-                            : Colors.grey.shade800,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.close_rounded,
-                        color:
-                            _isRecording ? Colors.grey.shade700 : Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 32),
-                  GestureDetector(
-                    onTapDown: (_) => _startRecording(),
-                    onTapUp: (_) {
-                      if (_isRecording) _stopAndSend();
-                    },
-                    onTapCancel: () {
-                      if (_isRecording) _stopAndSend();
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: _isRecording ? 80 : 72,
-                      height: _isRecording ? 80 : 72,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: _isRecording ? Colors.red : Colors.white,
-                          width: _isRecording ? 4 : 3,
-                        ),
-                      ),
-                      child: Center(
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          width: _isRecording ? 32 : 58,
-                          height: _isRecording ? 32 : 58,
-                          decoration: BoxDecoration(
-                            color: _isRecording
-                                ? Colors.red
-                                : const Color(0xFF1DB954),
-                            borderRadius:
-                                BorderRadius.circular(_isRecording ? 8 : 29),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 32),
-                  const SizedBox(width: 52, height: 52),
-                ],
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        previewReady
+            ? SquareVideoFramedCameraView(
+                controller: ctrl,
+                squareSize: squareSize,
+                isRecording: _isRecording,
+                recordingSeconds: _recordingSeconds,
+                maxDuration: _maxDuration,
+                showFlipButton: _cameras.length > 1,
+                onFlipCamera: _switchCamera,
+                isSwitchingCamera: _isSwitching,
+                pulseController: _pulseController,
+                isPaused: _recordingPaused,
+                onToggleRecordingPause: _isRecording
+                    ? () => unawaited(_toggleRecordingPause())
+                    : null,
+                recordingPaused: _recordingPaused,
+              )
+            : SizedBox(
+                width: squareSize + 6,
+                height: squareSize + 6,
+                child: Center(child: _buildPlaceholderPreview()),
               ),
-              const SizedBox(height: 14),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: Text(
-                  _isRecording
-                      ? 'Нажмите для остановки · пауза на превью'
-                      : 'Нажмите для записи',
-                  key: ValueKey(_isRecording),
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-                  textAlign: TextAlign.center,
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            GestureDetector(
+              onTap: _isRecording ? null : () => Navigator.pop(context),
+              child: Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: _isRecording
+                      ? Colors.grey.shade800.withValues(alpha: 0.3)
+                      : Colors.grey.shade800,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.close_rounded,
+                  color: _isRecording ? Colors.grey.shade700 : Colors.white,
+                  size: 24,
                 ),
               ),
-            ],
-          );
+            ),
+            const SizedBox(width: 32),
+            GestureDetector(
+              onTapDown: (_) => _startRecording(),
+              onTapUp: (_) {
+                if (_isRecording) _stopAndSend();
+              },
+              onTapCancel: () {
+                if (_isRecording) _stopAndSend();
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: _isRecording ? 80 : 72,
+                height: _isRecording ? 80 : 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _isRecording ? Colors.red : Colors.white,
+                    width: _isRecording ? 4 : 3,
+                  ),
+                ),
+                child: Center(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: _isRecording ? 32 : 58,
+                    height: _isRecording ? 32 : 58,
+                    decoration: BoxDecoration(
+                      color:
+                          _isRecording ? Colors.red : const Color(0xFF1DB954),
+                      borderRadius:
+                          BorderRadius.circular(_isRecording ? 8 : 29),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 32),
+            const SizedBox(width: 52, height: 52),
+          ],
+        ),
+        const SizedBox(height: 14),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: Text(
+            _isRecording
+                ? 'Нажмите для остановки · пауза на превью'
+                : 'Нажмите для записи',
+            key: ValueKey(_isRecording),
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildPlaceholderPreview() {

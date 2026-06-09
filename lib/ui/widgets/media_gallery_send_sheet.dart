@@ -990,7 +990,13 @@ class _PhotoCardState extends State<_PhotoCard>
                     final data = snap.data;
                     if (data == null) {
                       return Container(
-                        color: Colors.grey.shade800,
+                        color: Colors.black.withValues(alpha: 0.28),
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
                       );
                     }
                     return Image.memory(
@@ -2317,7 +2323,15 @@ class _GalleryTabState extends State<_GalleryTab> {
               builder: (context, snap) {
                 final d = snap.data;
                 if (d == null) {
-                  return Container(color: Colors.grey.shade800);
+                  return Container(
+                    color: Colors.black.withValues(alpha: 0.28),
+                    alignment: Alignment.center,
+                    child: const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
                 }
                 return Stack(
                   fit: StackFit.expand,

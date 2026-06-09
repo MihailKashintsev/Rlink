@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'chat_storage_service.dart';
+import '../models/chat_message.dart';
 
 /// Одна запись в журнале звонков (локально на устройстве).
 class CallHistoryEntry {
@@ -152,24 +153,23 @@ class CallHistoryService {
     final name = await _resolveDisplayName(normalized);
     final now = DateTime.now().millisecondsSinceEpoch;
     final id = '${now}_$normalized';
-    _entries.insert(
-      0,
-      CallHistoryEntry(
-        id: id,
-        peerId: normalized,
-        peerDisplayName: name,
-        endedAtMs: now,
-        durationMs: duration.inMilliseconds.clamp(0, 86400000 * 1000),
-        incoming: incoming,
-        video: video,
-        recordingPath: recordingPath,
-      ),
+    final entry = CallHistoryEntry(
+      id: id,
+      peerId: normalized,
+      peerDisplayName: name,
+      endedAtMs: now,
+      durationMs: duration.inMilliseconds.clamp(0, 86400000 * 1000),
+      incoming: incoming,
+      video: video,
+      recordingPath: recordingPath,
     );
+    _entries.insert(0, entry);
     while (_entries.length > _kMaxEntries) {
       _entries.removeLast();
     }
     version.value++;
     await _save();
+    await _saveChatCallMessage(entry);
   }
 
   /// Сохранить расшифровку для записи звонка.
@@ -193,6 +193,38 @@ class CallHistoryService {
     );
     version.value++;
     await _save();
+  }
+
+  Future<void> _saveChatCallMessage(CallHistoryEntry entry) async {
+    try {
+      final title = entry.video ? 'Видеозвонок' : 'Звонок';
+      final dur = entry.duration;
+      final durationText = dur.inSeconds <= 0
+          ? 'не состоялся'
+          : '${dur.inMinutes.remainder(60).toString().padLeft(2, '0')}:${dur.inSeconds.remainder(60).toString().padLeft(2, '0')}';
+      await ChatStorageService.instance.saveMessage(
+        ChatMessage(
+          id: 'call_${entry.id}',
+          peerId: entry.peerId,
+          text: '$title • $durationText',
+          isOutgoing: !entry.incoming,
+          timestamp: entry.endedAt,
+          status: MessageStatus.sent,
+          invitePayloadJson: jsonEncode({
+            'kind': 'call_history',
+            'callId': entry.id,
+            'video': entry.video,
+            'incoming': entry.incoming,
+            'endedAtMs': entry.endedAtMs,
+            'durationMs': entry.durationMs,
+            if (entry.recordingPath != null)
+              'recordingPath': entry.recordingPath,
+          }),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[CallHistory] chat message save failed: $e');
+    }
   }
 
   Future<void> recordRejectedIncoming({
