@@ -100,6 +100,9 @@ class CallService {
   /// Длительность записи (обновляется раз в секунду, пока localRecording == true).
   final ValueNotifier<Duration> recordingElapsed = ValueNotifier(Duration.zero);
 
+  /// Громкая связь для аудиозвонка. При включении proximity-blanking не нужен.
+  final ValueNotifier<bool> speakerOn = ValueNotifier(false);
+
   MediaRecorder? _mediaRecorder;
   String? _recordingPath;
   String _recordingMimeType = 'video/webm';
@@ -392,6 +395,7 @@ class CallService {
     _activePeerId = recipientKey;
     _videoEnabled = video;
     await SoundEffectsService.instance.stopIncomingRingtone();
+    unawaited(SoundEffectsService.instance.startOutgoingCallTone());
     // Show "ringing" while waiting for callee to accept.
     // Transitions to connecting when 'accept' signal arrives.
     _setPhase(CallPhase.ringing);
@@ -432,6 +436,7 @@ class CallService {
     _videoEnabled = session.videoEnabled;
     _historyWasIncoming = true;
     await SoundEffectsService.instance.stopIncomingRingtone();
+    await SoundEffectsService.instance.stopOutgoingCallTone();
     _setPhase(CallPhase.connecting);
 
     try {
@@ -533,6 +538,15 @@ class CallService {
     await Helper.switchCamera(tracks.first);
   }
 
+  Future<void> setSpeakerphone(bool enabled) async {
+    try {
+      await Helper.setSpeakerphoneOn(enabled);
+    } catch (e) {
+      debugPrint('[RLINK][Call] setSpeakerphone failed: $e');
+    }
+    speakerOn.value = enabled;
+  }
+
   Future<MediaStream?> getLocalStream() async {
     await _ensureLocalStream();
     return _localStream;
@@ -604,6 +618,7 @@ class CallService {
           _connectTimeout?.cancel();
           if (phase.value != CallPhase.connected) {
             _setPhase(CallPhase.connected);
+            unawaited(SoundEffectsService.instance.stopOutgoingCallTone());
             unawaited(SoundEffectsService.instance
                 .playAction(ActionSound.callConnected));
           }
@@ -639,6 +654,7 @@ class CallService {
         _connectTimeout?.cancel();
         if (phase.value != CallPhase.connected) {
           _setPhase(CallPhase.connected);
+          unawaited(SoundEffectsService.instance.stopOutgoingCallTone());
           unawaited(SoundEffectsService.instance
               .playAction(ActionSound.callConnected));
         }
@@ -697,6 +713,7 @@ class CallService {
     _connectTimeout?.cancel();
     if (phase.value != CallPhase.connected) {
       _setPhase(CallPhase.connected);
+      unawaited(SoundEffectsService.instance.stopOutgoingCallTone());
       unawaited(
           SoundEffectsService.instance.playAction(ActionSound.callConnected));
     }
@@ -712,6 +729,7 @@ class CallService {
     _connectTimeout?.cancel();
     if (phase.value != CallPhase.connected) {
       _setPhase(CallPhase.connected);
+      unawaited(SoundEffectsService.instance.stopOutgoingCallTone());
       unawaited(
           SoundEffectsService.instance.playAction(ActionSound.callConnected));
     }
@@ -967,6 +985,8 @@ class CallService {
 
   Future<void> _cleanup(CallPhase endPhase) async {
     await SoundEffectsService.instance.stopIncomingRingtone();
+    await SoundEffectsService.instance.stopOutgoingCallTone();
+    unawaited(setSpeakerphone(false));
     final callIdForRecent = _activeCallId;
     final peerForHistory = _activePeerId;
     final durationSnapshot =

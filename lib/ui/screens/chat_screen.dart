@@ -4268,6 +4268,19 @@ class _ChatScreenState extends State<ChatScreen> {
   /// when relay is available, and only loads bytes for BLE fallback.
   Future<void> _sendVideoFile(XFile picked, String myId) async {
     if (!mounted) return;
+    if (kIsWeb) {
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) {
+        _showErrorSnack('Не удалось прочитать видео в браузере');
+        return;
+      }
+      await _sendWebVideoBytes(
+        bytes: bytes,
+        fileName: picked.name.isNotEmpty ? picked.name : 'video.mp4',
+        myId: myId,
+      );
+      return;
+    }
     setState(() => _isSending = true);
     try {
       final path =
@@ -4331,6 +4344,21 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Send photo with compression + editing (opens fullscreen on tap in chat).
   Future<void> _sendImageCompressed(XFile picked, String myId) async {
+    if (kIsWeb) {
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) {
+        _showErrorSnack('Не удалось прочитать фото в браузере');
+        return;
+      }
+      await _sendWebBytesAsFile(
+        bytes: bytes,
+        fileName: picked.name.isNotEmpty ? picked.name : 'photo.jpg',
+        myId: myId,
+        textFallback: '',
+        asImage: true,
+      );
+      return;
+    }
     final editedBytes = await Navigator.push<Uint8List>(
       context,
       MaterialPageRoute(
@@ -4381,6 +4409,20 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Send photo as original-quality file (no compression, no image editor).
   Future<void> _sendImageAsFile(XFile picked, String myId) async {
     if (!mounted) return;
+    if (kIsWeb) {
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) {
+        _showErrorSnack('Не удалось прочитать файл в браузере');
+        return;
+      }
+      await _sendWebBytesAsFile(
+        bytes: bytes,
+        fileName: picked.name.isNotEmpty ? picked.name : 'photo.jpg',
+        myId: myId,
+        textFallback: '📎 ${picked.name.isNotEmpty ? picked.name : 'Фото'}',
+      );
+      return;
+    }
     setState(() => _isSending = true);
     try {
       final docsDir = await getApplicationDocumentsDirectory();
@@ -4542,11 +4584,19 @@ class _ChatScreenState extends State<ChatScreen> {
           return;
         }
         fileSize = webBytes.length;
-        localPath = _webMediaRefForPickedBytes(
-          webBytes,
-          originalName,
-          fallbackMime: 'application/octet-stream',
-        );
+        localPath = await writeWebStoredFile(
+              fileName: '${msgId}_$originalName',
+              bytes: webBytes,
+              mimeType: _mimeTypeForFileName(
+                originalName,
+                fallbackMime: 'application/octet-stream',
+              ),
+            ) ??
+            _webMediaRefForPickedBytes(
+              webBytes,
+              originalName,
+              fallbackMime: 'application/octet-stream',
+            );
         if (!_savedMessagesLocalOnly) {
           wasQueued = await _sendMedia(
             bytes: webBytes,
@@ -11804,6 +11854,8 @@ class _UploadProgressOverlay extends StatelessWidget {
 // ── Полноэкранный просмотр изображения ───────────────────────────
 
 class _DmImage extends StatelessWidget {
+  static final Map<String, Future<Uint8List?>> _webStoredFutures = {};
+
   final String imagePath;
   final double? width;
   final double? height;
@@ -11888,8 +11940,12 @@ class _DmImage extends StatelessWidget {
         );
       }
       if (imagePath.startsWith('opfs://rlink/')) {
+        final cleanPath = imagePath.split('#').first;
         return FutureBuilder<Uint8List?>(
-          future: readWebStoredFile(imagePath.split('#').first),
+          future: _webStoredFutures.putIfAbsent(
+            cleanPath,
+            () => readWebStoredFile(cleanPath),
+          ),
           builder: (context, snapshot) {
             final data = snapshot.data;
             if (data == null) {

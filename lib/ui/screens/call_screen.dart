@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../services/call_service.dart';
+import '../../services/call_proximity_service.dart';
 import '../widgets/avatar_widget.dart';
 
 class CallScreen extends StatefulWidget {
@@ -32,6 +35,7 @@ class _CallScreenState extends State<CallScreen> {
   VoidCallback? _phaseListener;
   VoidCallback? _streamListener;
   VoidCallback? _remoteGenListener;
+  VoidCallback? _speakerListener;
 
   /// В видеозвонке: true — большой кадр собеседника, false — большой свой.
   bool _mainShowsPeer = true;
@@ -85,6 +89,7 @@ class _CallScreenState extends State<CallScreen> {
     _phaseListener = () {
       if (!mounted) return;
       final phase = CallService.instance.phase.value;
+      unawaited(_syncProximityMonitoring());
       if (phase == CallPhase.failed || phase == CallPhase.ended) {
         if (phase == CallPhase.failed) {
           ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -95,6 +100,13 @@ class _CallScreenState extends State<CallScreen> {
       }
     };
     CallService.instance.phase.addListener(_phaseListener!);
+    _speakerListener = () {
+      if (!mounted) return;
+      unawaited(_syncProximityMonitoring());
+      setState(() {});
+    };
+    CallService.instance.speakerOn.addListener(_speakerListener!);
+    unawaited(_syncProximityMonitoring());
     if (mounted) setState(() {});
   }
 
@@ -108,6 +120,14 @@ class _CallScreenState extends State<CallScreen> {
       _remoteRenderer.srcObject = stream;
     }
     if (mounted) setState(() {});
+  }
+
+  Future<void> _syncProximityMonitoring() async {
+    final audioOnly = !widget.session.videoEnabled;
+    final speaker = CallService.instance.speakerOn.value;
+    final phase = CallService.instance.phase.value;
+    final enabled = audioOnly && !speaker && phase == CallPhase.connected;
+    await CallProximityService.instance.setEnabled(enabled);
   }
 
   String _formatElapsed(Duration d) {
@@ -260,6 +280,11 @@ class _CallScreenState extends State<CallScreen> {
           .removeListener(_remoteGenListener!);
       _remoteGenListener = null;
     }
+    if (_speakerListener != null) {
+      CallService.instance.speakerOn.removeListener(_speakerListener!);
+      _speakerListener = null;
+    }
+    unawaited(CallProximityService.instance.stop());
     _localRenderer.dispose();
     _remoteRenderer.dispose();
     super.dispose();
@@ -284,87 +309,119 @@ class _CallScreenState extends State<CallScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned(
-              width: 1,
-              height: 1,
-              left: -10,
-              top: -10,
-              child: IgnorePointer(
-                child: Opacity(
-                  opacity: 0.01,
-                  child: RTCVideoView(_remoteRenderer),
-                ),
-              ),
-            ),
-            Column(
+        child: ValueListenableBuilder<bool>(
+          valueListenable: CallProximityService.instance.isNear,
+          builder: (_, near, __) {
+            return Stack(
               children: [
-                const SizedBox(height: 40),
-                AvatarWidget(
-                  initials: _initials(widget.peerName),
-                  color: widget.peerAvatarColor,
-                  emoji: widget.peerAvatarEmoji,
-                  imagePath: widget.peerAvatarImagePath,
-                  size: 112,
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  widget.peerName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
+                Positioned(
+                  width: 1,
+                  height: 1,
+                  left: -10,
+                  top: -10,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: 0.01,
+                      child: RTCVideoView(_remoteRenderer),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                ValueListenableBuilder<CallPhase>(
-                  valueListenable: CallService.instance.phase,
-                  builder: (_, phase, __) {
-                    final label = switch (phase) {
-                      CallPhase.ringing when widget.session.incoming =>
-                        'Входящий звонок',
-                      CallPhase.ringing => 'Ждём ответа...',
-                      CallPhase.connecting => 'Соединение...',
-                      CallPhase.connected => 'Аудиозвонок',
-                      CallPhase.failed => 'Соединение не удалось',
-                      CallPhase.ended => 'Звонок завершён',
-                      CallPhase.idle => 'Звонок',
-                    };
-                    return Text(
-                      label,
-                      style:
-                          const TextStyle(color: Colors.white60, fontSize: 14),
-                    );
-                  },
-                ),
-                const Spacer(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Column(
                   children: [
-                    IconButton.filled(
-                      onPressed: () async {
-                        _micOn = !_micOn;
-                        await CallService.instance.toggleMic(_micOn);
-                        if (mounted) setState(() {});
+                    const SizedBox(height: 40),
+                    AvatarWidget(
+                      initials: _initials(widget.peerName),
+                      color: widget.peerAvatarColor,
+                      emoji: widget.peerAvatarEmoji,
+                      imagePath: widget.peerAvatarImagePath,
+                      size: 112,
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      widget.peerName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ValueListenableBuilder<CallPhase>(
+                      valueListenable: CallService.instance.phase,
+                      builder: (_, phase, __) {
+                        final label = switch (phase) {
+                          CallPhase.ringing when widget.session.incoming =>
+                            'Входящий звонок',
+                          CallPhase.ringing => 'Ждём ответа...',
+                          CallPhase.connecting => 'Соединение...',
+                          CallPhase.connected => 'Аудиозвонок',
+                          CallPhase.failed => 'Соединение не удалось',
+                          CallPhase.ended => 'Звонок завершён',
+                          CallPhase.idle => 'Звонок',
+                        };
+                        return Text(
+                          label,
+                          style: const TextStyle(
+                              color: Colors.white60, fontSize: 14),
+                        );
                       },
-                      icon: Icon(_micOn ? Icons.mic : Icons.mic_off),
                     ),
-                    const SizedBox(width: 10),
-                    _recordControl(),
-                    const SizedBox(width: 10),
-                    IconButton.filled(
-                      style: IconButton.styleFrom(backgroundColor: Colors.red),
-                      onPressed: _end,
-                      icon: const Icon(Icons.call_end),
+                    const Spacer(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton.filled(
+                          onPressed: () async {
+                            _micOn = !_micOn;
+                            await CallService.instance.toggleMic(_micOn);
+                            if (mounted) setState(() {});
+                          },
+                          icon: Icon(_micOn ? Icons.mic : Icons.mic_off),
+                        ),
+                        const SizedBox(width: 10),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: CallService.instance.speakerOn,
+                          builder: (_, speaker, __) {
+                            return IconButton.filled(
+                              tooltip: speaker
+                                  ? 'Выключить громкую связь'
+                                  : 'Громкая связь',
+                              onPressed: () async {
+                                await CallService.instance
+                                    .setSpeakerphone(!speaker);
+                                await _syncProximityMonitoring();
+                              },
+                              icon: Icon(speaker
+                                  ? Icons.volume_up_rounded
+                                  : Icons.volume_down_outlined),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        _recordControl(),
+                        const SizedBox(width: 10),
+                        IconButton.filled(
+                          style:
+                              IconButton.styleFrom(backgroundColor: Colors.red),
+                          onPressed: _end,
+                          icon: const Icon(Icons.call_end),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 42),
                   ],
                 ),
-                const SizedBox(height: 42),
+                _callTopOverlay(),
+                if (near)
+                  Positioned.fill(
+                    child: AbsorbPointer(
+                      absorbing: true,
+                      child: Container(color: Colors.black),
+                    ),
+                  ),
               ],
-            ),
-            _callTopOverlay(),
-          ],
+            );
+          },
         ),
       ),
     );

@@ -1,5 +1,7 @@
 Future<void> requestWebNotificationPermission() async {}
 
+Future<String> webNotificationPermission() async => 'unsupported';
+
 Future<void> showWebNotification({
   required String title,
   required String body,

@@ -4,6 +4,8 @@ import 'web_notification_bridge_stub.dart'
 Future<void> requestWebNotificationPermission() =>
     impl.requestWebNotificationPermission();
 
+Future<String> webNotificationPermission() => impl.webNotificationPermission();
+
 Future<void> showWebNotification({
   required String title,
   required String body,
@@ -15,7 +17,8 @@ Future<void> syncWebPushSubscription({
   required String relayServerUrl,
   required String publicKey,
   required String nick,
-}) => impl.syncWebPushSubscription(
+}) =>
+    impl.syncWebPushSubscription(
       relayServerUrl: relayServerUrl,
       publicKey: publicKey,
       nick: nick,

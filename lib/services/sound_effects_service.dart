@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -6,11 +8,25 @@ import 'package:flutter/foundation.dart';
 
 import 'app_settings.dart';
 import 'runtime_platform.dart';
+import '../utils/web_file_store.dart';
 
 enum ActionSound {
   messageSent,
   messageReceived,
   callConnected,
+}
+
+enum AppSoundSlot {
+  incomingCall('incoming_call', 'Входящий звонок'),
+  outgoingCall('outgoing_call', 'Исходящий вызов'),
+  callConnected('call_connected', 'Соединение установлено'),
+  messageSent('message_sent', 'Сообщение отправлено'),
+  messageReceived('message_received', 'Сообщение получено'),
+  notification('notification', 'Уведомление');
+
+  final String id;
+  final String label;
+  const AppSoundSlot(this.id, this.label);
 }
 
 class SoundEffectsService {
@@ -19,38 +35,32 @@ class SoundEffectsService {
 
   final AudioPlayer _effectsPlayer = AudioPlayer(playerId: 'rlink_fx');
   final AudioPlayer _ringtonePlayer = AudioPlayer(playerId: 'rlink_ringtone');
+  final AudioPlayer _outgoingCallPlayer =
+      AudioPlayer(playerId: 'rlink_outgoing_call');
 
   bool get _enabled => AppSettings.instance.notifSound;
   bool get _supportedPlatform =>
       RuntimePlatform.isAndroid ||
       RuntimePlatform.isIos ||
-      RuntimePlatform.isDesktop;
+      RuntimePlatform.isDesktop ||
+      RuntimePlatform.isWeb;
 
   Future<void> playAction(ActionSound sound) async {
     if (!_enabled || !_supportedPlatform) return;
     try {
-      final bytes = switch (sound) {
-        ActionSound.messageSent => _buildToneBytes(
-            notes: const [1200],
-            stepMs: 70,
-            sampleRate: 16000,
-            amplitude: 0.20,
-          ),
-        ActionSound.messageReceived => _buildToneBytes(
-            notes: const [740, 990],
-            stepMs: 95,
-            sampleRate: 16000,
-            amplitude: 0.23,
-          ),
-        ActionSound.callConnected => _buildToneBytes(
-            notes: const [660, 880, 660],
-            stepMs: 80,
-            sampleRate: 16000,
-            amplitude: 0.22,
-          ),
+      final slot = switch (sound) {
+        ActionSound.messageSent => AppSoundSlot.messageSent,
+        ActionSound.messageReceived => AppSoundSlot.messageReceived,
+        ActionSound.callConnected => AppSoundSlot.callConnected,
       };
-      await _effectsPlayer.setReleaseMode(ReleaseMode.stop);
-      await _effectsPlayer.play(BytesSource(bytes), volume: 1);
+      final bytes = switch (sound) {
+        ActionSound.messageSent => defaultSoundBytes(AppSoundSlot.messageSent),
+        ActionSound.messageReceived =>
+          defaultSoundBytes(AppSoundSlot.messageReceived),
+        ActionSound.callConnected =>
+          defaultSoundBytes(AppSoundSlot.callConnected),
+      };
+      await _playSlotOnce(slot, bytes, _effectsPlayer);
     } catch (e) {
       debugPrint('[RLINK][Sound] playAction failed: $e');
     }
@@ -59,14 +69,11 @@ class SoundEffectsService {
   Future<void> playPushNotificationSound() async {
     if (!_enabled || !_supportedPlatform) return;
     try {
-      final bytes = _buildToneBytes(
-        notes: const [820, 1240, 820],
-        stepMs: 110,
-        sampleRate: 16000,
-        amplitude: 0.26,
+      await _playSlotOnce(
+        AppSoundSlot.notification,
+        defaultSoundBytes(AppSoundSlot.notification),
+        _effectsPlayer,
       );
-      await _effectsPlayer.setReleaseMode(ReleaseMode.stop);
-      await _effectsPlayer.play(BytesSource(bytes), volume: 1);
     } catch (e) {
       debugPrint('[RLINK][Sound] playPushNotificationSound failed: $e');
     }
@@ -75,10 +82,13 @@ class SoundEffectsService {
   Future<void> startIncomingRingtone() async {
     if (!_enabled || !_supportedPlatform) return;
     try {
-      final bytes = _buildRingtonePresetBytes(AppSettings.instance.callRingtone);
       await _ringtonePlayer.stop();
       await _ringtonePlayer.setReleaseMode(ReleaseMode.loop);
-      await _ringtonePlayer.play(BytesSource(bytes), volume: 1);
+      await _playSlotLoop(
+        AppSoundSlot.incomingCall,
+        _buildRingtonePresetBytes(AppSettings.instance.callRingtone),
+        _ringtonePlayer,
+      );
     } catch (e) {
       debugPrint('[RLINK][Sound] startIncomingRingtone failed: $e');
     }
@@ -88,6 +98,70 @@ class SoundEffectsService {
     try {
       await _ringtonePlayer.stop();
     } catch (_) {}
+  }
+
+  Future<void> startOutgoingCallTone() async {
+    if (!_enabled || !_supportedPlatform) return;
+    try {
+      await _outgoingCallPlayer.stop();
+      await _outgoingCallPlayer.setReleaseMode(ReleaseMode.loop);
+      await _playSlotLoop(
+        AppSoundSlot.outgoingCall,
+        defaultSoundBytes(AppSoundSlot.outgoingCall),
+        _outgoingCallPlayer,
+      );
+    } catch (e) {
+      debugPrint('[RLINK][Sound] startOutgoingCallTone failed: $e');
+    }
+  }
+
+  Future<void> stopOutgoingCallTone() async {
+    try {
+      await _outgoingCallPlayer.stop();
+    } catch (_) {}
+  }
+
+  Uint8List defaultSoundBytes(AppSoundSlot slot) {
+    switch (slot) {
+      case AppSoundSlot.incomingCall:
+        return _buildRingtonePresetBytes(AppSettings.instance.callRingtone);
+      case AppSoundSlot.outgoingCall:
+        return _buildToneBytes(
+          notes: const [440, 0, 440, 0],
+          stepMs: 260,
+          pauseAfterMs: 720,
+          sampleRate: 16000,
+          amplitude: 0.22,
+        );
+      case AppSoundSlot.callConnected:
+        return _buildToneBytes(
+          notes: const [660, 880, 660],
+          stepMs: 80,
+          sampleRate: 16000,
+          amplitude: 0.22,
+        );
+      case AppSoundSlot.messageSent:
+        return _buildToneBytes(
+          notes: const [1200],
+          stepMs: 70,
+          sampleRate: 16000,
+          amplitude: 0.20,
+        );
+      case AppSoundSlot.messageReceived:
+        return _buildToneBytes(
+          notes: const [740, 990],
+          stepMs: 95,
+          sampleRate: 16000,
+          amplitude: 0.23,
+        );
+      case AppSoundSlot.notification:
+        return _buildToneBytes(
+          notes: const [820, 1240, 820],
+          stepMs: 110,
+          sampleRate: 16000,
+          amplitude: 0.26,
+        );
+    }
   }
 
   Uint8List _buildRingtonePresetBytes(int preset) {
@@ -133,6 +207,11 @@ class SoundEffectsService {
     for (final freq in totalSteps) {
       final samples = ((stepMs / 1000) * sampleRate).round();
       for (var i = 0; i < samples; i++) {
+        if (freq <= 0) {
+          pcm.addByte(0);
+          pcm.addByte(0);
+          continue;
+        }
         final t = i / sampleRate;
         final fadeIn = i < 80 ? i / 80 : 1.0;
         final fadeOut =
@@ -154,6 +233,70 @@ class SoundEffectsService {
       pcm.toBytes(),
       sampleRate: sampleRate,
     );
+  }
+
+  Future<void> previewSlot(AppSoundSlot slot) async {
+    if (!_supportedPlatform) return;
+    try {
+      await _playSlotOnce(slot, defaultSoundBytes(slot), _effectsPlayer);
+    } catch (e) {
+      debugPrint('[RLINK][Sound] previewSlot failed: $e');
+    }
+  }
+
+  Future<void> _playSlotOnce(
+    AppSoundSlot slot,
+    Uint8List fallbackBytes,
+    AudioPlayer player,
+  ) async {
+    await player.stop();
+    await player.setReleaseMode(ReleaseMode.stop);
+    await _playSlot(slot, fallbackBytes, player);
+  }
+
+  Future<void> _playSlotLoop(
+    AppSoundSlot slot,
+    Uint8List fallbackBytes,
+    AudioPlayer player,
+  ) async {
+    await player.setReleaseMode(ReleaseMode.loop);
+    await _playSlot(slot, fallbackBytes, player);
+  }
+
+  Future<void> _playSlot(
+    AppSoundSlot slot,
+    Uint8List fallbackBytes,
+    AudioPlayer player,
+  ) async {
+    final custom = AppSettings.instance.customSoundPath(slot.id);
+    if (custom != null) {
+      if (!kIsWeb && File(custom).existsSync()) {
+        await player.play(DeviceFileSource(custom), volume: 1);
+        return;
+      }
+      final customBytes = await _customSoundBytes(custom);
+      if (customBytes != null && customBytes.isNotEmpty) {
+        await player.play(BytesSource(customBytes), volume: 1);
+        return;
+      }
+    }
+    await player.play(BytesSource(fallbackBytes), volume: 1);
+  }
+
+  Future<Uint8List?> _customSoundBytes(String ref) async {
+    if (ref.startsWith('opfs://rlink/')) {
+      return readWebStoredFile(ref);
+    }
+    if (ref.startsWith('data:')) {
+      final comma = ref.indexOf(',');
+      if (comma < 0) return null;
+      try {
+        return base64Decode(ref.substring(comma + 1));
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
   }
 
   Uint8List _wrapPcm16MonoWav(

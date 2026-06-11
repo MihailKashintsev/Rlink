@@ -49,6 +49,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyNotifyGroups = 'notify_groups';
   static const _keyNotifyChannels = 'notify_channels';
   static const _keyCallRingtone = 'call_ringtone'; // 0=classic,1=digital,2=soft
+  static const _keyCustomSoundPaths = 'custom_sound_paths_v1';
   static const _keyAppIconVariant = 'app_icon_variant'; // 0=classic,1=mono,2=ai
   static const _keyUseIosStyleEmoji =
       'use_ios_style_emoji'; // Android: Noto Color Emoji fallback
@@ -114,6 +115,7 @@ class AppSettings extends ChangeNotifier {
       'notifyGroups': _notifyGroups,
       'notifyChannels': _notifyChannels,
       'callRingtone': _callRingtone,
+      'customSoundPaths': _customSoundPaths,
       'appIconVariant': _appIconVariant,
       'useIosStyleEmoji': _useIosStyleEmoji,
       'deviceLinkRole': _deviceLinkRole,
@@ -154,6 +156,7 @@ class AppSettings extends ChangeNotifier {
   bool _notifyGroups = true;
   bool _notifyChannels = true;
   int _callRingtone = 0;
+  Map<String, String> _customSoundPaths = const {};
   int _appIconVariant = 0;
   bool _useIosStyleEmoji = false;
   int _deviceLinkRole = 0;
@@ -196,6 +199,13 @@ class AppSettings extends ChangeNotifier {
   bool get notifyGroups => _notifyGroups;
   bool get notifyChannels => _notifyChannels;
   int get callRingtone => _callRingtone.clamp(0, 2);
+  Map<String, String> get customSoundPaths =>
+      Map.unmodifiable(_customSoundPaths);
+  String? customSoundPath(String soundId) {
+    final v = _customSoundPaths[soundId]?.trim();
+    return v == null || v.isEmpty ? null : v;
+  }
+
   int get appIconVariant => _appIconVariant;
   int get deviceLinkRole => _deviceLinkRole.clamp(0, 2);
   bool get isPrimaryDevice => deviceLinkRole == 1;
@@ -208,8 +218,10 @@ class AppSettings extends ChangeNotifier {
   bool isBotEnabled(String botId) => _enabledBotIds.contains(botId);
   bool get canEditOwnProfileAndSettings => !isLinkedChildDevice;
   bool get channelsEnabled => connectionMode != 0;
-  List<Map<String, dynamic>> get inputBarButtonConfig => List.unmodifiable(_inputBarButtonConfig);
-  List<String> get inputBarButtonOrder => inputBarButtonConfig.map((e) => e['id'] as String).toList();
+  List<Map<String, dynamic>> get inputBarButtonConfig =>
+      List.unmodifiable(_inputBarButtonConfig);
+  List<String> get inputBarButtonOrder =>
+      inputBarButtonConfig.map((e) => e['id'] as String).toList();
 
   /// На Android включает шрифт Noto Color Emoji (ближе к единому виду с iOS).
   bool get useIosStyleEmoji => _useIosStyleEmoji;
@@ -390,6 +402,8 @@ class AppSettings extends ChangeNotifier {
     _notifyGroups = _prefs.getBool(_keyNotifyGroups) ?? true;
     _notifyChannels = _prefs.getBool(_keyNotifyChannels) ?? true;
     _callRingtone = (_prefs.getInt(_keyCallRingtone) ?? 0).clamp(0, 2);
+    _customSoundPaths =
+        _decodeStringMap(_prefs.getString(_keyCustomSoundPaths));
     final rawButtonOrder = _prefs.getString(_keyInputBarButtonOrder);
     if (rawButtonOrder != null && rawButtonOrder.isNotEmpty) {
       // Migration: check if old format (List<String>) or new format (List<Map>)
@@ -400,15 +414,23 @@ class AppSettings extends ChangeNotifier {
           _inputBarButtonConfig = List<Map<String, dynamic>>.from(decoded);
         } else if (decoded is List) {
           // Old format: List<String>
-          _inputBarButtonConfig = decoded.map((id) => {'id': id as String, 'side': 'left'} as Map<String, dynamic>).toList();
+          _inputBarButtonConfig = decoded
+              .map((id) =>
+                  {'id': id as String, 'side': 'left'} as Map<String, dynamic>)
+              .toList();
         } else {
           // Fallback: treat as single string (old format with single value)
-          _inputBarButtonConfig = [{'id': rawButtonOrder, 'side': 'left'}];
+          _inputBarButtonConfig = [
+            {'id': rawButtonOrder, 'side': 'left'}
+          ];
         }
       } catch (_) {
         // Fallback: treat as old format with comma-separated values
         final items = rawButtonOrder.split(',');
-        _inputBarButtonConfig = items.map((id) => {'id': id.trim(), 'side': 'left'} as Map<String, dynamic>).toList();
+        _inputBarButtonConfig = items
+            .map((id) =>
+                {'id': id.trim(), 'side': 'left'} as Map<String, dynamic>)
+            .toList();
       }
     }
     var iconV = (_prefs.getInt(_keyAppIconVariant) ?? 0).clamp(0, 3);
@@ -450,17 +472,21 @@ class AppSettings extends ChangeNotifier {
   }
 
   Future<void> setInputBarButtonOrder(List<String> order) async {
-    _inputBarButtonConfig = List.unmodifiable(order.map((id) => {'id': id, 'side': 'left'}));
+    _inputBarButtonConfig =
+        List.unmodifiable(order.map((id) => {'id': id, 'side': 'left'}));
     await _runPrefsWrite(
-      (p) => p.setString(_keyInputBarButtonOrder, jsonEncode(_inputBarButtonConfig)),
+      (p) => p.setString(
+          _keyInputBarButtonOrder, jsonEncode(_inputBarButtonConfig)),
     );
     _notifySettingsChanged();
   }
 
-  Future<void> setInputBarButtonConfig(List<Map<String, dynamic>> config) async {
+  Future<void> setInputBarButtonConfig(
+      List<Map<String, dynamic>> config) async {
     _inputBarButtonConfig = List.unmodifiable(config);
     await _runPrefsWrite(
-      (p) => p.setString(_keyInputBarButtonOrder, jsonEncode(_inputBarButtonConfig)),
+      (p) => p.setString(
+          _keyInputBarButtonOrder, jsonEncode(_inputBarButtonConfig)),
     );
     _notifySettingsChanged();
   }
@@ -514,6 +540,12 @@ class AppSettings extends ChangeNotifier {
       _notifyChannels = m['notifyChannels'] as bool? ?? _notifyChannels;
       _callRingtone =
           ((m['callRingtone'] as num?)?.toInt() ?? _callRingtone).clamp(0, 2);
+      final customSounds = m['customSoundPaths'];
+      if (customSounds is Map) {
+        _customSoundPaths = customSounds.map(
+          (k, v) => MapEntry(k.toString(), v.toString()),
+        );
+      }
       _appIconVariant =
           ((m['appIconVariant'] as num?)?.toInt() ?? _appIconVariant)
               .clamp(0, 2);
@@ -542,6 +574,19 @@ class AppSettings extends ChangeNotifier {
     } catch (_) {}
   }
 
+  Map<String, String> _decodeStringMap(String? raw) {
+    if (raw == null || raw.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return const {};
+      return Map.unmodifiable(decoded.map(
+        (k, v) => MapEntry(k.toString(), v.toString()),
+      ));
+    } catch (_) {
+      return const {};
+    }
+  }
+
   Future<void> setNotifyPersonal(bool v) async {
     _notifyPersonal = v;
     await _runPrefsWrite((p) => p.setBool(_keyNotifyPersonal, v));
@@ -563,6 +608,23 @@ class AppSettings extends ChangeNotifier {
   Future<void> setCallRingtone(int v) async {
     _callRingtone = v.clamp(0, 2);
     await _runPrefsWrite((p) => p.setInt(_keyCallRingtone, _callRingtone));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setCustomSoundPath(String soundId, String? path) async {
+    final id = soundId.trim();
+    if (id.isEmpty) return;
+    final next = Map<String, String>.from(_customSoundPaths);
+    final clean = path?.trim() ?? '';
+    if (clean.isEmpty) {
+      next.remove(id);
+    } else {
+      next[id] = clean;
+    }
+    _customSoundPaths = Map.unmodifiable(next);
+    await _runPrefsWrite(
+      (p) => p.setString(_keyCustomSoundPaths, jsonEncode(_customSoundPaths)),
+    );
     _notifySettingsChanged();
   }
 

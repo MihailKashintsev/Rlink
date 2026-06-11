@@ -36,6 +36,8 @@ struct RlinkActivityAttributes: ActivityAttributes {
     private var writeBuffers: [UUID: Data] = [:]
     // Queued outgoing notification bytes per central (for peripheralManagerIsReady retry)
     private var pendingNotifyData: [UUID: Data] = [:]
+    private var proximityChannel: FlutterMethodChannel?
+    private var proximityMonitoring = false
 
     // Ограничитель буфера — не больше 50 пакетов
     private let maxBufferSize = 50
@@ -137,6 +139,21 @@ struct RlinkActivityAttributes: ActivityAttributes {
             }
         }
 
+        proximityChannel = FlutterMethodChannel(name: "com.rendergames.rlink/proximity", binaryMessenger: m)
+        proximityChannel?.setMethodCallHandler { [weak self] call, result in
+            guard let self = self else { return }
+            switch call.method {
+            case "start":
+                self.startProximityMonitoring()
+                result(nil)
+            case "stop":
+                self.stopProximityMonitoring()
+                result(nil)
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
+
         let method = FlutterMethodChannel(name: "com.rendergames.rlink/ble", binaryMessenger: m)
         method.setMethodCallHandler { [weak self] call, result in
             guard let self = self else { return }
@@ -196,6 +213,35 @@ struct RlinkActivityAttributes: ActivityAttributes {
                 self.flushPendingEvents()
             }
         }
+    }
+
+    private func startProximityMonitoring() {
+        if proximityMonitoring { return }
+        proximityMonitoring = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(proximityStateChanged),
+            name: UIDevice.proximityStateDidChangeNotification,
+            object: nil
+        )
+        UIDevice.current.isProximityMonitoringEnabled = true
+        proximityChannel?.invokeMethod("onProximityChanged", arguments: UIDevice.current.proximityState)
+    }
+
+    private func stopProximityMonitoring() {
+        if !proximityMonitoring { return }
+        proximityMonitoring = false
+        UIDevice.current.isProximityMonitoringEnabled = false
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIDevice.proximityStateDidChangeNotification,
+            object: nil
+        )
+        proximityChannel?.invokeMethod("onProximityChanged", arguments: false)
+    }
+
+    @objc private func proximityStateChanged() {
+        proximityChannel?.invokeMethod("onProximityChanged", arguments: UIDevice.current.proximityState)
     }
 
     // MARK: - Buffer

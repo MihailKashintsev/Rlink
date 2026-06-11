@@ -6,8 +6,16 @@ import 'dart:js' as js;
 Future<void> requestWebNotificationPermission() async {
   if (!html.Notification.supported) return;
   try {
-    await html.Notification.requestPermission();
+    final perm = await html.Notification.requestPermission();
+    if (perm == 'granted' && html.window.navigator.serviceWorker != null) {
+      await html.window.navigator.serviceWorker?.register('push_sw.js');
+    }
   } catch (_) {}
+}
+
+Future<String> webNotificationPermission() async {
+  if (!html.Notification.supported) return 'unsupported';
+  return html.Notification.permission ?? 'default';
 }
 
 Future<void> showWebNotification({
@@ -18,6 +26,21 @@ Future<void> showWebNotification({
   if (!html.Notification.supported) return;
   if (html.Notification.permission != 'granted') return;
   try {
+    final sw = html.window.navigator.serviceWorker;
+    if (sw != null) {
+      final reg = await sw.ready;
+      await reg.showNotification(
+        title,
+        {
+          'body': body,
+          'tag': tag,
+          'renotify': true,
+          'icon': 'icons/Icon-192.png',
+          'badge': 'icons/Icon-192.png',
+        },
+      );
+      return;
+    }
     html.Notification(
       title,
       body: body,

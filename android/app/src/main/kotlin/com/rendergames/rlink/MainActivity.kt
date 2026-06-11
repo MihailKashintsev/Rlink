@@ -9,10 +9,15 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import android.os.Build
 import android.os.ParcelUuid
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -27,6 +32,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         const val METHOD_CHANNEL = "com.rendergames.rlink/ble"
         const val EVENT_CHANNEL  = "com.rendergames.rlink/ble_events"
+        const val PROXIMITY_CHANNEL = "com.rendergames.rlink/proximity"
         const val NOTIFICATION_CHANNEL_ID = "rlink_messages"
         private const val APP_ICON_CHANNEL_ID = "rlink_app_icon"
         private const val APP_ICON_NOTIFICATION_ID = 91001
@@ -52,6 +58,23 @@ class MainActivity : FlutterActivity() {
 
     // Отслеживаем foreground/background для уведомлений
     private var isAppInForeground = false
+    private var proximityChannel: MethodChannel? = null
+    private var sensorManager: SensorManager? = null
+    private var proximitySensor: Sensor? = null
+    private var proximityWakeLock: PowerManager.WakeLock? = null
+    private var proximityMonitoring = false
+    private var lastProximityNear: Boolean? = null
+    private val proximityListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent) {
+            val sensor = proximitySensor ?: return
+            val near = event.values.isNotEmpty() && event.values[0] < sensor.maximumRange
+            if (lastProximityNear == near) return
+            lastProximityNear = near
+            proximityChannel?.invokeMethod("onProximityChanged", near)
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+    }
 
     override fun onResume() {
         super.onResume()
@@ -82,6 +105,11 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
         ensureAppIconNotificationChannel()
+    }
+
+    override fun onDestroy() {
+        stopProximityMonitoring()
+        super.onDestroy()
     }
 
     private fun createNotificationChannel() {
@@ -146,6 +174,24 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        proximityChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            PROXIMITY_CHANNEL
+        )
+        proximityChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> {
+                    startProximityMonitoring()
+                    result.success(null)
+                }
+                "stop" -> {
+                    stopProximityMonitoring()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -189,6 +235,43 @@ class MainActivity : FlutterActivity() {
 
         // Native square video cropping
         VideoCropPlugin.register(flutterEngine.dartExecutor.binaryMessenger)
+    }
+
+    private fun startProximityMonitoring() {
+        if (proximityMonitoring) return
+        val sm = getSystemService(Context.SENSOR_SERVICE) as? SensorManager ?: return
+        val sensor = sm.getDefaultSensor(Sensor.TYPE_PROXIMITY) ?: return
+        sensorManager = sm
+        proximitySensor = sensor
+        lastProximityNear = null
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            proximityWakeLock = pm.newWakeLock(
+                PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK,
+                "Rlink:CallProximity"
+            )
+            proximityWakeLock?.acquire()
+        } catch (e: Exception) {
+            Log.w("Rlink", "proximity wakelock: ${e.message}")
+        }
+        sm.registerListener(proximityListener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+        proximityMonitoring = true
+    }
+
+    private fun stopProximityMonitoring() {
+        if (!proximityMonitoring && proximityWakeLock == null) return
+        try {
+            sensorManager?.unregisterListener(proximityListener)
+        } catch (_: Exception) { }
+        try {
+            val wl = proximityWakeLock
+            if (wl?.isHeld == true) wl.release()
+        } catch (_: Exception) { }
+        proximityWakeLock = null
+        proximityMonitoring = false
+        proximitySensor = null
+        lastProximityNear = false
+        proximityChannel?.invokeMethod("onProximityChanged", false)
     }
 
     private fun ensureAppIconNotificationChannel() {

@@ -191,12 +191,12 @@ class NotificationService {
         importance: Importance.high,
         priority: Priority.high,
         category: AndroidNotificationCategory.message,
-        playSound: false,
+        playSound: AppSettings.instance.notifSound,
       );
       final darwinDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
-        presentSound: false,
+        presentSound: AppSettings.instance.notifSound,
         threadIdentifier: threadIdentifier,
       );
       final WindowsNotificationDetails? windowsDetails =

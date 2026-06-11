@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -23,6 +25,9 @@ import '../../services/profile_service.dart';
 import '../../services/relay_service.dart';
 import '../../services/runtime_platform.dart';
 import '../../services/sound_effects_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/web_notification_bridge.dart';
+import '../../utils/web_file_store.dart';
 import '../../services/web_identity_portable.dart';
 import '../screens/stickers_hub_screen.dart';
 import '../screens/emoji_hub_screen.dart';
@@ -966,7 +971,13 @@ class _NotificationsPageState extends State<_NotificationsPage> {
             subtitle: Text(AppL10n.t('settings_notif_messages_sub'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             value: settings.notificationsEnabled,
-            onChanged: (v) => settings.setNotificationsEnabled(v),
+            onChanged: (v) async {
+              await settings.setNotificationsEnabled(v);
+              if (v) {
+                await NotificationService.instance.requestPermissions();
+                if (mounted) setState(() {});
+              }
+            },
           ),
           SwitchListTile(
             secondary: Icon(Icons.volume_up_outlined,
@@ -997,6 +1008,70 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                 ? () => _pickRingtone(context, settings)
                 : null,
           ),
+          _SectionHeader('Звуки приложения'),
+          for (final slot in AppSoundSlot.values)
+            ListTile(
+              leading: Icon(Icons.music_note_outlined, color: cs.primary),
+              title: Text(slot.label),
+              subtitle: Text(
+                _soundSubtitle(settings, slot),
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
+              trailing: Wrap(
+                spacing: 2,
+                children: [
+                  IconButton(
+                    tooltip: 'Прослушать',
+                    onPressed: settings.notifSound
+                        ? () => unawaited(
+                              SoundEffectsService.instance.previewSlot(slot),
+                            )
+                        : null,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Выбрать файл',
+                    onPressed: settings.notifSound
+                        ? () => unawaited(_pickCustomSound(slot))
+                        : null,
+                    icon: const Icon(Icons.folder_open_outlined),
+                  ),
+                  if (settings.customSoundPath(slot.id) != null)
+                    IconButton(
+                      tooltip: 'Сбросить',
+                      onPressed: () => unawaited(_resetCustomSound(slot)),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                ],
+              ),
+            ),
+          if (RuntimePlatform.isWeb)
+            FutureBuilder<String>(
+              future: webNotificationPermission(),
+              builder: (context, snapshot) {
+                final perm = snapshot.data ?? 'default';
+                final label = switch (perm) {
+                  'granted' => 'Разрешены',
+                  'denied' => 'Запрещены в браузере',
+                  'unsupported' => 'Не поддерживаются браузером',
+                  _ => 'Нужно разрешение браузера',
+                };
+                return ListTile(
+                  leading: Icon(Icons.public_rounded, color: cs.primary),
+                  title: const Text('Web-уведомления'),
+                  subtitle: Text(label,
+                      style:
+                          TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                  trailing: FilledButton.tonal(
+                    onPressed: () async {
+                      await NotificationService.instance.requestPermissions();
+                      if (mounted) setState(() {});
+                    },
+                    child: const Text('Разрешить'),
+                  ),
+                );
+              },
+            ),
           SwitchListTile(
             secondary: Icon(Icons.vibration,
                 color: settings.notifVibration && settings.notificationsEnabled
@@ -1088,6 +1163,96 @@ class _NotificationsPageState extends State<_NotificationsPage> {
       default:
         return 'Classic Ring';
     }
+  }
+
+  String _soundSubtitle(AppSettings settings, AppSoundSlot slot) {
+    final custom = settings.customSoundPath(slot.id);
+    if (custom != null) return 'Свой файл: ${p.basename(custom)}';
+    if (slot == AppSoundSlot.incomingCall) {
+      return 'Стандартный: ${_ringtoneLabel(settings.callRingtone)}';
+    }
+    return 'Стандартный звук';
+  }
+
+  String _soundMimeForName(String name) {
+    switch (p.extension(name).toLowerCase()) {
+      case '.mp3':
+        return 'audio/mpeg';
+      case '.m4a':
+      case '.mp4':
+        return 'audio/mp4';
+      case '.ogg':
+      case '.opus':
+        return 'audio/ogg';
+      case '.wav':
+        return 'audio/wav';
+      case '.aac':
+        return 'audio/aac';
+      case '.webm':
+        return 'audio/webm';
+      default:
+        return 'audio/mpeg';
+    }
+  }
+
+  Future<void> _pickCustomSound(AppSoundSlot slot) async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const [
+        'mp3',
+        'm4a',
+        'mp4',
+        'aac',
+        'wav',
+        'ogg',
+        'opus',
+        'webm'
+      ],
+      allowMultiple: false,
+      withData: RuntimePlatform.isWeb,
+    );
+    final file = picked?.files.firstOrNull;
+    if (file == null) return;
+    String? storedPath;
+    if (RuntimePlatform.isWeb) {
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) return;
+      storedPath = await writeWebStoredFile(
+        fileName:
+            'sound_${slot.id}_${DateTime.now().millisecondsSinceEpoch}_${file.name}',
+        bytes: bytes,
+        mimeType: _soundMimeForName(file.name),
+      );
+      storedPath ??= 'data:${_soundMimeForName(file.name)};base64,'
+          '${base64Encode(bytes)}';
+    } else {
+      final docs = await getApplicationDocumentsDirectory();
+      final dir = Directory(p.join(docs.path, 'sounds'))
+        ..createSync(recursive: true);
+      final safeName = file.name
+          .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+          .replaceAll(RegExp(r'_+'), '_');
+      final out = p.join(
+        dir.path,
+        '${slot.id}_${DateTime.now().millisecondsSinceEpoch}_$safeName',
+      );
+      if (file.path != null) {
+        await File(file.path!).copy(out);
+      } else if (file.bytes != null) {
+        await File(out).writeAsBytes(file.bytes!);
+      }
+      storedPath = out;
+    }
+    if (storedPath == null || storedPath.isEmpty) return;
+    await AppSettings.instance.setCustomSoundPath(slot.id, storedPath);
+    if (!mounted) return;
+    setState(() {});
+    await SoundEffectsService.instance.previewSlot(slot);
+  }
+
+  Future<void> _resetCustomSound(AppSoundSlot slot) async {
+    await AppSettings.instance.setCustomSoundPath(slot.id, null);
+    if (mounted) setState(() {});
   }
 
   Future<void> _pickRingtone(BuildContext context, AppSettings settings) async {
