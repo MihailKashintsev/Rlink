@@ -11,6 +11,8 @@ import 'crypto_service.dart';
 import 'gossip_router.dart';
 import 'group_service.dart';
 import 'image_service.dart';
+import '../utils/web_file_store.dart';
+import '../utils/web_object_url.dart';
 import 'story_service.dart';
 
 /// Унифицированный приёмник медиа: единый pipeline для BLE-чанков и relay-blob.
@@ -155,7 +157,7 @@ class MediaReceiver {
       final p = await img.assembleAndSaveFile(msgId);
       if (p != null) {
         img.markCompleted(msgId);
-        final sz = kIsWeb ? _dataUriSize(p) : await File(p).length();
+        final sz = await _storedMediaByteLength(p);
         await ChannelService.instance.applyAssembledPostMedia(
             postId: msgId, filePath: p, fileName: fileName, fileSize: sz);
       }
@@ -190,7 +192,7 @@ class MediaReceiver {
       final p = await img.assembleAndSaveFile(msgId);
       if (p != null) {
         img.markCompleted(msgId);
-        final sz = kIsWeb ? _dataUriSize(p) : await File(p).length();
+        final sz = await _storedMediaByteLength(p);
         await ChannelService.instance.applyAssembledCommentMedia(
             commentId: msgId, filePath: p, fileName: fileName, fileSize: sz);
       }
@@ -274,8 +276,7 @@ class MediaReceiver {
     } else if (isFile) {
       filePath = await img.assembleAndSaveFile(msgId);
       if (filePath == null) return;
-      fileSize =
-          kIsWeb ? _dataUriSize(filePath) : await File(filePath).length();
+      fileSize = await _storedMediaByteLength(filePath);
       label = '📎 ${fileName ?? 'Файл'}';
     } else if (isVideo) {
       videoPath = await img.assembleAndSaveVideo(msgId, isSquare: isSquare);
@@ -317,6 +318,18 @@ class MediaReceiver {
     }
     onNotify?.call(fromId, label.isNotEmpty ? label : '📷 Фото');
   }
+}
+
+Future<int> _storedMediaByteLength(String path) async {
+  if (kIsWeb) {
+    final dataUriSize = _dataUriSize(path);
+    if (dataUriSize != null) return dataUriSize;
+    final storedBytes = await readWebStoredFile(path.split('#').first);
+    if (storedBytes != null) return storedBytes.length;
+    final objectBytes = await readWebObjectUrlBytes(path);
+    return objectBytes?.length ?? 0;
+  }
+  return File(path).length();
 }
 
 int? _dataUriSize(String value) {

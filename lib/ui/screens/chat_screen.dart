@@ -28,7 +28,11 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../main.dart'
-    show IncomingMessage, incomingMessageController, navigatorKey;
+    show
+        IncomingMessage,
+        incomingMessageController,
+        navigatorKey,
+        sendFullProfileToPeer;
 import '../../models/channel.dart';
 import '../../models/chat_message.dart';
 import '../../models/group.dart';
@@ -5547,6 +5551,24 @@ class _ChatScreenState extends State<ChatScreen> {
     }());
   }
 
+  Future<void> _exchangeProfilesAgain() async {
+    if (!_looksLikePublicKey(_resolvedPeerId)) {
+      final ok = await _waitForPeerPublicKey();
+      if (!ok) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Подождите — идёт обмен профилями')),
+        );
+        return;
+      }
+    }
+    await sendFullProfileToPeer(_resolvedPeerId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Профиль отправлен повторно')),
+    );
+  }
+
   void _jumpToMessageById(String messageId) {
     final messages =
         ChatStorageService.instance.messagesNotifier(_resolvedPeerId).value;
@@ -6137,6 +6159,11 @@ class _ChatScreenState extends State<ChatScreen> {
                               value: 'profile', child: Text('Профиль')),
                           if (!_isDmBot && !_savedMessagesLocalOnly)
                             const PopupMenuItem(
+                              value: 'exchange_profiles',
+                              child: Text('Обменяться профилями повторно'),
+                            ),
+                          if (!_isDmBot && !_savedMessagesLocalOnly)
+                            const PopupMenuItem(
                               value: 'edit_contact',
                               child: Text('Изменить контакт'),
                             ),
@@ -6164,6 +6191,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         switch (v) {
                           case 'profile':
                             _openPeerProfile();
+                            break;
+                          case 'exchange_profiles':
+                            await _exchangeProfilesAgain();
                             break;
                           case 'edit_contact':
                             final c = await ChatStorageService.instance
@@ -10593,6 +10623,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
   List<String> _tags = const [];
   String? _musicPath;
   AudioPlayer? _musicPlayer;
+  String? _musicObjectUrl;
   bool _musicPlaying = false;
   bool _isOwnedRelayBot = false;
   Map<String, dynamic>? _ownedRelayBotRow;
@@ -10612,6 +10643,9 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
     ChatStorageService.instance.contactsNotifier
         .removeListener(_onContactsChanged);
     _musicPlayer?.dispose();
+    if (_musicObjectUrl != null) {
+      revokeWebObjectUrl(_musicObjectUrl!);
+    }
     super.dispose();
   }
 
@@ -10692,6 +10726,20 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       _materials = _collectMaterials(msgs);
     });
     unawaited(_refreshOwnedRelayBotState());
+  }
+
+  Future<void> _exchangeProfilesAgain() async {
+    if (!_looksLikeHex64(widget.peerId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Профиль контакта ещё не найден')),
+      );
+      return;
+    }
+    await sendFullProfileToPeer(widget.peerId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Профиль отправлен повторно')),
+    );
   }
 
   List<_DmMaterialEntry> _collectMaterials(List<ChatMessage> msgs) {
@@ -10913,6 +10961,36 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
     return File(p).existsSync();
   }
 
+  bool _profileMusicAvailable(String? path) {
+    if (path == null || path.isEmpty) return false;
+    if (kIsWeb) return _ChatScreenState._isInlineWebUri(path);
+    return File(path).existsSync();
+  }
+
+  Future<Source?> _profileMusicSource(String path) async {
+    if (kIsWeb) {
+      if (path.startsWith('opfs://rlink/')) {
+        final url = await webStoredFileObjectUrl(
+          path.split('#').first,
+          mimeType: _ChatScreenState._mimeTypeForFileName(
+            path,
+            fallbackMime: 'audio/mpeg',
+          ),
+        );
+        if (url == null) return null;
+        if (_musicObjectUrl != null) {
+          revokeWebObjectUrl(_musicObjectUrl!);
+        }
+        _musicObjectUrl = url;
+        return UrlSource(url);
+      }
+      if (_ChatScreenState._isInlineWebUri(path)) return UrlSource(path);
+      return null;
+    }
+    if (!File(path).existsSync()) return null;
+    return DeviceFileSource(path);
+  }
+
   Widget _peerProfileBannerBackground(int color) {
     final p = _bannerPath;
     if (!_peerProfileBannerVisible(p)) return _bannerFallback(color);
@@ -10946,14 +11024,16 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
 
   Future<void> _toggleProfileMusic() async {
     final path = _musicPath;
-    if (path == null || !File(path).existsSync()) return;
+    if (!_profileMusicAvailable(path)) return;
     _musicPlayer ??= AudioPlayer();
     if (_musicPlaying) {
       await _musicPlayer!.stop();
       if (mounted) setState(() => _musicPlaying = false);
       return;
     }
-    await _musicPlayer!.play(DeviceFileSource(path));
+    final source = await _profileMusicSource(path!);
+    if (source == null) return;
+    await _musicPlayer!.play(source);
     if (!mounted) return;
     setState(() => _musicPlaying = true);
     unawaited(_musicPlayer!.onPlayerComplete.first.then((_) {
@@ -11514,6 +11594,14 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                           fontFamily: 'monospace'),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: OutlinedButton.icon(
+                      onPressed: _exchangeProfilesAgain,
+                      icon: const Icon(Icons.sync_outlined),
+                      label: const Text('Обменяться профилями повторно'),
+                    ),
+                  ),
 
                   // ── Tags ──
                   if (_tags.isNotEmpty) ...[
@@ -11538,8 +11626,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                   ValueListenableBuilder<int>(
                     valueListenable: RelayService.instance.presenceVersion,
                     builder: (_, __, ___) {
-                      final hasMusic =
-                          _musicPath != null && File(_musicPath!).existsSync();
+                      final hasMusic = _profileMusicAvailable(_musicPath);
                       final online = RelayService.instance.isConnected &&
                           RelayService.instance.isPeerOnline(widget.peerId);
                       return Column(
