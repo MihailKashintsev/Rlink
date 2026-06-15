@@ -109,12 +109,17 @@
         if (!('Notification' in window)) return;
         const relayBase = _rlinkHttpBase(relayUrl);
         const me = (publicKey || '').trim().toLowerCase();
-        if (!relayBase || !me) return;
+        if (!relayBase || !/^[0-9a-f]{64}$/.test(me)) return;
         const syncKey = `${relayBase}|${me}`;
         const now = Date.now();
         window.__rlinkPushSync = window.__rlinkPushSync || { key: '', at: 0, failedAt: 0 };
+        let persistedFailedAt = 0;
+        try {
+          persistedFailedAt = Number(localStorage.getItem(`rlink_push_failed_${syncKey}`) || '0') || 0;
+        } catch (_) {}
         if (window.__rlinkPushSync.key === syncKey && now - window.__rlinkPushSync.at < 10 * 60 * 1000) return;
         if (window.__rlinkPushSync.key === syncKey && now - window.__rlinkPushSync.failedAt < 60 * 60 * 1000) return;
+        if (persistedFailedAt > 0 && now - persistedFailedAt < 60 * 60 * 1000) return;
         window.__rlinkPushSync.key = syncKey;
         window.__rlinkPushSync.at = now;
 
@@ -156,7 +161,18 @@
             },
           }),
         });
-        if (!subscribeResp.ok) window.__rlinkPushSync.failedAt = Date.now();
+        if (!subscribeResp.ok) {
+          window.__rlinkPushSync.failedAt = Date.now();
+          if (subscribeResp.status >= 400 && subscribeResp.status < 500) {
+            try {
+              localStorage.setItem(`rlink_push_failed_${syncKey}`, String(window.__rlinkPushSync.failedAt));
+            } catch (_) {}
+          }
+        } else {
+          try {
+            localStorage.removeItem(`rlink_push_failed_${syncKey}`);
+          } catch (_) {}
+        }
       } catch (_) {}
     };
   </script>

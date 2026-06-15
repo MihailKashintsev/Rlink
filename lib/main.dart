@@ -2673,14 +2673,17 @@ Future<void> initServices() async {
       if (RelayService.instance.isConnected) {
         if (RuntimePlatform.isWeb) {
           final p = ProfileService.instance.profile;
-          unawaited(
-            syncWebPushSubscription(
-              relayServerUrl: RelayService.instance.serverUrl ??
-                  RelayService.defaultServerUrl,
-              publicKey: CryptoService.instance.publicKeyHex,
-              nick: p?.nickname ?? '',
-            ),
-          );
+          final publicKey = CryptoService.instance.publicKeyHex;
+          if (_isPublicKeyPeerId(publicKey)) {
+            unawaited(
+              syncWebPushSubscription(
+                relayServerUrl: RelayService.instance.serverUrl ??
+                    RelayService.defaultServerUrl,
+                publicKey: publicKey,
+                nick: p?.nickname ?? '',
+              ),
+            );
+          }
         }
         Future.delayed(const Duration(seconds: 2), _sendProfileToOnlinePeers);
         // Web: after reconnect/import, force a full profile push to contacts so

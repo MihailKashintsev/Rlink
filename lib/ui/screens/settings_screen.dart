@@ -937,7 +937,7 @@ Future<void> _syncCurrentWebPushSubscription() async {
   if (!RuntimePlatform.isWeb) return;
   if (!RelayService.instance.isConnected) return;
   final publicKey = CryptoService.instance.publicKeyHex;
-  if (publicKey.isEmpty) return;
+  if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(publicKey.trim())) return;
   final profile = ProfileService.instance.profile;
   await syncWebPushSubscription(
     relayServerUrl:
