@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import '../../services/embedded_video_pause_bus.dart';
 import '../../services/voice_service.dart';
 import '../../utils/web_file_store.dart';
+import '../../utils/web_object_url.dart';
 
 /// Полноэкранное воспроизведение DM-видео (в т.ч. квадратиков) с [VideoPlayer] в дереве.
 class DmVideoFullscreenPage extends StatefulWidget {
@@ -44,6 +45,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
   bool _completeScheduled = false;
   AnimationController? _doubleTapAnim;
   bool _doubleTapLeft = true;
+  final List<String> _webObjectUrls = [];
   static const _kSpeedSteps = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
   void _onEmbedPauseBus() {
@@ -125,38 +127,71 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
     _initPlayer();
   }
 
-  Future<void> _initPlayer() async {
-    var playablePath = widget.path;
+  Future<List<String>> _playableCandidates() async {
+    final playablePath = widget.path;
     if (kIsWeb && playablePath.startsWith('opfs://rlink/')) {
-      playablePath = await webStoredFileObjectUrl(
-            playablePath.split('#').first,
-            mimeType: webVideoMimeForPath(playablePath),
-          ) ??
-          playablePath;
+      final cleanPath = playablePath.split('#').first;
+      final out = <String>[];
+      for (final mime in webVideoMimeCandidatesForPath(playablePath)) {
+        final url = await webStoredFileObjectUrl(cleanPath, mimeType: mime);
+        if (url == null) continue;
+        _webObjectUrls.add(url);
+        out.add(url);
+      }
+      return out;
     }
-    final isInlineWeb = kIsWeb &&
-        (playablePath.startsWith('data:') ||
-            playablePath.startsWith('blob:') ||
-            playablePath.startsWith('http://') ||
-            playablePath.startsWith('https://'));
-    final ctrl = isInlineWeb
-        ? VideoPlayerController.networkUrl(Uri.parse(playablePath))
-        : VideoPlayerController.file(File(playablePath));
-    _ctrl = ctrl;
-    await ctrl.initialize().then((_) {
-      if (mounted) {
+    return [playablePath];
+  }
+
+  bool _isInlineWebVideoPath(String path) =>
+      path.startsWith('data:') ||
+      path.startsWith('blob:') ||
+      path.startsWith('http://') ||
+      path.startsWith('https://');
+
+  Future<void> _initPlayer() async {
+    final candidates = await _playableCandidates();
+    Object? lastError;
+    for (final playablePath in candidates) {
+      if (kIsWeb && !_isInlineWebVideoPath(playablePath)) {
+        lastError = 'unsupported_web_video_path';
+        continue;
+      }
+      final ctrl = kIsWeb
+          ? VideoPlayerController.networkUrl(Uri.parse(playablePath))
+          : VideoPlayerController.file(File(playablePath));
+      try {
+        await ctrl.initialize();
+        if (!mounted) {
+          await ctrl.dispose();
+          return;
+        }
+        _ctrl = ctrl;
         setState(() => _initialized = true);
         ctrl.addListener(_onCtrlTick);
         try {
-          ctrl.setPlaybackSpeed(_playbackRate);
+          await ctrl.setPlaybackSpeed(_playbackRate);
         } catch (_) {}
-        ctrl.play();
+        await ctrl.play();
         _armHideTopBar();
+        return;
+      } catch (e) {
+        lastError = e;
+        debugPrint('[VideoPlayer] init candidate error: $e');
+        await ctrl.dispose();
       }
-    }).catchError((e) {
-      debugPrint('[VideoPlayer] init error: $e');
-      if (mounted) setState(() => _error = true);
-    });
+    }
+    debugPrint('[VideoPlayer] init error: $lastError');
+    _revokeWebObjectUrls();
+    if (mounted) setState(() => _error = true);
+  }
+
+  void _revokeWebObjectUrls() {
+    if (!kIsWeb || _webObjectUrls.isEmpty) return;
+    for (final url in _webObjectUrls) {
+      revokeWebObjectUrl(url);
+    }
+    _webObjectUrls.clear();
   }
 
   @override
@@ -180,6 +215,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
       _ctrl?.setPlaybackSpeed(1.0);
     } catch (_) {}
     _ctrl?.dispose();
+    _revokeWebObjectUrls();
     super.dispose();
   }
 

@@ -10097,18 +10097,14 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     var playablePath = widget.videoPath;
     if (kIsWeb && playablePath.startsWith('opfs://rlink/')) {
       final cleanPath = playablePath.split('#').first;
-      final inferredMime = webVideoMimeForPath(playablePath);
-      final inferredUrl = await webStoredFileObjectUrl(
-        cleanPath,
-        mimeType: inferredMime,
-      );
-      if (inferredUrl != null) candidates.add(inferredUrl);
-      if (inferredMime != 'video/mp4') {
-        final mp4Url = await webStoredFileObjectUrl(
+      for (final mime in webVideoMimeCandidatesForPath(playablePath)) {
+        final url = await webStoredFileObjectUrl(
           cleanPath,
-          mimeType: 'video/mp4',
+          mimeType: mime,
         );
-        if (mp4Url != null && mp4Url != inferredUrl) candidates.add(mp4Url);
+        if (url != null && !candidates.contains(url)) {
+          candidates.add(url);
+        }
       }
     } else {
       candidates.add(playablePath);

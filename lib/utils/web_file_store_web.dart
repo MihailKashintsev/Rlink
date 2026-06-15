@@ -85,7 +85,10 @@ Future<String?> webStoredFileObjectUrl(
   try {
     final file = await _readFile(path);
     if (file == null) return null;
-    final blob = file.type.isEmpty ? file.slice(0, file.size, mimeType) : file;
+    final requestedType = mimeType.trim();
+    final blob = requestedType.isEmpty || file.type == requestedType
+        ? file
+        : file.slice(0, file.size, requestedType);
     return web.URL.createObjectURL(blob);
   } catch (_) {
     return null;

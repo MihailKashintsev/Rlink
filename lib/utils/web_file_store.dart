@@ -18,6 +18,16 @@ String webVideoMimeForPath(String path, {String fallback = 'video/mp4'}) {
   return fallback;
 }
 
+List<String> webVideoMimeCandidatesForPath(String path) {
+  final primary = webVideoMimeForPath(path);
+  return <String>{
+    primary,
+    'video/mp4',
+    'video/webm',
+    'video/quicktime',
+  }.toList(growable: false);
+}
+
 Future<String?> writeWebStoredFile({
   required String fileName,
   required Uint8List bytes,
