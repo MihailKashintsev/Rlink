@@ -6,6 +6,9 @@ Future<void> requestWebNotificationPermission() =>
 
 Future<String> webNotificationPermission() => impl.webNotificationPermission();
 
+Future<Map<String, Object?>> webNotificationCapability() =>
+    impl.webNotificationCapability();
+
 Future<void> showWebNotification({
   required String title,
   required String body,

@@ -127,8 +127,7 @@
         const vapid = (keyJson && keyJson.publicKey) ? String(keyJson.publicKey).trim() : '';
         if (!vapid) return;
 
-        const perm = await Notification.requestPermission();
-        if (perm !== 'granted') return;
+        if (Notification.permission !== 'granted') return;
 
         const reg = await navigator.serviceWorker.register('push_sw.js');
         let sub = await reg.pushManager.getSubscription();

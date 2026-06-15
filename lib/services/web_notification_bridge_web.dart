@@ -3,6 +3,66 @@
 import 'dart:html' as html;
 import 'dart:js' as js;
 
+bool _hasGlobal(String name) {
+  try {
+    return js.context.hasProperty(name);
+  } catch (_) {
+    return false;
+  }
+}
+
+Object? _navigatorValue(String name) {
+  try {
+    final navigator = js.context['navigator'];
+    if (navigator is! js.JsObject || !navigator.hasProperty(name)) {
+      return null;
+    }
+    return navigator[name];
+  } catch (_) {
+    return null;
+  }
+}
+
+bool _navigatorBool(String name) => _navigatorValue(name) == true;
+
+int _navigatorInt(String name) {
+  final value = _navigatorValue(name);
+  if (value is num) return value.toInt();
+  return 0;
+}
+
+bool _matchesMedia(String query) {
+  try {
+    return html.window.matchMedia(query).matches;
+  } catch (_) {
+    return false;
+  }
+}
+
+bool _isStandaloneWebApp() {
+  return _matchesMedia('(display-mode: standalone)') ||
+      _matchesMedia('(display-mode: fullscreen)') ||
+      _navigatorBool('standalone');
+}
+
+bool _isIOSWebKit() {
+  final ua = html.window.navigator.userAgent.toLowerCase();
+  return ua.contains('iphone') ||
+      ua.contains('ipad') ||
+      ua.contains('ipod') ||
+      (ua.contains('macintosh') && _navigatorInt('maxTouchPoints') > 1);
+}
+
+bool _isSafariLike() {
+  final ua = html.window.navigator.userAgent.toLowerCase();
+  return ua.contains('safari') &&
+      !ua.contains('chrome') &&
+      !ua.contains('crios') &&
+      !ua.contains('fxios') &&
+      !ua.contains('edg') &&
+      !ua.contains('android');
+}
+
 Future<void> requestWebNotificationPermission() async {
   if (!html.Notification.supported) return;
   try {
@@ -14,8 +74,67 @@ Future<void> requestWebNotificationPermission() async {
 }
 
 Future<String> webNotificationPermission() async {
-  if (!html.Notification.supported) return 'unsupported';
-  return html.Notification.permission ?? 'default';
+  final capability = await webNotificationCapability();
+  return (capability['status'] as String?) ?? 'unsupported';
+}
+
+Future<Map<String, Object?>> webNotificationCapability() async {
+  final isIOS = _isIOSWebKit();
+  final standalone = _isStandaloneWebApp();
+  final isSafari = _isSafariLike();
+  final notificationSupported =
+      html.Notification.supported || _hasGlobal('Notification');
+  final serviceWorkerSupported = html.window.navigator.serviceWorker != null;
+  final pushSupported = _hasGlobal('PushManager');
+  final permission = notificationSupported
+      ? (html.Notification.permission ?? 'default')
+      : 'unsupported';
+
+  String status;
+  String label;
+  bool canRequest;
+
+  if (isIOS && !standalone) {
+    status = 'ios_install_required';
+    label =
+        'На iPhone/iPad Safari push-уведомления работают только после добавления Rlink на экран Домой';
+    canRequest = false;
+  } else if (!notificationSupported) {
+    status = 'unsupported_notifications';
+    label = 'Браузер не отдает Notifications API';
+    canRequest = false;
+  } else if (!serviceWorkerSupported) {
+    status = 'unsupported_service_worker';
+    label = 'Service Worker недоступен на этом адресе';
+    canRequest = false;
+  } else if (!pushSupported) {
+    status = 'unsupported_push';
+    label = isSafari
+        ? 'Safari сейчас не отдает Push API для этой вкладки'
+        : 'Браузер не отдает Push API';
+    canRequest = false;
+  } else {
+    status = permission;
+    label = switch (permission) {
+      'granted' => 'Разрешены',
+      'denied' => 'Запрещены в настройках браузера',
+      _ => 'Нужно разрешение браузера',
+    };
+    canRequest = permission != 'denied';
+  }
+
+  return {
+    'status': status,
+    'permission': permission,
+    'label': label,
+    'canRequest': canRequest,
+    'notificationSupported': notificationSupported,
+    'serviceWorkerSupported': serviceWorkerSupported,
+    'pushSupported': pushSupported,
+    'standalone': standalone,
+    'isIOS': isIOS,
+    'isSafari': isSafari,
+  };
 }
 
 Future<void> showWebNotification({

@@ -933,6 +933,20 @@ class _NotificationsPage extends StatefulWidget {
   State<_NotificationsPage> createState() => _NotificationsPageState();
 }
 
+Future<void> _syncCurrentWebPushSubscription() async {
+  if (!RuntimePlatform.isWeb) return;
+  if (!RelayService.instance.isConnected) return;
+  final publicKey = CryptoService.instance.publicKeyHex;
+  if (publicKey.isEmpty) return;
+  final profile = ProfileService.instance.profile;
+  await syncWebPushSubscription(
+    relayServerUrl:
+        RelayService.instance.serverUrl ?? RelayService.defaultServerUrl,
+    publicKey: publicKey,
+    nick: profile?.nickname ?? '',
+  );
+}
+
 class _NotificationsPageState extends State<_NotificationsPage> {
   @override
   void initState() {
@@ -975,6 +989,7 @@ class _NotificationsPageState extends State<_NotificationsPage> {
               await settings.setNotificationsEnabled(v);
               if (v) {
                 await NotificationService.instance.requestPermissions();
+                await _syncCurrentWebPushSubscription();
                 if (mounted) setState(() {});
               }
             },
@@ -1046,16 +1061,16 @@ class _NotificationsPageState extends State<_NotificationsPage> {
               ),
             ),
           if (RuntimePlatform.isWeb)
-            FutureBuilder<String>(
-              future: webNotificationPermission(),
+            FutureBuilder<Map<String, Object?>>(
+              future: webNotificationCapability(),
               builder: (context, snapshot) {
-                final perm = snapshot.data ?? 'default';
-                final label = switch (perm) {
-                  'granted' => 'Разрешены',
-                  'denied' => 'Запрещены в браузере',
-                  'unsupported' => 'Не поддерживаются браузером',
-                  _ => 'Нужно разрешение браузера',
-                };
+                final capability = snapshot.data;
+                final permission =
+                    (capability?['permission'] as String?) ?? 'default';
+                final label = (capability?['label'] as String?) ??
+                    'Проверяем поддержку браузера';
+                final canRequest =
+                    (capability?['canRequest'] as bool?) ?? false;
                 return ListTile(
                   leading: Icon(Icons.public_rounded, color: cs.primary),
                   title: const Text('Web-уведомления'),
@@ -1063,11 +1078,16 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                       style:
                           TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                   trailing: FilledButton.tonal(
-                    onPressed: () async {
-                      await NotificationService.instance.requestPermissions();
-                      if (mounted) setState(() {});
-                    },
-                    child: const Text('Разрешить'),
+                    onPressed: canRequest
+                        ? () async {
+                            await NotificationService.instance
+                                .requestPermissions();
+                            await _syncCurrentWebPushSubscription();
+                            if (mounted) setState(() {});
+                          }
+                        : null,
+                    child: Text(
+                        permission == 'granted' ? 'Обновить' : 'Разрешить'),
                   ),
                 );
               },
