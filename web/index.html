@@ -45,6 +45,41 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script>
+    async function _rlinkClearStaleFlutterWorker() {
+      try {
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map(async (registration) => {
+            const worker = registration.active || registration.waiting || registration.installing;
+            const scriptUrl = worker && worker.scriptURL ? worker.scriptURL : '';
+            if (scriptUrl.includes('flutter_service_worker.js')) {
+              await registration.unregister();
+            }
+          }));
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((key) => {
+            if (
+              key.startsWith('flutter-app-cache') ||
+              key.startsWith('flutter-temp-cache') ||
+              key.startsWith('flutter-app-manifest')
+            ) {
+              return caches.delete(key);
+            }
+            return Promise.resolve(false);
+          }));
+        }
+      } catch (_) {}
+    }
+
+    function _rlinkLoadFlutter() {
+      const script = document.createElement('script');
+      script.src = 'flutter_bootstrap.js?v=20260615-2';
+      script.async = true;
+      document.body.appendChild(script);
+    }
+
     function _rlinkHttpBase(relayUrl) {
       const raw = (relayUrl || '').trim();
       if (!raw) return '';
@@ -127,6 +162,8 @@
     };
   </script>
   <script src="whisper_web.js" defer></script>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    _rlinkClearStaleFlutterWorker().finally(_rlinkLoadFlutter);
+  </script>
 </body>
 </html>
