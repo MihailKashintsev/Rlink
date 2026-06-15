@@ -106,7 +106,7 @@ class ChannelService {
     final path = await _dbPath('channels.db');
     _db = await openDatabase(
       path,
-      version: 19,
+      version: 20,
       onCreate: (db, v) async {
         await db.execute('''
           CREATE TABLE channels (
@@ -137,6 +137,10 @@ class ChannelService {
             drive_file_id TEXT,
             drive_file_url TEXT,
             drive_keys_url TEXT,
+            drive_avatar_file_id TEXT,
+            drive_avatar_url TEXT,
+            drive_banner_file_id TEXT,
+            drive_banner_url TEXT,
             allow_mods_manage_drive_account INTEGER DEFAULT 0
           )
         ''');
@@ -426,7 +430,32 @@ class ChannelService {
         }
       },
     );
+    await _ensureChannelSchema(_db!);
     unawaited(_loadVerificationRequests());
+  }
+
+  Future<void> _ensureChannelSchema(Database db) async {
+    final rows = await db.rawQuery('PRAGMA table_info(channels)');
+    final existing = rows
+        .map((r) => (r['name'] as String?) ?? '')
+        .where((name) => name.isNotEmpty)
+        .toSet();
+    Future<void> addColumn(String name, String ddl) async {
+      if (existing.contains(name)) return;
+      await db.execute('ALTER TABLE channels ADD COLUMN $ddl');
+      existing.add(name);
+    }
+
+    await addColumn(
+      'allow_mods_manage_drive_account',
+      'allow_mods_manage_drive_account INTEGER DEFAULT 0',
+    );
+    await addColumn('drive_file_url', 'drive_file_url TEXT');
+    await addColumn('drive_keys_url', 'drive_keys_url TEXT');
+    await addColumn('drive_avatar_file_id', 'drive_avatar_file_id TEXT');
+    await addColumn('drive_avatar_url', 'drive_avatar_url TEXT');
+    await addColumn('drive_banner_file_id', 'drive_banner_file_id TEXT');
+    await addColumn('drive_banner_url', 'drive_banner_url TEXT');
   }
 
   Future<void> _ensureDbReady() async {
