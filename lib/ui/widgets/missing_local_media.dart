@@ -13,6 +13,7 @@ import '../../services/image_service.dart';
 bool _hasLocalFile(String? storedPath) {
   if (kIsWeb && _isInlineWebMediaRef(storedPath)) return true;
   final r = ImageService.instance.resolveStoredPath(storedPath);
+  if (kIsWeb) return _isInlineWebMediaRef(r);
   return r != null && File(r).existsSync();
 }
 
@@ -20,6 +21,7 @@ bool _isInlineWebMediaRef(String? value) {
   if (value == null || value.isEmpty) return false;
   return value.startsWith('data:') ||
       value.startsWith('blob:') ||
+      value.startsWith('opfs://rlink/') ||
       value.startsWith('http://') ||
       value.startsWith('https://');
 }

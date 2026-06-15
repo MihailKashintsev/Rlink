@@ -150,6 +150,7 @@ String? _dmResolveMsgPath(String? raw) {
           r.startsWith('https://'))) {
     return r;
   }
+  if (kIsWeb) return null;
   return File(r).existsSync() ? r : null;
 }
 
@@ -1582,6 +1583,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (kIsWeb && _isInlineWebUri(path)) {
       return _readInlineWebMediaBytes(path);
     }
+    if (kIsWeb) return null;
     final file = File(path);
     if (!file.existsSync()) return null;
     return file.readAsBytes();
@@ -5121,6 +5123,27 @@ class _ChatScreenState extends State<ChatScreen> {
         ? null
         : (ImageService.instance.resolveStoredPath(msg.imagePath) ??
             msg.imagePath);
+    final imageSavePath = msg.imagePath == null
+        ? null
+        : (ImageService.instance.resolveStoredPath(msg.imagePath) ??
+            msg.imagePath);
+    final videoSavePath = msg.videoPath == null
+        ? null
+        : (ImageService.instance.resolveStoredPath(msg.videoPath) ??
+            msg.videoPath);
+    final canSaveImage = imageSavePath != null &&
+        imageSavePath.trim().isNotEmpty &&
+        (kIsWeb
+            ? _isInlineWebUri(imageSavePath)
+            : File(imageSavePath).existsSync());
+    final canSaveVideo = videoSavePath != null &&
+        videoSavePath.trim().isNotEmpty &&
+        (kIsWeb
+            ? _isInlineWebUri(videoSavePath)
+            : File(videoSavePath).existsSync());
+    final canImportSticker = !kIsWeb &&
+        stickerSourcePath != null &&
+        File(stickerSourcePath).existsSync();
     await showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -5197,35 +5220,25 @@ class _ChatScreenState extends State<ChatScreen> {
                 unawaited(shareChatMessageExternally(context, msg));
               },
             ),
-            if (msg.imagePath != null &&
-                msg.imagePath!.trim().isNotEmpty &&
-                File(ImageService.instance.resolveStoredPath(msg.imagePath) ??
-                        msg.imagePath!)
-                    .existsSync())
+            if (canSaveImage)
               ListTile(
                 leading: const Icon(Icons.save_alt_outlined),
                 title: const Text('Сохранить фото в галерею'),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final p =
-                      ImageService.instance.resolveStoredPath(msg.imagePath) ??
-                          msg.imagePath!;
-                  await _saveImageToGallery(p);
+                  await _saveImageToGallery(imageSavePath);
                 },
               ),
-            if (msg.videoPath != null &&
-                msg.videoPath!.trim().isNotEmpty &&
-                File(msg.videoPath!).existsSync())
+            if (canSaveVideo)
               ListTile(
                 leading: const Icon(Icons.video_file_outlined),
                 title: const Text('Сохранить видео в галерею'),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  await _saveVideoToGallery(msg.videoPath!);
+                  await _saveVideoToGallery(videoSavePath);
                 },
               ),
-            if (stickerSourcePath != null &&
-                File(stickerSourcePath).existsSync())
+            if (canImportSticker)
               ListTile(
                 leading: const Icon(Icons.bookmark_add_outlined),
                 title: const Text('В коллекцию стикеров'),
