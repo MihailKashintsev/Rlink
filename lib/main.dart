@@ -126,6 +126,17 @@ Future<Uint8List?> _readProfileMediaBytes(String? rawPath) async {
       return null;
     }
   }
+  if (kIsWeb) {
+    if (resolved.startsWith('opfs://rlink/')) {
+      return readWebStoredFile(resolved.split('#').first);
+    }
+    if (resolved.startsWith('blob:') ||
+        resolved.startsWith('http://') ||
+        resolved.startsWith('https://')) {
+      return readWebObjectUrlBytes(resolved);
+    }
+    return null;
+  }
   try {
     if (File(resolved).existsSync()) {
       return await File(resolved).readAsBytes();
@@ -252,10 +263,10 @@ Future<void> broadcastMyBanner() async {
 Future<void> broadcastMyProfileMusic() async {
   final myProfile = ProfileService.instance.profile;
   if (myProfile == null) return;
-  final musicPath =
-      ImageService.instance.resolveStoredPath(myProfile.profileMusicPath);
-  if (musicPath != null && File(musicPath).existsSync()) {
-    await _broadcastProfileMusic(myProfile.publicKeyHex, musicPath);
+  final musicPath = myProfile.profileMusicPath;
+  final bytes = await _readProfileMediaBytes(musicPath);
+  if (bytes != null && bytes.isNotEmpty) {
+    await _broadcastProfileMusic(myProfile.publicKeyHex, musicPath!);
   }
 }
 
@@ -282,7 +293,8 @@ Future<void> _broadcastProfileMusic(
     String myPublicKey, String musicPath) async {
   try {
     await Future.delayed(const Duration(milliseconds: 900));
-    final bytes = await File(musicPath).readAsBytes();
+    final bytes = await _readProfileMediaBytes(musicPath);
+    if (bytes == null || bytes.isEmpty) return;
     final contacts = await ChatStorageService.instance.getContacts();
     final compressed = ImageService.instance.compress(bytes);
     if (RelayService.instance.isConnected) {
@@ -1773,7 +1785,8 @@ Future<void> initServices() async {
         }
 
         // Если мы получили профиль от контакта (прямое соединение) —
-        // отправляем наш аватар в ответ (на случай если первая отправка потерялась).
+        // отправляем все медиа профиля в ответ (на случай если первая отправка
+        // потерялась или peer появился до relay/full-profile sync).
         if (isDirect) {
           final myProfile = ProfileService.instance.profile;
           if (myProfile != null) {
@@ -1781,6 +1794,12 @@ Future<void> initServices() async {
                 .resolveStoredPath(myProfile.avatarImagePath);
             if (avatarPath != null) {
               unawaited(_broadcastAvatar(myProfile.publicKeyHex, avatarPath));
+            }
+            if (myProfile.bannerImagePath?.isNotEmpty == true) {
+              unawaited(broadcastMyBanner());
+            }
+            if (myProfile.profileMusicPath?.isNotEmpty == true) {
+              unawaited(broadcastMyProfileMusic());
             }
           }
         }
@@ -2945,13 +2964,11 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
     }
   }
 
-  final musicPath =
-      ImageService.instance.resolveStoredPath(myProfile.profileMusicPath);
-  if (musicPath != null && File(musicPath).existsSync()) {
+  final musicBytes = await _readProfileMediaBytes(myProfile.profileMusicPath);
+  if (musicBytes != null && musicBytes.isNotEmpty) {
     try {
       await Future.delayed(const Duration(milliseconds: 500));
-      final bytes = await File(musicPath).readAsBytes();
-      final compressed = ImageService.instance.compress(bytes);
+      final compressed = ImageService.instance.compress(musicBytes);
       final sealed = await _sealServiceMediaForPeer(compressed, peerKey);
       if (sealed == null) return;
       final ts = DateTime.now().millisecondsSinceEpoch;
@@ -3051,7 +3068,7 @@ Future<void> _sendProfileToOnlinePeers() async {
   final peers = RelayService.instance.knownOnlinePeers;
   for (final p in peers) {
     if (isDmBotPeerId(p.publicKey)) continue;
-    unawaited(_sendProfileDirectToPeer(p.publicKey));
+    unawaited(_sendFullProfileToPeer(p.publicKey));
   }
   if (peers.isNotEmpty) {
     debugPrint('[RLINK][Profile] Sent profile to ${peers.length} online peers');

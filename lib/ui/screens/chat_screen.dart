@@ -1578,6 +1578,21 @@ class _ChatScreenState extends State<ChatScreen> {
     return null;
   }
 
+  static Future<Uint8List?> _readPickedPlatformFileBytes(
+      PlatformFile file) async {
+    final bytes = file.bytes;
+    if (bytes != null && bytes.isNotEmpty) return bytes;
+    final stream = file.readStream;
+    if (stream == null) return bytes;
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in stream) {
+      if (chunk.isNotEmpty) builder.add(chunk);
+    }
+    final out = builder.takeBytes();
+    if (out.isNotEmpty) return out;
+    return bytes;
+  }
+
   static Future<Uint8List?> _readLocalOrWebMediaBytes(String path) async {
     if (path.isEmpty) return null;
     if (kIsWeb && _isInlineWebUri(path)) {
@@ -3455,12 +3470,18 @@ class _ChatScreenState extends State<ChatScreen> {
         type: FileType.custom,
         allowedExtensions: const ['gif'],
         allowMultiple: false,
-        withData: true,
+        withData: false,
+        withReadStream: true,
       );
       final f = r?.files.firstOrNull;
-      if (f?.bytes == null || !mounted) return;
+      if (f == null || !mounted) return;
+      final bytes = await _readPickedPlatformFileBytes(f);
+      if (bytes == null || bytes.isEmpty) {
+        _showErrorSnack('Не удалось прочитать GIF в браузере');
+        return;
+      }
       await _sendWebBytesAsFile(
-        bytes: f!.bytes!,
+        bytes: bytes,
         fileName: f.name.isNotEmpty ? f.name : 'animation.gif',
         myId: myId,
         textFallback: '🎞 GIF',
@@ -3472,11 +3493,12 @@ class _ChatScreenState extends State<ChatScreen> {
       final r = await FilePicker.platform.pickFiles(
         type: FileType.video,
         allowMultiple: false,
-        withData: true,
+        withData: false,
+        withReadStream: true,
       );
       final f = r?.files.firstOrNull;
       if (f == null || !mounted) return;
-      final videoBytes = f.bytes;
+      final videoBytes = await _readPickedPlatformFileBytes(f);
       if (videoBytes == null || videoBytes.isEmpty) {
         _showErrorSnack('Не удалось прочитать видео в браузере');
         return;
@@ -3538,12 +3560,18 @@ class _ChatScreenState extends State<ChatScreen> {
     final r = await FilePicker.platform.pickFiles(
       type: FileType.any,
       allowMultiple: false,
-      withData: true,
+      withData: false,
+      withReadStream: true,
     );
     final f = r?.files.firstOrNull;
-    if (f?.bytes == null || !mounted) return;
+    if (f == null || !mounted) return;
+    final bytes = await _readPickedPlatformFileBytes(f);
+    if (bytes == null || bytes.isEmpty) {
+      _showErrorSnack('Не удалось прочитать файл в браузере');
+      return;
+    }
     await _sendWebBytesAsFile(
-      bytes: f!.bytes!,
+      bytes: bytes,
       fileName: f.name.isNotEmpty ? f.name : 'file.bin',
       myId: myId,
       textFallback: '📎 ${f.name.isNotEmpty ? f.name : 'Файл'}',
@@ -3657,6 +3685,10 @@ class _ChatScreenState extends State<ChatScreen> {
     bool asImage = false,
     bool isSticker = false,
   }) async {
+    if (bytes.isEmpty) {
+      _showErrorSnack('Файл пустой или не был прочитан браузером');
+      return;
+    }
     setState(() => _isSending = true);
     _sendActivity(Activity.sendingFile);
     try {
@@ -3734,6 +3766,10 @@ class _ChatScreenState extends State<ChatScreen> {
     required String fileName,
     required String myId,
   }) async {
+    if (bytes.isEmpty) {
+      _showErrorSnack('Видео пустое или не было прочитано браузером');
+      return;
+    }
     setState(() => _isSending = true);
     _sendActivity(Activity.sendingFile);
     try {
@@ -4510,12 +4546,18 @@ class _ChatScreenState extends State<ChatScreen> {
       final picked = await FilePicker.platform.pickFiles(
         type: FileType.video,
         allowMultiple: false,
-        withData: true,
+        withData: false,
+        withReadStream: true,
       );
       final f = picked?.files.firstOrNull;
-      if (f?.bytes == null || !mounted) return;
+      if (f == null || !mounted) return;
+      final bytes = await _readPickedPlatformFileBytes(f);
+      if (bytes == null || bytes.isEmpty) {
+        _showErrorSnack('Не удалось прочитать видео в браузере');
+        return;
+      }
       await _sendWebVideoBytes(
-        bytes: f!.bytes!,
+        bytes: bytes,
         fileName: f.name.isNotEmpty ? f.name : 'video.mp4',
         myId: myId,
       );
@@ -4550,13 +4592,15 @@ class _ChatScreenState extends State<ChatScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
       allowMultiple: false,
-      withData: kIsWeb,
+      withData: false,
+      withReadStream: kIsWeb,
     );
     if (result == null || result.files.isEmpty || !mounted) return;
 
     final picked = result.files.first;
     final originalName = picked.name;
-    final pickedBytes = picked.bytes;
+    final pickedBytes =
+        kIsWeb ? await _readPickedPlatformFileBytes(picked) : picked.bytes;
     final myId = CryptoService.instance.publicKeyHex;
     if (myId.isEmpty) return;
 
@@ -4574,7 +4618,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (kIsWeb) {
         final webBytes = pickedBytes;
-        if (webBytes == null) {
+        if (webBytes == null || webBytes.isEmpty) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(

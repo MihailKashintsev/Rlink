@@ -271,12 +271,20 @@ class ImageService {
 
   /// Сохраняет принятую по сети «музыку профиля» контакта.
   Future<String> saveProfileMusic(String publicKeyHex, Uint8List data) async {
-    final dir = await _imagesDir();
     final key = publicKeyHex.length >= 16
         ? publicKeyHex.substring(0, 16)
         : publicKeyHex;
     final ext = _audioExtFromMagic(data);
     final name = 'profile_music_$key.$ext';
+    if (kIsWeb) {
+      final stored = await writeWebStoredFile(
+        fileName: name,
+        bytes: data,
+        mimeType: _audioMimeFromMagic(data),
+      );
+      return stored ?? _webMediaRef(data, _audioMimeFromMagic(data));
+    }
+    final dir = await _imagesDir();
     final path = p.join(dir.path, name);
     await File(path).writeAsBytes(data);
     return path;

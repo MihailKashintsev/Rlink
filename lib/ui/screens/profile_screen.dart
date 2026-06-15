@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,7 @@ import '../../services/crypto_service.dart';
 import '../../services/gossip_router.dart';
 import '../../services/image_service.dart';
 import '../../services/profile_service.dart';
+import '../../utils/web_file_store.dart';
 import '../../main.dart'
     show
         broadcastMyAvatar,
@@ -174,17 +176,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final r = await FilePicker.platform.pickFiles(
       type: FileType.audio,
       allowMultiple: false,
+      withData: false,
+      withReadStream: kIsWeb,
     );
     if (r == null || r.files.isEmpty) return;
-    final src = r.files.single.path;
+    final picked = r.files.single;
+    final fileName =
+        picked.name.trim().isNotEmpty ? picked.name.trim() : 'music.m4a';
+    if (kIsWeb) {
+      final bytes = await _readPickedPlatformFileBytes(picked);
+      if (bytes == null || bytes.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось прочитать аудиофайл')),
+          );
+        }
+        return;
+      }
+      final stored = await writeWebStoredFile(
+        fileName:
+            'me_profile_${DateTime.now().millisecondsSinceEpoch}_$fileName',
+        bytes: bytes,
+        mimeType: _audioMimeForFileName(fileName),
+      );
+      if (stored == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось сохранить аудиофайл')),
+          );
+        }
+        return;
+      }
+      setState(() => _profileMusicPath = stored);
+      return;
+    }
+    final src = picked.path;
     if (src == null) return;
     final dir = await getApplicationDocumentsDirectory();
     final sub = Directory(p.join(dir.path, 'profile_audio'))
       ..createSync(recursive: true);
-    final ext = p.extension(src).isEmpty ? '.m4a' : p.extension(src);
+    final srcExt = p.extension(src);
+    final nameExt = p.extension(fileName);
+    final ext = srcExt.isEmpty ? (nameExt.isEmpty ? '.m4a' : nameExt) : srcExt;
     final dest = p.join(sub.path, 'me_profile$ext');
     await File(src).copy(dest);
     setState(() => _profileMusicPath = dest);
+  }
+
+  static Future<Uint8List?> _readPickedPlatformFileBytes(
+      PlatformFile file) async {
+    final bytes = file.bytes;
+    if (bytes != null && bytes.isNotEmpty) return bytes;
+    final stream = file.readStream;
+    if (stream == null) return bytes;
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in stream) {
+      if (chunk.isNotEmpty) builder.add(chunk);
+    }
+    final out = builder.takeBytes();
+    if (out.isNotEmpty) return out;
+    return bytes;
+  }
+
+  static String _audioMimeForFileName(String fileName) {
+    switch (p.extension(fileName).toLowerCase()) {
+      case '.webm':
+        return 'audio/webm';
+      case '.ogg':
+      case '.opus':
+        return 'audio/ogg';
+      case '.wav':
+        return 'audio/wav';
+      case '.aac':
+        return 'audio/aac';
+      case '.m4a':
+      case '.mp4':
+        return 'audio/mp4';
+      case '.mp3':
+      default:
+        return 'audio/mpeg';
+    }
   }
 
   void _clearProfileMusic() => setState(() => _profileMusicPath = null);
@@ -463,7 +534,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         right: 0,
                         top: 0,
                         child: GestureDetector(
-                          onTap: () => setState(() => _selectedImagePath = null),
+                          onTap: () =>
+                              setState(() => _selectedImagePath = null),
                           child: Container(
                             width: 28,
                             height: 28,
@@ -473,7 +545,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   .surfaceContainerHighest,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                  color: Theme.of(context).scaffoldBackgroundColor,
+                                  color:
+                                      Theme.of(context).scaffoldBackgroundColor,
                                   width: 2),
                             ),
                             child: Icon(Icons.close,
@@ -696,9 +769,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     : (ImageService.instance
                             .resolveStoredPath(_profileMusicPath) ??
                         _profileMusicPath);
-                final hasMusic = rp != null && File(rp).existsSync();
+                final hasMusic = rp != null &&
+                    (kIsWeb || (rp.isNotEmpty && File(rp).existsSync()));
                 final sub = hasMusic
-                    ? p.basename(rp)
+                    ? (kIsWeb
+                        ? p.basename(rp.split('#').first)
+                        : p.basename(rp))
                     : (_editing
                         ? 'Выберите аудиофайл — контакты смогут загрузить и послушать, когда вы в сети'
                         : 'Не выбрано');
@@ -1071,8 +1147,7 @@ class _InfoTile extends StatelessWidget {
             else
               Text(value,
                   style: TextStyle(
-                      fontSize: 14,
-                      fontFamily: monospace ? 'monospace' : null),
+                      fontSize: 14, fontFamily: monospace ? 'monospace' : null),
                   overflow: TextOverflow.ellipsis),
           ]),
         ),
