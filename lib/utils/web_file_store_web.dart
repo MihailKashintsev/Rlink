@@ -93,17 +93,16 @@ Future<String?> webStoredFileObjectUrl(
   try {
     final file = await _readFile(path);
     if (file == null) return null;
-    final requestedType = mimeType.trim();
-    // No retype needed → use the File's own object URL (range-capable).
-    if (requestedType.isEmpty || file.type == requestedType) {
-      return web.URL.createObjectURL(file);
-    }
-    // Retype by building a FRESH FULL blob from the bytes. Do NOT use
-    // file.slice(0, size, type): a retyped slice-blob makes <video>/<audio>
-    // byte-range requests fail in Chromium (ERR_REQUEST_RANGE_NOT_SATISFIABLE),
-    // which breaks playback of received media on web.
+    // Always materialize into an in-memory Blob. Object URLs of OPFS-backed
+    // File objects reject the byte-range requests that <video>/<audio> issue
+    // (notably the trailing end-range a player uses to read an MP4 `moov`
+    // atom) → 416 ERR_REQUEST_RANGE_NOT_SATISFIABLE, which breaks playback of
+    // received media on web. A plain in-memory Blob serves ranges reliably.
+    // Do NOT use file.slice()-retyping either (same range failure in Chromium).
     final ab = await file.arrayBuffer().toDart;
-    final blob = web.Blob([ab].toJS, web.BlobPropertyBag(type: requestedType));
+    final requestedType = mimeType.trim();
+    final type = requestedType.isEmpty ? file.type : requestedType;
+    final blob = web.Blob([ab].toJS, web.BlobPropertyBag(type: type));
     return web.URL.createObjectURL(blob);
   } catch (_) {
     return null;
