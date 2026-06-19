@@ -3885,7 +3885,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final comma = value.indexOf(',');
     if (comma < 0) return null;
     try {
-      return base64Decode(value.substring(comma + 1));
+      // Strip any fragment (e.g. square-video's #rlink_square marker) so the
+      // base64 payload decodes cleanly.
+      final payload = value.substring(comma + 1).split('#').first;
+      return base64Decode(payload);
     } catch (_) {
       return null;
     }

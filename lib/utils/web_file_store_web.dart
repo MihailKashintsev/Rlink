@@ -61,6 +61,14 @@ Future<String?> writeWebStoredFile({
     );
     await writable.write(blob).toDart;
     await writable.close().toDart;
+    // Verify the bytes actually persisted. Some browsers' OPFS
+    // createWritable() silently yields a 0-byte file; when that happens we
+    // return null so the caller falls back to an inline data: URI that keeps
+    // the real bytes (and the correct size).
+    final written = await fh.getFile().toDart;
+    if (written.size != bytes.length) {
+      return null;
+    }
     return '$_prefix$safeName';
   } catch (_) {
     return null;

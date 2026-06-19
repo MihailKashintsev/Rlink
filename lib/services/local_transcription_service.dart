@@ -2,17 +2,24 @@ import 'package:flutter/foundation.dart';
 
 import 'whisper_web_service.dart';
 import 'huggingface_stt_service.dart';
+import 'app_settings.dart';
+import 'transcription_engine.dart';
+import 'whisper_model.dart';
 import '../utils/web_file_store.dart';
 
 // Conditional imports: use IO-specific code on native platforms, stub on web
 import 'local_transcription_service_stub.dart'
     if (dart.library.io) 'local_transcription_service_io.dart';
 
-/// Локальная (on-device) расшифровка аудио через Whisper.
+/// Расшифровка аудио/звонков. Движок и размер модели выбираются пользователем
+/// в настройках ([AppSettings.transcriptionEngine] / [transcriptionModelSize]).
 ///
-/// iOS/macOS: cloud-first via Hugging Face; local WhisperKit dependency removed.
-/// Android/Windows/Linux: whisper.cpp через FFI
-/// Web: whisper.cpp через WASM (модель кешируется в IndexedDB)
+/// onDevice:
+///   - iOS/macOS → WhisperKit (Apple, on-device, «встроенная»)
+///   - Android/Windows/Linux → whisper.cpp через FFI
+///   - Web → whisper.cpp через WASM (модель в IndexedDB)
+/// cloud:
+///   - Hugging Face STT (аудио уходит на сервер)
 class LocalTranscriptionService {
   LocalTranscriptionService._();
   static final LocalTranscriptionService instance =
@@ -21,29 +28,26 @@ class LocalTranscriptionService {
   bool _modelReady = false;
   bool _loadingModel = false;
 
-  /// Приватность по умолчанию: голосовые не уходят во внешний STT.
-  /// Cloud STT можно включить явно из кода/настроек, если пользователь согласится.
-  bool preferCloud = false;
+  /// Размер модели, для которого выполнена инициализация (переинициализируем
+  /// при смене в настройках).
+  WhisperModelSize? _readySize;
 
-  /// Все платформы поддерживают локальную расшифровку.
+  /// Все платформы поддерживают расшифровку (локально или через облако).
   bool get isSupported => true;
 
-  /// Web-платформа.
   bool get _isWeb => kIsWeb;
 
-  /// Apple-платформа (только на native, через LocalTranscriptionServiceIO)
   bool get _isApplePlatform =>
       !kIsWeb && LocalTranscriptionServiceIO.isApplePlatform;
 
+  TranscriptionEngine get _engine => AppSettings.instance.transcriptionEngine;
+  WhisperModelSize get _modelSize => AppSettings.instance.transcriptionModelSize;
+
   /// Преобразует locale приложения в код языка для Whisper.
-  /// Поддерживаемые языки Whisper: ru, en, es, de, fr, it, pt, nl, pl, tr, ja, ko, zh
+  /// Поддерживаемые: ru, en, es, de, fr, it, pt, nl, pl, tr, ja, ko, zh
   static String mapLocaleToWhisperLanguage(String appLocale) {
-    if (appLocale == 'system') {
-      // Для системного языка используем русский как дефолт
-      return 'ru';
-    }
-    // Прямое маппинг для поддерживаемых языков
-    final supported = {
+    if (appLocale == 'system') return 'ru';
+    const supported = {
       'ru': 'ru',
       'en': 'en',
       'es': 'es',
@@ -61,32 +65,43 @@ class LocalTranscriptionService {
     return supported[appLocale] ?? 'ru';
   }
 
-  Future<void> _ensureModel() async {
-    if (_modelReady) return;
+  Future<void> _ensureModel(WhisperModelSize size) async {
+    if (_modelReady && _readySize == size) return;
     if (_loadingModel) {
       while (_loadingModel) {
         await Future<void>.delayed(const Duration(milliseconds: 120));
       }
-      if (_modelReady) return;
+      if (_modelReady && _readySize == size) return;
     }
     _loadingModel = true;
     try {
       if (_isWeb) {
+        // Web кеширует модель в IndexedDB силами WASM (tiny).
         await WhisperWebService.instance.init();
       } else if (_isApplePlatform) {
-        throw StateError(
-          'Локальная Apple-расшифровка отключена: используется cloud STT.',
-        );
+        await LocalTranscriptionServiceIO.ensureModel(isApple: true, size: size);
       } else {
-        // Desktop/Android: use LocalTranscriptionServiceIO for FFI
-        await LocalTranscriptionServiceIO.ensureModel(isApple: false);
+        await LocalTranscriptionServiceIO.ensureModel(
+            isApple: false, size: size);
       }
       _modelReady = true;
+      _readySize = size;
     } catch (e) {
+      _modelReady = false;
       throw StateError('Не удалось загрузить модель для расшифровки: $e');
     } finally {
       _loadingModel = false;
     }
+  }
+
+  Future<String> _transcribeOnDevice(
+      String audioPath, String language, WhisperModelSize size) async {
+    await _ensureModel(size);
+    if (_isWeb) return _transcribeWeb(audioPath, language);
+    if (_isApplePlatform) {
+      return LocalTranscriptionServiceIO.transcribeApple(audioPath, language);
+    }
+    return LocalTranscriptionServiceIO.transcribeCpp(audioPath, language);
   }
 
   Future<String> transcribeFile(String audioPath,
@@ -94,48 +109,31 @@ class LocalTranscriptionService {
     if (audioPath.isEmpty) {
       throw ArgumentError('Файл не найден: $audioPath');
     }
-    Object? cloudError;
-    if (preferCloud) {
+    final engine = _engine;
+    final size = _modelSize;
+
+    if (engine == TranscriptionEngine.cloud) {
+      // Облако выбрано явно: пробуем HF, при сбое (нет сети) — локально.
       try {
-        return await HuggingFaceSttService.instance.transcribeFile(
-          audioPath,
-          language: language,
-        );
-      } catch (e) {
-        cloudError = e;
-        debugPrint('[STT] Hugging Face failed, falling back locally: $e');
+        return await HuggingFaceSttService.instance
+            .transcribeFile(audioPath, language: language);
+      } catch (cloudError) {
+        debugPrint('[STT] Cloud failed, falling back on-device: $cloudError');
+        try {
+          return await _transcribeOnDevice(audioPath, language, size);
+        } catch (localError) {
+          throw StateError(
+            'Облачная расшифровка недоступна ($cloudError), '
+            'локальная тоже не запустилась ($localError)',
+          );
+        }
       }
     }
 
-    try {
-      await _ensureModel();
-
-      if (_isWeb) {
-        return _transcribeWeb(audioPath, language);
-      } else if (_isApplePlatform) {
-        return _transcribeApple(audioPath, language);
-      } else {
-        return _transcribeCpp(audioPath, language);
-      }
-    } catch (localError) {
-      if (cloudError != null) {
-        throw StateError(
-          'Сетевая расшифровка недоступна ($cloudError), '
-          'локальная модель тоже не запустилась ($localError)',
-        );
-      }
-      rethrow;
-    }
-  }
-
-  Future<String> _transcribeApple(String audioPath, String language) async {
-    throw StateError(
-      'Локальная Apple-расшифровка отключена: используется cloud STT.',
-    );
-  }
-
-  Future<String> _transcribeCpp(String audioPath, String language) async {
-    return LocalTranscriptionServiceIO.transcribeCpp(audioPath, language);
+    // onDevice (по умолчанию). Приватность: при сбое НЕ уходим молча в облако —
+    // пробрасываем ошибку (например «скачайте модель в настройках»), чтобы
+    // аудио не утекло на сервер без ведома пользователя.
+    return _transcribeOnDevice(audioPath, language, size);
   }
 
   Future<String> _transcribeWeb(String audioPath, String language) async {

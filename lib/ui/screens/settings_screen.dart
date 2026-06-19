@@ -15,6 +15,8 @@ import '../../models/contact.dart';
 import '../../models/user_profile.dart';
 import '../../services/app_settings.dart';
 import '../../services/app_icon_service.dart';
+import '../../services/transcription_engine.dart';
+import '../../services/model_download_service.dart';
 import '../widgets/message_cache_clear_dialog.dart';
 import '../../services/ble_service.dart';
 import '../../services/connection_transport.dart';
@@ -432,6 +434,13 @@ class SettingsCategoryCards extends StatelessWidget {
             title: AppL10n.t('settings_privacy'),
             subtitle: 'Прочтение, статус онлайн',
             onTap: () => _open(context, const _PrivacyPage()),
+          ),
+          _CategoryItem(
+            icon: Icons.record_voice_over_outlined,
+            color: const Color(0xFFFF7043),
+            title: 'Расшифровка',
+            subtitle: 'Движок и модель',
+            onTap: () => _open(context, const _TranscriptionPage()),
           ),
         ]),
         const SizedBox(height: 8),
@@ -2634,6 +2643,224 @@ class _ChatBgTile extends StatelessWidget {
 }
 
 // ── Заголовок секции ───────────────────────────────────────────────────
+
+// ── Расшифровка (движок + модель) ─────────────────────────────────────
+
+class _TranscriptionPage extends StatefulWidget {
+  const _TranscriptionPage();
+
+  @override
+  State<_TranscriptionPage> createState() => _TranscriptionPageState();
+}
+
+class _TranscriptionPageState extends State<_TranscriptionPage> {
+  final Map<WhisperModelSize, bool> _installed = {};
+
+  @override
+  void initState() {
+    super.initState();
+    AppSettings.instance.addListener(_onChanged);
+    _refreshInstalled();
+  }
+
+  @override
+  void dispose() {
+    AppSettings.instance.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _isWeb => RuntimePlatform.isWeb;
+  bool get _isApple => RuntimePlatform.isIos || RuntimePlatform.isDesktopMacos;
+
+  static String _fmtMb(int bytes) =>
+      '${(bytes / (1024 * 1024)).round()} МБ';
+
+  String _onDeviceSubtitle() {
+    if (_isWeb) return 'whisper.cpp в браузере (WASM)';
+    if (_isApple) return 'WhisperKit — встроенный движок Apple';
+    return 'whisper.cpp на устройстве';
+  }
+
+  Future<void> _refreshInstalled() async {
+    if (_isWeb || _isApple) return;
+    for (final s in WhisperModelSize.values) {
+      if (s.isBundled) continue;
+      _installed[s] = await ModelDownloadService.instance.isDownloaded(s);
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _downloadModel(WhisperModelSize size) async {
+    try {
+      await ModelDownloadService.instance.ensureDownloaded(size);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Модель «${size.displayName}» установлена')),
+      );
+      await _refreshInstalled();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _deleteModel(WhisperModelSize size) async {
+    await ModelDownloadService.instance.delete(size);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Модель «${size.displayName}» удалена')),
+    );
+    await _refreshInstalled();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = AppSettings.instance;
+    final cs = Theme.of(context).colorScheme;
+    final engine = settings.transcriptionEngine;
+    final size = settings.transcriptionModelSize;
+
+    return _subScaffold(
+      context: context,
+      title: 'Расшифровка',
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
+        children: [
+          const _SectionHeader('Движок расшифровки'),
+          RadioListTile<TranscriptionEngine>(
+            value: TranscriptionEngine.onDevice,
+            groupValue: engine,
+            title: const Text('На устройстве (локально)'),
+            subtitle: Text(_onDeviceSubtitle(),
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            onChanged: (v) {
+              if (v != null) settings.setTranscriptionEngine(v);
+            },
+          ),
+          RadioListTile<TranscriptionEngine>(
+            value: TranscriptionEngine.cloud,
+            groupValue: engine,
+            title: const Text('Облако (Hugging Face)'),
+            subtitle: Text('Аудио отправляется на сервер',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            onChanged: (v) {
+              if (v != null) settings.setTranscriptionEngine(v);
+            },
+          ),
+          if (engine == TranscriptionEngine.onDevice) ...[
+            const _SectionHeader('Модель'),
+            for (final s in WhisperModelSize.values) _modelTile(context, s, size),
+            if (_isWeb)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Text(
+                  'В браузере используется встроенная модель (tiny); '
+                  'загрузка дополнительных моделей недоступна.',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                ),
+              )
+            else if (_isApple)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Text(
+                  'WhisperKit скачивает выбранную модель автоматически '
+                  'при первом запуске.',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _modelTile(
+      BuildContext context, WhisperModelSize s, WhisperModelSize selected) {
+    final cs = Theme.of(context).colorScheme;
+    // На вебе доступна только встроенная tiny.
+    final disabled = _isWeb && !s.isBundled;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        RadioListTile<WhisperModelSize>(
+          value: s,
+          groupValue: selected,
+          title: Text(s.displayName),
+          subtitle: Text(
+            '≈ ${_fmtMb(s.approxBytes)}${s.isBundled ? ' · встроена' : ''}',
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+          onChanged: disabled
+              ? null
+              : (v) {
+                  if (v != null) {
+                    AppSettings.instance.setTranscriptionModelSize(v);
+                  }
+                },
+        ),
+        if (!_isWeb && !_isApple && !s.isBundled) _modelDownloadRow(context, s),
+      ],
+    );
+  }
+
+  Widget _modelDownloadRow(BuildContext context, WhisperModelSize s) {
+    return ValueListenableBuilder<WhisperModelSize?>(
+      valueListenable: ModelDownloadService.instance.downloading,
+      builder: (_, downloadingSize, __) {
+        if (downloadingSize == s) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(72, 0, 16, 10),
+            child: ValueListenableBuilder<double?>(
+              valueListenable: ModelDownloadService.instance.progress,
+              builder: (_, prog, __) {
+                return Row(
+                  children: [
+                    Expanded(child: LinearProgressIndicator(value: prog)),
+                    const SizedBox(width: 12),
+                    Text(prog == null ? '…' : '${(prog * 100).round()}%',
+                        style: const TextStyle(fontSize: 12)),
+                  ],
+                );
+              },
+            ),
+          );
+        }
+        final installed = _installed[s] ?? false;
+        final busy = downloadingSize != null;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(72, 0, 8, 6),
+          child: Row(
+            children: [
+              if (installed) ...[
+                const Icon(Icons.check_circle,
+                    color: Color(0xFF4CAF50), size: 18),
+                const SizedBox(width: 6),
+                const Text('Установлена', style: TextStyle(fontSize: 12)),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: busy ? null : () => _deleteModel(s),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Удалить'),
+                ),
+              ] else ...[
+                const Spacer(),
+                FilledButton.tonalIcon(
+                  onPressed: busy ? null : () => _downloadModel(s),
+                  icon: const Icon(Icons.download, size: 18),
+                  label: const Text('Скачать'),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
 
 class _SectionHeader extends StatelessWidget {
   final String title;

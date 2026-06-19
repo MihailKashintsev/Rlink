@@ -145,29 +145,6 @@ Future<Uint8List?> _readProfileMediaBytes(String? rawPath) async {
   return null;
 }
 
-int? _dataUriByteLength(String value) {
-  if (!value.startsWith('data:')) return null;
-  final comma = value.indexOf(',');
-  if (comma <= 0) return null;
-  try {
-    return base64Decode(value.substring(comma + 1).trim()).length;
-  } catch (_) {
-    return null;
-  }
-}
-
-Future<int> _storedMediaByteLength(String path) async {
-  if (kIsWeb) {
-    final dataUriSize = _dataUriByteLength(path);
-    if (dataUriSize != null) return dataUriSize;
-    final storedBytes = await readWebStoredFile(path.split('#').first);
-    if (storedBytes != null) return storedBytes.length;
-    final bytes = await readWebObjectUrlBytes(path);
-    return bytes?.length ?? 0;
-  }
-  return File(path).length();
-}
-
 String _shortPeerId(String peerId) =>
     peerId.length > 8 ? '${peerId.substring(0, 8)}…' : peerId;
 
@@ -1423,30 +1400,31 @@ Future<void> initServices() async {
           final origName = fileName;
           final path = await ImageService.instance.assembleAndSaveFile(msgId);
           if (path == null) return;
+          // Capture the known decompressed size NOW, before any further await:
+          // on web re-reading the stored path can return 0 bytes.
+          final knownBytes = ImageService.instance.lastAssembledByteLength;
           ImageService.instance.markCompleted(msgId);
           if (isChannelPost ||
               await ChannelService.instance.getPost(msgId) != null) {
-            final sz = await _storedMediaByteLength(path);
             await ChannelService.instance.applyAssembledPostMedia(
               postId: msgId,
               filePath: path,
               fileName: origName,
-              fileSize: sz,
+              fileSize: knownBytes,
             );
             return;
           }
           if (await ChannelService.instance.getComment(msgId) != null) {
-            final sz = await _storedMediaByteLength(path);
             await ChannelService.instance.applyAssembledCommentMedia(
               commentId: msgId,
               filePath: path,
               fileName: origName,
-              fileSize: sz,
+              fileSize: knownBytes,
             );
             return;
           }
           final fileLabel = '📎 ${origName ?? 'Файл'}';
-          final fileBytes = await _storedMediaByteLength(path);
+          final fileBytes = knownBytes;
           final msg = ChatMessage(
             id: msgId,
             peerId: senderKey,
@@ -3766,8 +3744,10 @@ Future<void> _processBlobAssemble({
       debugPrint('[RLINK][Blob] File assemble failed');
       return;
     }
+    // Capture the known decompressed size NOW, before any further await:
+    // on web re-reading the stored path can return 0 bytes.
+    final fileBytes = ImageService.instance.lastAssembledByteLength;
     ImageService.instance.markCompleted(msgId);
-    final fileBytes = await _storedMediaByteLength(path);
     if (await ChannelService.instance.getPost(msgId) != null) {
       await ChannelService.instance.applyAssembledPostMedia(
         postId: msgId,

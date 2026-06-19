@@ -28,6 +28,13 @@ class ImageService {
   final _uuid = const Uuid();
   final Map<String, _ImageAssembly> _assemblies = {};
 
+  /// Decompressed byte length of the most recently assembled file/video.
+  /// Read it synchronously right after [assembleAndSaveFile] /
+  /// [assembleAndSaveVideo] returns (before any further await) to learn the
+  /// true media size — on web the stored OPFS file may report 0 bytes even
+  /// though the bytes are intact, so re-reading the path is unreliable.
+  int lastAssembledByteLength = 0;
+
   /// Track completed assemblies to prevent duplicate processing
   /// when both blob and gossip chunks deliver the same msgId.
   final Set<String> _completedMsgIds = {};
@@ -715,6 +722,7 @@ class ImageService {
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
     final data = await _openAndDecompress(raw);
+    lastAssembledByteLength = data.length;
     if (kIsWeb) {
       final mime = _videoMimeFromData(data, assembly.fileName);
       final ext = mime == 'video/webm'
@@ -744,6 +752,7 @@ class ImageService {
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
     final data = await _openAndDecompress(raw);
+    lastAssembledByteLength = data.length;
     if (kIsWeb) {
       final mime = _mimeFromFileName(assembly.fileName);
       final stored = await writeWebStoredFile(

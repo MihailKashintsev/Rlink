@@ -93,6 +93,11 @@ dependencies:
   audioplayers: ^6.1.0
   audio_session: ^0.1.25
 
+  # On-device Apple speech-to-text (iOS/macOS only; runtime-guarded).
+  # Plugin is Apple-only — Android/Windows/Linux builds simply skip its
+  # native side, and Dart calls are gated behind Platform.isIOS/isMacOS.
+  flutter_whisper_kit: ^0.3.0
+
   # Theme / settings persistence
   shared_preferences: ^2.3.2
 
@@ -139,7 +144,9 @@ dev_dependencies:
 
 flutter:
   config:
-    enable-swift-package-manager: false
+    # WhisperKit (flutter_whisper_kit_apple) pulls its WhisperKit dependency via
+    # Swift Package Manager, so SPM must stay enabled for the iOS/macOS build.
+    enable-swift-package-manager: true
 
   uses-material-design: true
 

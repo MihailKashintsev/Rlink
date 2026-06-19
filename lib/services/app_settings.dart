@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'ai_bot_constants.dart';
 import 'runtime_platform.dart';
+import 'transcription_engine.dart';
+import 'whisper_model.dart';
 import 'web_account_bundle.dart';
 import 'web_identity_portable.dart';
 import '../utils/reaction_emoji_key.dart';
@@ -60,6 +62,10 @@ class AppSettings extends ChangeNotifier {
   static const _keyPreLinkConnectionMode = 'pre_link_connection_mode';
   static const _keyEnabledBotIds = 'enabled_bot_ids';
   static const _keyInputBarButtonOrder = 'input_bar_button_order';
+  static const _keyTranscriptionEngine =
+      'transcription_engine'; // 0=onDevice,1=cloud
+  static const _keyTranscriptionModelSize =
+      'transcription_model_size'; // 0=tiny,1=base,2=small
 
   late SharedPreferences _prefs;
   bool _prefsReady = false;
@@ -115,6 +121,8 @@ class AppSettings extends ChangeNotifier {
       'notifyGroups': _notifyGroups,
       'notifyChannels': _notifyChannels,
       'callRingtone': _callRingtone,
+      'transcriptionEngine': _transcriptionEngine,
+      'transcriptionModelSize': _transcriptionModelSize,
       'customSoundPaths': _customSoundPaths,
       'appIconVariant': _appIconVariant,
       'useIosStyleEmoji': _useIosStyleEmoji,
@@ -156,6 +164,8 @@ class AppSettings extends ChangeNotifier {
   bool _notifyGroups = true;
   bool _notifyChannels = true;
   int _callRingtone = 0;
+  int _transcriptionEngine = 0; // 0=onDevice, 1=cloud
+  int _transcriptionModelSize = 0; // 0=tiny, 1=base, 2=small
   Map<String, String> _customSoundPaths = const {};
   int _appIconVariant = 0;
   bool _useIosStyleEmoji = false;
@@ -199,6 +209,11 @@ class AppSettings extends ChangeNotifier {
   bool get notifyGroups => _notifyGroups;
   bool get notifyChannels => _notifyChannels;
   int get callRingtone => _callRingtone.clamp(0, 2);
+
+  TranscriptionEngine get transcriptionEngine =>
+      TranscriptionEngine.fromIndex(_transcriptionEngine);
+  WhisperModelSize get transcriptionModelSize =>
+      WhisperModelSize.fromIndex(_transcriptionModelSize);
   Map<String, String> get customSoundPaths =>
       Map.unmodifiable(_customSoundPaths);
   String? customSoundPath(String soundId) {
@@ -402,6 +417,10 @@ class AppSettings extends ChangeNotifier {
     _notifyGroups = _prefs.getBool(_keyNotifyGroups) ?? true;
     _notifyChannels = _prefs.getBool(_keyNotifyChannels) ?? true;
     _callRingtone = (_prefs.getInt(_keyCallRingtone) ?? 0).clamp(0, 2);
+    _transcriptionEngine =
+        (_prefs.getInt(_keyTranscriptionEngine) ?? 0).clamp(0, 1);
+    _transcriptionModelSize =
+        (_prefs.getInt(_keyTranscriptionModelSize) ?? 0).clamp(0, 2);
     _customSoundPaths =
         _decodeStringMap(_prefs.getString(_keyCustomSoundPaths));
     final rawButtonOrder = _prefs.getString(_keyInputBarButtonOrder);
@@ -540,6 +559,12 @@ class AppSettings extends ChangeNotifier {
       _notifyChannels = m['notifyChannels'] as bool? ?? _notifyChannels;
       _callRingtone =
           ((m['callRingtone'] as num?)?.toInt() ?? _callRingtone).clamp(0, 2);
+      _transcriptionEngine =
+          ((m['transcriptionEngine'] as num?)?.toInt() ?? _transcriptionEngine)
+              .clamp(0, 1);
+      _transcriptionModelSize = ((m['transcriptionModelSize'] as num?)?.toInt() ??
+              _transcriptionModelSize)
+          .clamp(0, 2);
       final customSounds = m['customSoundPaths'];
       if (customSounds is Map) {
         _customSoundPaths = customSounds.map(
@@ -608,6 +633,20 @@ class AppSettings extends ChangeNotifier {
   Future<void> setCallRingtone(int v) async {
     _callRingtone = v.clamp(0, 2);
     await _runPrefsWrite((p) => p.setInt(_keyCallRingtone, _callRingtone));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setTranscriptionEngine(TranscriptionEngine engine) async {
+    _transcriptionEngine = engine.index.clamp(0, 1);
+    await _runPrefsWrite(
+        (p) => p.setInt(_keyTranscriptionEngine, _transcriptionEngine));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setTranscriptionModelSize(WhisperModelSize size) async {
+    _transcriptionModelSize = size.index.clamp(0, 2);
+    await _runPrefsWrite(
+        (p) => p.setInt(_keyTranscriptionModelSize, _transcriptionModelSize));
     _notifySettingsChanged();
   }
 
