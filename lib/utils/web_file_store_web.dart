@@ -94,9 +94,16 @@ Future<String?> webStoredFileObjectUrl(
     final file = await _readFile(path);
     if (file == null) return null;
     final requestedType = mimeType.trim();
-    final blob = requestedType.isEmpty || file.type == requestedType
-        ? file
-        : file.slice(0, file.size, requestedType);
+    // No retype needed → use the File's own object URL (range-capable).
+    if (requestedType.isEmpty || file.type == requestedType) {
+      return web.URL.createObjectURL(file);
+    }
+    // Retype by building a FRESH FULL blob from the bytes. Do NOT use
+    // file.slice(0, size, type): a retyped slice-blob makes <video>/<audio>
+    // byte-range requests fail in Chromium (ERR_REQUEST_RANGE_NOT_SATISFIABLE),
+    // which breaks playback of received media on web.
+    final ab = await file.arrayBuffer().toDart;
+    final blob = web.Blob([ab].toJS, web.BlobPropertyBag(type: requestedType));
     return web.URL.createObjectURL(blob);
   } catch (_) {
     return null;
