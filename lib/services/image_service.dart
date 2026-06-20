@@ -723,6 +723,8 @@ class ImageService {
     final raw = assembly.assemble();
     final data = await _openAndDecompress(raw);
     lastAssembledByteLength = data.length;
+    debugPrint('[RLINK][Assemble] video $msgId: raw=${raw.length} '
+        'decompressed=${data.length} bytes');
     if (kIsWeb) {
       final mime = _videoMimeFromData(data, assembly.fileName);
       final ext = mime == 'video/webm'
@@ -753,6 +755,8 @@ class ImageService {
     final raw = assembly.assemble();
     final data = await _openAndDecompress(raw);
     lastAssembledByteLength = data.length;
+    debugPrint('[RLINK][Assemble] file $msgId: raw=${raw.length} '
+        'decompressed=${data.length} bytes');
     if (kIsWeb) {
       final mime = _mimeFromFileName(assembly.fileName);
       final stored = await writeWebStoredFile(

@@ -113,6 +113,10 @@
         const syncKey = `${relayBase}|${me}`;
         const now = Date.now();
         window.__rlinkPushSync = window.__rlinkPushSync || { key: '', at: 0, failedAt: 0 };
+        // In-flight guard: a flaky WebSocket fires this on every reconnect; without
+        // this, many concurrent calls all POST /push/subscribe before any completes,
+        // flooding the console with repeated 400s.
+        if (window.__rlinkPushSync.inFlight) return;
         let persistedFailedAt = 0;
         try {
           persistedFailedAt = Number(localStorage.getItem(`rlink_push_failed_${syncKey}`) || '0') || 0;
@@ -122,6 +126,7 @@
         if (persistedFailedAt > 0 && now - persistedFailedAt < 60 * 60 * 1000) return;
         window.__rlinkPushSync.key = syncKey;
         window.__rlinkPushSync.at = now;
+        window.__rlinkPushSync.inFlight = true;
 
         const keyResp = await fetch(`${relayBase}/push/public_key`, { method: 'GET' });
         if (!keyResp.ok) {
@@ -173,7 +178,9 @@
             localStorage.removeItem(`rlink_push_failed_${syncKey}`);
           } catch (_) {}
         }
-      } catch (_) {}
+      } catch (_) {} finally {
+        if (window.__rlinkPushSync) window.__rlinkPushSync.inFlight = false;
+      }
     };
   </script>
   <script src="whisper_web.js" defer></script>
