@@ -3474,7 +3474,7 @@ class _ChatScreenState extends State<ChatScreen> {
         type: FileType.custom,
         allowedExtensions: const ['gif'],
         allowMultiple: false,
-        withData: false,
+        withData: kIsWeb, // web: file_picker has no working readStream → load bytes
         withReadStream: true,
       );
       final f = r?.files.firstOrNull;
@@ -3497,7 +3497,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final r = await FilePicker.platform.pickFiles(
         type: FileType.video,
         allowMultiple: false,
-        withData: false,
+        withData: kIsWeb, // web: file_picker has no working readStream → load bytes
         withReadStream: true,
       );
       final f = r?.files.firstOrNull;
@@ -3564,7 +3564,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final r = await FilePicker.platform.pickFiles(
       type: FileType.any,
       allowMultiple: false,
-      withData: false,
+      withData: kIsWeb, // web: file_picker has no working readStream → load bytes
       withReadStream: true,
     );
     final f = r?.files.firstOrNull;
@@ -4553,7 +4553,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final picked = await FilePicker.platform.pickFiles(
         type: FileType.video,
         allowMultiple: false,
-        withData: false,
+        withData: kIsWeb, // web: file_picker has no working readStream → load bytes
         withReadStream: true,
       );
       final f = picked?.files.firstOrNull;
@@ -4599,7 +4599,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
       allowMultiple: false,
-      withData: false,
+      withData: kIsWeb, // web: file_picker has no working readStream → load bytes
       withReadStream: kIsWeb,
     );
     if (result == null || result.files.isEmpty || !mounted) return;

@@ -112,6 +112,13 @@ class LocalTranscriptionService {
     final engine = _engine;
     final size = _modelSize;
 
+    // На вебе облачный STT недостижим из браузера (CORS + cert), поэтому
+    // всегда используем локальный движок (whisper.cpp WASM), даже если в
+    // настройках выбрано «облако».
+    if (_isWeb) {
+      return _transcribeOnDevice(audioPath, language, size);
+    }
+
     if (engine == TranscriptionEngine.cloud) {
       // Облако выбрано явно: пробуем HF, при сбое (нет сети) — локально.
       try {
