@@ -381,7 +381,8 @@ class VoiceService {
         (path.startsWith('blob:') ||
             path.startsWith('data:') ||
             path.startsWith('http://') ||
-            path.startsWith('https://'))) {
+            path.startsWith('https://') ||
+            path.startsWith('opfs://rlink/'))) {
       return true;
     }
     return File(path).existsSync();
@@ -409,6 +410,16 @@ class VoiceService {
 
   Future<void> _startAudioItem(PlaybackQueueItem item) async {
     await _ensurePlaybackAudioSession();
+    // Resolve OPFS-stored audio (received voices, and own voices persisted on
+    // web) to an in-memory blob URL — audioplayers can't open opfs:// paths.
+    var playablePath = item.path;
+    if (kIsWeb && playablePath.startsWith('opfs://rlink/')) {
+      playablePath = await webStoredFileObjectUrl(
+            playablePath.split('#').first,
+            mimeType: '',
+          ) ??
+          playablePath;
+    }
     _player = AudioPlayer();
     playDuration.value = Duration.zero;
     _audioDurSub = _player!.onDurationChanged.listen((dur) {
@@ -436,12 +447,12 @@ class VoiceService {
       unawaited(_advanceQueue());
     });
     final source = kIsWeb &&
-            (item.path.startsWith('blob:') ||
-                item.path.startsWith('data:') ||
-                item.path.startsWith('http://') ||
-                item.path.startsWith('https://'))
-        ? UrlSource(item.path)
-        : DeviceFileSource(item.path);
+            (playablePath.startsWith('blob:') ||
+                playablePath.startsWith('data:') ||
+                playablePath.startsWith('http://') ||
+                playablePath.startsWith('https://'))
+        ? UrlSource(playablePath)
+        : DeviceFileSource(playablePath);
     await _player!.play(source);
   }
 

@@ -1526,6 +1526,21 @@ class _ChatScreenState extends State<ChatScreen> {
         final bytes = await _readLocalOrWebMediaBytes(segPath);
         if (bytes == null || bytes.isEmpty) continue;
         final msgId = _uuid.v4();
+        // On web the recorder returns a transient blob: URL that dies on reload
+        // and can't be transcribed. Persist the bytes to OPFS so the own voice
+        // survives refresh and resolves for playback/transcription.
+        var storedVoicePath = segPath;
+        if (kIsWeb) {
+          final mime = _audioMimeFromBytes(bytes);
+          final ext = _audioExtForMime(mime);
+          storedVoicePath = (await writeWebStoredFile(
+                fileName: '${msgId}_voice.$ext',
+                bytes: bytes,
+                mimeType: mime,
+              )) ??
+              _webMediaRefForPickedBytes(bytes, 'voice.$ext',
+                  fallbackMime: mime);
+        }
         final wasQueued = await _sendMedia(
           bytes: bytes,
           msgId: msgId,
@@ -1541,7 +1556,7 @@ class _ChatScreenState extends State<ChatScreen> {
             isOutgoing: true,
             timestamp: DateTime.now(),
             status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
-            voicePath: segPath,
+            voicePath: storedVoicePath,
           ),
           wasQueued: wasQueued,
         );
@@ -3891,6 +3906,52 @@ class _ChatScreenState extends State<ChatScreen> {
       return base64Decode(payload);
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Detect an audio MIME type from leading bytes (web voice recordings).
+  static String _audioMimeFromBytes(Uint8List b) {
+    if (b.length >= 4 &&
+        b[0] == 0x1A &&
+        b[1] == 0x45 &&
+        b[2] == 0xDF &&
+        b[3] == 0xA3) {
+      return 'audio/webm'; // EBML (webm / opus)
+    }
+    if (b.length >= 4 &&
+        b[0] == 0x4F &&
+        b[1] == 0x67 &&
+        b[2] == 0x67 &&
+        b[3] == 0x53) {
+      return 'audio/ogg'; // OggS
+    }
+    if (b.length >= 12 &&
+        b[4] == 0x66 &&
+        b[5] == 0x74 &&
+        b[6] == 0x79 &&
+        b[7] == 0x70) {
+      return 'audio/mp4'; // ftyp (m4a / aac)
+    }
+    if (b.length >= 4 &&
+        b[0] == 0x52 &&
+        b[1] == 0x49 &&
+        b[2] == 0x46 &&
+        b[3] == 0x46) {
+      return 'audio/wav'; // RIFF
+    }
+    return 'audio/webm';
+  }
+
+  static String _audioExtForMime(String mime) {
+    switch (mime) {
+      case 'audio/mp4':
+        return 'm4a';
+      case 'audio/ogg':
+        return 'ogg';
+      case 'audio/wav':
+        return 'wav';
+      default:
+        return 'webm';
     }
   }
 
