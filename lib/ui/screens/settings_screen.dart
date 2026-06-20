@@ -30,7 +30,6 @@ import '../../services/sound_effects_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/web_notification_bridge.dart';
 import '../../utils/web_file_store.dart';
-import '../../services/web_identity_portable.dart';
 import '../screens/stickers_hub_screen.dart';
 import '../screens/emoji_hub_screen.dart';
 import '../screens/chat_screen.dart';
@@ -2109,24 +2108,6 @@ class _NetworkPageState extends State<_NetworkPage> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text('В web-версии доступен только интернет-режим.',
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            ),
-          if (RuntimePlatform.isWeb)
-            ListTile(
-              leading: Icon(Icons.key_rounded, color: cs.primary),
-              title: const Text('Скачать файл ключа входа'),
-              subtitle: const Text(
-                'Сохраните JSON в надёжное место — это ваш ID и логин для web. '
-                'Восстановление — на экране регистрации.',
-                style: TextStyle(fontSize: 12),
-              ),
-              onTap: () async {
-                await WebIdentityPortable.exportIdentityKeyDownload();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Файл скачан')),
-                  );
-                }
-              },
             ),
           if (settings.isDeviceLinked)
             Padding(

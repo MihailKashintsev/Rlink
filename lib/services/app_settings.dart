@@ -88,7 +88,7 @@ class AppSettings extends ChangeNotifier {
     }
     notifyListeners();
     if (RuntimePlatform.isWeb) {
-      unawaited(WebIdentityPortable.exportIdentityKeyDownload());
+      unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
     }
   }
 

@@ -210,7 +210,7 @@ class GroupService {
     });
     _bump();
     if (kIsWeb) {
-      unawaited(WebIdentityPortable.exportIdentityKeyDownload());
+      unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
     }
     return group;
   }
@@ -364,7 +364,7 @@ class GroupService {
     );
     _bump();
     if (kIsWeb) {
-      unawaited(WebIdentityPortable.exportIdentityKeyDownload());
+      unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
     }
   }
 

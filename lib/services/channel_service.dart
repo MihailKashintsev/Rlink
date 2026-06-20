@@ -533,7 +533,7 @@ class ChannelService {
     _bump();
     unawaited(publishAccountChannelSubscriptions());
     if (kIsWeb) {
-      unawaited(WebIdentityPortable.exportIdentityKeyDownload());
+      unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
     }
     return channel;
   }
@@ -931,7 +931,7 @@ class ChannelService {
     }
     _bump();
     if (kIsWeb) {
-      unawaited(WebIdentityPortable.exportIdentityKeyDownload());
+      unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
     }
   }
 

@@ -38,7 +38,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String  _selectedEmoji = UserProfile.avatarEmojis[0];
   String? _selectedImagePath;
   bool    _loading         = false;
-  bool    _importBusy     = false;
   bool    _showEmojiPicker = false;
 
   final _picker = ImagePicker();
@@ -116,7 +115,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         setAvatarImagePath: true,
         avatarImagePath: _selectedImagePath,
       );
-      unawaited(WebIdentityPortable.exportIdentityKeyDownload());
+      unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
       // Restart transports with new identity.
       // BLE was stopped during reset — start() restores it.
       // Relay needs to reconnect so the server registers the new public key.
@@ -144,41 +143,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ));
   }
 
-  Future<void> _importFromKeyFile() async {
-    if (!RuntimePlatform.isWeb) return;
-    setState(() => _importBusy = true);
-    try {
-      final ok =
-          await WebIdentityPortable.importIdentityKeyFromUserFile(reloadAfter: false);
-      if (!mounted) return;
-      if (!ok) {
-        _showSnack('Импорт отменён или файл не подходит', isError: true);
-        return;
-      }
-      await CryptoService.instance.init();
-      await ProfileService.instance.init();
-      if (!RuntimePlatform.isWeb) {
-        await _ensureCoreDatabasesInitialized();
-      }
-      final profile = ProfileService.instance.profile;
-      if (profile == null) {
-        _showSnack('Ключ импортирован, но профиль не восстановлен', isError: true);
-        return;
-      }
-      unawaited(_restartTransports(profile));
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const ChatListScreen()),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        _showSnack('Ошибка импорта: $e', isError: true);
-      }
-    } finally {
-      if (mounted) setState(() => _importBusy = false);
-    }
-  }
 
   Future<void> _ensureCoreDatabasesInitialized() async {
     if (RuntimePlatform.isWeb) return;
@@ -443,31 +407,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onSubmitted: (_) => _create(),
                   onChanged: (_) => setState(() {}),
                 ),
-                if (RuntimePlatform.isWeb) ...[
-                  const SizedBox(height: 16),
-                  TextButton.icon(
-                    onPressed: (_loading || _importBusy) ? null : _importFromKeyFile,
-                    icon: _importBusy
-                        ? SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: cs.primary,
-                            ),
-                          )
-                        : const Icon(Icons.upload_file_rounded),
-                    label: const Text('Восстановить из файла ключа'),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      'Выберите ранее скачанный .rlink.json — страница перезагрузится',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 20),
 
                 // ── Кнопка ───────────────────────────────────
@@ -475,7 +414,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   width: double.infinity,
                   height: 52,
                   child: FilledButton(
-                    onPressed: (_loading || _importBusy) ? null : _create,
+                    onPressed: _loading ? null : _create,
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF1DB954),
                       shape: RoundedRectangleBorder(
