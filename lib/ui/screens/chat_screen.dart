@@ -1402,7 +1402,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _transcribeVoiceMessage(ChatMessage msg) async {
     final id = msg.id;
-    final rawPath = msg.voicePath;
+    // Voice messages use voicePath; square/quick video messages have audio in
+    // videoPath — transcribe that when there's no voicePath.
+    final rawPath = (msg.voicePath != null && msg.voicePath!.isNotEmpty)
+        ? msg.voicePath
+        : msg.videoPath;
     if (rawPath == null || rawPath.isEmpty) return;
 
     final resolved = _dmResolveMsgPath(rawPath);
@@ -1411,7 +1415,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!webReadable && !File(pathForTranscribe).existsSync()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Файл голосового не найден')),
+          const SnackBar(content: Text('Файл сообщения не найден')),
         );
       }
       return;
@@ -7916,6 +7920,17 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 ),
               ),
+            // Transcription for square/quick video messages (audio track).
+            if (msg.videoPath != null &&
+                _dmVideoPathIsSquare(msg.videoPath!) &&
+                onTranscribeVoice != null)
+              _SquareVideoTranscript(
+                msg: msg,
+                isOut: isOut,
+                onTranscribe: onTranscribeVoice!,
+                transcript: voiceTranscript?.call(msg.id),
+                expanded: voiceTranscriptExpanded?.call(msg.id) ?? false,
+              ),
             if (msg.imagePath != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
@@ -9798,6 +9813,85 @@ class _VoiceMessageBubble extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Transcribe button + expandable transcript for square/quick video messages.
+/// Reuses the voice-transcription pipeline (transcribes the video's audio).
+class _SquareVideoTranscript extends StatelessWidget {
+  final ChatMessage msg;
+  final bool isOut;
+  final Future<void> Function(ChatMessage) onTranscribe;
+  final String? transcript;
+  final bool expanded;
+
+  const _SquareVideoTranscript({
+    required this.msg,
+    required this.isOut,
+    required this.onTranscribe,
+    this.transcript,
+    this.expanded = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final t = transcript?.trim() ?? '';
+    final has = t.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 4),
+      child: Column(
+        crossAxisAlignment:
+            isOut ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () => unawaited(onTranscribe(msg)),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    has
+                        ? (expanded ? Icons.expand_less : Icons.expand_more)
+                        : Icons.subtitles_outlined,
+                    size: 18,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Расшифровка',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (has && expanded)
+            Container(
+              constraints: const BoxConstraints(maxWidth: 280),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: SelectionArea(
+                child: Text(
+                  t,
+                  style: TextStyle(
+                      fontSize: 13, height: 1.35, color: cs.onSurface),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
