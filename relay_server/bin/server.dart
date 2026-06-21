@@ -2254,8 +2254,10 @@ void _handleBlob(_User sender, Map<String, dynamic> msg) {
   if (relayMsgId == null || relayMsgId.isEmpty) return;
   final data = msg['data'] as String?;
   if (data == null || data.isEmpty) return;
-  if (data.length > 10485760) {
-    // 10 MB max for blobs (base64)
+  if (data.length > 209715200) {
+    // 200 MB max for a single blob message (base64). Raised from 10 MB.
+    // Large files are already chunked client-side (48 KB pieces), so this
+    // per-message cap is rarely the binding constraint.
     return;
   }
   final senderIsBot = _isKnownBot(sender.publicKey);

@@ -21,6 +21,7 @@ import 'utils/custom_emoji_text.dart';
 import 'utils/reaction_emoji_key.dart';
 import 'utils/web_file_store.dart';
 import 'utils/web_object_url.dart';
+import 'utils/web_log.dart';
 import 'models/contact.dart';
 import 'models/group.dart';
 import 'models/user_profile.dart';
@@ -3428,6 +3429,9 @@ void _onBlobReceived(
     bool viewOnce) async {
   debugPrint(
       '[RLINK][Blob] Received ${data.length} bytes from ${fromId.substring(0, 8)} msgId=$msgId voice=$isVoice video=$isVideo file=$isFile');
+  webConsoleLog(
+      '[RLINK][Blob] Received ${data.length} bytes msgId=${msgId.substring(0, msgId.length.clamp(0, 8))} '
+      'voice=$isVoice video=$isVideo file=$isFile');
 
   // Заблокированный отправитель — молча выкидываем blob.
   if (BlockService.instance.isBlocked(fromId)) {

@@ -14,6 +14,7 @@ import 'package:uuid/uuid.dart';
 
 import '../utils/web_object_url.dart';
 import '../utils/web_file_store.dart';
+import '../utils/web_log.dart';
 import 'crypto_service.dart';
 
 /// Сколько байт сырых данных помещается в один img_chunk-пакет.
@@ -546,7 +547,10 @@ class ImageService {
     if (isSealed && opened == null) {
       throw StateError('Media decrypt failed');
     }
-    return decompress(opened ?? raw);
+    final out = decompress(opened ?? raw);
+    webConsoleLog('[RLINK][Decode] raw=${raw.length} sealed=$isSealed '
+        'opened=${opened?.length ?? -1} decompressed=${out.length}');
+    return out;
   }
 
   Future<Directory> _imagesDir() async {
