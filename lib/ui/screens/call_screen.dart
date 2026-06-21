@@ -6,6 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../services/call_service.dart';
 import '../../services/call_proximity_service.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/wave_line.dart';
 
 class CallScreen extends StatefulWidget {
   final CallSessionInfo session;
@@ -363,6 +364,25 @@ class _CallScreenState extends State<CallScreen> {
                           label,
                           style: const TextStyle(
                               color: Colors.white60, fontSize: 14),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 30),
+                    ValueListenableBuilder<CallPhase>(
+                      valueListenable: CallService.instance.phase,
+                      builder: (_, phase, __) {
+                        final live = phase == CallPhase.connected;
+                        return SizedBox(
+                          width: 240,
+                          height: 52,
+                          child: WaveLine(
+                            seed: widget.peerName.hashCode,
+                            progress: 1.0,
+                            animating: live,
+                            activeColor: Colors.white.withValues(alpha: 0.92),
+                            inactiveColor: Colors.white24,
+                            strokeWidth: 2.8,
+                          ),
                         );
                       },
                     ),

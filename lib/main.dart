@@ -74,6 +74,7 @@ import 'services/web_identity_portable.dart';
 import 'services/web_notification_bridge.dart';
 import 'app_route_observer.dart';
 import 'ui/app_palettes.dart';
+import 'ui/widgets/animated_gradient_background.dart';
 import 'ui/screens/chat_list_screen.dart';
 import 'ui/widgets/audio_queue_mini_player.dart';
 import 'ui/widgets/square_video_queue_pip.dart';
@@ -4038,7 +4039,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (child != null) child,
+              if (child != null) AnimatedGradientBackground(child: child),
               const SquareVideoQueuePip(),
               ValueListenableBuilder<double?>(
                 valueListenable: AudioQueueMiniPlayerLayout.instance.barTop,
@@ -4134,10 +4135,12 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
           isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F0F0),
     );
 
+    final gradientOn = AppSettings.instance.animatedGradient;
     return ThemeData(
       brightness: brightness,
-      scaffoldBackgroundColor:
-          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF5F5F5),
+      scaffoldBackgroundColor: gradientOn
+          ? Colors.transparent
+          : (isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF5F5F5)),
       colorScheme: cs,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {

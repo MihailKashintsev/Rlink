@@ -84,6 +84,7 @@ import '../../utils/web_object_url.dart';
 import '../../utils/external_message_share.dart';
 import '../../utils/invite_dm_codec.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/wave_line.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/reactions.dart';
 import '../widgets/status_emoji_view.dart';
@@ -9557,17 +9558,14 @@ class _AudioFileBubble extends StatelessWidget {
                   builder: (_, progress, __) => SizedBox(
                     width: 110,
                     height: 28,
-                    child: CustomPaint(
-                      painter: _WaveformPainter(
-                        seed: filePath.hashCode,
-                        progress: isPlaying
-                            ? (progress.isFinite
-                                ? progress.clamp(0.0, 1.0)
-                                : 0.0)
-                            : 0,
-                        activeColor: activeColor,
-                        inactiveColor: inactiveColor,
-                      ),
+                    child: WaveLine(
+                      seed: filePath.hashCode,
+                      progress: isPlaying
+                          ? (progress.isFinite ? progress.clamp(0.0, 1.0) : 0.0)
+                          : 0,
+                      animating: isPlaying,
+                      activeColor: activeColor,
+                      inactiveColor: inactiveColor,
                     ),
                   ),
                 ),
@@ -9696,13 +9694,12 @@ class _VoiceMessageBubble extends StatelessWidget {
                         return SizedBox(
                           width: 120,
                           height: 28,
-                          child: CustomPaint(
-                            painter: _WaveformPainter(
-                              seed: voicePath.hashCode,
-                              progress: p,
-                              activeColor: activeColor,
-                              inactiveColor: inactiveColor,
-                            ),
+                          child: WaveLine(
+                            seed: voicePath.hashCode,
+                            progress: p,
+                            animating: isPlaying,
+                            activeColor: activeColor,
+                            inactiveColor: inactiveColor,
                           ),
                         );
                       },
@@ -9896,51 +9893,6 @@ class _SquareVideoTranscript extends StatelessWidget {
   }
 }
 
-class _WaveformPainter extends CustomPainter {
-  final int seed;
-  final double progress;
-  final Color activeColor;
-  final Color inactiveColor;
-
-  const _WaveformPainter({
-    required this.seed,
-    required this.progress,
-    required this.activeColor,
-    required this.inactiveColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const barCount = 28;
-    final spacing = size.width / barCount;
-    final barWidth = spacing * 0.55;
-    final rng = math.Random(seed);
-    final p = progress.isFinite ? progress.clamp(0.0, 1.0) : 0.0;
-    final activeBar = (p * barCount).floor().clamp(0, barCount);
-    final activePaint = Paint()..color = activeColor;
-    final inactivePaint = Paint()..color = inactiveColor;
-
-    for (int i = 0; i < barCount; i++) {
-      final heightFraction = 0.25 + rng.nextDouble() * 0.75;
-      final h = heightFraction * size.height;
-      final x = i * spacing + (spacing - barWidth) / 2;
-      final y = (size.height - h) / 2;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(x, y, barWidth, h),
-          const Radius.circular(2),
-        ),
-        i < activeBar ? activePaint : inactivePaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_WaveformPainter old) =>
-      old.progress != progress ||
-      old.activeColor != activeColor ||
-      old.seed != seed;
-}
 
 class _LiveRecordingWaveformPainter extends CustomPainter {
   final List<double> bars;
