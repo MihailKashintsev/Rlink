@@ -544,7 +544,19 @@ class ImageService {
     if (assembly == null || !assembly.isComplete) return null;
     final raw = assembly.assemble();
     final data = await _openAndDecompress(raw);
-    if (kIsWeb) return _webMediaRef(data, _audioMimeFromMagic(data));
+    if (kIsWeb) {
+      // Store in OPFS (like files/video) — a short opfs:// path survives reload,
+      // unlike a huge data: URI which may not round-trip through the chat DB,
+      // breaking voice replay after a page refresh.
+      final mime = _audioMimeFromMagic(data);
+      final ext = _audioExtFromMagic(data);
+      final stored = await writeWebStoredFile(
+        fileName: '${msgId}_voice.$ext',
+        bytes: data,
+        mimeType: mime,
+      );
+      return stored ?? _webMediaRef(data, mime);
+    }
     final dir = await _voicesDir();
     final path = p.join(dir.path, '$msgId.${_audioExtFromMagic(data)}');
     await File(path).writeAsBytes(data);

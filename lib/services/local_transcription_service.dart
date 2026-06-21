@@ -146,11 +146,10 @@ class LocalTranscriptionService {
   Future<String> _transcribeWeb(String audioPath, String language) async {
     var path = audioPath;
     if (isWebStoredFile(path)) {
-      path = await webStoredFileObjectUrl(
-            path,
-            mimeType: 'audio/webm',
-          ) ??
-          path;
+      // Empty mimeType → use the stored file's real type (webm/mp4/…) instead of
+      // forcing audio/webm, which could mismatch an m4a recording. transformers.js
+      // decodes via Web Audio regardless, but a correct type avoids edge failures.
+      path = await webStoredFileObjectUrl(path, mimeType: '') ?? path;
     }
     final text =
         await WhisperWebService.instance.transcribe(path, language: language);
