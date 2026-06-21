@@ -5981,21 +5981,25 @@ class _ChatScreenState extends State<ChatScreen> {
                                               .isPeerOnline(_resolvedPeerId))),
                             ),
                           )
-                        : AvatarWidget(
-                            initials: widget.peerNickname.isNotEmpty
-                                ? widget.peerNickname[0].toUpperCase()
-                                : '?',
-                            color: widget.peerAvatarColor,
-                            emoji: widget.peerAvatarEmoji,
-                            imagePath:
-                                _headerAvatarPath ?? widget.peerAvatarImagePath,
-                            size: 38,
-                            isOnline: !_isDmBot &&
-                                (BleService.instance
-                                        .isPeerConnected(_resolvedPeerId) ||
-                                    (RelayService.instance.isConnected &&
-                                        RelayService.instance
-                                            .isPeerOnline(_resolvedPeerId))),
+                        : InkWell(
+                            borderRadius: BorderRadius.circular(999),
+                            onTap: _openPeerProfile,
+                            child: AvatarWidget(
+                              initials: widget.peerNickname.isNotEmpty
+                                  ? widget.peerNickname[0].toUpperCase()
+                                  : '?',
+                              color: widget.peerAvatarColor,
+                              emoji: widget.peerAvatarEmoji,
+                              imagePath: _headerAvatarPath ??
+                                  widget.peerAvatarImagePath,
+                              size: 38,
+                              isOnline: !_isDmBot &&
+                                  (BleService.instance
+                                          .isPeerConnected(_resolvedPeerId) ||
+                                      (RelayService.instance.isConnected &&
+                                          RelayService.instance
+                                              .isPeerOnline(_resolvedPeerId))),
+                            ),
                           ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -6082,12 +6086,16 @@ class _ChatScreenState extends State<ChatScreen> {
                                   Row(
                                     children: [
                                       Flexible(
-                                        child: Text(widget.peerNickname,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600)),
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: _openPeerProfile,
+                                          child: Text(widget.peerNickname,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600)),
+                                        ),
                                       ),
                                       if (_peerStatusEmoji().isNotEmpty) ...[
                                         const SizedBox(width: 6),
