@@ -334,12 +334,28 @@ class ImageService {
 
   /// Распаковывает zlib-сжатые данные на приёмнике.
   Uint8List decompress(Uint8List data) {
+    if (data.isEmpty) return data;
+    // Только если данные реально начинаются с zlib-заголовка. КРИТИЧНО для веба:
+    // archive ZLibDecoder на dart2js на НЕ-zlib входе возвращает ПУСТОТУ (а не
+    // бросает исключение, как на нативе), из-за чего несжатые медиа (файлы,
+    // видео, уже-сжатое аудио) обнулялись → приём 0 байт.
+    if (!_looksLikeZlib(data)) return data;
     try {
-      return const archive.ZLibDecoder().decodeBytes(data);
+      final out = const archive.ZLibDecoder().decodeBytes(data);
+      // Подстраховка: на вебе декодер может вернуть пусто на «похожем» мусоре.
+      if (out.isEmpty) return data;
+      return Uint8List.fromList(out);
     } catch (_) {
-      // Если данные не сжаты (обратная совместимость) — возвращаем как есть
       return data;
     }
+  }
+
+  /// Сниффер zlib-потока: метод сжатия = deflate (8) в младшем ниббле байта 0,
+  /// и 2-байтовый заголовок кратен 31 (FCHECK).
+  static bool _looksLikeZlib(Uint8List d) {
+    if (d.length < 2) return false;
+    if ((d[0] & 0x0f) != 0x08) return false;
+    return (((d[0] << 8) | d[1]) % 31) == 0;
   }
 
   // ── Разбивка на чанки ─────────────────────────────────────────
