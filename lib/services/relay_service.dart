@@ -142,7 +142,8 @@ class RelayService with WidgetsBindingObserver {
       bool isFile,
       bool isSticker,
       String? fileName,
-      bool viewOnce)? onBlobReceived;
+      bool viewOnce,
+      String? caption)? onBlobReceived;
 
   /// Callback when a new peer comes online (publicKey) — used for avatar sync
   void Function(String publicKey)? onPeerOnline;
@@ -924,6 +925,7 @@ class RelayService with WidgetsBindingObserver {
     bool isFile = false,
     bool isSticker = false,
     String? fileName,
+    String? caption,
     bool viewOnce = false,
   }) async {
     debugPrint(
@@ -953,6 +955,7 @@ class RelayService with WidgetsBindingObserver {
       if (isFile) 'file': true,
       if (isSticker) 'stk': true,
       if (fileName != null) 'fname': fileName,
+      if (caption != null && caption.isNotEmpty) 'cap': caption,
       if (viewOnce) 'vo': true,
     };
     debugPrint('[RLINK][Relay] sendBlob prepared, sending...');
@@ -981,6 +984,7 @@ class RelayService with WidgetsBindingObserver {
     bool isFile = false,
     bool isSticker = false,
     String? fileName,
+    String? caption,
     bool viewOnce = false,
   }) async {
     if (!isConnected) return;
@@ -1004,6 +1008,8 @@ class RelayService with WidgetsBindingObserver {
       if (chunkIdx == 0 && isFile) 'file': true,
       if (chunkIdx == 0 && isSticker) 'stk': true,
       if (chunkIdx == 0 && fileName != null) 'fname': fileName,
+      if (chunkIdx == 0 && caption != null && caption.isNotEmpty)
+        'cap': caption,
       if (chunkIdx == 0 && viewOnce) 'vo': true,
     };
     try {
@@ -1884,13 +1890,14 @@ class RelayService with WidgetsBindingObserver {
         final isFile = (msg['file'] as bool?) ?? false;
         final isSticker = (msg['stk'] as bool?) ?? false;
         final fileName = msg['fname'] as String?;
+        final caption = msg['cap'] as String?;
         final viewOnce = (msg['vo'] as bool?) ?? false;
         debugPrint(
             '[RLINK][Relay] Received blob ${bytes.length} bytes for $msgId voice=$isVoice video=$isVideo file=$isFile sticker=$isSticker');
         debugPrint(
             '[RLINK][Relay] Calling onBlobReceived callback (exists: ${onBlobReceived != null})');
         onBlobReceived?.call(from, msgId, Uint8List.fromList(bytes), isVoice,
-            isVideo, isSquare, isFile, isSticker, fileName, viewOnce);
+            isVideo, isSquare, isFile, isSticker, fileName, viewOnce, caption);
         debugPrint('[RLINK][Relay] onBlobReceived callback completed');
         if (relayMsgId != null && relayMsgId.isNotEmpty) {
           unawaited(_safeSend({
@@ -1915,6 +1922,7 @@ class RelayService with WidgetsBindingObserver {
         assembly.isFile = (msg['file'] as bool?) ?? false;
         assembly.isSticker = (msg['stk'] as bool?) ?? false;
         assembly.fileName = msg['fname'] as String?;
+        assembly.caption = msg['cap'] as String?;
         assembly.viewOnce = (msg['vo'] as bool?) ?? false;
       }
       debugPrint('[RLINK][Relay] Blob chunk $chunkIdx/$chunkTotal '
@@ -1947,7 +1955,8 @@ class RelayService with WidgetsBindingObserver {
             assembly.isFile,
             assembly.isSticker,
             assembly.fileName,
-            assembly.viewOnce);
+            assembly.viewOnce,
+            assembly.caption);
         if (relayMsgId != null && relayMsgId.isNotEmpty) {
           unawaited(_safeSend({
             'type': 'relay_ack',
@@ -2026,5 +2035,6 @@ class _BlobAssembly {
   bool isSticker = false;
   bool viewOnce = false;
   String? fileName;
+  String? caption;
   _BlobAssembly({required this.total, required this.from});
 }

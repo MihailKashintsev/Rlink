@@ -89,6 +89,7 @@ import '../widgets/animated_transitions.dart';
 import '../widgets/reactions.dart';
 import '../widgets/status_emoji_view.dart';
 import 'image_editor_screen.dart';
+import 'media_send_preview_screen.dart';
 import 'profile_screen.dart';
 import 'bot_profile_screen.dart';
 import 'square_video_recorder_screen.dart';
@@ -445,6 +446,7 @@ class _ChatScreenState extends State<ChatScreen> {
     bool isFile = false,
     bool isSticker = false,
     String? fileName,
+    String? caption,
     String? filePath, // local file path for upload queue (large file resume)
   }) async {
     if (_isEmojiBot) {
@@ -523,6 +525,7 @@ class _ChatScreenState extends State<ChatScreen> {
               isFile: isFile,
               isSticker: isSticker,
               fileName: fileName,
+              caption: caption,
             );
             blobSent = true;
             debugPrint(
@@ -543,6 +546,7 @@ class _ChatScreenState extends State<ChatScreen> {
               isFile: isFile,
               isSticker: isSticker,
               fileName: fileName,
+              caption: caption,
             );
             blobSent = true;
           }
@@ -610,6 +614,7 @@ class _ChatScreenState extends State<ChatScreen> {
     bool isFile = false,
     bool isSticker = false,
     String? fileName,
+    String? caption,
   }) async {
     // Use full public key for relay routing
     final relayRecipientKey = _resolvedPeerId;
@@ -632,6 +637,7 @@ class _ChatScreenState extends State<ChatScreen> {
         isFile: isFile,
         isSticker: isSticker,
         fileName: fileName,
+        caption: caption,
       );
       // Gentle pacing: mobile browsers and proxies are more stable with
       // smaller, less bursty WebSocket frames.
@@ -3689,11 +3695,22 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       final fileName =
           picked.name.trim().isNotEmpty ? picked.name.trim() : 'photo.jpg';
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<MediaPreviewResult>(
+        MaterialPageRoute(
+          builder: (_) => MediaSendPreviewScreen(
+            imageBytes: bytes,
+            peerName: widget.peerNickname,
+          ),
+        ),
+      );
+      if (result == null || !mounted) return;
       await _sendWebBytesAsFile(
-        bytes: bytes,
+        bytes: result.bytes,
         fileName: fileName,
         myId: myId,
         textFallback: '',
+        caption: result.caption,
         asImage: true,
       );
     } catch (e) {
@@ -3706,6 +3723,7 @@ class _ChatScreenState extends State<ChatScreen> {
     required String fileName,
     required String myId,
     required String textFallback,
+    String caption = '',
     bool asImage = false,
     bool isSticker = false,
   }) async {
@@ -3751,6 +3769,7 @@ class _ChatScreenState extends State<ChatScreen> {
           isFile: !asImage,
           isSticker: isSticker,
           fileName: asImage ? null : fileName,
+          caption: caption.isNotEmpty ? caption : null,
           filePath: kIsWeb ? null : localPath,
         );
       }
@@ -3758,7 +3777,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ChatMessage(
           id: msgId,
           peerId: targetPeerId,
-          text: textFallback,
+          text: caption.isNotEmpty ? caption : textFallback,
           isOutgoing: true,
           timestamp: DateTime.now(),
           status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
@@ -4461,11 +4480,22 @@ class _ChatScreenState extends State<ChatScreen> {
         _showErrorSnack('Не удалось прочитать фото в браузере');
         return;
       }
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<MediaPreviewResult>(
+        MaterialPageRoute(
+          builder: (_) => MediaSendPreviewScreen(
+            imageBytes: bytes,
+            peerName: widget.peerNickname,
+          ),
+        ),
+      );
+      if (result == null || !mounted) return;
       await _sendWebBytesAsFile(
-        bytes: bytes,
+        bytes: result.bytes,
         fileName: picked.name.isNotEmpty ? picked.name : 'photo.jpg',
         myId: myId,
         textFallback: '',
+        caption: result.caption,
         asImage: true,
       );
       return;

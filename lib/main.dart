@@ -3430,7 +3430,8 @@ void _onBlobReceived(
     bool isFile,
     bool isSticker,
     String? fileName,
-    bool viewOnce) async {
+    bool viewOnce,
+    String? caption) async {
   debugPrint(
       '[RLINK][Blob] Received ${data.length} bytes from ${fromId.substring(0, 8)} msgId=$msgId voice=$isVoice video=$isVideo file=$isFile');
   webConsoleLog(
@@ -3665,6 +3666,7 @@ void _onBlobReceived(
     isSticker: isSticker,
     fileName: fileName,
     viewOnce: viewOnce,
+    caption: caption,
   );
 }
 
@@ -3679,6 +3681,7 @@ Future<void> _processBlobAssemble({
   required bool isSticker,
   required bool viewOnce,
   String? fileName,
+  String? caption,
 }) async {
   // Feed directly to ImageService as if all chunks arrived at once
   ImageService.instance.initAssembly(
@@ -3887,10 +3890,11 @@ Future<void> _processBlobAssemble({
       return;
     }
 
+    final imageCaption = (caption != null && caption.isNotEmpty) ? caption : '';
     final msg = ChatMessage(
       id: msgId,
       peerId: senderKey,
-      text: '',
+      text: imageCaption,
       isOutgoing: false,
       timestamp: DateTime.now(),
       status: MessageStatus.delivered,
@@ -3901,7 +3905,7 @@ Future<void> _processBlobAssemble({
     await ChatStorageService.instance.saveMessage(msg);
     incomingMessageController.add(IncomingMessage(
       fromId: senderKey,
-      text: '',
+      text: imageCaption,
       timestamp: msg.timestamp,
       msgId: msgId,
     ));
@@ -3909,7 +3913,9 @@ Future<void> _processBlobAssemble({
       unawaited(GossipRouter.instance
           .sendAck(messageId: msgId, senderId: myKey, recipientId: fromId));
     }
-    await _notifyIncomingDirectEvent(peerId: fromId, body: '📷 Фото');
+    await _notifyIncomingDirectEvent(
+        peerId: fromId,
+        body: imageCaption.isNotEmpty ? '📷 $imageCaption' : '📷 Фото');
     debugPrint('[RLINK][Blob] Image saved: $path');
   }
 }
