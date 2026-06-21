@@ -17,6 +17,7 @@ import '../../services/app_settings.dart';
 import '../../services/app_icon_service.dart';
 import '../../services/transcription_engine.dart';
 import '../../services/model_download_service.dart';
+import '../app_palettes.dart';
 import '../widgets/message_cache_clear_dialog.dart';
 import '../../services/ble_service.dart';
 import '../../services/connection_transport.dart';
@@ -581,39 +582,44 @@ class _AppearancePageState extends State<_AppearancePage> {
                   ),
                 ]),
                 const SizedBox(height: 20),
-                Text(AppL10n.t('settings_accent_color'),
+                Text('Цветовая схема',
                     style: TextStyle(
                         fontSize: 13, color: Theme.of(context).hintColor)),
                 const SizedBox(height: 10),
                 Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: List.generate(AppSettings.accentColors.length, (i) {
-                    final color = AppSettings.accentColors[i];
-                    final selected = settings.accentColorIndex == i;
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: List.generate(kAppPalettes.length, (i) {
+                    final p = kAppPalettes[i];
+                    final selected = settings.appPalette == i;
                     return GestureDetector(
-                      onTap: () => settings.setAccentColor(i),
+                      onTap: () => settings.setAppPalette(i),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        width: 36,
-                        height: 36,
+                        width: 54,
+                        height: 54,
                         decoration: BoxDecoration(
-                          color: color,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: p.gradient,
+                          ),
                           shape: BoxShape.circle,
-                          border: selected
-                              ? Border.all(color: cs.onSurface, width: 3)
-                              : null,
+                          border: Border.all(
+                            color: selected ? cs.onSurface : cs.outlineVariant,
+                            width: selected ? 3 : 1,
+                          ),
                           boxShadow: selected
                               ? [
                                   BoxShadow(
-                                      color: color.withValues(alpha: 0.5),
-                                      blurRadius: 8)
+                                      color: p.seed.withValues(alpha: 0.5),
+                                      blurRadius: 10)
                                 ]
                               : null,
                         ),
                         child: selected
                             ? const Icon(Icons.check,
-                                color: Colors.white, size: 18)
+                                color: Colors.white, size: 22)
                             : null,
                       ),
                     );
@@ -659,6 +665,111 @@ class _AppearancePageState extends State<_AppearancePage> {
               ],
             ),
           ),
+
+          // ── Движение и анимации ──────────────────────────────────
+          const _SectionHeader('Движение и анимации'),
+          if (RuntimePlatform.isIos)
+            SwitchListTile(
+              secondary: Icon(Icons.blur_on_rounded, color: cs.primary),
+              title: const Text('Жидкое стекло (iOS)'),
+              subtitle: Text('Полупрозрачные «стеклянные» панели',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              value: settings.liquidGlass,
+              onChanged: (v) => settings.setLiquidGlass(v),
+            ),
+          SwitchListTile(
+            secondary: Icon(Icons.gradient_rounded, color: cs.primary),
+            title: const Text('Анимированный градиент'),
+            subtitle: Text('Живой фон в выбранной палитре',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            value: settings.animatedGradient,
+            onChanged: (v) => settings.setAnimatedGradient(v),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(Icons.auto_awesome_rounded, color: cs.primary, size: 20),
+                  const SizedBox(width: 8),
+                  const Text('Интенсивность анимаций'),
+                  const Spacer(),
+                  Text('${(settings.animationLevel * 100).round()}%',
+                      style: TextStyle(
+                          color: cs.onSurfaceVariant, fontSize: 12)),
+                ]),
+                Slider(
+                  value: settings.animationLevel,
+                  onChanged: (v) => settings.setAnimationLevel(v),
+                ),
+              ],
+            ),
+          ),
+          SwitchListTile(
+            secondary: Icon(Icons.battery_saver_rounded, color: cs.primary),
+            title: const Text('Экономия энергии'),
+            subtitle: Text(
+              'Снижать анимации при ${settings.batteryAnimReduceAt}%, '
+              'выключать при ${settings.batteryAnimOffAt}%',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            value: settings.batterySaverAnimations,
+            onChanged: (v) => settings.setBatterySaverAnimations(v),
+          ),
+          if (settings.batterySaverAnimations) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Row(children: [
+                const SizedBox(
+                    width: 110,
+                    child: Text('Снижать при', style: TextStyle(fontSize: 13))),
+                Expanded(
+                  child: Slider(
+                    value: settings.batteryAnimReduceAt.toDouble().clamp(5, 50),
+                    min: 5,
+                    max: 50,
+                    divisions: 9,
+                    label: '${settings.batteryAnimReduceAt}%',
+                    onChanged: (v) => settings.setBatteryAnimReduceAt(v.round()),
+                  ),
+                ),
+                SizedBox(
+                  width: 40,
+                  child: Text('${settings.batteryAnimReduceAt}%',
+                      textAlign: TextAlign.end,
+                      style:
+                          TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                ),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(children: [
+                const SizedBox(
+                    width: 110,
+                    child:
+                        Text('Выключать при', style: TextStyle(fontSize: 13))),
+                Expanded(
+                  child: Slider(
+                    value: settings.batteryAnimOffAt.toDouble().clamp(0, 20),
+                    min: 0,
+                    max: 20,
+                    divisions: 20,
+                    label: '${settings.batteryAnimOffAt}%',
+                    onChanged: (v) => settings.setBatteryAnimOffAt(v.round()),
+                  ),
+                ),
+                SizedBox(
+                  width: 40,
+                  child: Text('${settings.batteryAnimOffAt}%',
+                      textAlign: TextAlign.end,
+                      style:
+                          TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                ),
+              ]),
+            ),
+          ],
 
           // Font size
           ListTile(

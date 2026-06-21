@@ -101,6 +101,10 @@ dependencies:
   # Theme / settings persistence
   shared_preferences: ^2.3.2
 
+  # UI motion + battery-aware animation control
+  flutter_animate: ^4.5.0
+  battery_plus: ^6.0.0
+
   # Location (message geotag)
   geolocator: ^13.0.4
 

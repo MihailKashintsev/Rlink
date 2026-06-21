@@ -27,6 +27,7 @@ import 'models/group.dart';
 import 'models/user_profile.dart';
 import 'models/shared_collab.dart';
 import 'services/app_settings.dart';
+import 'services/motion_controller.dart';
 import 'services/chat_inbox_service.dart';
 import 'services/channel_service.dart';
 import 'services/channel_backup_service.dart';
@@ -72,6 +73,7 @@ import 'services/web_storage_bootstrap.dart';
 import 'services/web_identity_portable.dart';
 import 'services/web_notification_bridge.dart';
 import 'app_route_observer.dart';
+import 'ui/app_palettes.dart';
 import 'ui/screens/chat_list_screen.dart';
 import 'ui/widgets/audio_queue_mini_player.dart';
 import 'ui/widgets/square_video_queue_pip.dart';
@@ -611,6 +613,7 @@ Future<void> initServices() async {
     await ImageService.instance.init();
     await CryptoService.instance.init();
     await AppSettings.instance.init();
+    unawaited(MotionController.instance.init());
     await _restoreAdminPasswordFromSealedIfNeeded();
     await ProfileService.instance.init();
     if (RuntimePlatform.isWeb) {
@@ -4059,8 +4062,9 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
         );
       },
       themeMode: settings.themeMode,
-      theme: _buildTheme(settings.accentColor, Brightness.light),
-      darkTheme: _buildTheme(settings.accentColor, Brightness.dark),
+      theme: _buildTheme(paletteFor(settings.appPalette).seed, Brightness.light),
+      darkTheme:
+          _buildTheme(paletteFor(settings.appPalette).seed, Brightness.dark),
       locale: settings.resolvedLocale,
       supportedLocales: const [
         Locale('ru'),

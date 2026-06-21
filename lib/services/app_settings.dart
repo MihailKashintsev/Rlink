@@ -66,6 +66,14 @@ class AppSettings extends ChangeNotifier {
       'transcription_engine'; // 0=onDevice,1=cloud
   static const _keyTranscriptionModelSize =
       'transcription_model_size'; // 0=tiny,1=base,2=small
+  // Appearance & motion
+  static const _keyAppPalette = 'app_palette'; // preset index
+  static const _keyAnimatedGradient = 'animated_gradient';
+  static const _keyLiquidGlass = 'liquid_glass';
+  static const _keyAnimationLevel = 'animation_level'; // 0.0..1.0
+  static const _keyBatterySaverAnimations = 'battery_saver_animations';
+  static const _keyBatteryAnimReduceAt = 'battery_anim_reduce_at'; // percent
+  static const _keyBatteryAnimOffAt = 'battery_anim_off_at'; // percent
 
   late SharedPreferences _prefs;
   bool _prefsReady = false;
@@ -166,6 +174,13 @@ class AppSettings extends ChangeNotifier {
   int _callRingtone = 0;
   int _transcriptionEngine = 0; // 0=onDevice, 1=cloud
   int _transcriptionModelSize = 0; // 0=tiny, 1=base, 2=small
+  int _appPalette = 0;
+  bool _animatedGradient = false;
+  bool _liquidGlass = true;
+  double _animationLevel = 1.0;
+  bool _batterySaverAnimations = true;
+  int _batteryAnimReduceAt = 20;
+  int _batteryAnimOffAt = 5;
   Map<String, String> _customSoundPaths = const {};
   int _appIconVariant = 0;
   bool _useIosStyleEmoji = false;
@@ -209,6 +224,14 @@ class AppSettings extends ChangeNotifier {
   bool get notifyGroups => _notifyGroups;
   bool get notifyChannels => _notifyChannels;
   int get callRingtone => _callRingtone.clamp(0, 2);
+
+  int get appPalette => _appPalette;
+  bool get animatedGradient => _animatedGradient;
+  bool get liquidGlass => _liquidGlass;
+  double get animationLevel => _animationLevel.clamp(0.0, 1.0);
+  bool get batterySaverAnimations => _batterySaverAnimations;
+  int get batteryAnimReduceAt => _batteryAnimReduceAt.clamp(0, 100);
+  int get batteryAnimOffAt => _batteryAnimOffAt.clamp(0, 100);
 
   TranscriptionEngine get transcriptionEngine =>
       TranscriptionEngine.fromIndex(_transcriptionEngine);
@@ -421,6 +444,13 @@ class AppSettings extends ChangeNotifier {
         (_prefs.getInt(_keyTranscriptionEngine) ?? 0).clamp(0, 1);
     _transcriptionModelSize =
         (_prefs.getInt(_keyTranscriptionModelSize) ?? 0).clamp(0, 2);
+    _appPalette = (_prefs.getInt(_keyAppPalette) ?? 0).clamp(0, 99);
+    _animatedGradient = _prefs.getBool(_keyAnimatedGradient) ?? false;
+    _liquidGlass = _prefs.getBool(_keyLiquidGlass) ?? true;
+    _animationLevel = (_prefs.getDouble(_keyAnimationLevel) ?? 1.0).clamp(0.0, 1.0);
+    _batterySaverAnimations = _prefs.getBool(_keyBatterySaverAnimations) ?? true;
+    _batteryAnimReduceAt = (_prefs.getInt(_keyBatteryAnimReduceAt) ?? 20).clamp(0, 100);
+    _batteryAnimOffAt = (_prefs.getInt(_keyBatteryAnimOffAt) ?? 5).clamp(0, 100);
     _customSoundPaths =
         _decodeStringMap(_prefs.getString(_keyCustomSoundPaths));
     final rawButtonOrder = _prefs.getString(_keyInputBarButtonOrder);
@@ -633,6 +663,48 @@ class AppSettings extends ChangeNotifier {
   Future<void> setCallRingtone(int v) async {
     _callRingtone = v.clamp(0, 2);
     await _runPrefsWrite((p) => p.setInt(_keyCallRingtone, _callRingtone));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setAppPalette(int v) async {
+    _appPalette = v.clamp(0, 99);
+    await _runPrefsWrite((p) => p.setInt(_keyAppPalette, _appPalette));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setAnimatedGradient(bool v) async {
+    _animatedGradient = v;
+    await _runPrefsWrite((p) => p.setBool(_keyAnimatedGradient, v));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setLiquidGlass(bool v) async {
+    _liquidGlass = v;
+    await _runPrefsWrite((p) => p.setBool(_keyLiquidGlass, v));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setAnimationLevel(double v) async {
+    _animationLevel = v.clamp(0.0, 1.0);
+    await _runPrefsWrite((p) => p.setDouble(_keyAnimationLevel, _animationLevel));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setBatterySaverAnimations(bool v) async {
+    _batterySaverAnimations = v;
+    await _runPrefsWrite((p) => p.setBool(_keyBatterySaverAnimations, v));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setBatteryAnimReduceAt(int v) async {
+    _batteryAnimReduceAt = v.clamp(0, 100);
+    await _runPrefsWrite((p) => p.setInt(_keyBatteryAnimReduceAt, _batteryAnimReduceAt));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setBatteryAnimOffAt(int v) async {
+    _batteryAnimOffAt = v.clamp(0, 100);
+    await _runPrefsWrite((p) => p.setInt(_keyBatteryAnimOffAt, _batteryAnimOffAt));
     _notifySettingsChanged();
   }
 
