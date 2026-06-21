@@ -339,6 +339,18 @@ class _ChannelAdminSettingsScreenState
       avatarEmoji: ch.avatarEmoji,
       description: ch.description,
     );
+    // The relay broadcast only reaches OTHER online peers, so a network admin
+    // who owns this channel would never see their own request. Persist it
+    // locally too, so it shows up in the admin panel on this device.
+    await ChannelService.instance.addVerificationRequest(VerificationRequest(
+      channelId: ch.id,
+      channelName: ch.name,
+      adminId: ch.adminId,
+      subscriberCount: ch.subscriberIds.length,
+      avatarEmoji: ch.avatarEmoji,
+      description: ch.description,
+      requestedAt: DateTime.now().millisecondsSinceEpoch,
+    ));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

@@ -3449,7 +3449,8 @@ void _onBlobReceived(
   // Handle avatar blob — save as contact avatar, not a chat message
   if (msgId.startsWith('avatar_')) {
     try {
-      final decompressed = ImageService.instance.decompress(data);
+      final decompressed =
+          await ImageService.instance.openAndDecompressIncoming(data);
       final avatarPath = await ImageService.instance.saveContactAvatar(
         fromId,
         decompressed,
@@ -3470,7 +3471,8 @@ void _onBlobReceived(
   // Handle banner blob — save as contact banner image
   if (msgId.startsWith('banner_')) {
     try {
-      final decompressed = ImageService.instance.decompress(data);
+      final decompressed =
+          await ImageService.instance.openAndDecompressIncoming(data);
       // Use dedicated saveBannerImage to avoid overwriting avatar (different filename prefix).
       final bannerPath =
           await ImageService.instance.saveBannerImage(fromId, decompressed);
@@ -3491,7 +3493,8 @@ void _onBlobReceived(
 
   if (msgId.startsWith('profile_music_')) {
     try {
-      final decompressed = ImageService.instance.decompress(data);
+      final decompressed =
+          await ImageService.instance.openAndDecompressIncoming(data);
       final musicPath =
           await ImageService.instance.saveProfileMusic(fromId, decompressed);
       final existing = await ChatStorageService.instance.getContact(fromId);
@@ -3511,7 +3514,8 @@ void _onBlobReceived(
   if (msgId.startsWith('story_vid_')) {
     try {
       final storyId = msgId.substring('story_vid_'.length);
-      final decompressed = ImageService.instance.decompress(data);
+      final decompressed =
+          await ImageService.instance.openAndDecompressIncoming(data);
       final videoPath =
           await ImageService.instance.saveStoryVideo(storyId, decompressed);
       final story = StoryService.instance.findStory(storyId);
@@ -3537,7 +3541,8 @@ void _onBlobReceived(
   if (msgId.startsWith('story_')) {
     try {
       final storyId = msgId.substring('story_'.length);
-      final decompressed = ImageService.instance.decompress(data);
+      final decompressed =
+          await ImageService.instance.openAndDecompressIncoming(data);
       final imagePath = await ImageService.instance.saveContactAvatar(
         'story_$storyId',
         decompressed,
