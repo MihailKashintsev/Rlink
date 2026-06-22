@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rlink — Канал</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Dark theme (default) ── */
+  :root {
+    --teal: #0d9488;
+    --teal-light: #14b8a9;
+    --teal-dim: rgba(13,148,136,0.15);
+    --bg: #050f0e;
+    --surface: rgba(255,255,255,0.04);
+    --surface-hover: rgba(255,255,255,0.07);
+    --border: rgba(255,255,255,0.08);
+    --border-teal: rgba(13,148,136,0.35);
+    --text: #f0fafa;
+    --text-muted: rgba(240,250,250,0.5);
+    --text-dim: rgba(240,250,250,0.3);
+    --err: #f87171;
+    --glow-color: rgba(13,148,136,0.12);
+  }
+
+  /* ── Separate selectors for wider browser compat ── */
+  html.light {
+    --teal: #0d9488;
+    --teal-light: #0b7a72;
+    --teal-dim: rgba(13,148,136,0.10);
+    --bg: #f0faf9;
+    --surface: rgba(255,255,255,0.85);
+    --surface-hover: rgba(255,255,255,0.95);
+    --border: rgba(0,0,0,0.08);
+    --border-teal: rgba(13,148,136,0.28);
+    --text: #0d1f1e;
+    --text-muted: rgba(13,31,30,0.55);
+    --text-dim: rgba(13,31,30,0.38);
+    --err: #dc2626;
+    --glow-color: rgba(13,148,136,0.08);
+  }
+  @media (prefers-color-scheme: light) {
+    html:not(.dark) {
+      --teal: #0d9488;
+      --teal-light: #0b7a72;
+      --teal-dim: rgba(13,148,136,0.10);
+      --bg: #f0faf9;
+      --surface: rgba(255,255,255,0.85);
+      --surface-hover: rgba(255,255,255,0.95);
+      --border: rgba(0,0,0,0.08);
+      --border-teal: rgba(13,148,136,0.28);
+      --text: #0d1f1e;
+      --text-muted: rgba(13,31,30,0.55);
+      --text-dim: rgba(13,31,30,0.38);
+      --err: #dc2626;
+      --glow-color: rgba(13,148,136,0.08);
+    }
+  }
+
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Jost', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Animated background ── */
+  .bg-canvas {
+    position: fixed; inset: 0; overflow: hidden; z-index: 0; pointer-events: none;
+  }
+  .ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid var(--border-teal);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0;
+    animation: pulse-ring 6s ease-out infinite;
+  }
+  .ring:nth-child(1) { width: 320px; height: 320px; animation-delay: 0s; }
+  .ring:nth-child(2) { width: 520px; height: 520px; animation-delay: 2s; }
+  .ring:nth-child(3) { width: 720px; height: 720px; animation-delay: 4s; }
+
+  @keyframes pulse-ring {
+    0%   { transform: translate(-50%,-50%) scale(0.4); opacity: 0; }
+    30%  { opacity: 0.5; }
+    100% { transform: translate(-50%,-50%) scale(1.4); opacity: 0; }
+  }
+
+  .bg-glow {
+    position: absolute;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, var(--glow-color) 0%, transparent 70%);
+    top: 50%; left: 50%; transform: translate(-50%, -60%);
+    border-radius: 50%;
+  }
+
+  /* ── Layout ── */
+  .page {
+    position: relative; z-index: 1;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 32px 20px;
+  }
+
+  .card {
+    width: 100%; max-width: 400px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px 32px 36px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    animation: fade-up 0.5s ease both;
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Icon ── */
+  .icon-wrap {
+    width: 56px; height: 56px;
+    background: var(--teal-dim);
+    border: 1px solid var(--border-teal);
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 24px;
+  }
+  .icon-wrap svg { width: 26px; height: 26px; fill: none; stroke: var(--teal-light); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── Typography ── */
+  .label {
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--teal-light); font-family: 'Jost', sans-serif;
+    font-weight: 500; margin-bottom: 8px;
+  }
+  h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.65rem; font-weight: 700;
+    line-height: 1.2; margin-bottom: 12px;
+    color: var(--text);
+  }
+  .subtitle {
+    font-size: 0.9rem; line-height: 1.55;
+    color: var(--text-muted); margin-bottom: 28px;
+  }
+
+  /* ── Channel ID chip ── */
+  .ch-id {
+    display: none;
+    align-items: center; gap: 8px;
+    background: var(--teal-dim);
+    border: 1px solid var(--border-teal);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 24px;
+  }
+  .ch-id.visible { display: flex; }
+  .ch-id-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--teal-light);
+    flex-shrink: 0;
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:0.3 } }
+  .ch-id-text {
+    font-size: 0.75rem; color: var(--teal-light);
+    word-break: break-all; font-family: 'Jost', sans-serif;
+  }
+
+  /* ── Error ── */
+  .err-box {
+    display: none;
+    background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.25);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 20px;
+    font-size: 0.82rem; line-height: 1.5;
+    color: var(--err);
+  }
+  .err-box.visible { display: block; }
+
+  /* ── Buttons ── */
+  .btn-primary {
+    display: block; width: 100%;
+    padding: 15px 20px;
+    background: var(--teal);
+    color: #fff;
+    border: none; border-radius: 14px;
+    font-family: 'Jost', sans-serif;
+    font-size: 0.95rem; font-weight: 500;
+    cursor: pointer;
+    transition: background 0.18s, transform 0.1s, opacity 0.2s;
+    letter-spacing: 0.01em;
+    position: relative; overflow: hidden;
+  }
+  .btn-primary::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: rgba(255,255,255,0.08);
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .btn-primary:hover:not(:disabled)::after { opacity: 1; }
+  .btn-primary:active:not(:disabled) { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ── Open-in-web button (teal outline, secondary action) ── */
+  .btn-web {
+    display: block; width: 100%;
+    margin-top: 12px;
+    padding: 14px 20px;
+    background: var(--teal-dim);
+    color: var(--teal-light);
+    border: 1px solid var(--border-teal);
+    border-radius: 14px;
+    font-family: 'Jost', sans-serif;
+    font-size: 0.92rem; font-weight: 500;
+    cursor: pointer; text-decoration: none; text-align: center;
+    transition: background 0.18s, border-color 0.18s, transform 0.1s, opacity 0.2s;
+  }
+  .btn-web:hover { background: rgba(13,148,136,0.22); border-color: var(--teal); }
+  .btn-web:active { transform: scale(0.98); }
+
+  /* ── Divider ── */
+  .divider {
+    display: flex; align-items: center; gap: 12px;
+    margin: 24px 0 20px;
+  }
+  .divider::before, .divider::after {
+    content: ''; flex: 1; height: 1px;
+    background: var(--border);
+  }
+  .divider span {
+    font-size: 0.72rem; color: var(--text-dim);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .btn-secondary {
+    display: block; width: 100%;
+    padding: 13px 20px;
+    background: var(--surface-hover);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    font-family: 'Jost', sans-serif;
+    font-size: 0.9rem; font-weight: 500;
+    cursor: pointer; text-decoration: none;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+    text-align: center;
+  }
+  .btn-secondary:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--border-teal);
+  }
+
+  /* ── Footer note ── */
+  .foot {
+    margin-top: 20px;
+    font-size: 0.76rem; color: var(--text-dim);
+    line-height: 1.5; text-align: center;
+  }
+
+  /* ── Card header row ── */
+  .card-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
+  /* ── Theme toggle ── */
+  .theme-toggle {
+    width: 36px; height: 36px; flex-shrink: 0;
+    background: var(--teal-dim);
+    border: 1px solid var(--border-teal);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background 0.18s, transform 0.1s;
+    padding: 0; position: relative;
+  }
+  .theme-toggle:hover { background: rgba(13,148,136,0.22); }
+  .theme-toggle:active { transform: scale(0.90); }
+  .theme-toggle svg { width: 17px; height: 17px; transition: opacity 0.2s, transform 0.3s; position: absolute; }
+
+  html:not(.light) .icon-sun  { opacity: 0; transform: rotate(90deg) scale(0.6); }
+  html:not(.light) .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+  html.light .icon-sun        { opacity: 1; transform: rotate(0deg) scale(1); }
+  html.light .icon-moon       { opacity: 0; transform: rotate(-90deg) scale(0.6); }
+
+  @media (prefers-color-scheme: light) {
+    html:not(.dark) .icon-sun  { opacity: 1; transform: rotate(0deg) scale(1); }
+    html:not(.dark) .icon-moon { opacity: 0; transform: rotate(-90deg) scale(0.6); }
+  }
+</style>
+</head>
+<body>
+
+
+<div style="position:fixed;inset:0;background:var(--bg);z-index:0;transition:background 0.3s;"></div>
+
+<div class="bg-canvas">
+  <div class="bg-glow"></div>
+  <div class="ring"></div>
+  <div class="ring"></div>
+  <div class="ring"></div>
+</div>
+
+<div class="page">
+  <div class="card">
+
+    <div class="card-header">
+      <div class="icon-wrap">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+          <path d="M8 12h8M12 8l4 4-4 4"/>
+          <circle cx="5" cy="12" r="1.5" fill="var(--teal-light)" stroke="none"/>
+          <circle cx="19" cy="12" r="1.5" fill="var(--teal-light)" stroke="none"/>
+        </svg>
+      </div>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Переключить тему">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="var(--teal-light)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="var(--teal-light)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+
+    <p class="label">Приглашение</p>
+    <h1>Канал в Rlink</h1>
+    <p class="subtitle">Откройте ссылку в приложении или в веб-версии. Если приложение не запустилось — нажмите кнопку ниже.</p>
+
+    <div class="ch-id" id="rlink-ch-id-line">
+      <div class="ch-id-dot"></div>
+      <span class="ch-id-text" id="rlink-ch-id-text"></span>
+    </div>
+
+    <div class="err-box" id="rlink-ch-err">
+      Откройте полную ссылку из приглашения — в адресе должно быть <strong>?channel=…</strong>. Или установите Rlink и попросите ссылку у автора канала.
+    </div>
+
+    <button type="button" class="btn-primary" id="rlink-ch-open">Открыть в приложении</button>
+
+    <a class="btn-web" id="rlink-ch-web" href="#" rel="noopener">Открыть в веб-версии</a>
+
+    <div class="divider"><span>нет приложения?</span></div>
+
+    <a class="btn-secondary" id="rlink-ch-download" href="https://rendergames.ru/rlink" target="_blank" rel="noopener">
+      Скачать Rlink с сайта
+    </a>
+
+    <p class="foot">В Google Play и App Store пока нет — сборки на сайте.</p>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var DOWNLOAD_PAGE = 'https://rendergames.ru/rlink';
+  // Веб-версия Rlink (Flutter web bundle на сайте). Должна заканчиваться '/'.
+  var WEB_APP_PAGE = 'https://rendergames.ru/rlink_web/';
+
+  function parseChannelId() {
+    var u = window.location;
+    var search = u.search || '';
+    var params = {};
+    search.replace(/^\?/, '').split('&').forEach(function (pair) {
+      var p = pair.split('=');
+      if (p[0]) params[decodeURIComponent(p[0])] = decodeURIComponent((p[1] || '').replace(/\+/g, ' '));
+    });
+    var fromQ = params.channel || params.c;
+    if (fromQ && String(fromQ).trim()) return String(fromQ).trim();
+
+    var segs = u.pathname.split('/').filter(Boolean);
+    var i = segs.indexOf('channel');
+    if (i >= 0 && segs[i + 1]) return segs[i + 1];
+    return '';
+  }
+
+  var id = parseChannelId();
+  var deep = id ? 'rlink://channel/' + encodeURIComponent(id) : '';
+  var webUrl = id ? (WEB_APP_PAGE + '?channel=' + encodeURIComponent(id)) : WEB_APP_PAGE;
+
+  var elErr  = document.getElementById('rlink-ch-err');
+  var elId   = document.getElementById('rlink-ch-id-line');
+  var elIdTx = document.getElementById('rlink-ch-id-text');
+  var elOpen = document.getElementById('rlink-ch-open');
+  var elWeb  = document.getElementById('rlink-ch-web');
+  var elDl   = document.getElementById('rlink-ch-download');
+  if (elDl) elDl.href = DOWNLOAD_PAGE;
+
+  if (!id) {
+    elErr.classList.add('visible');
+    elOpen.disabled = true;
+    // Без channel в адресе открывать конкретный канал в вебе нечего — прячем кнопку.
+    if (elWeb) elWeb.style.display = 'none';
+    return;
+  }
+
+  elIdTx.textContent = 'ID: ' + id;
+  elId.classList.add('visible');
+  if (elWeb) elWeb.href = webUrl;
+
+  function openApp() { window.location.href = deep; }
+
+  elOpen.addEventListener('click', openApp);
+
+  setTimeout(function () {
+    if (document.visibilityState === 'visible' && id) openApp();
+  }, 400);
+})();
+
+/* ── Theme toggle ── */
+(function () {
+  var html = document.documentElement;
+  var btn  = document.getElementById('theme-toggle');
+  var sys  = window.matchMedia('(prefers-color-scheme: light)');
+
+  function isLight() {
+    if (html.classList.contains('light')) return true;
+    if (html.classList.contains('dark'))  return false;
+    return sys.matches;
+  }
+
+  function setTheme(light) {
+    html.classList.toggle('light', light);
+    html.classList.toggle('dark', !light);
+  }
+
+  btn.addEventListener('click', function () { setTheme(!isLight()); });
+})();
+</script>
+</body>
+</html>
