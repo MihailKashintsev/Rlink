@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -103,6 +104,11 @@ class CallService {
   /// Громкая связь для аудиозвонка. При включении proximity-blanking не нужен.
   final ValueNotifier<bool> speakerOn = ValueNotifier(false);
 
+  /// Живой уровень звука собеседника (0..1) — питает «живую» звуковую волну на
+  /// экране звонка. Берётся из getStats() входящего аудио, пока идёт разговор.
+  final ValueNotifier<double> audioLevel = ValueNotifier(0.0);
+  Timer? _audioLevelTimer;
+
   MediaRecorder? _mediaRecorder;
   String? _recordingPath;
   String _recordingMimeType = 'video/webm';
@@ -136,6 +142,7 @@ class CallService {
         callElapsed.value = sw.elapsed;
       }
     });
+    _startAudioLevelPoll();
   }
 
   void _stopCallDurationTimer() {
@@ -144,6 +151,47 @@ class CallService {
     _callDurationSw?.stop();
     _callDurationSw = null;
     callElapsed.value = Duration.zero;
+    _audioLevelTimer?.cancel();
+    _audioLevelTimer = null;
+    audioLevel.value = 0.0;
+  }
+
+  void _startAudioLevelPoll() {
+    _audioLevelTimer?.cancel();
+    _audioLevelTimer =
+        Timer.periodic(const Duration(milliseconds: 120), (_) {
+      unawaited(_pollAudioLevel());
+    });
+  }
+
+  /// Read the live incoming audio level via WebRTC getStats().
+  Future<void> _pollAudioLevel() async {
+    final pc = _pc;
+    if (pc == null || phase.value != CallPhase.connected) return;
+    try {
+      final reports = await pc.getStats();
+      double best = -1;
+      for (final r in reports) {
+        final v = r.values;
+        final lvl = v['audioLevel'];
+        if (lvl is! num) continue;
+        final d = lvl.toDouble();
+        final inbound = r.type == 'inbound-rtp' ||
+            (r.type == 'track' && v['remoteSource'] == true);
+        if (inbound) {
+          best = math.max(best, d);
+        } else if (best < 0) {
+          best = d; // fallback to any audioLevel if no inbound found
+        }
+      }
+      if (best >= 0) {
+        // Emphasise speech and smooth so the wave glides instead of flickering.
+        final target = (best * 1.8).clamp(0.0, 1.0);
+        audioLevel.value = audioLevel.value * 0.45 + target * 0.55;
+      }
+    } catch (_) {
+      // getStats not available / transient — leave the last value to decay.
+    }
   }
 
   /// Запись разговора (локально в Documents). Собеседнику уходит сигнал [recording].

@@ -84,7 +84,7 @@ import '../../utils/web_object_url.dart';
 import '../../utils/external_message_share.dart';
 import '../../utils/invite_dm_codec.dart';
 import '../widgets/avatar_widget.dart';
-import '../widgets/wave_line.dart';
+import '../widgets/voice_wave_line.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/reactions.dart';
 import '../widgets/status_emoji_view.dart';
@@ -9596,8 +9596,8 @@ class _AudioFileBubble extends StatelessWidget {
                   builder: (_, progress, __) => SizedBox(
                     width: 110,
                     height: 28,
-                    child: WaveLine(
-                      seed: filePath.hashCode,
+                    child: VoiceWaveLine(
+                      path: filePath,
                       progress: isPlaying
                           ? (progress.isFinite ? progress.clamp(0.0, 1.0) : 0.0)
                           : 0,
@@ -9732,8 +9732,8 @@ class _VoiceMessageBubble extends StatelessWidget {
                         return SizedBox(
                           width: 120,
                           height: 28,
-                          child: WaveLine(
-                            seed: voicePath.hashCode,
+                          child: VoiceWaveLine(
+                            path: voicePath,
                             progress: p,
                             animating: isPlaying,
                             activeColor: activeColor,

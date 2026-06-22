@@ -379,6 +379,7 @@ class _CallScreenState extends State<CallScreen> {
                             seed: widget.peerName.hashCode,
                             progress: 1.0,
                             animating: live,
+                            level: live ? CallService.instance.audioLevel : null,
                             activeColor: Colors.white.withValues(alpha: 0.92),
                             inactiveColor: Colors.white24,
                             strokeWidth: 2.8,
