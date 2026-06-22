@@ -371,8 +371,10 @@
 <script>
 (function () {
   var DOWNLOAD_PAGE = 'https://rendergames.ru/rlink';
-  // Веб-версия Rlink (Flutter web bundle на сайте). Должна заканчиваться '/'.
-  var WEB_APP_PAGE = 'https://rendergames.ru/rlink_web/';
+  // Веб-версия Rlink. ВАЖНО: должен быть тот же origin (домен), где пользователь
+  // уже авторизован — иначе откроется новая пустая сессия (хранилище привязано к
+  // домену). Сейчас веб-приложение живёт на GitHub Pages. Должна заканчиваться '/'.
+  var WEB_APP_PAGE = 'https://mihailkashintsev.github.io/rlink-web/';
 
   function parseChannelId() {
     var u = window.location;

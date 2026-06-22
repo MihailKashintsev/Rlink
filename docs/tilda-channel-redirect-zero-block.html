@@ -274,7 +274,8 @@
 <script>
 (function () {
   var DOWNLOAD_PAGE = 'https://rendergames.ru/rlink';
-  var WEB_APP_PAGE = 'https://rendergames.ru/rlink_web';
+  // Тот же origin, где пользователь авторизован (иначе — новая пустая сессия).
+  var WEB_APP_PAGE = 'https://mihailkashintsev.github.io/rlink-web/';
 
   function parseChannelId() {
     var u = window.location;
