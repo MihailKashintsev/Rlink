@@ -86,11 +86,16 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="rlink" android:host="channel" />
             </intent-filter>
-            <!-- Публичные ссылки https://rendergames.online/rlink/... (после Digital Asset Links — открытие в приложении). -->
+            <!-- Публичные ссылки https://rendergames.ru/rlink/... (после Digital Asset Links — открытие в приложении).
+                 .online оставлен для совместимости со старыми разосланными ссылками. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="rendergames.ru"
+                    android:pathPrefix="/rlink" />
                 <data
                     android:scheme="https"
                     android:host="rendergames.online"

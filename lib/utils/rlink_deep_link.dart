@@ -8,11 +8,11 @@ class RlinkDeepLink {
   RlinkDeepLink._();
 
   /// База веб-страницы Rlink (установка, лендинг, APK).
-  static const String installWebBase = 'https://rendergames.online/rlink';
+  static const String installWebBase = 'https://rendergames.ru/rlink';
 
   /// Лендинг «открыть канал» (Tilda). ID передаётся в query: `?channel=` — так проще одна страница без вложенных URL.
   static const String channelWebInvitePage =
-      'https://rendergames.online/rlinkchanales';
+      'https://rendergames.ru/rlinkchanales';
 
   static Uri channelUri(String channelId) =>
       Uri(scheme: 'rlink', host: 'channel', pathSegments: [channelId]);

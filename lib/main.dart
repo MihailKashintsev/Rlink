@@ -2686,7 +2686,7 @@ Future<void> initServices() async {
 
     _bindGossipFallbackHandlersIfMissing();
 
-    // Проверка обновлений: публичный репозиторий релизов → мобильные на rendergames.online/rlink
+    // Проверка обновлений: публичный репозиторий релизов → мобильные на rendergames.ru/rlink
     unawaited(_checkUpdate());
   } catch (e, st) {
     debugPrint('[RLINK][main] Init error: $e\n$st');

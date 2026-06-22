@@ -15,7 +15,7 @@ const _kDefaultReleaseOwner = 'MihailKashintsev';
 const _kDefaultReleaseRepo = 'Rlink-releases';
 
 /// Страница загрузки APK / инструкций (после обнаружения более новой версии на GitHub).
-const _kMobileDownloadPageUrl = 'https://rendergames.online/rlink';
+const _kMobileDownloadPageUrl = 'https://rendergames.ru/rlink';
 
 /// Уведомление UI о доступном обновлении (после фоновой проверки GitHub).
 final ValueNotifier<UpdateInfo?> pendingUpdateNotifier =

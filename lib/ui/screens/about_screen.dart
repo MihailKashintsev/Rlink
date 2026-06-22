@@ -19,7 +19,7 @@ class _AboutScreenState extends State<AboutScreen> {
   int _developerTapCount = 0;
   DateTime _lastDeveloperTapAt = DateTime.fromMillisecondsSinceEpoch(0);
 
-  static const _websiteUrl = 'https://rendergames.online/rlink';
+  static const _websiteUrl = 'https://rendergames.ru/rlink';
   static const _telegramUrl = 'https://t.me/rendergm';
   static const _boostyUrl =
       'https://boosty.to/rendergamesru/purchase/3242287?ssource=DIRECT&share=subscription_link';
@@ -130,7 +130,7 @@ class _AboutScreenState extends State<AboutScreen> {
             icon: Icons.language_rounded,
             iconColor: const Color(0xFF2196F3),
             title: AppL10n.t('about_website'),
-            subtitle: 'rendergames.online/rlink',
+            subtitle: 'rendergames.ru/rlink',
             onTap: () => _open(context, _websiteUrl),
           ),
           _LinkTile(
