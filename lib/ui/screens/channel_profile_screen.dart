@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -91,8 +92,16 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
     final canOpenGeneralSettings =
         isAdmin || (isMod && ch.allowModeratorsManageDriveAccount);
     final subscribed = ch.subscriberIds.contains(myId) || isAdmin;
-    final banner = ImageService.instance.resolveStoredPath(ch.bannerImagePath);
-    final hasBanner = banner != null && File(banner).existsSync();
+    final bannerRaw = ch.bannerImagePath;
+    final bannerResolved =
+        ImageService.instance.resolveStoredPath(bannerRaw);
+    final bannerIsData = bannerRaw != null && bannerRaw.startsWith('data:');
+    // Web-safe: never touch dart:io File on web (it throws), and render data:
+    // URLs (web-set/received banners) via Image.network.
+    final hasBanner = bannerIsData ||
+        (!kIsWeb &&
+            bannerResolved != null &&
+            File(bannerResolved).existsSync());
 
     return Scaffold(
       body: CustomScrollView(
@@ -150,11 +159,23 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (hasBanner)
-                    Image.file(
-                      File(banner),
-                      key: ValueKey(banner),
+                  if (hasBanner && bannerIsData)
+                    Image.network(
+                      bannerRaw,
+                      key: ValueKey(bannerRaw),
                       fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                          color:
+                              Color(ch.avatarColor).withValues(alpha: 0.35)),
+                    )
+                  else if (hasBanner)
+                    Image.file(
+                      File(bannerResolved!),
+                      key: ValueKey(bannerResolved),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                          color:
+                              Color(ch.avatarColor).withValues(alpha: 0.35)),
                     )
                   else
                     Container(
