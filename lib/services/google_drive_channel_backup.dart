@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
@@ -192,6 +194,117 @@ class GoogleDriveChannelBackup {
     } catch (_) {}
   }
 
+  // ── Durable relay-backed account (refresh token lives on the relay) ─────────
+  // Works on every platform incl. iOS PWA: user consents once in a browser, the
+  // relay stores the refresh token and serves short-lived access tokens forever.
+  static const String relayOauthBase = 'https://185.244.172.90.nip.io';
+  static String? _relayPairing;
+  static String? _relayEmail;
+  static gapis.AccessCredentials? _relayCreds;
+  static String? _pendingPairing;
+
+  static bool get hasRelayAccount =>
+      _relayPairing != null && _relayPairing!.isNotEmpty;
+  static String? get relayEmail => _relayEmail;
+
+  /// Begin a durable link: returns the consent URL to open in a browser.
+  static String startRelayLink() {
+    final rnd = Random.secure();
+    final bytes = List<int>.generate(20, (_) => rnd.nextInt(256));
+    final pairing =
+        'rl_${DateTime.now().millisecondsSinceEpoch}_${base64Url.encode(bytes).replaceAll('=', '')}';
+    _pendingPairing = pairing;
+    return '$relayOauthBase/oauth/google/start?p=${Uri.encodeQueryComponent(pairing)}';
+  }
+
+  /// After the user consents in the browser, confirm the link by polling the
+  /// relay for a token. Returns true once linked.
+  static Future<bool> finishRelayLink() async {
+    final pairing = _pendingPairing;
+    if (pairing == null || pairing.isEmpty) {
+      _lastSignInError = 'Сначала откройте вход';
+      return false;
+    }
+    final creds = await _fetchRelayCreds(pairing);
+    if (creds == null) {
+      _lastSignInError = 'Вход ещё не подтверждён. Завершите его в браузере.';
+      return false;
+    }
+    _relayPairing = pairing;
+    _relayCreds = creds;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString('drive_relay_pairing', pairing);
+      if (_relayEmail != null) await p.setString('drive_relay_email', _relayEmail!);
+    } catch (_) {}
+    return true;
+  }
+
+  /// Fetch a fresh access token for [pairing] from the relay (it refreshes
+  /// server-side). Returns null if not linked yet / unavailable.
+  static Future<gapis.AccessCredentials?> _fetchRelayCreds(
+      String pairing) async {
+    try {
+      final uri = Uri.parse(
+          '$relayOauthBase/oauth/google/token?p=${Uri.encodeQueryComponent(pairing)}');
+      final resp = await http.get(uri).timeout(const Duration(seconds: 20));
+      if (resp.statusCode != 200) return null;
+      final m = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (m['ok'] != true) return null;
+      final token = m['access_token'] as String?;
+      if (token == null || token.isEmpty) return null;
+      final expiryMs = (m['expiry_ms'] as num?)?.toInt() ??
+          DateTime.now().millisecondsSinceEpoch + 3000 * 1000;
+      _relayEmail = m['email'] as String?;
+      return gapis.AccessCredentials(
+        gapis.AccessToken('Bearer', token,
+            DateTime.fromMillisecondsSinceEpoch(expiryMs, isUtc: true)),
+        null,
+        _driveScopes,
+      );
+    } catch (e) {
+      debugPrint('[RLINK][Drive] relay token fetch failed: $e');
+      return null;
+    }
+  }
+
+  /// Relay client, refreshing the short-lived access token when near expiry.
+  static Future<gapis.AuthClient?> _relayAuthClient() async {
+    final pairing = _relayPairing;
+    if (pairing == null) return null;
+    final cached = _relayCreds;
+    final fresh = cached != null &&
+        cached.accessToken.expiry
+            .isAfter(DateTime.now().toUtc().add(const Duration(seconds: 60)));
+    final creds = fresh ? cached : await _fetchRelayCreds(pairing);
+    if (creds == null) return null;
+    _relayCreds = creds;
+    return gapis.authenticatedClient(http.Client(), creds);
+  }
+
+  static Future<void> restoreRelayAccount() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final pairing = p.getString('drive_relay_pairing');
+      if (pairing != null && pairing.isNotEmpty) {
+        _relayPairing = pairing;
+        _relayEmail = p.getString('drive_relay_email');
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> _clearRelay() async {
+    _relayPairing = null;
+    _relayEmail = null;
+    _relayCreds = null;
+    _pendingPairing = null;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.remove('drive_relay_pairing');
+      await p.remove('drive_relay_email');
+    } catch (_) {}
+  }
+
   static bool _isScopesApiUnsupported(Object error) {
     if (error is UnimplementedError) return true;
     final msg = error.toString();
@@ -229,7 +342,12 @@ class GoogleDriveChannelBackup {
   static Future<gapis.AuthClient?> _driveAuthClient({
     required bool interactive,
   }) async {
-    // Manual (pasted) web token takes precedence — used on iOS Safari PWA.
+    // Durable relay account takes top priority (refresh handled server-side).
+    if (hasRelayAccount) {
+      final c = await _relayAuthClient();
+      if (c != null) return c;
+    }
+    // Manual (pasted) web token next — used on iOS Safari PWA without relay.
     if (hasValidManualCreds) {
       return gapis.authenticatedClient(http.Client(), _manualCreds!);
     }
@@ -276,6 +394,7 @@ class GoogleDriveChannelBackup {
       debugPrint('[RLINK][Drive] signOut() failed: $e\n$st');
     }
     await _clearManual();
+    await _clearRelay();
     return _signIn.currentUser == null;
   }
 
@@ -365,15 +484,15 @@ class GoogleDriveChannelBackup {
     bool interactive = false,
   }) async {
     try {
-      final account = hasValidManualCreds
+      final account = (hasValidManualCreds || hasRelayAccount)
           ? null
           : await ensureUserSignedIn(interactive: interactive);
-      if (account == null && !hasValidManualCreds) {
+      if (account == null && !hasValidManualCreds && !hasRelayAccount) {
         return const GoogleDriveSyncStatus();
       }
       late final GoogleDriveSyncStatus accountOnlyStatus;
       accountOnlyStatus = GoogleDriveSyncStatus(
-        email: account?.email ?? _manualEmail,
+        email: account?.email ?? _relayEmail ?? _manualEmail,
         displayName: account?.displayName,
       );
 
@@ -399,7 +518,10 @@ class GoogleDriveChannelBackup {
 
         final q = about.storageQuota;
         return GoogleDriveSyncStatus(
-          email: about.user?.emailAddress ?? account?.email ?? _manualEmail,
+          email: about.user?.emailAddress ??
+              account?.email ??
+              _relayEmail ??
+              _manualEmail,
           displayName: about.user?.displayName ?? account?.displayName,
           limitBytes: parseQuota(q?.limit),
           usageBytes: parseQuota(q?.usage),
@@ -423,7 +545,7 @@ class GoogleDriveChannelBackup {
     String? existingFileId,
   }) async {
     try {
-      if (!hasValidManualCreds) {
+      if (!hasValidManualCreds && !hasRelayAccount) {
         final account = await ensureUserSignedIn(interactive: true);
         if (account == null) return null;
       }
@@ -501,7 +623,7 @@ class GoogleDriveChannelBackup {
   }) async {
     if (fileId.trim().isEmpty) return true;
     try {
-      if (!hasValidManualCreds) {
+      if (!hasValidManualCreds && !hasRelayAccount) {
         final account = await ensureUserSignedIn(interactive: interactive);
         if (account == null) return false;
       }

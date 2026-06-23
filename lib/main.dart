@@ -616,6 +616,7 @@ Future<void> initServices() async {
     await CryptoService.instance.init();
     await AppSettings.instance.init();
     unawaited(MotionController.instance.init());
+    unawaited(GoogleDriveChannelBackup.restoreRelayAccount());
     if (RuntimePlatform.isWeb) {
       unawaited(GoogleDriveChannelBackup.restoreManualToken());
     }

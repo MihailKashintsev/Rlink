@@ -554,6 +554,55 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
     }
   }
 
+  /// Durable link via the relay OAuth backend (refresh token on the server).
+  Future<void> _linkRelay() async {
+    final url = GoogleDriveChannelBackup.startRelayLink();
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Подтвердите вход'),
+        content: const Text(
+          'В открывшемся браузере войдите в Google и разрешите доступ к Drive. '
+          'Когда увидите «Готово ✓» — вернитесь сюда и нажмите «Готово».',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Готово'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    var linked = false;
+    for (var i = 0; i < 4 && !linked; i++) {
+      linked = await GoogleDriveChannelBackup.finishRelayLink();
+      if (!linked) await Future<void>.delayed(const Duration(seconds: 2));
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (linked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google Drive привязан (постоянно)')),
+      );
+      await _load(interactive: false);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(GoogleDriveChannelBackup.lastSignInError ??
+              'Не удалось подтвердить вход. Попробуйте снова.'),
+        ),
+      );
+    }
+  }
+
   Future<void> _linkGis() async {
     setState(() => _busy = true);
     try {
@@ -710,12 +759,22 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
           ),
           const SizedBox(height: 8),
           const _SectionHeader('Привязка'),
+          ListTile(
+            leading: Icon(Icons.cloud_done_outlined,
+                color: Theme.of(context).colorScheme.primary),
+            title: const Text('Привязать постоянно (рекомендуется)'),
+            subtitle: const Text(
+              'Через сервер Rlink: работает на любом устройстве и не отваливается через час.',
+              style: TextStyle(fontSize: 12),
+            ),
+            onTap: _busy ? null : _linkRelay,
+          ),
           if (RuntimePlatform.isWeb)
             ListTile(
               leading: const Icon(Icons.phone_iphone),
-              title: const Text('Привязать через Safari (iPhone)'),
+              title: const Text('Привязать через Safari (1 час)'),
               subtitle: const Text(
-                'Если обычный вход Google не открывается в веб-приложении.',
+                'Запасной вариант без сервера; токен живёт ~час.',
                 style: TextStyle(fontSize: 12),
               ),
               onTap: _busy ? null : _linkSafari,
