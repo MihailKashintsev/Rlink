@@ -160,6 +160,8 @@ flutter:
     - assets/branding/rlink_icon_ai.png
     - assets/models/ggml-tiny.bin
     - assets/sticker_packs/default/
+    - assets/backgrounds/black.png
+    - assets/backgrounds/light.png
 
 flutter_launcher_icons:
   android: true

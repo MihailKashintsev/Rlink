@@ -2652,9 +2652,15 @@ class _PostCardState extends State<_PostCard> {
         }
       },
       child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        color: cs.surfaceContainerHigh,
+        elevation: 0,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2662,8 +2668,8 @@ class _PostCardState extends State<_PostCard> {
               Row(children: [
                 Text(senderLabel,
                     style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
                         color: cs.primary)),
                 const Spacer(),
                 Text(
@@ -2726,9 +2732,9 @@ class _PostCardState extends State<_PostCard> {
               // Image
               if (!missing && post.imagePath != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.only(bottom: 10),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(14),
                     child: Builder(builder: (context) {
                       final p = ImageService.instance
                           .resolveStoredPath(post.imagePath);
