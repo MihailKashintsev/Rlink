@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_version.dart';
 import '../../l10n/app_l10n.dart';
@@ -15,6 +16,7 @@ import '../../models/contact.dart';
 import '../../models/user_profile.dart';
 import '../../services/app_settings.dart';
 import '../../services/app_icon_service.dart';
+import '../../services/google_drive_channel_backup.dart';
 import '../../services/transcription_engine.dart';
 import '../../services/model_download_service.dart';
 import '../app_palettes.dart';
@@ -452,6 +454,13 @@ class SettingsCategoryCards extends StatelessWidget {
             subtitle: 'BLE, интернет, ретранслятор',
             onTap: () => _open(context, const _NetworkPage()),
           ),
+          _CategoryItem(
+            icon: Icons.add_to_drive_outlined,
+            color: const Color(0xFF1A73E8),
+            title: 'Google Drive',
+            subtitle: 'Привязка аккаунта, резерв и место',
+            onTap: () => _open(context, const _GoogleDrivePage()),
+          ),
           if (RuntimePlatform.isWeb)
             _CategoryItem(
               icon: Icons.ios_share_rounded,
@@ -489,6 +498,255 @@ class SettingsCategoryCards extends StatelessWidget {
           ),
         ]),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Sub-screen: Google Drive (account linking, status, free space)
+// ─────────────────────────────────────────────────────────────────────
+
+class _GoogleDrivePage extends StatefulWidget {
+  const _GoogleDrivePage();
+
+  @override
+  State<_GoogleDrivePage> createState() => _GoogleDrivePageState();
+}
+
+class _GoogleDrivePageState extends State<_GoogleDrivePage> {
+  GoogleDriveSyncStatus? _status;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load(interactive: false);
+  }
+
+  String? get _email {
+    final e = _status?.email;
+    return (e != null && e.isNotEmpty) ? e : null;
+  }
+
+  String _fmtBytes(int? b) {
+    if (b == null || b < 0) return '—';
+    const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+    var v = b.toDouble();
+    var i = 0;
+    while (v >= 1024 && i < units.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return '${v.toStringAsFixed(v >= 100 || i == 0 ? 0 : 1)} ${units[i]}';
+  }
+
+  Future<void> _load({required bool interactive}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final st =
+          await GoogleDriveChannelBackup.getSyncStatus(interactive: interactive);
+      if (mounted) setState(() => _status = st);
+    } catch (_) {
+      if (mounted) setState(() => _status = null);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _linkGis() async {
+    setState(() => _busy = true);
+    try {
+      final acc =
+          await GoogleDriveChannelBackup.ensureUserSignedIn(interactive: true);
+      if (!mounted) return;
+      if (acc == null) {
+        final reason = GoogleDriveChannelBackup.lastSignInError;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(reason?.isNotEmpty == true
+                ? 'Не удалось войти: $reason'
+                : 'Не удалось войти в Google. На iPhone используйте «Привязать через Safari».'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    await _load(interactive: false);
+  }
+
+  Future<void> _linkSafari() async {
+    final tokenCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Привязка через Safari'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '1. Нажмите «Открыть вход» — откроется Safari со входом Google.\n'
+                '2. Разрешите доступ к Google Drive.\n'
+                '3. На странице нажмите «Скопировать код».\n'
+                '4. Вернитесь сюда и вставьте код ниже.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.open_in_browser),
+                label: const Text('Открыть вход Google'),
+                onPressed: () => launchUrl(
+                  Uri.parse(GoogleDriveChannelBackup.buildManualAuthUrl()),
+                  mode: LaunchMode.externalApplication,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: tokenCtrl,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Вставьте код доступа',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final linked = await GoogleDriveChannelBackup.linkWithPastedToken(
+                  tokenCtrl.text);
+              if (ctx.mounted) Navigator.pop(ctx, linked);
+            },
+            child: const Text('Привязать'),
+          ),
+        ],
+      ),
+    );
+    tokenCtrl.dispose();
+    if (!mounted) return;
+    if (ok == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google Drive привязан')),
+      );
+      await _load(interactive: false);
+    } else if (ok == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(GoogleDriveChannelBackup.lastSignInError ??
+              'Не удалось привязать. Получите новый код.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _disconnect() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Отвязать Google-аккаунт?'),
+        content: const Text('Привязка будет удалена на этом устройстве.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Отвязать'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await GoogleDriveChannelBackup.disconnectCurrentUser();
+    if (!mounted) return;
+    setState(() => _status = const GoogleDriveSyncStatus());
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Аккаунт отвязан')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final linked = _email != null;
+    return _subScaffold(
+      context: context,
+      title: 'Google Drive',
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
+        children: [
+          const _SectionHeader('Аккаунт'),
+          ListTile(
+            leading: Icon(
+              linked ? Icons.account_circle : Icons.account_circle_outlined,
+              color: linked ? cs.primary : null,
+            ),
+            title: Text(linked ? _email! : 'Аккаунт не привязан'),
+            subtitle: _busy
+                ? const Text('Обновление…', style: TextStyle(fontSize: 12))
+                : (linked && _status?.limitBytes != null
+                    ? Text(
+                        'Свободно ${_fmtBytes(_status!.freeBytes)} из ${_fmtBytes(_status!.limitBytes)}',
+                        style: const TextStyle(fontSize: 12),
+                      )
+                    : null),
+            trailing: linked
+                ? IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: _busy ? null : () => _load(interactive: true),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 8),
+          const _SectionHeader('Привязка'),
+          if (RuntimePlatform.isWeb)
+            ListTile(
+              leading: const Icon(Icons.phone_iphone),
+              title: const Text('Привязать через Safari (iPhone)'),
+              subtitle: const Text(
+                'Если обычный вход Google не открывается в веб-приложении.',
+                style: TextStyle(fontSize: 12),
+              ),
+              onTap: _busy ? null : _linkSafari,
+            ),
+          ListTile(
+            leading: const Icon(Icons.login),
+            title: const Text('Войти через Google'),
+            subtitle: const Text(
+              'Обычный вход (ПК/Android). На iPhone используйте вариант выше.',
+              style: TextStyle(fontSize: 12),
+            ),
+            onTap: _busy ? null : _linkGis,
+          ),
+          if (linked)
+            ListTile(
+              leading: const Icon(Icons.link_off, color: Colors.red),
+              title: const Text('Отвязать аккаунт',
+                  style: TextStyle(color: Colors.red)),
+              onTap: _busy ? null : _disconnect,
+            ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Text(
+              'Этот аккаунт используется для резервного копирования каналов '
+              '(если в настройках канала включён резерв). В веб-версии токен '
+              'живёт около часа — затем потребуется привязать заново.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
