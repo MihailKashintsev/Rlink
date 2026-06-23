@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/channel.dart';
 import '../../services/channel_backup_service.dart';
@@ -151,6 +153,82 @@ class _ChannelAdminSettingsScreenState
     await updated.broadcastGossipMeta();
     if (!mounted) return;
     setState(() => _channel = updated);
+  }
+
+  /// iPhone/Safari fallback: authorise in real Safari (implicit flow) and paste
+  /// the access token back — works in iOS standalone PWA where GIS popups fail.
+  Future<void> _linkDriveViaSafari() async {
+    if (!_canManageDriveAccount) return;
+    final tokenCtrl = TextEditingController();
+    final linked = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Привязка на iPhone / Safari'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '1. Нажмите «Открыть вход» — откроется Safari со входом Google.\n'
+                '2. Разрешите доступ к Google Drive.\n'
+                '3. На открывшейся странице нажмите «Скопировать код».\n'
+                '4. Вернитесь сюда и вставьте код ниже.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.open_in_browser),
+                label: const Text('Открыть вход Google'),
+                onPressed: () => launchUrl(
+                  Uri.parse(GoogleDriveChannelBackup.buildManualAuthUrl()),
+                  mode: LaunchMode.externalApplication,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: tokenCtrl,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Вставьте код доступа',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final ok = await GoogleDriveChannelBackup.linkWithPastedToken(
+                  tokenCtrl.text);
+              if (ctx.mounted) Navigator.pop(ctx, ok);
+            },
+            child: const Text('Привязать'),
+          ),
+        ],
+      ),
+    );
+    tokenCtrl.dispose();
+    if (!mounted) return;
+    if (linked == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google Drive привязан на этом устройстве')),
+      );
+      await _refreshDriveQuota();
+    } else if (linked == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(GoogleDriveChannelBackup.lastSignInError ??
+              'Не удалось привязать. Получите новый код и попробуйте снова.'),
+        ),
+      );
+    }
   }
 
   Future<void> _disconnectDriveAccount() async {
@@ -801,6 +879,16 @@ class _ChannelAdminSettingsScreenState
                 ),
               ),
             ),
+            if (kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.phone_iphone),
+                title: const Text('Привязать на iPhone / Safari'),
+                subtitle: const Text(
+                  'Если вход Google не открывается в веб-приложении на телефоне.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                onTap: _linkDriveViaSafari,
+              ),
             Builder(builder: (context) {
               final email = _driveStatus?.email;
               final hasEmail = email != null && email.isNotEmpty;

@@ -28,6 +28,7 @@ import 'models/user_profile.dart';
 import 'models/shared_collab.dart';
 import 'services/app_settings.dart';
 import 'services/motion_controller.dart';
+import 'services/google_drive_channel_backup.dart';
 import 'services/chat_inbox_service.dart';
 import 'services/channel_service.dart';
 import 'services/channel_backup_service.dart';
@@ -615,6 +616,9 @@ Future<void> initServices() async {
     await CryptoService.instance.init();
     await AppSettings.instance.init();
     unawaited(MotionController.instance.init());
+    if (RuntimePlatform.isWeb) {
+      unawaited(GoogleDriveChannelBackup.restoreManualToken());
+    }
     await _restoreAdminPasswordFromSealedIfNeeded();
     await ProfileService.instance.init();
     if (RuntimePlatform.isWeb) {

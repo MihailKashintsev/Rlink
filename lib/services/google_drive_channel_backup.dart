@@ -7,6 +7,8 @@ import 'package:flutter/widgets.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis_auth/googleapis_auth.dart' as gapis;
 import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Состояние аккаунта Google Drive для экрана настроек (квота из [about.get]).
 class GoogleDriveSyncStatus {
@@ -57,6 +59,139 @@ class GoogleDriveChannelBackup {
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
   );
 
+  // ── Manual / implicit web token (iPhone Safari PWA fallback) ──────────────
+  // On iOS standalone PWA the GIS popup/redirect doesn't work. As a fallback the
+  // user authorises in real Safari (implicit flow) and pastes the access token
+  // back into the app. Token is short-lived (~1h, no refresh) — re-link when it
+  // expires. Requires this redirect URI registered on the Web OAuth client.
+  static const String manualRedirectUri =
+      'https://mihailkashintsev.github.io/rlink-web/oauth.html';
+  static gapis.AccessCredentials? _manualCreds;
+  static String? _manualEmail;
+
+  static String? get manualEmail => _manualEmail;
+
+  static bool get hasValidManualCreds {
+    final c = _manualCreds;
+    return c != null &&
+        c.accessToken.expiry
+            .isAfter(DateTime.now().toUtc().add(const Duration(seconds: 30)));
+  }
+
+  /// Implicit-flow consent URL — open in real Safari, then paste the token.
+  static String buildManualAuthUrl() {
+    final params = <String, String>{
+      'client_id': _webClientId,
+      'redirect_uri': manualRedirectUri,
+      'response_type': 'token',
+      'scope': _driveScopes.join(' '),
+      'include_granted_scopes': 'true',
+      'prompt': 'consent',
+    };
+    final q = params.entries
+        .map((e) =>
+            '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+    return 'https://accounts.google.com/o/oauth2/v2/auth?$q';
+  }
+
+  /// Accepts a bare token, a "token|expires_in" string (from oauth.html), or a
+  /// full "#access_token=…&expires_in=…" fragment. Validates against Drive.
+  static Future<bool> linkWithPastedToken(String raw) async {
+    _lastSignInError = null;
+    try {
+      var token = raw.trim();
+      var expiresIn = 3600;
+      if (token.contains('access_token=')) {
+        final frag =
+            token.contains('#') ? token.substring(token.indexOf('#') + 1) : token;
+        for (final pair in frag.split('&')) {
+          final kv = pair.split('=');
+          if (kv.length < 2) continue;
+          final k = Uri.decodeComponent(kv[0]);
+          final v = Uri.decodeComponent(kv[1]);
+          if (k == 'access_token') token = v;
+          if (k == 'expires_in') expiresIn = int.tryParse(v) ?? 3600;
+        }
+      } else if (token.contains('|')) {
+        final parts = token.split('|');
+        token = parts[0].trim();
+        if (parts.length > 1) {
+          expiresIn = int.tryParse(parts[1].trim()) ?? 3600;
+        }
+      }
+      if (token.isEmpty) {
+        _lastSignInError = 'Пустой код';
+        return false;
+      }
+      final expiry = DateTime.now()
+          .toUtc()
+          .add(Duration(seconds: (expiresIn - 120).clamp(60, 3600)));
+      final creds = gapis.AccessCredentials(
+        gapis.AccessToken('Bearer', token, expiry),
+        null,
+        _driveScopes,
+      );
+      final client = gapis.authenticatedClient(http.Client(), creds);
+      try {
+        final about = await drive.DriveApi(client).about.get($fields: 'user');
+        _manualCreds = creds;
+        _manualEmail = about.user?.emailAddress;
+        await _persistManual(token, expiry, _manualEmail);
+        debugPrint('[RLINK][Drive] manual token linked: $_manualEmail');
+        return true;
+      } finally {
+        client.close();
+      }
+    } catch (e, st) {
+      debugPrint('[RLINK][Drive] linkWithPastedToken failed: $e\n$st');
+      _lastSignInError = 'Код недействителен или истёк. Получите новый.';
+      return false;
+    }
+  }
+
+  static Future<void> _persistManual(
+      String token, DateTime expiryUtc, String? email) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString('drive_manual_token', token);
+      await p.setInt('drive_manual_expiry', expiryUtc.millisecondsSinceEpoch);
+      if (email != null) await p.setString('drive_manual_email', email);
+    } catch (_) {}
+  }
+
+  /// Restore a still-valid manual token at startup (web).
+  static Future<void> restoreManualToken() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final token = p.getString('drive_manual_token');
+      final exp = p.getInt('drive_manual_expiry');
+      if (token == null || exp == null) return;
+      final expiry = DateTime.fromMillisecondsSinceEpoch(exp, isUtc: true);
+      if (expiry.isBefore(DateTime.now().toUtc())) {
+        await _clearManual();
+        return;
+      }
+      _manualCreds = gapis.AccessCredentials(
+        gapis.AccessToken('Bearer', token, expiry),
+        null,
+        _driveScopes,
+      );
+      _manualEmail = p.getString('drive_manual_email');
+    } catch (_) {}
+  }
+
+  static Future<void> _clearManual() async {
+    _manualCreds = null;
+    _manualEmail = null;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.remove('drive_manual_token');
+      await p.remove('drive_manual_expiry');
+      await p.remove('drive_manual_email');
+    } catch (_) {}
+  }
+
   static bool _isScopesApiUnsupported(Object error) {
     if (error is UnimplementedError) return true;
     final msg = error.toString();
@@ -94,6 +229,10 @@ class GoogleDriveChannelBackup {
   static Future<gapis.AuthClient?> _driveAuthClient({
     required bool interactive,
   }) async {
+    // Manual (pasted) web token takes precedence — used on iOS Safari PWA.
+    if (hasValidManualCreds) {
+      return gapis.authenticatedClient(http.Client(), _manualCreds!);
+    }
     if (!await _ensureDriveScopes(interactive: interactive)) {
       return null;
     }
@@ -136,6 +275,7 @@ class GoogleDriveChannelBackup {
     } catch (e, st) {
       debugPrint('[RLINK][Drive] signOut() failed: $e\n$st');
     }
+    await _clearManual();
     return _signIn.currentUser == null;
   }
 
@@ -225,14 +365,16 @@ class GoogleDriveChannelBackup {
     bool interactive = false,
   }) async {
     try {
-      final account = await ensureUserSignedIn(interactive: interactive);
-      if (account == null) {
+      final account = hasValidManualCreds
+          ? null
+          : await ensureUserSignedIn(interactive: interactive);
+      if (account == null && !hasValidManualCreds) {
         return const GoogleDriveSyncStatus();
       }
       late final GoogleDriveSyncStatus accountOnlyStatus;
       accountOnlyStatus = GoogleDriveSyncStatus(
-        email: account.email,
-        displayName: account.displayName,
+        email: account?.email ?? _manualEmail,
+        displayName: account?.displayName,
       );
 
       gapis.AuthClient? authClient;
@@ -257,8 +399,8 @@ class GoogleDriveChannelBackup {
 
         final q = about.storageQuota;
         return GoogleDriveSyncStatus(
-          email: about.user?.emailAddress ?? account.email,
-          displayName: about.user?.displayName ?? account.displayName,
+          email: about.user?.emailAddress ?? account?.email ?? _manualEmail,
+          displayName: about.user?.displayName ?? account?.displayName,
           limitBytes: parseQuota(q?.limit),
           usageBytes: parseQuota(q?.usage),
         );
@@ -281,8 +423,10 @@ class GoogleDriveChannelBackup {
     String? existingFileId,
   }) async {
     try {
-      final account = await ensureUserSignedIn(interactive: true);
-      if (account == null) return null;
+      if (!hasValidManualCreds) {
+        final account = await ensureUserSignedIn(interactive: true);
+        if (account == null) return null;
+      }
       final authClient = await _driveAuthClient(interactive: true);
       if (authClient == null) return null;
       try {
@@ -357,8 +501,10 @@ class GoogleDriveChannelBackup {
   }) async {
     if (fileId.trim().isEmpty) return true;
     try {
-      final account = await ensureUserSignedIn(interactive: interactive);
-      if (account == null) return false;
+      if (!hasValidManualCreds) {
+        final account = await ensureUserSignedIn(interactive: interactive);
+        if (account == null) return false;
+      }
       final authClient = await _driveAuthClient(interactive: interactive);
       if (authClient == null) return false;
       try {
