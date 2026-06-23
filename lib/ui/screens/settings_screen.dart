@@ -1048,14 +1048,6 @@ class _AppearancePageState extends State<_AppearancePage> {
               value: settings.liquidGlass,
               onChanged: (v) => settings.setLiquidGlass(v),
             ),
-          SwitchListTile(
-            secondary: Icon(Icons.gradient_rounded, color: cs.primary),
-            title: const Text('Анимированный градиент'),
-            subtitle: Text('Живой фон в выбранной палитре',
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            value: settings.animatedGradient,
-            onChanged: (v) => settings.setAnimatedGradient(v),
-          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Column(
