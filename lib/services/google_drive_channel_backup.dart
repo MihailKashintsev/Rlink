@@ -398,6 +398,72 @@ class GoogleDriveChannelBackup {
     return _signIn.currentUser == null;
   }
 
+  /// Upload arbitrary bytes (a received file/photo/video, an export, a call
+  /// recording…) into a "Rlink" folder on the linked Drive. Returns true on
+  /// success. Uses whichever account is active (relay/manual/GIS).
+  static Future<bool> uploadBytesToDrive({
+    required String fileName,
+    required Uint8List bytes,
+    String mimeType = 'application/octet-stream',
+  }) async {
+    _lastSignInError = null;
+    try {
+      if (!hasValidManualCreds && !hasRelayAccount) {
+        final account = await ensureUserSignedIn(interactive: true);
+        if (account == null) {
+          _lastSignInError = 'Аккаунт Google не привязан';
+          return false;
+        }
+      }
+      final client = await _driveAuthClient(interactive: true);
+      if (client == null) {
+        _lastSignInError = 'Нет доступа к Google Drive';
+        return false;
+      }
+      try {
+        final api = drive.DriveApi(client);
+        final folderId = await _ensureRlinkFolder(api);
+        final media = drive.Media(
+          Stream<List<int>>.value(bytes),
+          bytes.length,
+          contentType: mimeType,
+        );
+        final f = drive.File()
+          ..name = fileName
+          ..parents = folderId != null ? [folderId] : null;
+        await api.files.create(f, uploadMedia: media);
+        return true;
+      } finally {
+        client.close();
+      }
+    } catch (e, st) {
+      debugPrint('[RLINK][Drive] uploadBytesToDrive failed: $e\n$st');
+      _lastSignInError = '$e';
+      return false;
+    }
+  }
+
+  /// Find or create the app's "Rlink" folder (drive.file scope sees only files
+  /// this app created, so it's a per-app folder).
+  static Future<String?> _ensureRlinkFolder(drive.DriveApi api) async {
+    try {
+      final res = await api.files.list(
+        q: "name='Rlink' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+        $fields: 'files(id,name)',
+        spaces: 'drive',
+      );
+      final found = res.files;
+      if (found != null && found.isNotEmpty) return found.first.id;
+      final folder = drive.File()
+        ..name = 'Rlink'
+        ..mimeType = 'application/vnd.google-apps.folder';
+      final created = await api.files.create(folder, $fields: 'id');
+      return created.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// На Android интерактивный [GoogleSignIn.signIn] требует foreground Activity;
   /// при предварительном запуске Dart из [RlinkApplication] плагин может ещё не
   /// получить activity — ждём resumed и даём кадр на attach.

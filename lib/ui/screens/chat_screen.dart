@@ -80,6 +80,7 @@ import '../../utils/channel_mentions.dart';
 import '../../utils/custom_emoji_text.dart';
 import '../../utils/reaction_emoji_key.dart';
 import '../../utils/web_file_store.dart';
+import '../../services/google_drive_channel_backup.dart';
 import '../../utils/web_object_url.dart';
 import '../../utils/external_message_share.dart';
 import '../../utils/invite_dm_codec.dart';
@@ -5273,6 +5274,74 @@ class _ChatScreenState extends State<ChatScreen> {
     return humanizeCustomEmojiCodes(lines.join('\n').trim());
   }
 
+  Future<Uint8List?> _readBytesFromStoredPath(String path) async {
+    if (kIsWeb) {
+      if (isWebStoredFile(path)) return readWebStoredFile(path.split('#').first);
+      if (path.startsWith('data:')) return _bytesFromDataUri(path);
+      return null;
+    }
+    try {
+      final f = File(path);
+      if (f.existsSync()) return f.readAsBytes();
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _saveMessageMediaToDrive(ChatMessage msg) async {
+    String? path;
+    String name;
+    String mime;
+    if (msg.imagePath != null && msg.imagePath!.trim().isNotEmpty) {
+      path = ImageService.instance.resolveStoredPath(msg.imagePath) ??
+          msg.imagePath;
+      name = 'photo_${msg.id}.jpg';
+      mime = 'image/jpeg';
+    } else if (msg.videoPath != null && msg.videoPath!.trim().isNotEmpty) {
+      path = ImageService.instance.resolveStoredPath(msg.videoPath) ??
+          msg.videoPath;
+      name = 'video_${msg.id}.mp4';
+      mime = 'video/mp4';
+    } else if (msg.filePath != null && msg.filePath!.trim().isNotEmpty) {
+      path = ImageService.instance.resolveStoredPath(msg.filePath) ??
+          msg.filePath;
+      name = (msg.fileName != null && msg.fileName!.trim().isNotEmpty)
+          ? msg.fileName!.trim()
+          : 'file_${msg.id}';
+      mime = _mimeTypeForFileName(name, fallbackMime: 'application/octet-stream');
+    } else {
+      return;
+    }
+    if (path == null) return;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Загрузка на Google Drive…')),
+      );
+    }
+    try {
+      final bytes = await _readBytesFromStoredPath(path);
+      if (bytes == null || bytes.isEmpty) {
+        if (mounted) _showErrorSnack('Не удалось прочитать файл');
+        return;
+      }
+      final ok = await GoogleDriveChannelBackup.uploadBytesToDrive(
+        fileName: name,
+        bytes: bytes,
+        mimeType: mime,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? 'Сохранено на Google Drive ✓ (папка «Rlink»)'
+              : (GoogleDriveChannelBackup.lastSignInError ??
+                  'Не удалось сохранить. Привяжите аккаунт в Настройки → Google Drive.')),
+        ),
+      );
+    } catch (e) {
+      if (mounted) _showErrorSnack('Ошибка: $e');
+    }
+  }
+
   Future<void> _onLongPressMessage(ChatMessage msg) async {
     final stickerSourcePath = msg.imagePath == null
         ? null
@@ -5391,6 +5460,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () async {
                   Navigator.pop(ctx);
                   await _saveVideoToGallery(videoSavePath);
+                },
+              ),
+            if (canSaveImage ||
+                canSaveVideo ||
+                (msg.filePath != null && msg.filePath!.trim().isNotEmpty))
+              ListTile(
+                leading: const Icon(Icons.add_to_drive_outlined),
+                title: const Text('Сохранить на Google Drive'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _saveMessageMediaToDrive(msg);
                 },
               ),
             if (canImportSticker)
