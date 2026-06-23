@@ -964,6 +964,22 @@ class ChatStorageService {
   }
 
   /// JSON-файл во временной директории (пути к медиа — как в локальной БД).
+  /// Web-safe export of a DM conversation as a JSON string (no dart:io File) —
+  /// used to upload the history straight to Google Drive.
+  Future<String> exportDirectChatToJsonString(String peerId) async {
+    final msgs = await getAllMessages(peerId);
+    final contact = await getContact(peerId);
+    final export = <String, dynamic>{
+      'v': 1,
+      'type': 'rlink_dm_export',
+      'peerId': peerId,
+      if (contact != null) 'peerNick': contact.nickname,
+      'exportedAt': DateTime.now().millisecondsSinceEpoch,
+      'messages': msgs.map((m) => m.toMap()).toList(),
+    };
+    return const JsonEncoder.withIndent('  ').convert(export);
+  }
+
   Future<File> exportDirectChatToJsonFile(String peerId) async {
     final msgs = await getAllMessages(peerId);
     final contact = await getContact(peerId);

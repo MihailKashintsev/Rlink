@@ -5695,6 +5695,43 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _exportChatToDrive() async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Экспорт истории на Google Drive…')),
+      );
+    }
+    try {
+      final json = await ChatStorageService.instance
+          .exportDirectChatToJsonString(_resolvedPeerId);
+      final bytes = Uint8List.fromList(utf8.encode(json));
+      final nick = widget.peerNickname.trim().isEmpty
+          ? 'chat'
+          : widget.peerNickname.trim().replaceAll(RegExp(r'[^\w\-]+'), '_');
+      final name = 'rlink_chat_${nick}_${DateTime.now().millisecondsSinceEpoch}.json';
+      final ok = await GoogleDriveChannelBackup.uploadBytesToDrive(
+        fileName: name,
+        bytes: bytes,
+        mimeType: 'application/json',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? 'История сохранена на Google Drive ✓ (папка «Rlink»)'
+              : (GoogleDriveChannelBackup.lastSignInError ??
+                  'Не удалось. Привяжите аккаунт в Настройки → Google Drive.')),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось экспортировать: $e')),
+        );
+      }
+    }
+  }
+
   void _openPeerProfile() {
     if (_isEmojiBot) {
       Navigator.push(
@@ -6379,6 +6416,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           const PopupMenuItem(
                               value: 'export', child: Text('Экспорт в файл')),
                           const PopupMenuItem(
+                              value: 'export_drive',
+                              child: Text('Экспорт на Google Drive')),
+                          const PopupMenuItem(
                               value: 'delete', child: Text('Удалить чат')),
                         ];
                       },
@@ -6423,6 +6463,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             break;
                           case 'export':
                             await _exportChatToFile();
+                            break;
+                          case 'export_drive':
+                            await _exportChatToDrive();
                             break;
                           case 'delete':
                             final ok = await showDialog<bool>(
