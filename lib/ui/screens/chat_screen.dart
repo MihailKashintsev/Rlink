@@ -5380,6 +5380,33 @@ class _ChatScreenState extends State<ChatScreen> {
     return null;
   }
 
+  /// When several Drive accounts are linked, ask which to use. Returns the
+  /// chosen pairing, or null to use the active account.
+  Future<String?> _pickDriveAccountPairing() async {
+    final accounts = GoogleDriveChannelBackup.relayAccounts;
+    if (accounts.length < 2) return null;
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text('На какой аккаунт Google сохранить?'),
+            ),
+            for (final a in accounts)
+              ListTile(
+                leading: const Icon(Icons.account_circle_outlined),
+                title: Text((a['email'] ?? '').isNotEmpty ? a['email']! : 'Аккаунт'),
+                onTap: () => Navigator.pop(ctx, a['pairing']),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _saveMessageMediaToDrive(ChatMessage msg) async {
     String? path;
     String name;
@@ -5405,11 +5432,11 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     if (path == null) return;
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Загрузка на Google Drive…')),
-      );
-    }
+    final pairing = await _pickDriveAccountPairing();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Загрузка на Google Drive…')),
+    );
     try {
       final bytes = await _readBytesFromStoredPath(path);
       if (bytes == null || bytes.isEmpty) {
@@ -5420,6 +5447,7 @@ class _ChatScreenState extends State<ChatScreen> {
         fileName: name,
         bytes: bytes,
         mimeType: mime,
+        accountPairing: pairing,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

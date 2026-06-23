@@ -156,6 +156,52 @@ class _ChannelAdminSettingsScreenState
     setState(() => _channel = updated);
   }
 
+  String _channelDriveAccountLabel(String channelId) {
+    final p = GoogleDriveChannelBackup.channelAccountPairing(channelId);
+    if (p == null) return 'По умолчанию (активный аккаунт)';
+    for (final a in GoogleDriveChannelBackup.relayAccounts) {
+      if (a['pairing'] == p) {
+        return (a['email'] ?? '').isNotEmpty ? a['email']! : 'Аккаунт';
+      }
+    }
+    return 'По умолчанию (активный аккаунт)';
+  }
+
+  Future<void> _pickChannelDriveAccount(String channelId) async {
+    final accounts = GoogleDriveChannelBackup.relayAccounts;
+    final current = GoogleDriveChannelBackup.channelAccountPairing(channelId);
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text('Аккаунт Google для резерва этого канала'),
+            ),
+            ListTile(
+              leading: Icon(current == null ? Icons.check : null),
+              title: const Text('По умолчанию (активный аккаунт)'),
+              onTap: () => Navigator.pop(ctx, '__default__'),
+            ),
+            for (final a in accounts)
+              ListTile(
+                leading: Icon(a['pairing'] == current ? Icons.check : null),
+                title: Text(
+                    (a['email'] ?? '').isNotEmpty ? a['email']! : 'Аккаунт'),
+                onTap: () => Navigator.pop(ctx, a['pairing']),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null) return;
+    await GoogleDriveChannelBackup.setChannelAccount(
+        channelId, chosen == '__default__' ? null : chosen);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _disconnectDriveAccount() async {
     if (!_canManageDriveAccount) return;
     final ok = await showDialog<bool>(
@@ -777,6 +823,15 @@ class _ChannelAdminSettingsScreenState
                 style: TextStyle(fontSize: 12),
               ),
             ),
+            if (GoogleDriveChannelBackup.relayAccounts.length >= 2)
+              ListTile(
+                leading: const Icon(Icons.switch_account_outlined),
+                title: const Text('Аккаунт Drive для этого канала'),
+                subtitle: Text(_channelDriveAccountLabel(ch.id),
+                    style: const TextStyle(fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _pickChannelDriveAccount(ch.id),
+              ),
             SwitchListTile(
               value: ch.driveBackupEnabled,
               onChanged: (v) => _toggleDriveBackup(v),

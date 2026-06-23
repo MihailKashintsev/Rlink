@@ -351,12 +351,14 @@ class GoogleDriveChannelBackup {
       _activePairing = p.getString('drive_relay_active') ??
           (_accounts.isNotEmpty ? _accounts.first['pairing'] : null);
       if (_accounts.isNotEmpty) await _persistAccounts();
+      await _restoreChannelAccounts();
     } catch (_) {}
   }
 
   static Future<void> _clearRelay() async {
     _accounts.clear();
     _credsCache.clear();
+    _channelAccounts.clear();
     _activePairing = null;
     _pendingPairing = null;
     try {
@@ -365,6 +367,44 @@ class GoogleDriveChannelBackup {
       await p.remove('drive_relay_active');
       await p.remove('drive_relay_pairing');
       await p.remove('drive_relay_email');
+      await p.remove('drive_channel_accounts');
+    } catch (_) {}
+  }
+
+  // ── Per-channel account override (channelId → pairing) ─────────────────────
+  static final Map<String, String> _channelAccounts = {};
+
+  /// The pairing a channel should back up to, or null to use the active account.
+  /// Falls back to active if the chosen account was removed.
+  static String? channelAccountPairing(String channelId) {
+    final p = _channelAccounts[channelId];
+    if (p != null && _accountFor(p) != null) return p;
+    return null;
+  }
+
+  static Future<void> setChannelAccount(
+      String channelId, String? pairing) async {
+    if (pairing == null || pairing.isEmpty) {
+      _channelAccounts.remove(channelId);
+    } else {
+      _channelAccounts[channelId] = pairing;
+    }
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString('drive_channel_accounts', jsonEncode(_channelAccounts));
+    } catch (_) {}
+  }
+
+  static Future<void> _restoreChannelAccounts() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString('drive_channel_accounts');
+      if (raw != null && raw.isNotEmpty) {
+        final m = jsonDecode(raw) as Map;
+        _channelAccounts
+          ..clear()
+          ..addAll(m.map((k, v) => MapEntry(k.toString(), v.toString())));
+      }
     } catch (_) {}
   }
 
@@ -675,13 +715,15 @@ class GoogleDriveChannelBackup {
     required String fileName,
     required Uint8List ciphertext,
     String? existingFileId,
+    String? accountPairing,
   }) async {
     try {
-      if (!hasValidManualCreds && !hasRelayAccount) {
+      if (!hasValidManualCreds && !hasRelayAccount && accountPairing == null) {
         final account = await ensureUserSignedIn(interactive: true);
         if (account == null) return null;
       }
-      final authClient = await _driveAuthClient(interactive: true);
+      final authClient = await _driveAuthClient(
+          interactive: true, relayPairing: accountPairing);
       if (authClient == null) return null;
       try {
         final api = drive.DriveApi(authClient);

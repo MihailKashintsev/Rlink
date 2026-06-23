@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../services/app_settings.dart';
 import '../../services/call_history_service.dart';
+import '../../services/google_drive_channel_backup.dart';
 import '../../services/local_transcription_service.dart';
 import '../../services/voice_service.dart';
 import '../../utils/video_controller_for_path.dart';
@@ -272,6 +274,58 @@ class _CallRecordingPlaybackScreenState
     );
   }
 
+  Future<void> _saveRecordingToDrive() async {
+    final path = _entry.recordingPath;
+    if (path == null || path.isEmpty) return;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Загрузка записи на Google Drive…')),
+      );
+    }
+    try {
+      Uint8List? bytes;
+      if (kIsWeb && isWebStoredFile(path)) {
+        bytes = await readWebStoredFile(path);
+      }
+      if (bytes == null || bytes.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Не удалось прочитать запись на этом устройстве')));
+        }
+        return;
+      }
+      final name = _downloadFileName();
+      final ok = await GoogleDriveChannelBackup.uploadBytesToDrive(
+        fileName: name,
+        bytes: bytes,
+        mimeType: _recordingMimeType(),
+      );
+      final transcript = _transcriptText ?? _entry.transcript;
+      if (ok && transcript != null && transcript.trim().isNotEmpty) {
+        await GoogleDriveChannelBackup.uploadBytesToDrive(
+          fileName: '${name.replaceAll(RegExp(r'\.[^.]+$'), '')}_transcript.txt',
+          bytes: Uint8List.fromList(utf8.encode(transcript)),
+          mimeType: 'text/plain',
+        );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? 'Запись${transcript != null && transcript.trim().isNotEmpty ? ' и расшифровка' : ''} сохранены на Google Drive ✓'
+              : (GoogleDriveChannelBackup.lastSignInError ??
+                  'Не удалось. Привяжите аккаунт в Настройки → Google Drive.')),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -280,7 +334,17 @@ class _CallRecordingPlaybackScreenState
         localFileExistsForPath(_entry.recordingPath!);
 
     return Scaffold(
-      appBar: AppBar(title: Text(_entry.peerDisplayName)),
+      appBar: AppBar(
+        title: Text(_entry.peerDisplayName),
+        actions: [
+          if (hasRecording)
+            IconButton(
+              tooltip: 'Сохранить на Google Drive',
+              icon: const Icon(Icons.add_to_drive_outlined),
+              onPressed: _saveRecordingToDrive,
+            ),
+        ],
+      ),
       body: Column(children: [
         if (_isVideo && _videoCtrl != null && _videoCtrl!.value.isInitialized)
           AspectRatio(

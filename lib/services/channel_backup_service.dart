@@ -192,12 +192,15 @@ class ChannelBackupService {
 
     if (channel.driveBackupEnabled) {
       final compact = ChannelService.compactChannelId(channel.id);
+      final pairing =
+          GoogleDriveChannelBackup.channelAccountPairing(channel.id);
 
       // Upload encrypted snapshot.
       fileId = await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
         fileName: 'Rlink_ch_$compact.bin',
         ciphertext: sealed,
         existingFileId: channel.driveFileId,
+        accountPairing: pairing,
       );
       if (fileId != null) {
         fileUrl =
@@ -218,6 +221,7 @@ class ChannelBackupService {
           fileName: 'Rlink_ch_${compact}_keys.json',
           ciphertext: keysBytes,
           existingFileId: existingKeysFileId,
+          accountPairing: pairing,
         );
         if (keysFileId != null) {
           await _writeKeysFileId(channel.id, keysFileId);
@@ -238,6 +242,7 @@ class ChannelBackupService {
             fileName: 'Rlink_ch_${compact}_avatar.jpg',
             ciphertext: avatarBytes,
             existingFileId: channel.driveAvatarFileId,
+            accountPairing: pairing,
           );
           if (avatarFileId != null) {
             avatarUrl =
@@ -258,6 +263,7 @@ class ChannelBackupService {
             fileName: 'Rlink_ch_${compact}_banner.jpg',
             ciphertext: bannerBytes,
             existingFileId: channel.driveBannerFileId,
+            accountPairing: pairing,
           );
           if (bannerFileId != null) {
             bannerUrl =
