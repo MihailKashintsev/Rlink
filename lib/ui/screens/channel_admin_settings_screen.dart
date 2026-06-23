@@ -115,7 +115,7 @@ class _ChannelAdminSettingsScreenState
   Future<void> _toggleDriveBackup(bool enabled) async {
     final ch = _channel;
     if (ch == null || ch.adminId != _myId) return;
-    if (enabled) {
+    if (enabled && !GoogleDriveChannelBackup.hasValidManualCreds) {
       final account =
           await GoogleDriveChannelBackup.ensureUserSignedIn(interactive: true);
       if (!mounted) return;
@@ -843,6 +843,17 @@ class _ChannelAdminSettingsScreenState
       body: ListView(
         children: [
           if (_isOwnerMode) ...[
+            if (kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.phone_iphone),
+                title: const Text('Привязать Google на iPhone / Safari'),
+                subtitle: const Text(
+                  'Если вход Google не открывается в веб-приложении на телефоне. '
+                  'Привяжите здесь, затем включите резерв ниже.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                onTap: _linkDriveViaSafari,
+              ),
             SwitchListTile(
               value: ch.driveBackupEnabled,
               onChanged: (v) => _toggleDriveBackup(v),
