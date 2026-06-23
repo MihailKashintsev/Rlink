@@ -494,6 +494,12 @@ class MediaUploadQueue {
     return stored != null && stored.isNotEmpty ? stored : null;
   }
 
+  /// Publish progress for an upload handled outside the native queue (e.g. the
+  /// web in-memory/chunked relay send) so the bubble shows the same gauge.
+  /// Pass progress >= 1.0 to clear it.
+  void setExternalProgress(String msgId, double progress) =>
+      _setProgress(msgId, progress);
+
   void _setProgress(String msgId, double progress) {
     final map = Map<String, double>.from(progressMap.value);
     if (progress >= 1.0) {

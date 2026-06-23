@@ -618,32 +618,40 @@ class _ChatScreenState extends State<ChatScreen> {
   }) async {
     // Use full public key for relay routing
     final relayRecipientKey = _resolvedPeerId;
-    for (var i = 0; i < total; i++) {
-      final offset = i * chunkBytes;
-      final end = (offset + chunkBytes) > compressed.length
-          ? compressed.length
-          : offset + chunkBytes;
-      final chunk = Uint8List.sublistView(compressed, offset, end);
-      await RelayService.instance.sendBlobChunk(
-        recipientKey: relayRecipientKey,
-        fromId: myId,
-        msgId: msgId,
-        chunkIdx: i,
-        chunkTotal: total,
-        chunkData: chunk,
-        isVoice: isVoice,
-        isVideo: isVideo,
-        isSquare: isSquare,
-        isFile: isFile,
-        isSticker: isSticker,
-        fileName: fileName,
-        caption: caption,
-      );
-      // Gentle pacing: mobile browsers and proxies are more stable with
-      // smaller, less bursty WebSocket frames.
-      await Future.delayed(
-        const Duration(milliseconds: kIsWeb ? 120 : 50),
-      );
+    MediaUploadQueue.instance.setExternalProgress(msgId, 0.01);
+    try {
+      for (var i = 0; i < total; i++) {
+        final offset = i * chunkBytes;
+        final end = (offset + chunkBytes) > compressed.length
+            ? compressed.length
+            : offset + chunkBytes;
+        final chunk = Uint8List.sublistView(compressed, offset, end);
+        await RelayService.instance.sendBlobChunk(
+          recipientKey: relayRecipientKey,
+          fromId: myId,
+          msgId: msgId,
+          chunkIdx: i,
+          chunkTotal: total,
+          chunkData: chunk,
+          isVoice: isVoice,
+          isVideo: isVideo,
+          isSquare: isSquare,
+          isFile: isFile,
+          isSticker: isSticker,
+          fileName: fileName,
+          caption: caption,
+        );
+        // Determinate gauge on the bubble (kept < 1.0 until fully sent).
+        MediaUploadQueue.instance
+            .setExternalProgress(msgId, ((i + 1) / total) * 0.99);
+        // Gentle pacing: mobile browsers and proxies are more stable with
+        // smaller, less bursty WebSocket frames.
+        await Future.delayed(
+          const Duration(milliseconds: kIsWeb ? 120 : 50),
+        );
+      }
+    } finally {
+      MediaUploadQueue.instance.setExternalProgress(msgId, 1.0); // clear
     }
     debugPrint(
         '[RLINK][Media] All $total blob chunks sent for $msgId to $relayRecipientKey');
@@ -9143,9 +9151,39 @@ class _InputBarState extends State<_InputBar> {
                     ),
                     child: widget.isSending
                         ? Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: cs.onPrimary))
+                            padding: const EdgeInsets.all(10),
+                            child: ValueListenableBuilder<Map<String, double>>(
+                              valueListenable:
+                                  MediaUploadQueue.instance.progressMap,
+                              builder: (_, map, __) {
+                                final p = map.values.isEmpty
+                                    ? null
+                                    : map.values
+                                        .reduce((a, b) => a > b ? a : b);
+                                return Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    CircularProgressIndicator(
+                                      value: (p != null && p > 0.02) ? p : null,
+                                      strokeWidth: 2.4,
+                                      color: cs.onPrimary,
+                                      backgroundColor:
+                                          cs.onPrimary.withValues(alpha: 0.25),
+                                    ),
+                                    if (p != null && p > 0.02)
+                                      Text(
+                                        '${(p * 100).round()}',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: cs.onPrimary,
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
+                          )
                         : Icon(Icons.send_rounded,
                             color: cs.onPrimary, size: 20),
                   ),
