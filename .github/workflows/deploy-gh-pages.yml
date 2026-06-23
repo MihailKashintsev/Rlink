@@ -31,12 +31,27 @@ jobs:
         run: flutter pub get
 
       - name: Build web
+        env:
+          # TURN media relay — required for calls between symmetric-NAT / mobile
+          # networks (без него сигналинг проходит, а звук/видео не доходят).
+          # Host/user default to the known relay; password must be set as a repo
+          # secret (coturn turnserver.conf: user=rlink:<password>). If the secret
+          # is empty, TURN stays disabled (CallService falls back to STUN only).
+          TURN_HOST: ${{ vars.TURN_HOST || '185.244.172.90' }}
+          TURN_USER: ${{ vars.TURN_USER || 'rlink' }}
+          # Falls back to the value committed in relay_server/turnserver.conf
+          # (already public). Override with a real secret after rotating coturn's
+          # password — see relay_server/README_TURN.md.
+          TURN_PASSWORD: ${{ secrets.TURN_PASSWORD || 'change_me_strong_password' }}
         run: |
           short_sha="${GITHUB_SHA::7}"
           flutter build web --release \
             --pwa-strategy=none \
             --base-href "/${{ github.event.repository.name }}/" \
-            --dart-define="RLINK_WEB_PUSH_ID=${GITHUB_RUN_NUMBER}-${short_sha}"
+            --dart-define="RLINK_WEB_PUSH_ID=${GITHUB_RUN_NUMBER}-${short_sha}" \
+            --dart-define="TURN_HOST=${TURN_HOST}" \
+            --dart-define="TURN_USER=${TURN_USER}" \
+            --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
