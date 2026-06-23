@@ -58,6 +58,7 @@ import '../widgets/composer_input_bar.dart';
 import '../widgets/forward_target_sheet.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../../utils/web_file_store.dart';
 
 // ══════════════════════════════════════════════════════════════════
 // Forward / упоминания (канал)
@@ -1189,6 +1190,10 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   Future<void> _openChannelMediaGallery() async {
     if (_isSending) return;
     if (!mounted) return;
+    if (kIsWeb) {
+      await _openChannelWebMediaPicker();
+      return;
+    }
     await showMediaGallerySendSheet(
       context,
       onPhotoPath: _channelGalleryPhoto,
@@ -1668,11 +1673,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   Future<void> _publishImageBytesPost(Uint8List rawBytes) async {
     if (_isSending || rawBytes.isEmpty) return;
     if (kIsWeb) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Стикеры и GIF в канал пока доступны в приложении'),
-        ));
-      }
+      await _publishImageBytesPostWeb(rawBytes);
       return;
     }
     setState(() {
@@ -1760,6 +1761,116 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (data == null || data.isEmpty) return;
       await _publishImageBytesPost(Uint8List.fromList(data));
     } catch (_) {}
+  }
+
+  /// Web image post: store bytes to OPFS + gossip them (no dart:io).
+  Future<void> _publishImageBytesPostWeb(Uint8List rawBytes) async {
+    if (_isSending || rawBytes.isEmpty) return;
+    setState(() {
+      _isSending = true;
+      _sendProgress = 0.0;
+    });
+    try {
+      final postId = _uuid.v4();
+      final stored = await writeWebStoredFile(
+        fileName: '${postId}_post.jpg',
+        bytes: rawBytes,
+        mimeType: 'image/jpeg',
+      );
+      final chunks = ImageService.instance.splitToBase64Chunks(rawBytes);
+      await GossipRouter.instance.sendImgMeta(
+        msgId: postId,
+        totalChunks: chunks.length,
+        fromId: _myId,
+        isAvatar: false,
+        isChannelPost: true,
+      );
+      for (var i = 0; i < chunks.length; i++) {
+        await GossipRouter.instance.sendImgChunk(
+          msgId: postId,
+          index: i,
+          base64Data: chunks[i],
+          fromId: _myId,
+        );
+        if (mounted) setState(() => _sendProgress = (i + 1) / chunks.length);
+      }
+      final staffLabel = _channel.staffLabelForNewPost(_myId);
+      final post = ChannelPost(
+        id: postId,
+        channelId: _channel.id,
+        authorId: _myId,
+        text: _postCtrl.text.trim(),
+        imagePath: stored ?? '',
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        staffLabel: staffLabel,
+      );
+      await ChannelService.instance.savePost(post);
+      await BroadcastOutboxService.instance.enqueueChannelPost(
+        channelId: _channel.id,
+        postId: postId,
+        authorId: _myId,
+        text: post.text,
+        timestamp: post.timestamp,
+        hasImage: true,
+        staffLabel: staffLabel,
+      );
+      if (mounted) _postCtrl.clear();
+      _maybeAutoDriveBackupAfterOwnerPost();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+          _sendProgress = 0.0;
+        });
+      }
+    }
+  }
+
+  /// Modern web media picker (matches the chat's), then posts the image.
+  Future<void> _openChannelWebMediaPicker() async {
+    final go = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Icon(Icons.photo_library_outlined, color: cs.primary),
+                  title: const Text('Фото или GIF'),
+                  subtitle: const Text('Выбрать из файлов'),
+                  onTap: () => Navigator.pop(ctx, true),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (go != true || !mounted) return;
+    final r = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    final bytes = r?.files.single.bytes;
+    if (bytes == null) return;
+    await _publishImageBytesPost(bytes);
   }
 
   /// Discard the in-progress voice recording without sending (swipe-to-cancel).

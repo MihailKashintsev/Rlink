@@ -9,8 +9,11 @@ import '../../models/channel.dart';
 import '../../services/channel_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/gossip_router.dart';
+import 'dart:typed_data';
+
 import '../../services/image_service.dart';
 import '../../utils/rlink_deep_link.dart';
+import '../../utils/web_file_store.dart';
 import '../widgets/avatar_widget.dart';
 import 'channel_admin_settings_screen.dart';
 
@@ -80,9 +83,20 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
       content = Image.network(raw,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => _thumbFallback(cs));
+    } else if (kIsWeb) {
+      final p = ImageService.instance.resolveStoredPath(raw) ?? raw ?? '';
+      content = isWebStoredFile(p)
+          ? FutureBuilder<Uint8List?>(
+              future: readWebStoredFile(p),
+              builder: (_, snap) =>
+                  (snap.data != null && snap.data!.isNotEmpty)
+                      ? Image.memory(snap.data!, fit: BoxFit.cover)
+                      : _thumbFallback(cs),
+            )
+          : _thumbFallback(cs);
     } else {
       final p = ImageService.instance.resolveStoredPath(raw);
-      if (!kIsWeb && p != null && File(p).existsSync()) {
+      if (p != null && File(p).existsSync()) {
         content = Image.file(File(p),
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => _thumbFallback(cs));
