@@ -154,8 +154,6 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                 ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-              title:
-                  Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis),
               background: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -192,66 +190,162 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                       ),
                     ),
                   ),
-                  Positioned(
-                    left: 16,
-                    bottom: 52,
-                    child: AvatarWidget(
-                      key: ValueKey(
-                          'ch_prof_av_${ch.id}_${ch.avatarImagePath ?? ''}'),
-                      initials:
-                          ch.name.isNotEmpty ? ch.name[0].toUpperCase() : '?',
-                      color: ch.avatarColor,
-                      emoji: ch.avatarEmoji,
-                      imagePath: ch.avatarImagePath,
-                      size: 88,
-                    ),
-                  ),
                 ],
               ),
             ),
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    if (ch.verified) ...[
-                      const Icon(Icons.verified, color: Colors.blue, size: 22),
-                      const SizedBox(width: 6),
-                    ],
-                    Text('${ch.subscriberIds.length} подписчиков',
-                        style: TextStyle(color: cs.onSurfaceVariant)),
-                  ]),
-                  if (ch.universalCode.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    SelectableText('Код: ${ch.universalCode}',
-                        style: const TextStyle(
-                            fontFamily: 'monospace', fontSize: 13)),
-                  ],
-                  if (ch.description != null && ch.description!.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text('О канале',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, color: cs.primary)),
-                    const SizedBox(height: 6),
-                    Text(ch.description!,
-                        style: TextStyle(
-                            fontSize: 15, height: 1.35, color: cs.onSurface)),
-                  ],
-                  const SizedBox(height: 24),
-                  if (!isAdmin)
-                    FilledButton.tonalIcon(
-                      onPressed: _toggleSubscribe,
-                      icon: Icon(subscribed
-                          ? Icons.notifications_off_outlined
-                          : Icons.notifications_active_outlined),
-                      label: Text(subscribed ? 'Отписаться' : 'Подписаться'),
+                  // Header: avatar overlaps the banner edge with a surface ring,
+                  // name + stats beside it (no awkward floating overlap).
+                  Transform.translate(
+                    offset: const Offset(0, -34),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: cs.surface, width: 4),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: AvatarWidget(
+                            key: ValueKey(
+                                'ch_prof_av_${ch.id}_${ch.avatarImagePath ?? ''}'),
+                            initials: ch.name.isNotEmpty
+                                ? ch.name[0].toUpperCase()
+                                : '?',
+                            color: ch.avatarColor,
+                            emoji: ch.avatarEmoji,
+                            imagePath: ch.avatarImagePath,
+                            size: 92,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        ch.name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w700,
+                                          height: 1.1,
+                                        ),
+                                      ),
+                                    ),
+                                    if (ch.verified) ...[
+                                      const SizedBox(width: 6),
+                                      const Icon(Icons.verified,
+                                          color: Colors.blue, size: 20),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${ch.subscriberIds.length} подписчиков',
+                                  style: TextStyle(
+                                      color: cs.onSurfaceVariant, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  if (isAdmin)
-                    Text('Вы администратор этого канала',
-                        style: TextStyle(color: cs.onSurfaceVariant)),
+                  ),
+                  // Close part of the translate gap.
+                  Transform.translate(
+                    offset: const Offset(0, -18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (ch.description != null &&
+                            ch.description!.isNotEmpty) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('О канале',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: cs.primary,
+                                        fontSize: 13)),
+                                const SizedBox(height: 6),
+                                Text(ch.description!,
+                                    style: TextStyle(
+                                        fontSize: 15,
+                                        height: 1.4,
+                                        color: cs.onSurface)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                        if (ch.universalCode.isNotEmpty) ...[
+                          Row(
+                            children: [
+                              Icon(Icons.tag_rounded,
+                                  size: 18, color: cs.onSurfaceVariant),
+                              const SizedBox(width: 6),
+                              SelectableText('Код: ${ch.universalCode}',
+                                  style: const TextStyle(
+                                      fontFamily: 'monospace', fontSize: 13)),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        if (!isAdmin)
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _toggleSubscribe,
+                              icon: Icon(subscribed
+                                  ? Icons.notifications_off_outlined
+                                  : Icons.notifications_active_outlined),
+                              label: Text(
+                                  subscribed ? 'Отписаться' : 'Подписаться'),
+                            ),
+                          ),
+                        if (isAdmin)
+                          Row(
+                            children: [
+                              Icon(Icons.shield_outlined,
+                                  size: 18, color: cs.onSurfaceVariant),
+                              const SizedBox(width: 8),
+                              Text('Вы администратор',
+                                  style:
+                                      TextStyle(color: cs.onSurfaceVariant)),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
