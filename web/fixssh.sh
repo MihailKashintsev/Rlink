@@ -46,4 +46,24 @@ case "$cur_shell" in
   *) echo "root shell ok: $cur_shell" ;;
 esac
 
+echo "== sshd listening on :22? =="
+( ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null ) | grep ':22 ' || echo 'NOT LISTENING on 22'
+
+echo "== sshd service state =="
+systemctl is-active ssh 2>/dev/null || true
+systemctl is-active sshd 2>/dev/null || true
+
+echo "== ensure sshd running =="
+systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || service ssh restart 2>/dev/null || true
+sleep 1
+( ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null ) | grep ':22 ' || echo 'STILL NOT LISTENING on 22'
+
+echo "== fail2ban (unban my IP / all) =="
+fail2ban-client status sshd 2>/dev/null || echo 'no fail2ban or jail'
+fail2ban-client unban --all 2>/dev/null && echo 'fail2ban: unbanned all' || true
+
+echo "== firewall (ufw / iptables drops on 22) =="
+ufw status 2>/dev/null | head -8 || true
+iptables -S 2>/dev/null | grep -Ei 'DROP|REJECT|dport 22|--dport ssh' | head -15 || echo '(no obvious iptables drops / iptables n/a)'
+
 echo "== DONE FIXSSH =="
