@@ -719,6 +719,64 @@ class GoogleDriveChannelBackup {
 
   /// Делает файл доступным по ссылке (Anyone with link → viewer) и возвращает прямую ссылку для скачивания.
   /// Вызывается сразу после [uploadOrUpdateEncryptedFile] чтобы подписчики могли скачать снимок без авторизации.
+  /// Upload [bytes] to the Rlink folder, make it shareable (anyone-with-link),
+  /// and return a direct download URL. Used to offload large files instead of
+  /// streaming them through the relay. Returns null on failure.
+  static Future<String?> uploadBytesAndGetPublicLink({
+    required String fileName,
+    required Uint8List bytes,
+    String mimeType = 'application/octet-stream',
+    String? accountPairing,
+  }) async {
+    _lastSignInError = null;
+    try {
+      if (!hasValidManualCreds && !hasRelayAccount && accountPairing == null) {
+        final account = await ensureUserSignedIn(interactive: true);
+        if (account == null) {
+          _lastSignInError = 'Аккаунт Google не привязан';
+          return null;
+        }
+      }
+      final client = await _driveAuthClient(
+          interactive: true, relayPairing: accountPairing);
+      if (client == null) {
+        _lastSignInError = 'Нет доступа к Google Drive';
+        return null;
+      }
+      try {
+        final api = drive.DriveApi(client);
+        final folderId = await _ensureRlinkFolder(api);
+        final media = drive.Media(
+          Stream<List<int>>.value(bytes),
+          bytes.length,
+          contentType: mimeType,
+        );
+        final f = drive.File()
+          ..name = fileName
+          ..parents = folderId != null ? [folderId] : null;
+        final created =
+            await api.files.create(f, uploadMedia: media, $fields: 'id');
+        final id = created.id;
+        if (id == null) return null;
+        await api.permissions.create(
+          drive.Permission()
+            ..type = 'anyone'
+            ..role = 'reader',
+          id,
+        );
+        final got =
+            await api.files.get(id, $fields: 'webContentLink') as drive.File;
+        return got.webContentLink;
+      } finally {
+        client.close();
+      }
+    } catch (e, st) {
+      debugPrint('[RLINK][Drive] uploadBytesAndGetPublicLink failed: $e\n$st');
+      _lastSignInError = '$e';
+      return null;
+    }
+  }
+
   static Future<String?> makePublicAndGetDownloadUrl(String fileId) async {
     try {
       final authClient = await _driveAuthClient(interactive: true);

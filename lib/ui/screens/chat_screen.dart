@@ -395,6 +395,10 @@ class _ChatScreenState extends State<ChatScreen> {
   /// All files larger than this are automatically split into chunks for reliable delivery.
   static const _kMaxBlobBytes = 100 * 1024;
 
+  /// Files at/above this size offer a Google Drive offload instead of streaming
+  /// thousands of chunks through the relay (≈1 GB).
+  static const _kDriveOffloadBytes = 1024 * 1024 * 1024;
+
   /// Relay chunk size for large media — 500 KB raw → ~667 KB after base64.
   /// Safely under relay server's 10 MB limit. Faster transfers for large files.
   static const _kRelayChunkBytes = 500 * 1024;
@@ -3727,6 +3731,80 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  static String _humanSize(int b) {
+    const u = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+    var v = b.toDouble();
+    var i = 0;
+    while (v >= 1024 && i < u.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return '${v.toStringAsFixed(v >= 100 || i == 0 ? 0 : 1)} ${u[i]}';
+  }
+
+  /// Returns true = send via Drive, false = normal send, null = cancel.
+  Future<bool?> _askDriveOffload(int size) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Большой файл'),
+        content: Text(
+          'Файл ${_humanSize(size)}. Отправить через Google Drive (быстро) '
+          'или напрямую через Rlink (медленно, по частям)?\n\n'
+          'Через Drive: файл загрузится на ваш Google Drive, собеседник скачает '
+          'его по ссылке прямо в чате.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Напрямую'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Через Google Drive'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendFileViaDrive(
+      Uint8List bytes, String fileName, String myId) async {
+    // Note: do NOT set _isSending here — _send() guards on it and manages it.
+    _sendActivity(Activity.sendingFile);
+    try {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('Загрузка ${_humanSize(bytes.length)} на Google Drive…')),
+        );
+      }
+      final mime =
+          _mimeTypeForFileName(fileName, fallbackMime: 'application/octet-stream');
+      final url = await GoogleDriveChannelBackup.uploadBytesAndGetPublicLink(
+        fileName: fileName,
+        bytes: bytes,
+        mimeType: mime,
+      );
+      if (url == null) {
+        if (mounted) {
+          _showErrorSnack(GoogleDriveChannelBackup.lastSignInError ??
+              'Не удалось загрузить на Google Drive. Привяжите аккаунт в Настройки → Google Drive.');
+        }
+        return;
+      }
+      // Deliver the link as a normal (linkified) message via the text path.
+      _controller.text =
+          '📎 $fileName (${_humanSize(bytes.length)})\nСкачать с Google Drive: $url';
+      await _send();
+    } catch (e) {
+      if (mounted) _showErrorSnack('Ошибка: $e');
+    } finally {
+      _sendActivity(Activity.stopped);
+    }
+  }
+
   Future<void> _sendWebBytesAsFile({
     required Uint8List bytes,
     required String fileName,
@@ -3739,6 +3817,21 @@ class _ChatScreenState extends State<ChatScreen> {
     if (bytes.isEmpty) {
       _showErrorSnack('Файл пустой или не был прочитан браузером');
       return;
+    }
+    // Large files: offer to offload via Google Drive instead of streaming
+    // every chunk through the relay (much faster for big files).
+    if (!isSticker &&
+        !asImage &&
+        bytes.length >= _kDriveOffloadBytes &&
+        !_isDmBot &&
+        !_savedMessagesLocalOnly) {
+      final choice = await _askDriveOffload(bytes.length);
+      if (choice == null) return; // cancelled
+      if (choice) {
+        await _sendFileViaDrive(bytes, fileName, myId);
+        return;
+      }
+      // else: fall through to normal (slow) chunked relay send
     }
     setState(() => _isSending = true);
     _sendActivity(Activity.sendingFile);
