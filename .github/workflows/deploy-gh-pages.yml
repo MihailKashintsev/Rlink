@@ -42,7 +42,7 @@ jobs:
           # Falls back to the value committed in relay_server/turnserver.conf
           # (already public). Override with a real secret after rotating coturn's
           # password — see relay_server/README_TURN.md.
-          TURN_PASSWORD: ${{ secrets.TURN_PASSWORD || 'change_me_strong_password' }}
+          TURN_PASSWORD: ${{ secrets.TURN_PASSWORD || 'RlinkSecure2024!' }}
         run: |
           short_sha="${GITHUB_SHA::7}"
           flutter build web --release \
