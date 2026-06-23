@@ -757,14 +757,68 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
                   )
                 : null,
           ),
+          Builder(builder: (_) {
+            final accounts = GoogleDriveChannelBackup.relayAccounts;
+            if (accounts.length < 2) return const SizedBox.shrink();
+            final active = GoogleDriveChannelBackup.activeRelayPairing;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Аккаунты'),
+                for (final a in accounts)
+                  Builder(builder: (_) {
+                    final pairing = a['pairing'] ?? '';
+                    final email = (a['email'] ?? '').isNotEmpty
+                        ? a['email']!
+                        : 'Аккаунт';
+                    final isActive = pairing == active;
+                    return ListTile(
+                      leading: Icon(
+                        isActive
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                        color: isActive ? cs.primary : null,
+                      ),
+                      title: Text(email),
+                      subtitle: isActive
+                          ? const Text(
+                              'Активный — для каналов и скачиваний',
+                              style: TextStyle(fontSize: 11))
+                          : null,
+                      onTap: _busy
+                          ? null
+                          : () async {
+                              await GoogleDriveChannelBackup
+                                  .setActiveRelayAccount(pairing);
+                              if (!mounted) return;
+                              setState(() {});
+                              await _load(interactive: false);
+                            },
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                await GoogleDriveChannelBackup
+                                    .removeRelayAccount(pairing);
+                                if (!mounted) return;
+                                setState(() {});
+                                await _load(interactive: false);
+                              },
+                      ),
+                    );
+                  }),
+              ],
+            );
+          }),
           const SizedBox(height: 8),
           const _SectionHeader('Привязка'),
           ListTile(
             leading: Icon(Icons.cloud_done_outlined,
                 color: Theme.of(context).colorScheme.primary),
-            title: const Text('Привязать постоянно (рекомендуется)'),
+            title: const Text('Добавить аккаунт Google (постоянно)'),
             subtitle: const Text(
-              'Через сервер Rlink: работает на любом устройстве и не отваливается через час.',
+              'Через сервер Rlink: не отваливается через час, можно несколько аккаунтов.',
               style: TextStyle(fontSize: 12),
             ),
             onTap: _busy ? null : _linkRelay,
