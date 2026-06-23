@@ -26,6 +26,7 @@ class ChannelProfileScreen extends StatefulWidget {
 
 class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
   Channel? _channel;
+  List<ChannelPost> _mediaPosts = [];
 
   @override
   void initState() {
@@ -42,7 +43,96 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
 
   Future<void> _load() async {
     final ch = await ChannelService.instance.getChannel(widget.channelId);
-    if (mounted) setState(() => _channel = ch);
+    final posts =
+        await ChannelService.instance.getPosts(widget.channelId, limit: 200);
+    final media = posts
+        .where((p) =>
+            (p.imagePath != null &&
+                p.imagePath!.isNotEmpty &&
+                !p.isSticker) ||
+            (p.videoPath != null && p.videoPath!.isNotEmpty))
+        .toList();
+    if (mounted) {
+      setState(() {
+        _channel = ch;
+        _mediaPosts = media;
+      });
+    }
+  }
+
+  Widget _thumbFallback(ColorScheme cs) => Container(
+        color: cs.surfaceContainerHighest,
+        child: Icon(Icons.image_outlined, color: cs.onSurfaceVariant),
+      );
+
+  /// Web-safe square media thumbnail for the grid.
+  Widget _mediaThumb(ColorScheme cs, ChannelPost post) {
+    final isVideo = post.videoPath != null && post.videoPath!.isNotEmpty;
+    final raw = post.imagePath;
+    Widget content;
+    if (isVideo) {
+      content = Container(
+        color: cs.surfaceContainerHighest,
+        child: Icon(Icons.play_circle_outline,
+            color: cs.onSurfaceVariant, size: 30),
+      );
+    } else if (raw != null && raw.startsWith('data:')) {
+      content = Image.network(raw,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _thumbFallback(cs));
+    } else {
+      final p = ImageService.instance.resolveStoredPath(raw);
+      if (!kIsWeb && p != null && File(p).existsSync()) {
+        content = Image.file(File(p),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _thumbFallback(cs));
+      } else {
+        content = _thumbFallback(cs);
+      }
+    }
+    return GestureDetector(
+      onTap: isVideo ? null : () => _openImagePost(post),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: SizedBox.expand(child: content),
+      ),
+    );
+  }
+
+  void _openImagePost(ChannelPost post) {
+    final raw = post.imagePath;
+    if (raw == null) return;
+    Widget img;
+    if (raw.startsWith('data:')) {
+      img = Image.network(raw, fit: BoxFit.contain);
+    } else {
+      final p = ImageService.instance.resolveStoredPath(raw);
+      if (!kIsWeb && p != null && File(p).existsSync()) {
+        img = Image.file(File(p), fit: BoxFit.contain);
+      } else {
+        return;
+      }
+    }
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Positioned.fill(child: InteractiveViewer(child: Center(child: img))),
+            Positioned(
+              top: 40,
+              right: 12,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _toggleSubscribe() async {
@@ -350,6 +440,41 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
               ),
             ),
           ),
+          if (_mediaPosts.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.grid_view_rounded, size: 18, color: cs.primary),
+                    const SizedBox(width: 8),
+                    const Text('Медиа',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 15)),
+                    const SizedBox(width: 8),
+                    Text('${_mediaPosts.length}',
+                        style: TextStyle(
+                            color: cs.onSurfaceVariant, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+              sliver: SliverGrid(
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 4,
+                  mainAxisSpacing: 4,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) => _mediaThumb(cs, _mediaPosts[i]),
+                  childCount: _mediaPosts.length,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
