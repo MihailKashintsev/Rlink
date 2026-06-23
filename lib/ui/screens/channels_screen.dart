@@ -54,7 +54,10 @@ import 'channel_profile_screen.dart';
 import 'channel_profile_edit_dialog.dart';
 import 'chat_screen.dart' show ChatScreen, DmForwardDraft;
 import '../mention_nav.dart';
+import '../widgets/composer_input_bar.dart';
 import '../widgets/forward_target_sheet.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 // ══════════════════════════════════════════════════════════════════
 // Forward / упоминания (канал)
@@ -581,6 +584,11 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   bool _isBackingUp = false;
   String _backupStep = '';
   final _recordingSecondsNotifier = ValueNotifier<double>(0);
+  // Notifiers required by the shared ComposerInputBar. The channel composer uses
+  // simple hold-to-record voice (no lock/pause/trim), so these stay constant.
+  final _recordingWaveformNotifier = ValueNotifier<List<double>>(<double>[]);
+  final _voicePausedNotifier = ValueNotifier<bool>(false);
+  final _holdVideoPausedNotifier = ValueNotifier<bool>(false);
   Timer? _recordingTimer;
   Timer? _historyPollTimer;
 
@@ -641,6 +649,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     _postCtrl.dispose();
     _recordingTimer?.cancel();
     _recordingSecondsNotifier.dispose();
+    _recordingWaveformNotifier.dispose();
+    _voicePausedNotifier.dispose();
+    _holdVideoPausedNotifier.dispose();
     if (NotificationService.instance.currentRoute.value ==
         'channel:${_channel.id}') {
       NotificationService.instance.currentRoute.value = null;
@@ -1638,6 +1649,117 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     });
   }
 
+  /// Publish raw image bytes as a channel post (used for stickers/GIFs picked
+  /// from the shared composer's emoji sheet).
+  Future<void> _publishImageBytesPost(Uint8List rawBytes) async {
+    if (_isSending || rawBytes.isEmpty) return;
+    if (kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Стикеры и GIF в канал пока доступны в приложении'),
+        ));
+      }
+      return;
+    }
+    setState(() {
+      _isSending = true;
+      _sendProgress = 0.0;
+    });
+    try {
+      final tmpDir = await getTemporaryDirectory();
+      final tmpFile = File(
+          '${tmpDir.path}/ch_st_${DateTime.now().millisecondsSinceEpoch}.png');
+      await tmpFile.writeAsBytes(rawBytes);
+      final path = await ImageService.instance.compressAndSave(tmpFile.path);
+      final bytes = await File(path).readAsBytes();
+      final chunks = ImageService.instance.splitToBase64Chunks(bytes);
+      final postId = _uuid.v4();
+      await GossipRouter.instance.sendImgMeta(
+        msgId: postId,
+        totalChunks: chunks.length,
+        fromId: _myId,
+        isAvatar: false,
+        isChannelPost: true,
+      );
+      for (var i = 0; i < chunks.length; i++) {
+        await GossipRouter.instance.sendImgChunk(
+          msgId: postId,
+          index: i,
+          base64Data: chunks[i],
+          fromId: _myId,
+        );
+        if (mounted) setState(() => _sendProgress = (i + 1) / chunks.length);
+      }
+      final staffLabel = _channel.staffLabelForNewPost(_myId);
+      final post = ChannelPost(
+        id: postId,
+        channelId: _channel.id,
+        authorId: _myId,
+        text: _postCtrl.text.trim(),
+        imagePath: path,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        staffLabel: staffLabel,
+      );
+      await ChannelService.instance.savePost(post);
+      await BroadcastOutboxService.instance.enqueueChannelPost(
+        channelId: _channel.id,
+        postId: postId,
+        authorId: _myId,
+        text: post.text,
+        timestamp: post.timestamp,
+        hasImage: true,
+        staffLabel: staffLabel,
+      );
+      if (mounted) _postCtrl.clear();
+      _maybeAutoDriveBackupAfterOwnerPost();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+          _sendProgress = 0.0;
+        });
+      }
+    }
+  }
+
+  Future<void> _publishLocalImagePost(String path) async {
+    if (kIsWeb) return _publishImageBytesPost(Uint8List(0));
+    try {
+      final bytes = await File(path).readAsBytes();
+      await _publishImageBytesPost(bytes);
+    } catch (_) {}
+  }
+
+  Future<void> _publishGifPost(String url) async {
+    try {
+      final resp = await Dio().get<List<int>>(
+        url,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final data = resp.data;
+      if (data == null || data.isEmpty) return;
+      await _publishImageBytesPost(Uint8List.fromList(data));
+    } catch (_) {}
+  }
+
+  /// Discard the in-progress voice recording without sending (swipe-to-cancel).
+  Future<void> _cancelVoiceRecording() async {
+    if (!_isRecording) return;
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    try {
+      await VoiceService.instance.stopRecording();
+    } catch (_) {}
+    _recordingSecondsNotifier.value = 0;
+    if (mounted) setState(() => _isRecording = false);
+  }
+
   Future<void> _stopAndSendVoice() async {
     if (!_isRecording) return;
     _recordingTimer?.cancel();
@@ -2327,12 +2449,20 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
           ),
           // Post input bar for admin + moderators (hidden if channel blocked)
           if (_channel.canPost(_myId) && !_channel.blocked)
-            _ChannelInputBar(
+            ComposerInputBar(
               controller: _postCtrl,
               isSending: _isSending,
-              sendProgress: _sendProgress,
               isRecording: _isRecording,
+              isVoiceRecordingMode: _isRecording,
+              voiceControlsEnabled: false,
+              recordingPaused: false,
+              isHoldVideoStarting: false,
               recordingSecondsNotifier: _recordingSecondsNotifier,
+              recordingWaveformNotifier: _recordingWaveformNotifier,
+              hintText: 'Новый пост...',
+              allowMediaRecord: true,
+              allowGallery: true,
+              locationActive: false,
               onSend: () => unawaited(_createPost()),
               onOpenEmojiInsert: () => unawaited(showChatEmojiInsertSheet(
                 context,
@@ -2349,11 +2479,26 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                     selection: TextSelection.collapsed(offset: newOff),
                   );
                 },
+                onStickerPicked: (path) =>
+                    unawaited(_publishLocalImagePost(path)),
+                onGifPicked: (url) => unawaited(_publishGifPost(url)),
               )),
               onOpenMediaGallery: () => unawaited(_openChannelMediaGallery()),
-              onRecordSquareVideo: () => unawaited(_recordAndSendSquarePost()),
-              onMicDown: () => unawaited(_startVoiceRecording()),
-              onMicUp: () => unawaited(_stopAndSendVoice()),
+              onPickSquareVideo: () => unawaited(_recordAndSendSquarePost()),
+              onPickFile: () => unawaited(_openChannelMediaGallery()),
+              onVoiceHoldStart: () => unawaited(_startVoiceRecording()),
+              onVideoHoldStart: () async {},
+              onHoldReleaseSend: _stopAndSendVoice,
+              onHoldCancelDiscard: _cancelVoiceRecording,
+              onVoicePause: () async {},
+              onVoiceResume: () async {},
+              onVoicePreview: () async {},
+              onVoiceTrimLastPart: () async {},
+              onLocation: () {},
+              holdVideoPausedListenable: _holdVideoPausedNotifier,
+              voicePausedListenable: _voicePausedNotifier,
+              onHoldRecordingLockChanged: (_) {},
+              onHoldVideoLockedPauseToggle: () async {},
             ),
         ],
       ),
@@ -2368,477 +2513,6 @@ class _ImageQuality {
   final int maxSize;
   const _ImageQuality({required this.quality, required this.maxSize});
 }
-
-// ══════════════════════════════════════════════════════════════════
-// Channel Input Bar — как в личном чате: формат, +, галерея, поле, @, микрофон
-// ══════════════════════════════════════════════════════════════════
-
-class _ChannelFmtBtn extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  final bool bold;
-  final bool italic;
-  final bool strikethrough;
-  final bool underline;
-
-  const _ChannelFmtBtn({
-    required this.label,
-    required this.onTap,
-    this.bold = false,
-    this.italic = false,
-    this.strikethrough = false,
-    this.underline = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: Material(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
-                fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-                decoration: underline
-                    ? TextDecoration.underline
-                    : strikethrough
-                        ? TextDecoration.lineThrough
-                        : TextDecoration.none,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChannelInputBar extends StatefulWidget {
-  final TextEditingController controller;
-  final bool isSending;
-  final double sendProgress;
-  final bool isRecording;
-  final ValueNotifier<double> recordingSecondsNotifier;
-  final VoidCallback onSend;
-  final VoidCallback onOpenEmojiInsert;
-  final VoidCallback onOpenMediaGallery;
-  final VoidCallback onRecordSquareVideo;
-  final VoidCallback onMicDown;
-  final VoidCallback onMicUp;
-
-  const _ChannelInputBar({
-    required this.controller,
-    required this.isSending,
-    this.sendProgress = 0.0,
-    required this.isRecording,
-    required this.recordingSecondsNotifier,
-    required this.onSend,
-    required this.onOpenEmojiInsert,
-    required this.onOpenMediaGallery,
-    required this.onRecordSquareVideo,
-    required this.onMicDown,
-    required this.onMicUp,
-  });
-
-  @override
-  State<_ChannelInputBar> createState() => _ChannelInputBarState();
-}
-
-class _ChannelInputBarState extends State<_ChannelInputBar> {
-  bool _hasText = false;
-  bool _showFormatStrip = false;
-  final _focusNode = FocusNode();
-
-  void _onAppSettingsChanged() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    AppSettings.instance.addListener(_onAppSettingsChanged);
-    widget.controller.addListener(_onTextChanged);
-  }
-
-  @override
-  void dispose() {
-    AppSettings.instance.removeListener(_onAppSettingsChanged);
-    widget.controller.removeListener(_onTextChanged);
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _onTextChanged() {
-    final has = widget.controller.text.trim().isNotEmpty;
-    final sel = widget.controller.selection;
-    if (mounted) {
-      setState(() {
-        _hasText = has;
-        if (!sel.isValid || sel.isCollapsed) {
-          _showFormatStrip = false;
-        }
-      });
-    }
-  }
-
-  void _wrapSelection(String prefix, String suffix) {
-    final sel = widget.controller.selection;
-    if (!sel.isValid || sel.isCollapsed) return;
-    final text = widget.controller.text;
-    final selected = text.substring(sel.start, sel.end);
-    final newText =
-        text.replaceRange(sel.start, sel.end, '$prefix$selected$suffix');
-    final newOffset = sel.end + prefix.length + suffix.length;
-    widget.controller.value = widget.controller.value.copyWith(
-      text: newText,
-      selection: TextSelection.collapsed(offset: newOffset),
-    );
-  }
-
-  Future<void> _attachLinkToSelection() async {
-    final sel = widget.controller.selection;
-    if (!sel.isValid || sel.isCollapsed) return;
-    final fullText = widget.controller.text;
-    final selected = fullText.substring(sel.start, sel.end);
-
-    final urlCtrl = TextEditingController();
-    final url = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Ссылка'),
-        content: TextField(
-          controller: urlCtrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'https://...',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, urlCtrl.text.trim()),
-            child: const Text('Готово'),
-          ),
-        ],
-      ),
-    );
-    final u = (url ?? '').trim();
-    if (u.isEmpty) return;
-    final wrapped = '[$selected]($u)';
-    final newText = fullText.replaceRange(sel.start, sel.end, wrapped);
-    final newOffset = sel.start + wrapped.length;
-    widget.controller.value = widget.controller.value.copyWith(
-      text: newText,
-      selection: TextSelection.collapsed(offset: newOffset),
-    );
-  }
-
-  Widget _buildContextMenu(
-      BuildContext context, EditableTextState editableTextState) {
-    final items = <ContextMenuButtonItem>[
-      ...editableTextState.contextMenuButtonItems,
-      ContextMenuButtonItem(
-        label: 'Жирный',
-        onPressed: () {
-          editableTextState.hideToolbar();
-          _wrapSelection('**', '**');
-        },
-      ),
-      ContextMenuButtonItem(
-        label: 'Курсив',
-        onPressed: () {
-          editableTextState.hideToolbar();
-          _wrapSelection('_', '_');
-        },
-      ),
-      ContextMenuButtonItem(
-        label: 'Тонкий',
-        onPressed: () {
-          editableTextState.hideToolbar();
-          _wrapSelection('`', '`');
-        },
-      ),
-      ContextMenuButtonItem(
-        label: 'Подчёркнутый',
-        onPressed: () {
-          editableTextState.hideToolbar();
-          _wrapSelection('__', '__');
-        },
-      ),
-      ContextMenuButtonItem(
-        label: 'Зачёркнутый',
-        onPressed: () {
-          editableTextState.hideToolbar();
-          _wrapSelection('~~', '~~');
-        },
-      ),
-      ContextMenuButtonItem(
-        label: 'Спойлер',
-        onPressed: () {
-          editableTextState.hideToolbar();
-          _wrapSelection('||', '||');
-        },
-      ),
-      ContextMenuButtonItem(
-        label: 'Ссылка…',
-        onPressed: () {
-          editableTextState.hideToolbar();
-          unawaited(_attachLinkToSelection());
-        },
-      ),
-    ];
-
-    return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: editableTextState.contextMenuAnchors,
-      buttonItems: items,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final sel = widget.controller.selection;
-    final hasSelection = sel.isValid && sel.baseOffset != sel.extentOffset;
-
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          border:
-              Border(top: BorderSide(color: cs.outline.withValues(alpha: 0.3))),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Send progress bar
-            if (widget.isSending && widget.sendProgress > 0)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    value: widget.sendProgress,
-                    minHeight: 3,
-                    backgroundColor: cs.outline.withValues(alpha: 0.2),
-                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                  ),
-                ),
-              ),
-            if (hasSelection && _showFormatStrip)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    _ChannelFmtBtn(
-                        label: 'B',
-                        bold: true,
-                        onTap: () => _wrapSelection('**', '**')),
-                    _ChannelFmtBtn(
-                        label: 'I',
-                        italic: true,
-                        onTap: () => _wrapSelection('_', '_')),
-                    _ChannelFmtBtn(
-                        label: 'S',
-                        strikethrough: true,
-                        onTap: () => _wrapSelection('~~', '~~')),
-                    _ChannelFmtBtn(
-                        label: 'U',
-                        underline: true,
-                        onTap: () => _wrapSelection('__', '__')),
-                    _ChannelFmtBtn(
-                        label: '||', onTap: () => _wrapSelection('||', '||')),
-                  ],
-                ),
-              ),
-            Row(children: [
-              if (hasSelection)
-                IconButton(
-                  onPressed: () =>
-                      setState(() => _showFormatStrip = !_showFormatStrip),
-                  icon: Icon(
-                    Icons.text_fields_rounded,
-                    color: _showFormatStrip ? cs.primary : cs.onSurfaceVariant,
-                    size: 22,
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints(minWidth: 36, minHeight: 36),
-                  tooltip: _showFormatStrip
-                      ? 'Скрыть формат'
-                      : 'Формат выделенного текста',
-                ),
-              IconButton(
-                onPressed: widget.isSending || widget.isRecording
-                    ? null
-                    : widget.onOpenEmojiInsert,
-                icon: Icon(
-                  Icons.emoji_emotions_outlined,
-                  color: widget.isSending || widget.isRecording
-                      ? cs.onSurface.withValues(alpha: 0.3)
-                      : cs.onSurfaceVariant,
-                  size: 24,
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                tooltip: 'Эмодзи и стикеры',
-              ),
-              IconButton(
-                onPressed: widget.isSending || widget.isRecording
-                    ? null
-                    : widget.onOpenMediaGallery,
-                icon: Icon(
-                  Icons.photo_library_outlined,
-                  color: widget.isSending || widget.isRecording
-                      ? cs.onSurface.withValues(alpha: 0.3)
-                      : cs.onSurfaceVariant,
-                  size: 24,
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                tooltip: 'Галерея медиа',
-              ),
-              const SizedBox(width: 2),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: ValueListenableBuilder<double>(
-                    valueListenable: widget.recordingSecondsNotifier,
-                    builder: (_, secs, __) {
-                      final s = secs.floor();
-                      final t = ((secs % 1) * 10).floor();
-                      final sendOnEnter = AppSettings.instance.sendOnEnter;
-                      return TextField(
-                        controller: widget.controller,
-                        focusNode: _focusNode,
-                        onTapOutside: (_) => _focusNode.unfocus(),
-                        enabled: !widget.isRecording,
-                        contextMenuBuilder: _buildContextMenu,
-                        maxLines: sendOnEnter ? 1 : 4,
-                        minLines: 1,
-                        textInputAction: sendOnEnter
-                            ? TextInputAction.send
-                            : TextInputAction.newline,
-                        onSubmitted: sendOnEnter
-                            ? (_) {
-                                if (!widget.isSending &&
-                                    !widget.isRecording &&
-                                    _hasText) {
-                                  widget.onSend();
-                                }
-                              }
-                            : null,
-                        style: TextStyle(fontSize: 15, color: cs.onSurface),
-                        decoration: InputDecoration(
-                          hintText: widget.isRecording
-                              ? 'Запись... ${s}s.$t'
-                              : 'Новый пост...',
-                          hintStyle: TextStyle(
-                              color:
-                                  cs.onSurfaceVariant.withValues(alpha: 0.6)),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: widget.isRecording ? widget.onMicUp : widget.onMicDown,
-                onLongPressStart: (_) {
-                  if (!widget.isRecording) widget.onMicDown();
-                },
-                onLongPressEnd: (_) {
-                  if (widget.isRecording) widget.onMicUp();
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: widget.isRecording ? Colors.redAccent : cs.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    widget.isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-                    color: cs.onPrimary,
-                    size: 20,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (_hasText || widget.isSending)
-                GestureDetector(
-                  onTap: widget.isSending || widget.isRecording
-                      ? null
-                      : widget.onSend,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: (widget.isSending || widget.isRecording)
-                          ? cs.onSurface.withValues(alpha: 0.3)
-                          : cs.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: widget.isSending
-                        ? Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: CircularProgressIndicator(
-                                value: widget.sendProgress > 0
-                                    ? widget.sendProgress
-                                    : null,
-                                strokeWidth: 2,
-                                color: cs.onPrimary))
-                        : Icon(Icons.send_rounded,
-                            color: cs.onPrimary, size: 20),
-                  ),
-                )
-              else
-                GestureDetector(
-                  onTap: widget.isSending ? null : widget.onRecordSquareVideo,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: widget.isSending
-                          ? cs.onSurface.withValues(alpha: 0.3)
-                          : cs.primary,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child:
-                        Icon(Icons.crop_square, color: cs.onPrimary, size: 22),
-                  ),
-                ),
-            ]),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════
-// Post card — shows a single post with comment icon
-// ══════════════════════════════════════════════════════════════════
 
 class _PostCard extends StatefulWidget {
   final ChannelPost post;
@@ -3235,6 +2909,9 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
   bool _isRecordingComment = false;
   Timer? _commentRecordingTimer;
   final _commentRecordingSeconds = ValueNotifier<double>(0);
+  final _commentWaveformNotifier = ValueNotifier<List<double>>(<double>[]);
+  final _commentVoicePaused = ValueNotifier<bool>(false);
+  final _commentHoldVideoPaused = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -3253,6 +2930,9 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     ChannelService.instance.version.removeListener(_loadComments);
     _commentRecordingTimer?.cancel();
     _commentRecordingSeconds.dispose();
+    _commentWaveformNotifier.dispose();
+    _commentVoicePaused.dispose();
+    _commentHoldVideoPaused.dispose();
     _commentCtrl.dispose();
     _commentFocus.dispose();
     _scrollController.dispose();
@@ -3668,6 +3348,17 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     });
   }
 
+  Future<void> _cancelCommentVoice() async {
+    if (!_isRecordingComment) return;
+    _commentRecordingTimer?.cancel();
+    _commentRecordingTimer = null;
+    try {
+      await VoiceService.instance.stopRecording();
+    } catch (_) {}
+    _commentRecordingSeconds.value = 0;
+    if (mounted) setState(() => _isRecordingComment = false);
+  }
+
   Future<void> _commentMicUp() async {
     if (!_isRecordingComment) return;
     _commentRecordingTimer?.cancel();
@@ -4007,217 +3698,53 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
           ),
 
           // ── Comment input ──
-          SafeArea(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: cs.surface,
-                border: Border(
-                    top: BorderSide(color: cs.outline.withValues(alpha: 0.3))),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_isSendingComment)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: _commentSendProgress > 0
-                              ? _commentSendProgress
-                              : null,
-                          minHeight: 3,
-                          backgroundColor: cs.outline.withValues(alpha: 0.2),
-                          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                        ),
-                      ),
-                    ),
-                  Row(children: [
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (_isSendingComment || _isRecordingComment) return;
-                        switch (value) {
-                          case 'photo':
-                            unawaited(_sendCommentImage());
-                            break;
-                          case 'square_video':
-                            unawaited(_sendCommentSquareVideo());
-                            break;
-                          case 'video':
-                            unawaited(_sendCommentVideo());
-                            break;
-                          case 'file':
-                            unawaited(_sendCommentFile());
-                            break;
-                        }
-                      },
-                      icon: Icon(Icons.add_rounded,
-                          color: cs.onSurfaceVariant, size: 26),
-                      padding: EdgeInsets.zero,
-                      constraints:
-                          const BoxConstraints(minWidth: 36, minHeight: 36),
-                      tooltip: 'Прикрепить',
-                      position: PopupMenuPosition.over,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: 'photo',
-                          child: Row(children: [
-                            Icon(Icons.photo_library_outlined, size: 20),
-                            SizedBox(width: 12),
-                            Text('Фото'),
-                          ]),
-                        ),
-                        const PopupMenuItem(
-                          value: 'square_video',
-                          child: Row(children: [
-                            Icon(Icons.crop_square, size: 20),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Записать квадратик',
-                                maxLines: 2,
-                              ),
-                            ),
-                          ]),
-                        ),
-                        const PopupMenuItem(
-                          value: 'video',
-                          child: Row(children: [
-                            Icon(Icons.video_library_outlined, size: 20),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Видео из галереи',
-                                maxLines: 2,
-                              ),
-                            ),
-                          ]),
-                        ),
-                        const PopupMenuItem(
-                          value: 'file',
-                          child: Row(children: [
-                            Icon(Icons.attach_file_outlined, size: 20),
-                            SizedBox(width: 12),
-                            Text('Файл'),
-                          ]),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: ValueListenableBuilder<double>(
-                          valueListenable: _commentRecordingSeconds,
-                          builder: (_, secs, __) {
-                            final s = secs.floor();
-                            final t = ((secs % 1) * 10).floor();
-                            return TextField(
-                              controller: _commentCtrl,
-                              focusNode: _commentFocus,
-                              onTapOutside: (_) => _commentFocus.unfocus(),
-                              enabled: !_isRecordingComment,
-                              maxLines: 3,
-                              minLines: 1,
-                              textInputAction: TextInputAction.newline,
-                              style:
-                                  TextStyle(fontSize: 15, color: cs.onSurface),
-                              decoration: InputDecoration(
-                                hintText: _isRecordingComment
-                                    ? 'Запись... ${s}s.$t'
-                                    : 'Комментарий...',
-                                hintStyle: TextStyle(
-                                    color: cs.onSurfaceVariant
-                                        .withValues(alpha: 0.6)),
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 10),
-                              ),
-                              onSubmitted: (_) => _addComment(),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      onPressed: _isSendingComment || _isRecordingComment
-                          ? null
-                          : _openMentionPickerForComment,
-                      icon: Icon(Icons.alternate_email_rounded,
-                          color: cs.onSurfaceVariant, size: 22),
-                      padding: EdgeInsets.zero,
-                      constraints:
-                          const BoxConstraints(minWidth: 36, minHeight: 36),
-                      tooltip: 'Отметить человека',
-                    ),
-                    const SizedBox(width: 4),
-                    GestureDetector(
-                      onTap: _isRecordingComment
-                          ? () => unawaited(_commentMicUp())
-                          : () => unawaited(_commentMicDown()),
-                      onLongPressStart: (_) {
-                        if (!_isRecordingComment) {
-                          unawaited(_commentMicDown());
-                        }
-                      },
-                      onLongPressEnd: (_) {
-                        if (_isRecordingComment) {
-                          unawaited(_commentMicUp());
-                        }
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: _isRecordingComment
-                              ? Colors.redAccent
-                              : cs.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _isRecordingComment
-                              ? Icons.stop_rounded
-                              : Icons.mic_rounded,
-                          color: cs.onPrimary,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: _isSendingComment || _isRecordingComment
-                          ? null
-                          : _addComment,
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: _isSendingComment || _isRecordingComment
-                              ? cs.onSurface.withValues(alpha: 0.3)
-                              : cs.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: _isSendingComment
-                            ? Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: cs.onPrimary))
-                            : Icon(Icons.send_rounded,
-                                color: cs.onPrimary, size: 20),
-                      ),
-                    ),
-                  ]),
-                ],
-              ),
-            ),
+          ComposerInputBar(
+            controller: _commentCtrl,
+            isSending: _isSendingComment,
+            isRecording: _isRecordingComment,
+            isVoiceRecordingMode: _isRecordingComment,
+            voiceControlsEnabled: false,
+            recordingPaused: false,
+            isHoldVideoStarting: false,
+            recordingSecondsNotifier: _commentRecordingSeconds,
+            recordingWaveformNotifier: _commentWaveformNotifier,
+            hintText: 'Комментарий...',
+            allowMediaRecord: true,
+            allowGallery: true,
+            locationActive: false,
+            onSend: () => unawaited(_addComment()),
+            onOpenEmojiInsert: () => unawaited(showChatEmojiInsertSheet(
+              context,
+              onInsert: (insert) {
+                final value = _commentCtrl.value;
+                final sel = value.selection;
+                final text = value.text;
+                final off = sel.isValid ? sel.start : text.length;
+                final end = sel.isValid ? sel.end : text.length;
+                final next = text.replaceRange(off, end, insert);
+                final newOff = off + insert.length;
+                _commentCtrl.value = TextEditingValue(
+                  text: next,
+                  selection: TextSelection.collapsed(offset: newOff),
+                );
+              },
+            )),
+            onOpenMediaGallery: () => unawaited(_sendCommentImage()),
+            onPickSquareVideo: () => unawaited(_sendCommentSquareVideo()),
+            onPickFile: () => unawaited(_sendCommentFile()),
+            onVoiceHoldStart: () => unawaited(_commentMicDown()),
+            onVideoHoldStart: () async {},
+            onHoldReleaseSend: _commentMicUp,
+            onHoldCancelDiscard: _cancelCommentVoice,
+            onVoicePause: () async {},
+            onVoiceResume: () async {},
+            onVoicePreview: () async {},
+            onVoiceTrimLastPart: () async {},
+            onLocation: () {},
+            holdVideoPausedListenable: _commentHoldVideoPaused,
+            voicePausedListenable: _commentVoicePaused,
+            onHoldRecordingLockChanged: (_) {},
+            onHoldVideoLockedPauseToggle: () async {},
           ),
         ],
       ),
