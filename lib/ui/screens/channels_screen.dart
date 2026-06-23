@@ -177,6 +177,20 @@ void insertChannelMentionToken(
   );
 }
 
+/// Contacts mapped to mention candidates for the shared composer's @-picker.
+List<MentionCandidate> _contactMentionCandidates() =>
+    ChatStorageService.instance.contactsNotifier.value
+        .map((c) => MentionCandidate(
+              id: c.publicKeyHex,
+              title: c.nickname,
+              username: c.username,
+              initials: c.initials,
+              avatarColor: c.avatarColor,
+              avatarEmoji: c.avatarEmoji,
+              avatarImagePath: c.avatarImagePath,
+            ))
+        .toList();
+
 Future<void> _showContactMentionPicker(
   BuildContext context,
   void Function(String publicKeyHex) onPick,
@@ -2499,6 +2513,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               voicePausedListenable: _voicePausedNotifier,
               onHoldRecordingLockChanged: (_) {},
               onHoldVideoLockedPauseToggle: () async {},
+              mentionCandidates: _contactMentionCandidates,
             ),
         ],
       ),
@@ -3751,6 +3766,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
             voicePausedListenable: _commentVoicePaused,
             onHoldRecordingLockChanged: (_) {},
             onHoldVideoLockedPauseToggle: () async {},
+              mentionCandidates: _contactMentionCandidates,
           ),
         ],
       ),

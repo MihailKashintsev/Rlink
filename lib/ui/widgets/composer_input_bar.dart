@@ -6,8 +6,30 @@ import 'package:flutter/material.dart';
 import '../../services/app_settings.dart';
 import '../../services/media_upload_queue.dart';
 import '../../services/voice_service.dart';
+import 'avatar_widget.dart';
 import 'status_emoji_view.dart';
 import 'telegram_media_record_button.dart';
+
+/// A person suggested in the @-mention picker. [id] is the public-key hex that
+/// gets inserted into the text as the `&hex` mention token.
+class MentionCandidate {
+  final String id;
+  final String title;
+  final String username;
+  final String initials;
+  final int avatarColor;
+  final String avatarEmoji;
+  final String? avatarImagePath;
+  const MentionCandidate({
+    required this.id,
+    required this.title,
+    required this.username,
+    required this.initials,
+    required this.avatarColor,
+    required this.avatarEmoji,
+    this.avatarImagePath,
+  });
+}
 
 /// Shared chat-style composer (input bar above the keyboard): hold-to-record
 /// voice/video, emoji/sticker, media gallery, configurable button order, format
@@ -53,6 +75,9 @@ class ComposerInputBar extends StatefulWidget {
   final void Function(bool locked) onHoldRecordingLockChanged;
   final Future<void> Function() onHoldVideoLockedPauseToggle;
 
+  /// When provided, typing `@` opens a contact picker above the input.
+  final List<MentionCandidate> Function()? mentionCandidates;
+
   const ComposerInputBar({
     required this.controller,
     required this.isSending,
@@ -90,6 +115,7 @@ class ComposerInputBar extends StatefulWidget {
     required this.voicePausedListenable,
     required this.onHoldRecordingLockChanged,
     required this.onHoldVideoLockedPauseToggle,
+    this.mentionCandidates,
   });
 
   @override
@@ -102,6 +128,104 @@ class ComposerInputBarState extends State<ComposerInputBar> {
 
   /// Панель B/I/S… не перекрывает поле — открывается кнопкой при выделении.
   bool _showFormatStrip = false;
+
+  // @-mention picker state. Active when the cursor sits inside a `@token`.
+  String? _mentionQuery;
+  int _mentionStart = 0;
+
+  void _updateMention() {
+    if (widget.mentionCandidates == null) {
+      _mentionQuery = null;
+      return;
+    }
+    final sel = widget.controller.selection;
+    final text = widget.controller.text;
+    if (!sel.isValid || !sel.isCollapsed) {
+      _mentionQuery = null;
+      return;
+    }
+    final cursor = sel.baseOffset.clamp(0, text.length);
+    int at = -1;
+    for (int i = cursor - 1; i >= 0; i--) {
+      final ch = text[i];
+      if (ch == '@') {
+        if (i == 0 || RegExp(r'\s').hasMatch(text[i - 1])) at = i;
+        break;
+      }
+      if (RegExp(r'[\s&]').hasMatch(ch)) break;
+    }
+    if (at < 0) {
+      _mentionQuery = null;
+      return;
+    }
+    _mentionQuery = text.substring(at + 1, cursor);
+    _mentionStart = at;
+  }
+
+  List<MentionCandidate> get _filteredMentions {
+    final all = widget.mentionCandidates?.call() ?? const <MentionCandidate>[];
+    final q = (_mentionQuery ?? '').toLowerCase();
+    final list = q.isEmpty
+        ? all
+        : all
+            .where((c) =>
+                c.title.toLowerCase().contains(q) ||
+                c.username.toLowerCase().contains(q))
+            .toList();
+    return list.take(30).toList();
+  }
+
+  void _applyMention(MentionCandidate c) {
+    final text = widget.controller.text;
+    final cursor =
+        widget.controller.selection.baseOffset.clamp(0, text.length);
+    final start = _mentionStart.clamp(0, text.length);
+    final insert = '&${c.id} ';
+    final nt = text.replaceRange(start, cursor, insert);
+    widget.controller.value = TextEditingValue(
+      text: nt,
+      selection: TextSelection.collapsed(
+          offset: (start + insert.length).clamp(0, nt.length)),
+    );
+    setState(() => _mentionQuery = null);
+  }
+
+  Widget _buildMentionList(ColorScheme cs) {
+    final items = _filteredMentions;
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 220),
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: ListView.builder(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: items.length,
+        itemBuilder: (_, i) {
+          final c = items[i];
+          return ListTile(
+            dense: true,
+            leading: AvatarWidget(
+              initials: c.initials,
+              color: c.avatarColor,
+              emoji: c.avatarEmoji,
+              imagePath: c.avatarImagePath,
+              size: 36,
+            ),
+            title:
+                Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: c.username.isNotEmpty
+                ? Text('@${c.username}',
+                    maxLines: 1, overflow: TextOverflow.ellipsis)
+                : null,
+            onTap: () => _applyMention(c),
+          );
+        },
+      ),
+    );
+  }
 
   void _onAppSettingsChanged() {
     if (mounted) setState(() {});
@@ -212,6 +336,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
           if (!sel.isValid || sel.isCollapsed) {
             _showFormatStrip = false;
           }
+          _updateMention();
         });
       }
     };
@@ -284,6 +409,8 @@ class ComposerInputBarState extends State<ComposerInputBar> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_mentionQuery != null && _filteredMentions.isNotEmpty)
+              _buildMentionList(cs),
             if (hasSelection && _showFormatStrip)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),

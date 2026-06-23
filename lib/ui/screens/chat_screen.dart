@@ -230,6 +230,20 @@ class DmForwardDraft {
   });
 }
 
+/// Contacts mapped to mention candidates for the composer's @-picker.
+List<MentionCandidate> _chatMentionCandidates() =>
+    ChatStorageService.instance.contactsNotifier.value
+        .map((c) => MentionCandidate(
+              id: c.publicKeyHex,
+              title: c.nickname,
+              username: c.username,
+              initials: c.initials,
+              avatarColor: c.avatarColor,
+              avatarEmoji: c.avatarEmoji,
+              avatarImagePath: c.avatarImagePath,
+            ))
+        .toList();
+
 class ChatScreen extends StatefulWidget {
   final String peerId; // Ed25519 public key получателя
   final String peerNickname;
@@ -7330,6 +7344,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     voicePausedListenable: _voicePausedNotifier,
                     onHoldRecordingLockChanged: _onHoldRecordingLockChanged,
                     onHoldVideoLockedPauseToggle: _toggleDmHoldVideoPause,
+                    mentionCandidates: _chatMentionCandidates,
                   ),
                 ],
               ]),
