@@ -4149,9 +4149,12 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
     final gradientOn = AppSettings.instance.animatedGradient;
     return ThemeData(
       brightness: brightness,
+      // Plain default background (black/white per theme); the palette only
+      // tints accents. When the animated gradient is on, scaffolds go
+      // transparent so it shows through.
       scaffoldBackgroundColor: gradientOn
           ? Colors.transparent
-          : (isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF5F5F5)),
+          : (isDark ? Colors.black : Colors.white),
       colorScheme: cs,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {

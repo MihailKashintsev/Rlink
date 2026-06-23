@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../models/channel.dart';
@@ -10,7 +12,32 @@ import '../../services/channel_backup_service.dart';
 import '../../services/channel_service.dart';
 import '../../services/gossip_router.dart';
 import '../../services/image_service.dart';
+import '../../utils/web_file_store.dart';
+import '../../utils/web_image_compress.dart';
+import '../widgets/avatar_widget.dart';
 import '../widgets/desktop_image_picker.dart';
+
+/// Pick + compress a channel avatar/banner. On web returns a `data:` URL
+/// (no file path); on native returns a stored file path.
+Future<String?> _pickChannelImageFile({required bool isBanner}) async {
+  if (kIsWeb) {
+    final r = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    final bytes = r?.files.single.bytes;
+    if (bytes == null) return null;
+    return webCompressedImageDataUrl(bytes, isBanner: isBanner);
+  }
+  final raw = await pickImagePathDesktopAware();
+  if (raw == null) return null;
+  if (isBanner) {
+    return ImageService.instance
+        .compressAndSave(raw, maxSize: 1200, quality: 82);
+  }
+  return ImageService.instance.compressAndSave(raw, isAvatar: true);
+}
 
 const _accentColors = [
   0xFF42A5F5,
@@ -56,9 +83,8 @@ Future<void> syncChannelVisualsAfterEdit({
 }) async {
   if (updated.avatarImagePath != prevAvatarPath &&
       updated.avatarImagePath != null) {
-    final rp = ImageService.instance.resolveStoredPath(updated.avatarImagePath);
-    if (rp != null && File(rp).existsSync()) {
-      final bytes = await File(rp).readAsBytes();
+    final bytes = await _readVisualBytes(updated.avatarImagePath);
+    if (bytes != null && bytes.isNotEmpty) {
       await _broadcastVisualAssetBytes(
         msgId: ChannelService.channelAvatarBroadcastMsgId(updated.id),
         rawFileBytes: bytes,
@@ -68,9 +94,8 @@ Future<void> syncChannelVisualsAfterEdit({
   }
   if (updated.bannerImagePath != prevBannerPath &&
       updated.bannerImagePath != null) {
-    final rp = ImageService.instance.resolveStoredPath(updated.bannerImagePath);
-    if (rp != null && File(rp).existsSync()) {
-      final bytes = await File(rp).readAsBytes();
+    final bytes = await _readVisualBytes(updated.bannerImagePath);
+    if (bytes != null && bytes.isNotEmpty) {
       await _broadcastVisualAssetBytes(
         msgId: ChannelService.channelBannerBroadcastMsgId(updated.id),
         rawFileBytes: bytes,
@@ -78,6 +103,22 @@ Future<void> syncChannelVisualsAfterEdit({
       );
     }
   }
+}
+
+/// Read avatar/banner bytes web-safely (data: URL, OPFS, or native file).
+Future<Uint8List?> _readVisualBytes(String? path) async {
+  if (path == null || path.isEmpty) return null;
+  if (path.startsWith('data:')) return bytesFromDataUrl(path);
+  final rp = ImageService.instance.resolveStoredPath(path) ?? path;
+  if (kIsWeb) {
+    if (isWebStoredFile(rp)) return readWebStoredFile(rp);
+    return null;
+  }
+  try {
+    final f = File(rp);
+    if (f.existsSync()) return f.readAsBytes();
+  } catch (_) {}
+  return null;
 }
 
 /// [showPolicyToggles]: полные настройки (комментарии, публичность) — только владелец.
@@ -116,43 +157,17 @@ Future<void> showChannelProfileEditDialog(
                   Center(
                     child: GestureDetector(
                       onTap: () async {
-                        final raw = await pickImagePathDesktopAware();
-                        if (raw == null) return;
                         final saved =
-                            await ImageService.instance.compressAndSave(
-                          raw,
-                          isAvatar: true,
-                        );
-                        if (!ctx.mounted) return;
+                            await _pickChannelImageFile(isBanner: false);
+                        if (saved == null || !ctx.mounted) return;
                         setDialogState(() => pickedImagePath = saved);
                       },
-                      child: CircleAvatar(
-                        radius: 36,
-                        backgroundColor: Color(pickedColor),
-                        backgroundImage: () {
-                          if (pickedImagePath == null) return null;
-                          final rp = ImageService.instance
-                              .resolveStoredPath(pickedImagePath);
-                          if (rp != null && File(rp).existsSync()) {
-                            return FileImage(File(rp));
-                          }
-                          return null;
-                        }(),
-                        child: () {
-                          if (pickedImagePath == null) {
-                            return Text(
-                                emojiCtrl.text.isEmpty ? '📢' : emojiCtrl.text,
-                                style: const TextStyle(fontSize: 28));
-                          }
-                          final rp = ImageService.instance
-                              .resolveStoredPath(pickedImagePath);
-                          if (rp != null && File(rp).existsSync()) {
-                            return null;
-                          }
-                          return Text(
-                              emojiCtrl.text.isEmpty ? '📢' : emojiCtrl.text,
-                              style: const TextStyle(fontSize: 28));
-                        }(),
+                      child: AvatarWidget(
+                        initials: '',
+                        color: pickedColor,
+                        emoji: emojiCtrl.text.isEmpty ? '📢' : emojiCtrl.text,
+                        imagePath: pickedImagePath,
+                        size: 72,
                       ),
                     ),
                   ),
@@ -165,16 +180,9 @@ Future<void> showChannelProfileEditDialog(
                     borderRadius: BorderRadius.circular(10),
                     child: GestureDetector(
                       onTap: () async {
-                        final raw = await pickImagePathDesktopAware();
-                        if (raw == null) return;
                         final saved =
-                            await ImageService.instance.compressAndSave(
-                          raw,
-                          isAvatar: false,
-                          maxSize: 1200,
-                          quality: 82,
-                        );
-                        if (!ctx.mounted) return;
+                            await _pickChannelImageFile(isBanner: true);
+                        if (saved == null || !ctx.mounted) return;
                         setDialogState(() => pickedBannerPath = saved);
                       },
                       child: SizedBox(
@@ -191,23 +199,32 @@ Future<void> showChannelProfileEditDialog(
                                   ),
                                 )
                               : Builder(builder: (_) {
+                                  final bw = math
+                                      .min(MediaQuery.sizeOf(ctx).width - 48,
+                                          520.0)
+                                      .toDouble();
+                                  final raw = pickedBannerPath!;
+                                  Widget broken() => Center(
+                                        child: Icon(Icons.broken_image_outlined,
+                                            color: cs.onSurfaceVariant),
+                                      );
+                                  if (raw.startsWith('data:')) {
+                                    return Image.network(raw,
+                                        fit: BoxFit.cover,
+                                        width: bw,
+                                        height: 100,
+                                        errorBuilder: (_, __, ___) => broken());
+                                  }
                                   final bp = ImageService.instance
-                                      .resolveStoredPath(pickedBannerPath);
-                                  if (bp != null && File(bp).existsSync()) {
-                                    return Image.file(
-                                      File(bp),
-                                      fit: BoxFit.cover,
-                                      width: math.min(
-                                          MediaQuery.sizeOf(ctx).width - 48,
-                                          520),
-                                      height: 100,
-                                      errorBuilder: (_, __, ___) => Center(
-                                        child: Icon(
-                                          Icons.broken_image_outlined,
-                                          color: cs.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    );
+                                      .resolveStoredPath(raw);
+                                  if (!kIsWeb &&
+                                      bp != null &&
+                                      File(bp).existsSync()) {
+                                    return Image.file(File(bp),
+                                        fit: BoxFit.cover,
+                                        width: bw,
+                                        height: 100,
+                                        errorBuilder: (_, __, ___) => broken());
                                   }
                                   return Center(
                                     child: Icon(

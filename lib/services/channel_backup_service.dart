@@ -18,6 +18,24 @@ import 'google_drive_channel_backup.dart';
 import 'gossip_router.dart';
 import 'image_service.dart';
 import 'relay_service.dart';
+import '../utils/web_file_store.dart';
+import '../utils/web_image_compress.dart';
+
+/// Read avatar/banner bytes web-safely (data: URL, OPFS, or native file).
+Future<Uint8List?> _readChannelVisualBytes(String? path) async {
+  if (path == null || path.isEmpty) return null;
+  if (path.startsWith('data:')) return bytesFromDataUrl(path);
+  final rp = ImageService.instance.resolveStoredPath(path) ?? path;
+  if (kIsWeb) {
+    if (isWebStoredFile(rp)) return readWebStoredFile(rp);
+    return null;
+  }
+  try {
+    final f = File(rp);
+    if (f.existsSync()) return f.readAsBytes();
+  } catch (_) {}
+  return null;
+}
 
 /// Резерв истории канала: отдельный симметричный ключ на канал, шифрование снимка,
 /// тихая доставка чанков подписчикам и опциональная копия на Google Drive у админа.
@@ -233,10 +251,9 @@ class ChannelBackupService {
 
       // Upload channel avatar if exists.
       if (channel.avatarImagePath != null) {
-        final rp =
-            ImageService.instance.resolveStoredPath(channel.avatarImagePath);
-        if (rp != null && File(rp).existsSync()) {
-          final avatarBytes = await File(rp).readAsBytes();
+        final avatarBytes =
+            await _readChannelVisualBytes(channel.avatarImagePath);
+        if (avatarBytes != null && avatarBytes.isNotEmpty) {
           avatarFileId =
               await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
             fileName: 'Rlink_ch_${compact}_avatar.jpg',
@@ -254,10 +271,9 @@ class ChannelBackupService {
 
       // Upload channel banner if exists.
       if (channel.bannerImagePath != null) {
-        final rp =
-            ImageService.instance.resolveStoredPath(channel.bannerImagePath);
-        if (rp != null && File(rp).existsSync()) {
-          final bannerBytes = await File(rp).readAsBytes();
+        final bannerBytes =
+            await _readChannelVisualBytes(channel.bannerImagePath);
+        if (bannerBytes != null && bannerBytes.isNotEmpty) {
           bannerFileId =
               await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
             fileName: 'Rlink_ch_${compact}_banner.jpg',
