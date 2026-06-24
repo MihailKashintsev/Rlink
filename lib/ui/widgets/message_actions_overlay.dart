@@ -95,10 +95,16 @@ class _MessageActionsLayer extends StatelessWidget {
                 onTap: () {
                   if (anim.value >= 0.95) dismiss();
                 },
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 9 * t, sigmaY: 9 * t),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.22 * t),
+                // When there's no lifted snapshot (web), cut a hole at the
+                // bubble so the real message stays sharp above the blur.
+                child: ClipPath(
+                  clipper: snapshot == null ? _HoleClipper(rect) : null,
+                  child: BackdropFilter(
+                    filter:
+                        ui.ImageFilter.blur(sigmaX: 9 * t, sigmaY: 9 * t),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.22 * t),
+                    ),
                   ),
                 ),
               ),
@@ -289,4 +295,25 @@ class _ActionMenu extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Clips a full-screen overlay so it does NOT cover [hole] (the selected
+/// message), keeping that area sharp/visible above the blur.
+class _HoleClipper extends CustomClipper<Path> {
+  final Rect hole;
+  const _HoleClipper(this.hole);
+
+  @override
+  Path getClip(Size size) {
+    return Path.combine(
+      PathOperation.difference,
+      Path()..addRect(Offset.zero & size),
+      Path()
+        ..addRRect(RRect.fromRectAndRadius(hole, const Radius.circular(14))),
+    );
+  }
+
+  @override
+  bool shouldReclip(covariant _HoleClipper oldClipper) =>
+      oldClipper.hole != hole;
 }

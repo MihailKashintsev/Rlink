@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart' as epf;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -10,6 +11,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../models/sticker_pack.dart';
+import '../../utils/web_file_store.dart';
 import '../../models/emoji_pack.dart';
 import '../../services/app_settings.dart';
 import '../../services/emoji_pack_service.dart';
@@ -71,6 +73,13 @@ class AvatarWidget extends StatelessWidget {
         : null;
     final hasImage = file != null && file.existsSync();
     final hasNetworkImage = networkPath.isNotEmpty;
+    // OPFS-stored images on web (e.g. a channel avatar received over the
+    // network) — read bytes and render via Image.memory.
+    final String? webStoredPath = kIsWeb && networkPath.isEmpty
+        ? ((resolvedPath != null && isWebStoredFile(resolvedPath))
+            ? resolvedPath
+            : (raw != null && isWebStoredFile(raw) ? raw : null))
+        : null;
 
     // If story ring is shown, shrink the avatar by 6px so the ring fits within size
     final ringWidth = hasStory ? 3.0 : 0.0;
@@ -106,9 +115,29 @@ class AvatarWidget extends StatelessWidget {
                       child: _buildEmojiOrInitials(innerSize),
                     ),
                   )
-                : Center(
-                    child: _buildEmojiOrInitials(innerSize),
-                  ),
+                : webStoredPath != null
+                    ? FutureBuilder<Uint8List?>(
+                        future: readWebStoredFile(webStoredPath),
+                        builder: (_, snap) {
+                          final b = snap.data;
+                          if (b == null || b.isEmpty) {
+                            return Center(
+                                child: _buildEmojiOrInitials(innerSize));
+                          }
+                          return Image.memory(
+                            b,
+                            width: innerSize,
+                            height: innerSize,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: _buildEmojiOrInitials(innerSize),
+                            ),
+                          );
+                        },
+                      )
+                    : Center(
+                        child: _buildEmojiOrInitials(innerSize),
+                      ),
       ),
     );
 
