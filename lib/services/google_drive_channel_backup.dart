@@ -847,6 +847,31 @@ class GoogleDriveChannelBackup {
     }
   }
 
+  /// Pulls the Drive file id out of common link shapes (`uc?id=…`,
+  /// `?…&id=…`, `/file/d/ID/…`, `/d/ID`) or a bare id.
+  static String? extractDriveFileId(String input) {
+    final s = input.trim();
+    if (s.isEmpty) return null;
+    if (!s.contains('/') && !s.contains('?') && !s.contains('=')) return s;
+    final idParam = RegExp(r'[?&]id=([^&]+)').firstMatch(s);
+    if (idParam != null) return idParam.group(1);
+    final dPath = RegExp(r'/d/([^/]+)').firstMatch(s);
+    if (dPath != null) return dPath.group(1);
+    return null;
+  }
+
+  /// Converts any stored Drive link (or bare file id) into a direct,
+  /// CORS-enabled download URL on `drive.usercontent.google.com` with a
+  /// `confirm` token. The legacy `drive.google.com/uc?export=download` host
+  /// sends NO CORS header (browsers block it) and 403s without the confirm
+  /// token, so it fails on the web build and for the virus-scan interstitial.
+  static String directDownloadUrl(String urlOrId) {
+    final id = extractDriveFileId(urlOrId);
+    if (id == null || id.isEmpty) return urlOrId;
+    return 'https://drive.usercontent.google.com/download?id=$id'
+        '&export=download&confirm=t';
+  }
+
   /// Удаляет файл-резерв канала на Google Drive.
   /// Возвращает true, если файл удалён или уже отсутствует.
   static Future<bool> deleteBackupFile({

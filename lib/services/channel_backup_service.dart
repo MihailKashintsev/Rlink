@@ -443,7 +443,7 @@ class ChannelBackupService {
           '[RLINK][ChBak] restoreFromDriveUrl: fetching ${url.substring(0, url.length.clamp(0, 60))}…');
       final dio = Dio();
       final response = await dio.get<List<int>>(
-        url,
+        GoogleDriveChannelBackup.directDownloadUrl(url),
         options: Options(
             responseType: ResponseType.bytes,
             receiveTimeout: const Duration(seconds: 120)),
@@ -479,7 +479,7 @@ class ChannelBackupService {
       debugPrint('[RLINK][ChBak] fetching keys file for ${channel.id}');
       final dio = Dio();
       final response = await dio.get<String>(
-        keysUrl,
+        GoogleDriveChannelBackup.directDownloadUrl(keysUrl),
         options: Options(
             responseType: ResponseType.plain,
             receiveTimeout: const Duration(seconds: 30)),

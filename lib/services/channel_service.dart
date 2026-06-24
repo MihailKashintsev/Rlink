@@ -15,6 +15,7 @@ import '../models/channel.dart';
 import '../models/message_poll.dart';
 import '../utils/web_file_store.dart';
 import '../utils/reaction_emoji_key.dart';
+import 'google_drive_channel_backup.dart';
 import '../utils/reaction_limit.dart';
 import 'gossip_router.dart';
 import 'image_service.dart';
@@ -1900,7 +1901,7 @@ class ChannelService {
     try {
       final dio = Dio();
       final response = await dio.get<Uint8List>(
-        ch.driveAvatarUrl!,
+        GoogleDriveChannelBackup.directDownloadUrl(ch.driveAvatarUrl!),
         options: Options(
             responseType: ResponseType.bytes,
             receiveTimeout: const Duration(seconds: 30)),
@@ -1931,7 +1932,7 @@ class ChannelService {
     try {
       final dio = Dio();
       final response = await dio.get<Uint8List>(
-        ch.driveBannerUrl!,
+        GoogleDriveChannelBackup.directDownloadUrl(ch.driveBannerUrl!),
         options: Options(
             responseType: ResponseType.bytes,
             receiveTimeout: const Duration(seconds: 30)),
