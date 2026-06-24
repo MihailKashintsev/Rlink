@@ -96,9 +96,9 @@ class _MessageActionsLayer extends StatelessWidget {
                   if (anim.value >= 0.95) dismiss();
                 },
                 child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 16 * t, sigmaY: 16 * t),
+                  filter: ui.ImageFilter.blur(sigmaX: 9 * t, sigmaY: 9 * t),
                   child: Container(
-                    color: Colors.black.withValues(alpha: 0.3 * t),
+                    color: Colors.black.withValues(alpha: 0.22 * t),
                   ),
                 ),
               ),
@@ -149,10 +149,13 @@ class _MessageActionsLayer extends StatelessWidget {
                   ),
                 ),
               ),
-            // Compact action menu.
+            // Compact action menu. When placed above the bubble, clear the
+            // reaction bar (which sits just above the bubble) so they don't overlap.
             Positioned(
               top: placeBelow ? rect.bottom + 10 : null,
-              bottom: placeBelow ? null : (size.height - rect.top + 10),
+              bottom: placeBelow
+                  ? null
+                  : (size.height - rect.top + (onReact != null ? 74 : 12)),
               left: alignRight ? null : rect.left.clamp(8.0, size.width),
               right: alignRight
                   ? (size.width - rect.right).clamp(8.0, size.width)

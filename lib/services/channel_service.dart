@@ -13,6 +13,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/channel.dart';
 import '../models/message_poll.dart';
+import '../utils/web_file_store.dart';
 import '../utils/reaction_emoji_key.dart';
 import '../utils/reaction_limit.dart';
 import 'gossip_router.dart';
@@ -2525,15 +2526,41 @@ class ChannelService {
   }
 
   /// Повторная рассылка аватара/баннера (новый подписчик мог пропустить старый broadcast).
+  /// Web-safe read of a channel avatar/banner (data: URL, OPFS, or native file).
+  Future<Uint8List?> _readVisualBytesWebSafe(String? rawPath) async {
+    if (rawPath == null || rawPath.isEmpty) return null;
+    if (rawPath.startsWith('data:')) {
+      final comma = rawPath.indexOf(',');
+      if (comma < 0) return null;
+      try {
+        return base64Decode(rawPath.substring(comma + 1));
+      } catch (_) {
+        return null;
+      }
+    }
+    final rp = ImageService.instance.resolveStoredPath(rawPath) ?? rawPath;
+    if (kIsWeb) {
+      if (isWebStoredFile(rp)) return readWebStoredFile(rp);
+      return null;
+    }
+    try {
+      final f = File(rp);
+      if (f.existsSync()) return f.readAsBytes();
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> rebroadcastChannelVisualAssets(Channel ch) async {
     final me = CryptoService.instance.publicKeyHex;
     if (me.isEmpty || ch.adminId != me) return;
 
+    // Re-broadcast the meta too, so subscribers get the Drive URLs and can pull
+    // the avatar/banner from the backup if the image chunks don't reach them.
+    unawaited(ch.broadcastGossipMeta());
+
     Future<void> send(String msgId, String? rawPath) async {
-      if (rawPath == null) return;
-      final rp = ImageService.instance.resolveStoredPath(rawPath);
-      if (rp == null || !File(rp).existsSync()) return;
-      final bytes = await File(rp).readAsBytes();
+      final bytes = await _readVisualBytesWebSafe(rawPath);
+      if (bytes == null || bytes.isEmpty) return;
       final chunks = ImageService.instance.splitToBase64Chunks(bytes);
       await GossipRouter.instance.sendImgMeta(
         msgId: msgId,

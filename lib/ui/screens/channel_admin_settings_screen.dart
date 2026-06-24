@@ -34,6 +34,7 @@ class _ChannelAdminSettingsScreenState
   GoogleDriveSyncStatus? _driveStatus;
   bool _driveRefreshing = false;
   bool _isPublishingBackup = false;
+  bool _isRestoringBackup = false;
   String _publishStep = '';
 
   String get _myId => CryptoService.instance.publicKeyHex;
@@ -254,6 +255,43 @@ class _ChannelAdminSettingsScreenState
       );
     } finally {
       if (mounted) setState(() { _isPublishingBackup = false; _publishStep = ''; });
+    }
+  }
+
+  Future<void> _restoreBackupNow() async {
+    final ch = _channel;
+    if (ch == null) return;
+    setState(() {
+      _isRestoringBackup = true;
+      _publishStep = 'Подключение к Google Drive…';
+    });
+    try {
+      final ok = await ChannelBackupService.instance.restoreFromDriveUrl(
+        ch,
+        onStep: (s) {
+          if (mounted) setState(() => _publishStep = s);
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? 'История вытянута из Google Drive'
+              : 'Не удалось вытянуть историю (нет ключа или файла сохранения)'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRestoringBackup = false;
+          _publishStep = '';
+        });
+      }
     }
   }
 
@@ -954,6 +992,32 @@ class _ChannelAdminSettingsScreenState
                 ),
                 onTap: (_driveRefreshing || _isPublishingBackup) ? null : _publishBackupNow,
               ),
+            // Available to moderators too: pull the active Drive save to see
+            // exactly what subscribers see and refresh the local copy.
+            ListTile(
+              leading: _isRestoringBackup
+                  ? SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    )
+                  : const Icon(Icons.cloud_download_outlined),
+              title: const Text('Вытянуть историю из Drive'),
+              subtitle: Text(
+                _isRestoringBackup
+                    ? (_publishStep.isNotEmpty ? _publishStep : 'Загрузка…')
+                    : 'Загрузить активный файл сохранения (увидеть, что видят подписчики)',
+                style: const TextStyle(fontSize: 12),
+              ),
+              onTap: (_driveRefreshing ||
+                      _isPublishingBackup ||
+                      _isRestoringBackup)
+                  ? null
+                  : _restoreBackupNow,
+            ),
             if (!_isModeratorDriveMode)
               ListTile(
                 leading: const Icon(Icons.delete_sweep_outlined),
