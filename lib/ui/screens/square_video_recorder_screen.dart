@@ -438,13 +438,10 @@ class _VideoOverlayState extends State<_VideoOverlay>
             ),
             const SizedBox(width: 32),
             GestureDetector(
-              onTapDown: (_) => _startRecording(),
-              onTapUp: (_) {
-                if (_isRecording) _stopAndSend();
-              },
-              onTapCancel: () {
-                if (_isRecording) _stopAndSend();
-              },
+              // Tap to toggle: tap to start, tap to stop+send. (Hold-to-record
+              // breaks on web — a click fires down+up instantly.)
+              onTap: () =>
+                  unawaited(_isRecording ? _stopAndSend() : _startRecording()),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: _isRecording ? 80 : 72,

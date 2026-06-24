@@ -34,3 +34,25 @@ class AppBackground extends StatelessWidget {
     );
   }
 }
+
+/// The themed wallpaper alone (no child) — for placing as a Stack layer behind
+/// chat content. Honours the same per-theme asset + scrim.
+class ChatWallpaper extends StatelessWidget {
+  const ChatWallpaper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final asset = isDark
+        ? 'assets/backgrounds/black.png'
+        : 'assets/backgrounds/light.png';
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        image: DecorationImage(image: AssetImage(asset), fit: BoxFit.cover),
+      ),
+      child: ColoredBox(
+        color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.14),
+      ),
+    );
+  }
+}

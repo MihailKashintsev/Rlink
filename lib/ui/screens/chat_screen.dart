@@ -122,6 +122,7 @@ import '../widgets/chat_emoji_insert_sheet.dart';
 import 'emoji_hub_screen.dart';
 import 'emoji_pack_detail_screen.dart';
 import 'stickers_hub_screen.dart';
+import '../widgets/app_background.dart';
 import '../widgets/composer_input_bar.dart';
 import '../widgets/message_actions_overlay.dart';
 import '../mention_nav.dart';
@@ -6771,9 +6772,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ],
                 ),
+          backgroundColor: AppSettings.instance.chatBackground
+              ? Colors.transparent
+              : null,
           body: Stack(
             clipBehavior: Clip.none,
             children: [
+              if (AppSettings.instance.chatBackground)
+                const Positioned.fill(child: ChatWallpaper()),
               Column(children: [
                 SizedBox(height: 0, key: _audioQueueMiniPlayerAnchor),
                 // Sending / uploading status bar

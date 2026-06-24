@@ -70,6 +70,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyAppPalette = 'app_palette'; // preset index
   static const _keyAnimatedGradient = 'animated_gradient';
   static const _keyLiquidGlass = 'liquid_glass';
+  static const _keyChatBackground = 'chat_background';
   static const _keyAnimationLevel = 'animation_level'; // 0.0..1.0
   static const _keyBatterySaverAnimations = 'battery_saver_animations';
   static const _keyBatteryAnimReduceAt = 'battery_anim_reduce_at'; // percent
@@ -177,6 +178,7 @@ class AppSettings extends ChangeNotifier {
   int _appPalette = 0;
   bool _animatedGradient = false;
   bool _liquidGlass = true;
+  bool _chatBackground = true;
   double _animationLevel = 1.0;
   bool _batterySaverAnimations = true;
   int _batteryAnimReduceAt = 20;
@@ -228,6 +230,7 @@ class AppSettings extends ChangeNotifier {
   int get appPalette => _appPalette;
   bool get animatedGradient => _animatedGradient;
   bool get liquidGlass => _liquidGlass;
+  bool get chatBackground => _chatBackground;
   double get animationLevel => _animationLevel.clamp(0.0, 1.0);
   bool get batterySaverAnimations => _batterySaverAnimations;
   int get batteryAnimReduceAt => _batteryAnimReduceAt.clamp(0, 100);
@@ -447,6 +450,7 @@ class AppSettings extends ChangeNotifier {
     _appPalette = (_prefs.getInt(_keyAppPalette) ?? 0).clamp(0, 99);
     _animatedGradient = _prefs.getBool(_keyAnimatedGradient) ?? false;
     _liquidGlass = _prefs.getBool(_keyLiquidGlass) ?? true;
+    _chatBackground = _prefs.getBool(_keyChatBackground) ?? true;
     _animationLevel = (_prefs.getDouble(_keyAnimationLevel) ?? 1.0).clamp(0.0, 1.0);
     _batterySaverAnimations = _prefs.getBool(_keyBatterySaverAnimations) ?? true;
     _batteryAnimReduceAt = (_prefs.getInt(_keyBatteryAnimReduceAt) ?? 20).clamp(0, 100);
@@ -681,6 +685,12 @@ class AppSettings extends ChangeNotifier {
   Future<void> setLiquidGlass(bool v) async {
     _liquidGlass = v;
     await _runPrefsWrite((p) => p.setBool(_keyLiquidGlass, v));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setChatBackground(bool v) async {
+    _chatBackground = v;
+    await _runPrefsWrite((p) => p.setBool(_keyChatBackground, v));
     _notifySettingsChanged();
   }
 

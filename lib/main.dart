@@ -76,7 +76,6 @@ import 'services/web_notification_bridge.dart';
 import 'app_route_observer.dart';
 import 'ui/app_palettes.dart';
 import 'ui/screens/chat_list_screen.dart';
-import 'ui/widgets/app_background.dart';
 import 'ui/widgets/audio_queue_mini_player.dart';
 import 'ui/widgets/square_video_queue_pip.dart';
 import 'ui/screens/onboarding_screen.dart';
@@ -4050,7 +4049,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (child != null) AppBackground(child: child),
+              if (child != null) child,
               const SquareVideoQueuePip(),
               ValueListenableBuilder<double?>(
                 valueListenable: AudioQueueMiniPlayerLayout.instance.barTop,
@@ -4148,8 +4147,9 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
 
     return ThemeData(
       brightness: brightness,
-      // Transparent so the themed wallpaper (AppBackground) shows through.
-      scaffoldBackgroundColor: Colors.transparent,
+      // Plain themed background everywhere; the wallpaper is applied only inside
+      // chats (AppBackground), gated by the chatBackground setting.
+      scaffoldBackgroundColor: isDark ? Colors.black : Colors.white,
       colorScheme: cs,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {

@@ -1037,6 +1037,16 @@ class _AppearancePageState extends State<_AppearancePage> {
             ),
           ),
 
+          // ── Оформление ───────────────────────────────────────────
+          const _SectionHeader('Оформление'),
+          SwitchListTile(
+            secondary: Icon(Icons.wallpaper_rounded, color: cs.primary),
+            title: const Text('Фон в чатах'),
+            subtitle: Text('Показывать фоновую картинку в переписке',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            value: settings.chatBackground,
+            onChanged: (v) => settings.setChatBackground(v),
+          ),
           // ── Движение и анимации ──────────────────────────────────
           const _SectionHeader('Движение и анимации'),
           if (RuntimePlatform.isIos)
