@@ -324,6 +324,10 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _dmHoldSwitchingCam = false;
   final _recordingSecondsNotifier = ValueNotifier<double>(0);
   Timer? _recordingTimer;
+  // Reliable manual long-press on a message (GestureDetector.onLongPress loses
+  // the gesture arena on web behind the swipe/selection recognizers).
+  Timer? _msgLongPressTimer;
+  Offset? _msgLongPressPos;
   double? _pendingLat;
   double? _pendingLng;
   Timer? _typingDebounce;
@@ -1170,6 +1174,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     MediaUploadQueue.instance.onTaskCompleted = null;
     _recordingTimer?.cancel();
+    _msgLongPressTimer?.cancel();
     _voiceAmpSub?.cancel();
     _voiceAmpSub = null;
     _recordingWaveformNotifier.dispose();
@@ -7148,11 +7153,58 @@ class _ChatScreenState extends State<ChatScreen> {
                                                     child: Listener(
                                                       behavior: HitTestBehavior
                                                           .translucent,
-                                                      onPointerDown: _bulkSelectMode
-                                                          ? null
-                                                          : (e) =>
-                                                              _onMessagePointerDownQuickReact(
-                                                                  e, msg),
+                                                      onPointerDown: (e) {
+                                                        if (!_bulkSelectMode) {
+                                                          _onMessagePointerDownQuickReact(
+                                                              e, msg);
+                                                        }
+                                                        _msgLongPressPos =
+                                                            e.position;
+                                                        _msgLongPressTimer
+                                                            ?.cancel();
+                                                        _msgLongPressTimer =
+                                                            Timer(
+                                                          const Duration(
+                                                              milliseconds: 400),
+                                                          () {
+                                                            _msgLongPressTimer =
+                                                                null;
+                                                            if (_bulkSelectMode) {
+                                                              _bulkSelectRangeThrough(
+                                                                  messages, i);
+                                                            } else {
+                                                              unawaited(
+                                                                  _onLongPressMessage(
+                                                                      msg));
+                                                            }
+                                                          },
+                                                        );
+                                                      },
+                                                      onPointerMove: (e) {
+                                                        if (_msgLongPressPos !=
+                                                                null &&
+                                                            (e.position -
+                                                                        _msgLongPressPos!)
+                                                                    .distance >
+                                                                16) {
+                                                          _msgLongPressTimer
+                                                              ?.cancel();
+                                                          _msgLongPressTimer =
+                                                              null;
+                                                        }
+                                                      },
+                                                      onPointerUp: (_) {
+                                                        _msgLongPressTimer
+                                                            ?.cancel();
+                                                        _msgLongPressTimer =
+                                                            null;
+                                                      },
+                                                      onPointerCancel: (_) {
+                                                        _msgLongPressTimer
+                                                            ?.cancel();
+                                                        _msgLongPressTimer =
+                                                            null;
+                                                      },
                                                       child: GestureDetector(
                                                         behavior:
                                                             HitTestBehavior
@@ -7162,13 +7214,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                 _toggleBulkMessageSelection(
                                                                     msg)
                                                             : null,
-                                                        onLongPress: _bulkSelectMode
-                                                            ? () =>
-                                                                _bulkSelectRangeThrough(
-                                                                    messages, i)
-                                                            : () =>
-                                                                _onLongPressMessage(
-                                                                    msg),
                                                         onDoubleTap: _bulkSelectMode
                                                             ? null
                                                             : () => unawaited(

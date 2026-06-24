@@ -989,7 +989,32 @@ class _ChannelAdminSettingsScreenState
             ListTile(
               leading: const Icon(Icons.people_outline),
               title: const Text('Подписчики'),
-              trailing: const Icon(Icons.chevron_right),
+              subtitle: Text('${ch.subscriberIds.length} подписчиков',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text('${ch.subscriberIds.length}',
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
               onTap: _manageSubscribers,
             ),
             ListTile(
