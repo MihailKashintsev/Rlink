@@ -551,6 +551,21 @@ class ChannelBackupService {
     await _decryptAndImport(asm.channelId, asm.rev, ordered.toBytes());
   }
 
+  /// On web, public Drive downloads 403 (browsers send Sec-Fetch-Site:cross-site,
+  /// which drive.usercontent rejects). Route them through the relay's server-side
+  /// /drive-proxy instead. Native apps download directly (no Sec-Fetch).
+  static String channelDownloadUrl(String url) {
+    if (!kIsWeb) return GoogleDriveChannelBackup.directDownloadUrl(url);
+    final id = GoogleDriveChannelBackup.extractDriveFileId(url);
+    if (id == null || id.isEmpty) {
+      return GoogleDriveChannelBackup.directDownloadUrl(url);
+    }
+    final base = RelayService.defaultServerUrl
+        .replaceFirst('wss://', 'https://')
+        .replaceFirst('ws://', 'http://');
+    return '$base/drive-proxy?id=$id';
+  }
+
   /// Скачивает зашифрованный снимок по публичной ссылке [channel.driveFileUrl] и импортирует историю.
   /// Возвращает true при успешном импорте. Не требует авторизации в Google — файл публичный.
   /// Если локального ключа нет — пытается получить его из файла ключей [channel.driveKeysUrl].
@@ -603,7 +618,7 @@ class ChannelBackupService {
             '[RLINK][ChBak] restoreFromDriveUrl: fetching ${url.substring(0, url.length.clamp(0, 60))}…');
         final dio = Dio();
         final response = await dio.get<List<int>>(
-          GoogleDriveChannelBackup.directDownloadUrl(url),
+          channelDownloadUrl(url),
           options: Options(
               responseType: ResponseType.bytes,
               receiveTimeout: const Duration(seconds: 120)),
@@ -660,7 +675,7 @@ class ChannelBackupService {
       if (body == null) {
         final dio = Dio();
         final response = await dio.get<String>(
-          GoogleDriveChannelBackup.directDownloadUrl(keysUrl),
+          channelDownloadUrl(keysUrl),
           options: Options(
               responseType: ResponseType.plain,
               receiveTimeout: const Duration(seconds: 30)),

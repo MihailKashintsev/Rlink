@@ -20,6 +20,7 @@ import '../utils/reaction_limit.dart';
 import 'gossip_router.dart';
 import 'image_service.dart';
 import 'account_sync_publish.dart';
+import 'channel_backup_service.dart';
 import 'channel_directory_relay.dart';
 import 'crypto_service.dart';
 import 'web_identity_portable.dart';
@@ -1938,7 +1939,7 @@ class ChannelService {
     try {
       final dio = Dio();
       final response = await dio.get<Uint8List>(
-        GoogleDriveChannelBackup.directDownloadUrl(ch.driveAvatarUrl!),
+        ChannelBackupService.channelDownloadUrl(ch.driveAvatarUrl!),
         options: Options(
             responseType: ResponseType.bytes,
             receiveTimeout: const Duration(seconds: 30)),
@@ -1969,7 +1970,7 @@ class ChannelService {
     try {
       final dio = Dio();
       final response = await dio.get<Uint8List>(
-        GoogleDriveChannelBackup.directDownloadUrl(ch.driveBannerUrl!),
+        ChannelBackupService.channelDownloadUrl(ch.driveBannerUrl!),
         options: Options(
             responseType: ResponseType.bytes,
             receiveTimeout: const Duration(seconds: 30)),
