@@ -22,7 +22,7 @@ class MessageMenuAction {
 Future<void> showMessageActionsOverlay({
   required BuildContext context,
   required Rect bubbleRect,
-  required ui.Image snapshot,
+  ui.Image? snapshot,
   required List<MessageMenuAction> actions,
   List<String> quickReactions = const ['👍', '❤️', '😂', '😮', '😢', '🔥'],
   void Function(String emoji)? onReact,
@@ -50,7 +50,7 @@ Future<void> showMessageActionsOverlay({
 class _MessageActionsLayer extends StatelessWidget {
   final Animation<double> anim;
   final Rect bubbleRect;
-  final ui.Image snapshot;
+  final ui.Image? snapshot;
   final List<MessageMenuAction> actions;
   final List<String> quickReactions;
   final void Function(String emoji)? onReact;
@@ -59,7 +59,7 @@ class _MessageActionsLayer extends StatelessWidget {
   const _MessageActionsLayer({
     required this.anim,
     required this.bubbleRect,
-    required this.snapshot,
+    this.snapshot,
     required this.actions,
     required this.quickReactions,
     required this.onReact,
@@ -126,24 +126,25 @@ class _MessageActionsLayer extends StatelessWidget {
                   ),
                 ),
               ),
-            // The lifted bubble snapshot.
-            Positioned(
-              top: rect.top,
-              left: rect.left,
-              width: rect.width,
-              height: rect.height,
-              child: Transform.scale(
-                scale: 1.0 - 0.04 * (1 - t),
-                alignment:
-                    alignRight ? Alignment.centerRight : Alignment.centerLeft,
-                child: RawImage(
-                  image: snapshot,
-                  width: rect.width,
-                  height: rect.height,
-                  fit: BoxFit.fill,
+            // The lifted bubble snapshot (best-effort; absent on web HTML renderer).
+            if (snapshot != null)
+              Positioned(
+                top: rect.top,
+                left: rect.left,
+                width: rect.width,
+                height: rect.height,
+                child: Transform.scale(
+                  scale: 1.0 - 0.04 * (1 - t),
+                  alignment:
+                      alignRight ? Alignment.centerRight : Alignment.centerLeft,
+                  child: RawImage(
+                    image: snapshot,
+                    width: rect.width,
+                    height: rect.height,
+                    fit: BoxFit.fill,
+                  ),
                 ),
               ),
-            ),
             // Compact action menu.
             Positioned(
               top: placeBelow ? rect.bottom + 10 : null,

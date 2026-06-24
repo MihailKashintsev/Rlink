@@ -10,6 +10,8 @@ import 'package:archive/archive.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'
@@ -5485,12 +5487,6 @@ class _ChatScreenState extends State<ChatScreen> {
   GlobalKey _bubbleBoundaryKey(String msgId) =>
       _bubbleBoundaryKeys.putIfAbsent(msgId, () => GlobalKey());
 
-  RenderRepaintBoundary? _captureBubbleBoundary(String msgId) {
-    final ctx = _bubbleBoundaryKeys[msgId]?.currentContext;
-    final ro = ctx?.findRenderObject();
-    if (ro is RenderRepaintBoundary && !ro.debugNeedsPaint) return ro;
-    return null;
-  }
 
   Future<void> _copyMessage(ChatMessage msg) async {
     final plain = _plainTextForClipboard(msg);
@@ -5553,14 +5549,23 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Telegram-style overlay: snapshot the bubble, blur the screen, lift the
     // bubble and show a compact action menu next to it. Falls back to the sheet.
-    final boundary = _captureBubbleBoundary(msg.id);
-    if (boundary != null) {
-      final box = boundary as RenderBox;
-      final rect = box.localToGlobal(Offset.zero) & box.size;
-      final image = await boundary.toImage(
-          pixelRatio: MediaQuery.of(context).devicePixelRatio);
+    final bubbleRo =
+        _bubbleBoundaryKeys[msg.id]?.currentContext?.findRenderObject();
+    if (bubbleRo is RenderBox && bubbleRo.hasSize) {
+      final rect = bubbleRo.localToGlobal(Offset.zero) & bubbleRo.size;
+      // Snapshot is best-effort (toImage can fail on the web HTML renderer);
+      // the menu still works without the lifted bubble.
+      ui.Image? image;
+      if (bubbleRo is RenderRepaintBoundary && !bubbleRo.debugNeedsPaint) {
+        try {
+          image = await bubbleRo.toImage(
+              pixelRatio: MediaQuery.of(context).devicePixelRatio);
+        } catch (_) {
+          image = null;
+        }
+      }
       if (!mounted) {
-        image.dispose();
+        image?.dispose();
         return;
       }
       final hasFile = msg.filePath != null && msg.filePath!.trim().isNotEmpty;
@@ -5632,7 +5637,7 @@ class _ChatScreenState extends State<ChatScreen> {
         onReact: (e) => unawaited(_toggleReaction(msg, e)),
         onMoreReactions: () => unawaited(_showReactionPicker(msg)),
       );
-      image.dispose();
+      image?.dispose();
       return;
     }
 
