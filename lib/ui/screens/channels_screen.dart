@@ -692,7 +692,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   late Channel _channel;
   final _postCtrl = TextEditingController();
   final _feedScrollController = ScrollController();
-  bool _showScrollToBottomFab = false;
+  // ValueNotifier (not setState) so scrolling never rebuilds the whole feed —
+  // a setState here caused a jitter feedback loop on mobile web.
+  final ValueNotifier<bool> _showScrollToBottomFab = ValueNotifier(false);
   final _uuid = const Uuid();
   final _picker = ImagePicker();
   bool _isSending = false;
@@ -785,6 +787,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     unawaited(ChannelService.instance.markChannelRead(_channel.id));
     _feedScrollController.removeListener(_onFeedScroll);
     _feedScrollController.dispose();
+    _showScrollToBottomFab.dispose();
     ChannelService.instance.version.removeListener(_scheduleLoad);
     _postCtrl.dispose();
     _recordingTimer?.cancel();
@@ -848,10 +851,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         : null;
     if (pos == null) return;
     final away = pos.maxScrollExtent - pos.pixels;
-    final show = away > 120;
-    if (show != _showScrollToBottomFab && mounted) {
-      setState(() => _showScrollToBottomFab = show);
-    }
+    _showScrollToBottomFab.value = away > 120;
   }
 
   void _scrollFeedToBottom() {
@@ -2734,28 +2734,32 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                           ),
                         ),
                       ),
-                      if (_showScrollToBottomFab)
-                        Positioned(
-                          right: 10,
-                          bottom: 10,
-                          child: Material(
-                            elevation: 3,
-                            shape: const CircleBorder(),
-                            color: cs.primary,
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: _scrollFeedToBottom,
-                              child: Padding(
-                                padding: const EdgeInsets.all(10),
-                                child: Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  color: cs.onPrimary,
-                                  size: 26,
+                      ValueListenableBuilder<bool>(
+                        valueListenable: _showScrollToBottomFab,
+                        builder: (_, show, __) => !show
+                            ? const SizedBox.shrink()
+                            : Positioned(
+                                right: 10,
+                                bottom: 10,
+                                child: Material(
+                                  elevation: 3,
+                                  shape: const CircleBorder(),
+                                  color: cs.primary,
+                                  child: InkWell(
+                                    customBorder: const CircleBorder(),
+                                    onTap: _scrollFeedToBottom,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(10),
+                                      child: Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        color: cs.onPrimary,
+                                        size: 26,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        ),
+                      ),
                     ],
                   ),
           ),
