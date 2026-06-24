@@ -202,11 +202,16 @@ class ImageService {
 
   /// Сохраняет аватар контакта по его publicKeyHex (перезаписывает).
   Future<String> saveContactAvatar(String publicKeyHex, Uint8List data) async {
-    final dir = await _imagesDir();
     final key = publicKeyHex.length >= 16
         ? publicKeyHex.substring(0, 16)
         : publicKeyHex;
     final name = 'avatar_$key.jpg';
+    if (kIsWeb) {
+      final stored = await writeWebStoredFile(
+          fileName: name, bytes: data, mimeType: 'image/jpeg');
+      return stored ?? '';
+    }
+    final dir = await _imagesDir();
     final path = p.join(dir.path, name);
     await File(path).writeAsBytes(data);
     return path;
@@ -214,11 +219,16 @@ class ImageService {
 
   /// Сохраняет баннер профиля контакта (отдельный файл, не пересекается с аватаром).
   Future<String> saveBannerImage(String publicKeyHex, Uint8List data) async {
-    final dir = await _imagesDir();
     final key = publicKeyHex.length >= 16
         ? publicKeyHex.substring(0, 16)
         : publicKeyHex;
     final name = 'banner_$key.jpg';
+    if (kIsWeb) {
+      final stored = await writeWebStoredFile(
+          fileName: name, bytes: data, mimeType: 'image/jpeg');
+      return stored ?? '';
+    }
+    final dir = await _imagesDir();
     final path = p.join(dir.path, name);
     await File(path).writeAsBytes(data);
     return path;

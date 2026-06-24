@@ -1077,22 +1077,32 @@ class ChannelService {
       driveBackupEnabled: p.containsKey('driveBackup')
           ? (p['driveBackup'] as bool? ?? false)
           : (existing?.driveBackupEnabled ?? false),
-      driveBackupRev: p.containsKey('driveBackupRev')
-          ? ((p['driveBackupRev'] as num?)?.toInt() ?? 0)
-          : (existing?.driveBackupRev ?? 0),
+      // Accept both the short gossip keys (drv*) and the full directory keys.
+      driveBackupRev: (p['drvRev'] as num?)?.toInt() ??
+          (p['driveBackupRev'] as num?)?.toInt() ??
+          existing?.driveBackupRev ??
+          0,
       driveFileId: existing?.driveFileId,
-      driveFileUrl: p.containsKey('driveFileUrl')
-          ? p['driveFileUrl'] as String?
-          : existing?.driveFileUrl,
-      driveKeysUrl: p.containsKey('driveKeysUrl')
-          ? p['driveKeysUrl'] as String?
-          : existing?.driveKeysUrl,
+      driveFileUrl: (p['drvUrl'] ?? p['driveFileUrl']) as String? ??
+          existing?.driveFileUrl,
+      driveKeysUrl: (p['drvKUrl'] ?? p['driveKeysUrl']) as String? ??
+          existing?.driveKeysUrl,
+      driveAvatarFileId: existing?.driveAvatarFileId,
+      driveAvatarUrl: (p['drvAvUrl'] ?? p['driveAvatarUrl']) as String? ??
+          existing?.driveAvatarUrl,
+      driveBannerFileId: existing?.driveBannerFileId,
+      driveBannerUrl: (p['drvBnUrl'] ?? p['driveBannerUrl']) as String? ??
+          existing?.driveBannerUrl,
       allowModeratorsManageDriveAccount:
           p.containsKey('allowModeratorsManageDriveAccount')
               ? (p['allowModeratorsManageDriveAccount'] as bool? ?? false)
               : (existing?.allowModeratorsManageDriveAccount ?? false),
     );
     await saveChannelFromBroadcast(ch);
+    // New subscribers receive the Drive URLs in the meta but not the image
+    // bytes — pull avatar/banner from Drive if we don't have them yet.
+    unawaited(maybeDownloadChannelAvatarFromDrive(channelId));
+    unawaited(maybeDownloadChannelBannerFromDrive(channelId));
   }
 
   /// Слияние снимка каталога с relay (подпись уже проверена на сервере).
@@ -1857,6 +1867,7 @@ class ChannelService {
     if (ch == null) return;
     if (ch.driveAvatarUrl == null || ch.driveAvatarUrl!.isEmpty) return;
     if (ch.avatarImagePath != null) {
+      if (kIsWeb) return; // already have a stored path (data:/OPFS) on web
       final rp = ImageService.instance.resolveStoredPath(ch.avatarImagePath);
       if (rp != null && File(rp).existsSync())
         return; // Already have local file
@@ -1887,6 +1898,7 @@ class ChannelService {
     if (ch == null) return;
     if (ch.driveBannerUrl == null || ch.driveBannerUrl!.isEmpty) return;
     if (ch.bannerImagePath != null) {
+      if (kIsWeb) return; // already have a stored path (data:/OPFS) on web
       final rp = ImageService.instance.resolveStoredPath(ch.bannerImagePath);
       if (rp != null && File(rp).existsSync())
         return; // Already have local file
