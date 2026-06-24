@@ -1099,10 +1099,13 @@ class ChannelService {
               : (existing?.allowModeratorsManageDriveAccount ?? false),
     );
     await saveChannelFromBroadcast(ch);
-    // New subscribers receive the Drive URLs in the meta but not the image
-    // bytes — pull avatar/banner from Drive if we don't have them yet.
-    unawaited(maybeDownloadChannelAvatarFromDrive(channelId));
-    unawaited(maybeDownloadChannelBannerFromDrive(channelId));
+    // Only subscribers (and the admin) cache the avatar/banner — pull from Drive
+    // if subscribed and we don't have them yet.
+    final myId = CryptoService.instance.publicKeyHex;
+    if (ch.subscriberIds.contains(myId) || ch.adminId == myId) {
+      unawaited(maybeDownloadChannelAvatarFromDrive(channelId));
+      unawaited(maybeDownloadChannelBannerFromDrive(channelId));
+    }
   }
 
   /// Слияние снимка каталога с relay (подпись уже проверена на сервере).
@@ -1243,6 +1246,12 @@ class ChannelService {
     await updateChannel(
         ch.copyWith(subscriberIds: [...ch.subscriberIds, userId]));
     unawaited(publishAccountChannelSubscriptions());
+    // When *I* subscribe, pull the channel avatar/banner from the Drive backup
+    // right away (only subscribers cache them).
+    if (userId == CryptoService.instance.publicKeyHex) {
+      unawaited(maybeDownloadChannelAvatarFromDrive(channelId));
+      unawaited(maybeDownloadChannelBannerFromDrive(channelId));
+    }
   }
 
   Future<void> unsubscribe(String channelId, String userId) async {
@@ -1251,6 +1260,21 @@ class ChannelService {
     await updateChannel(ch.copyWith(
         subscriberIds: ch.subscriberIds.where((s) => s != userId).toList()));
     unawaited(publishAccountChannelSubscriptions());
+    // When *I* unsubscribe, drop the cached avatar/banner from the device.
+    if (userId == CryptoService.instance.publicKeyHex) {
+      unawaited(clearChannelVisualsCache(channelId));
+    }
+  }
+
+  /// Remove the locally-cached channel avatar/banner (after unsubscribing).
+  Future<void> clearChannelVisualsCache(String channelId) async {
+    final ch = await getChannel(channelId);
+    if (ch == null) return;
+    if (ch.adminId == CryptoService.instance.publicKeyHex) return; // owner keeps
+    await _tryDeleteChannelMediaFile(ch.avatarImagePath);
+    await _tryDeleteChannelMediaFile(ch.bannerImagePath);
+    await updateChannel(ch.copyWith(
+        clearAvatarImagePath: true, clearBannerImagePath: true));
   }
 
   /// Передача владения каналом (только текущий [adminId]).

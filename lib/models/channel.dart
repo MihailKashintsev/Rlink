@@ -222,6 +222,8 @@ class Channel {
     String? avatarEmoji,
     String? avatarImagePath,
     String? bannerImagePath,
+    bool clearAvatarImagePath = false,
+    bool clearBannerImagePath = false,
     String? description,
     bool? commentsEnabled,
     bool? verified,
@@ -253,8 +255,12 @@ class Channel {
         staffLabels: staffLabels ?? this.staffLabels,
         avatarColor: avatarColor ?? this.avatarColor,
         avatarEmoji: avatarEmoji ?? this.avatarEmoji,
-        avatarImagePath: avatarImagePath ?? this.avatarImagePath,
-        bannerImagePath: bannerImagePath ?? this.bannerImagePath,
+        avatarImagePath: clearAvatarImagePath
+            ? null
+            : (avatarImagePath ?? this.avatarImagePath),
+        bannerImagePath: clearBannerImagePath
+            ? null
+            : (bannerImagePath ?? this.bannerImagePath),
         description: description ?? this.description,
         commentsEnabled: commentsEnabled ?? this.commentsEnabled,
         createdAt: createdAt,
