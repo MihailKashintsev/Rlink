@@ -60,6 +60,7 @@ import '../widgets/forward_target_sheet.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../utils/web_file_store.dart';
+import '../../utils/web_object_url.dart';
 
 // ══════════════════════════════════════════════════════════════════
 // Forward / упоминания (канал)
@@ -1006,10 +1007,27 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       _sendProgress = 0.0;
     });
     try {
-      final path = await ImageService.instance.saveVideo(raw, isSquare: true);
-      final bytes = await File(path).readAsBytes();
-      final chunks = ImageService.instance.splitToBase64Chunks(bytes);
       final postId = _uuid.v4();
+      final Uint8List bytes;
+      final String storedPath;
+      if (kIsWeb) {
+        // On web the recorder returns a blob: URL — read it and stash in OPFS.
+        final b = await readWebObjectUrlBytes(raw);
+        if (b == null || b.isEmpty) {
+          throw 'не удалось прочитать запись с камеры';
+        }
+        bytes = b;
+        storedPath = (await writeWebStoredFile(
+              fileName: '${postId}_sq.mp4',
+              bytes: b,
+              mimeType: 'video/mp4',
+            )) ??
+            raw;
+      } else {
+        storedPath = await ImageService.instance.saveVideo(raw, isSquare: true);
+        bytes = await File(storedPath).readAsBytes();
+      }
+      final chunks = ImageService.instance.splitToBase64Chunks(bytes);
 
       await GossipRouter.instance.sendImgMeta(
         msgId: postId,
@@ -1036,7 +1054,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         channelId: _channel.id,
         authorId: _myId,
         text: '',
-        videoPath: path,
+        videoPath: storedPath,
         timestamp: DateTime.now().millisecondsSinceEpoch,
         staffLabel: staffLabel,
       );

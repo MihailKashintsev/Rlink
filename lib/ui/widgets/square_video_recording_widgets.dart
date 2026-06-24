@@ -102,22 +102,10 @@ class _SquareVideoCameraPreviewInnerState
     if (!ctrl.value.isInitialized) {
       return Container(color: const Color(0xFF111111));
     }
-    // On web previewSize is usually null and the platform view (HTML <video>)
-    // sizes itself — render CameraPreview directly so the live feed shows.
+    // On web the platform view (HTML <video>) doesn't render well inside nested
+    // FittedBox/Transform — keep it simple so the live feed actually shows.
     if (kIsWeb || ctrl.value.previewSize == null) {
-      return ClipRect(
-        child: SizedBox.expand(
-          child: FittedBox(
-            fit: BoxFit.cover,
-            clipBehavior: Clip.hardEdge,
-            child: SizedBox(
-              width: ctrl.value.previewSize?.height ?? 720,
-              height: ctrl.value.previewSize?.width ?? 720,
-              child: CameraPreview(ctrl),
-            ),
-          ),
-        ),
-      );
+      return ClipRect(child: Center(child: CameraPreview(ctrl)));
     }
     return LayoutBuilder(
       builder: (ctx, constraints) {

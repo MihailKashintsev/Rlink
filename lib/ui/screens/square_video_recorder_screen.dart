@@ -243,6 +243,12 @@ class _VideoOverlayState extends State<_VideoOverlay>
       });
     } catch (e) {
       debugPrint('[SquareVideo] startVideoRecording error: $e');
+      if (mounted) {
+        setState(() => _isRecording = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось начать запись: $e')),
+        );
+      }
     }
   }
 
