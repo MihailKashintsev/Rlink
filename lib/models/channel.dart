@@ -242,6 +242,8 @@ class Channel {
     String? driveAvatarUrl,
     String? driveBannerFileId,
     String? driveBannerUrl,
+    bool clearDriveAvatar = false,
+    bool clearDriveBanner = false,
     bool? allowModeratorsManageDriveAccount,
   }) =>
       Channel(
@@ -276,10 +278,16 @@ class Channel {
         driveFileId: driveFileId ?? this.driveFileId,
         driveFileUrl: driveFileUrl ?? this.driveFileUrl,
         driveKeysUrl: driveKeysUrl ?? this.driveKeysUrl,
-        driveAvatarFileId: driveAvatarFileId ?? this.driveAvatarFileId,
-        driveAvatarUrl: driveAvatarUrl ?? this.driveAvatarUrl,
-        driveBannerFileId: driveBannerFileId ?? this.driveBannerFileId,
-        driveBannerUrl: driveBannerUrl ?? this.driveBannerUrl,
+        driveAvatarFileId: clearDriveAvatar
+            ? null
+            : (driveAvatarFileId ?? this.driveAvatarFileId),
+        driveAvatarUrl:
+            clearDriveAvatar ? null : (driveAvatarUrl ?? this.driveAvatarUrl),
+        driveBannerFileId: clearDriveBanner
+            ? null
+            : (driveBannerFileId ?? this.driveBannerFileId),
+        driveBannerUrl:
+            clearDriveBanner ? null : (driveBannerUrl ?? this.driveBannerUrl),
         allowModeratorsManageDriveAccount: allowModeratorsManageDriveAccount ??
             this.allowModeratorsManageDriveAccount,
       );

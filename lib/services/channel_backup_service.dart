@@ -113,6 +113,16 @@ class ChannelBackupService {
     await p.setString('chbak_kfid_$channelId', fileId);
   }
 
+  Future<String?> _readSettingsFileId(String channelId) async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString('chbak_sfid_$channelId');
+  }
+
+  Future<void> _writeSettingsFileId(String channelId, String fileId) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString('chbak_sfid_$channelId', fileId);
+  }
+
   static String backupMsgId(String channelId, int rev) =>
       'chbak_${ChannelService.compactChannelId(channelId)}_$rev';
 
@@ -277,38 +287,44 @@ class ChannelBackupService {
     String? bannerFileId;
     String? bannerUrl;
 
+    // Avatar/banner cleared → also clear their stored URLs below.
+    var clearAvatar = false;
+    var clearBanner = false;
+
     if (channel.driveBackupEnabled) {
-      final compact = ChannelService.compactChannelId(channel.id);
       final pairing =
           GoogleDriveChannelBackup.channelAccountPairing(channel.id);
+      // Everything for this channel lives in Rlink/<channelId>/ with clean names.
+      String cid() => channel.id;
 
-      // Upload encrypted snapshot.
+      // Encrypted save file (history + content).
       fileId = await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
-        fileName: 'Rlink_ch_$compact.bin',
+        fileName: 'backup.bin',
         ciphertext: sealed,
         existingFileId: channel.driveFileId,
         accountPairing: pairing,
+        channelId: cid(),
       );
       if (fileId != null) {
         fileUrl =
             await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(fileId);
       }
 
-      // Upload per-subscriber wrapped keys as a public JSON file.
+      // Per-subscriber wrapped keys.
       if (wrappedKeys.isNotEmpty) {
-        final keysJson = jsonEncode({
+        final keysBytes = Uint8List.fromList(utf8.encode(jsonEncode({
           'v': 1,
           'channelId': channel.id,
           'rev': rev,
           'keys': wrappedKeys,
-        });
-        final keysBytes = Uint8List.fromList(utf8.encode(keysJson));
+        })));
         final existingKeysFileId = await _readKeysFileId(channel.id);
         keysFileId = await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
-          fileName: 'Rlink_ch_${compact}_keys.json',
+          fileName: 'keys.json',
           ciphertext: keysBytes,
           existingFileId: existingKeysFileId,
           accountPairing: pairing,
+          channelId: cid(),
         );
         if (keysFileId != null) {
           await _writeKeysFileId(channel.id, keysFileId);
@@ -318,17 +334,47 @@ class ChannelBackupService {
         }
       }
 
-      // Upload channel avatar if exists.
+      // Human-readable channel settings file.
+      final settingsBytes = Uint8List.fromList(utf8.encode(
+        const JsonEncoder.withIndent('  ').convert(<String, dynamic>{
+          'channelId': channel.id,
+          'name': channel.name,
+          'username': channel.username,
+          'description': channel.description,
+          'avatarColor': channel.avatarColor,
+          'avatarEmoji': channel.avatarEmoji,
+          'adminId': channel.adminId,
+          'moderatorIds': channel.moderatorIds,
+          'commentsEnabled': channel.commentsEnabled,
+          'driveBackupRev': rev,
+          'updatedAt': DateTime.now().toIso8601String(),
+        }),
+      ));
+      final existingSettingsId = await _readSettingsFileId(channel.id);
+      final settingsId =
+          await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
+        fileName: 'settings.json',
+        ciphertext: settingsBytes,
+        existingFileId: existingSettingsId,
+        accountPairing: pairing,
+        channelId: cid(),
+        mimeType: 'application/json',
+      );
+      if (settingsId != null) await _writeSettingsFileId(channel.id, settingsId);
+
+      // Channel avatar: upload if present, delete old file if it was cleared.
       if (channel.avatarImagePath != null) {
         final avatarBytes =
             await _readChannelVisualBytes(channel.avatarImagePath);
         if (avatarBytes != null && avatarBytes.isNotEmpty) {
           avatarFileId =
               await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
-            fileName: 'Rlink_ch_${compact}_avatar.jpg',
+            fileName: 'avatar.jpg',
             ciphertext: avatarBytes,
             existingFileId: channel.driveAvatarFileId,
             accountPairing: pairing,
+            channelId: cid(),
+            mimeType: 'image/jpeg',
           );
           if (avatarFileId != null) {
             avatarUrl =
@@ -336,19 +382,25 @@ class ChannelBackupService {
                     avatarFileId);
           }
         }
+      } else if (channel.driveAvatarFileId != null) {
+        await GoogleDriveChannelBackup.deleteFileById(channel.driveAvatarFileId,
+            accountPairing: pairing);
+        clearAvatar = true;
       }
 
-      // Upload channel banner if exists.
+      // Channel banner: same — upload new, delete old on removal.
       if (channel.bannerImagePath != null) {
         final bannerBytes =
             await _readChannelVisualBytes(channel.bannerImagePath);
         if (bannerBytes != null && bannerBytes.isNotEmpty) {
           bannerFileId =
               await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
-            fileName: 'Rlink_ch_${compact}_banner.jpg',
+            fileName: 'banner.jpg',
             ciphertext: bannerBytes,
             existingFileId: channel.driveBannerFileId,
             accountPairing: pairing,
+            channelId: cid(),
+            mimeType: 'image/jpeg',
           );
           if (bannerFileId != null) {
             bannerUrl =
@@ -356,6 +408,10 @@ class ChannelBackupService {
                     bannerFileId);
           }
         }
+      } else if (channel.driveBannerFileId != null) {
+        await GoogleDriveChannelBackup.deleteFileById(channel.driveBannerFileId,
+            accountPairing: pairing);
+        clearBanner = true;
       }
     }
 
@@ -364,10 +420,14 @@ class ChannelBackupService {
       driveFileId: fileId ?? channel.driveFileId,
       driveFileUrl: fileUrl ?? channel.driveFileUrl,
       driveKeysUrl: keysFileUrl ?? channel.driveKeysUrl,
-      driveAvatarFileId: avatarFileId ?? channel.driveAvatarFileId,
-      driveAvatarUrl: avatarUrl ?? channel.driveAvatarUrl,
-      driveBannerFileId: bannerFileId ?? channel.driveBannerFileId,
-      driveBannerUrl: bannerUrl ?? channel.driveBannerUrl,
+      driveAvatarFileId:
+          clearAvatar ? null : (avatarFileId ?? channel.driveAvatarFileId),
+      driveAvatarUrl: clearAvatar ? null : (avatarUrl ?? channel.driveAvatarUrl),
+      driveBannerFileId:
+          clearBanner ? null : (bannerFileId ?? channel.driveBannerFileId),
+      driveBannerUrl: clearBanner ? null : (bannerUrl ?? channel.driveBannerUrl),
+      clearDriveAvatar: clearAvatar,
+      clearDriveBanner: clearBanner,
     );
     await ChannelService.instance.updateChannel(next);
     await next.broadcastGossipMeta();

@@ -570,6 +570,33 @@ class GoogleDriveChannelBackup {
     }
   }
 
+  /// Per-channel subfolder `Rlink/<channelId>/` that holds the channel's banner,
+  /// avatar, settings, save file and content — so the Drive is structured.
+  static Future<String?> _ensureChannelFolder(
+      drive.DriveApi api, String channelId) async {
+    try {
+      final root = await _ensureRlinkFolder(api);
+      if (root == null) return null;
+      final safe = channelId.replaceAll("'", '');
+      final res = await api.files.list(
+        q: "name='$safe' and mimeType='application/vnd.google-apps.folder' "
+            "and '$root' in parents and trashed=false",
+        $fields: 'files(id,name)',
+        spaces: 'drive',
+      );
+      final found = res.files;
+      if (found != null && found.isNotEmpty) return found.first.id;
+      final folder = drive.File()
+        ..name = channelId
+        ..mimeType = 'application/vnd.google-apps.folder'
+        ..parents = [root];
+      final created = await api.files.create(folder, $fields: 'id');
+      return created.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// На Android интерактивный [GoogleSignIn.signIn] требует foreground Activity;
   /// при предварительном запуске Dart из [RlinkApplication] плагин может ещё не
   /// получить activity — ждём resumed и даём кадр на attach.
@@ -716,6 +743,8 @@ class GoogleDriveChannelBackup {
     required Uint8List ciphertext,
     String? existingFileId,
     String? accountPairing,
+    String? channelId,
+    String mimeType = 'application/octet-stream',
   }) async {
     try {
       if (!hasValidManualCreds && !hasRelayAccount && accountPairing == null) {
@@ -727,9 +756,14 @@ class GoogleDriveChannelBackup {
       if (authClient == null) return null;
       try {
         final api = drive.DriveApi(authClient);
+        // Organize everything under Rlink/<channelId>/.
+        final folderId = (channelId != null && channelId.isNotEmpty)
+            ? await _ensureChannelFolder(api, channelId)
+            : null;
         final media = drive.Media(
           Stream<List<int>>.value(ciphertext),
           ciphertext.length,
+          contentType: mimeType,
         );
 
         if (existingFileId != null && existingFileId.isNotEmpty) {
@@ -738,6 +772,8 @@ class GoogleDriveChannelBackup {
               drive.File()..name = fileName,
               existingFileId,
               uploadMedia: media,
+              // Move the file into the channel folder if it isn't already.
+              addParents: folderId,
             );
             return existingFileId;
           } catch (e) {
@@ -746,7 +782,9 @@ class GoogleDriveChannelBackup {
         }
 
         final created = await api.files.create(
-          drive.File()..name = fileName,
+          drive.File()
+            ..name = fileName
+            ..parents = folderId != null ? [folderId] : null,
           uploadMedia: media,
         );
         return created.id;
@@ -756,6 +794,25 @@ class GoogleDriveChannelBackup {
     } catch (e, st) {
       debugPrint('[RLINK][Drive] upload failed: $e\n$st');
       return null;
+    }
+  }
+
+  /// Deletes a Drive file by id (best-effort). Used when an avatar/banner is
+  /// removed so the old picture doesn't linger in the channel folder.
+  static Future<void> deleteFileById(String? fileId,
+      {String? accountPairing}) async {
+    if (fileId == null || fileId.isEmpty) return;
+    try {
+      final authClient = await _driveAuthClient(
+          interactive: false, relayPairing: accountPairing);
+      if (authClient == null) return;
+      try {
+        await drive.DriveApi(authClient).files.delete(fileId);
+      } finally {
+        authClient.close();
+      }
+    } catch (e) {
+      debugPrint('[RLINK][Drive] deleteFileById failed: $e');
     }
   }
 
