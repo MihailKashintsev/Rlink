@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -118,12 +119,43 @@ class ChannelBackupService {
   List<String> _splitChunks(Uint8List data) {
     final chunks = <String>[];
     var offset = 0;
+    // Must stay tiny: gossip drops img packets over ~500B (_kMaxImgPayloadBytes).
     while (offset < data.length) {
       final end = (offset + kImgChunkBytes).clamp(0, data.length);
       chunks.add(base64Encode(data.sublist(offset, end)));
       offset = end;
     }
     return chunks;
+  }
+
+  /// Best-effort P2P broadcast of the sealed snapshot. Runs unawaited so a large
+  /// snapshot never blocks the publish (Drive is the primary delivery path).
+  Future<void> _broadcastSnapshotOverGossip(
+      String channelId, int rev, String adminId, Uint8List sealed) async {
+    try {
+      await Future.delayed(const Duration(milliseconds: 400));
+      final mid = backupMsgId(channelId, rev);
+      final chunks = _splitChunks(sealed);
+      await GossipRouter.instance.sendChannelBackupMeta(
+        channelId: channelId,
+        rev: rev,
+        totalChunks: chunks.length,
+        adminId: adminId,
+        msgId: mid,
+      );
+      for (var i = 0; i < chunks.length; i++) {
+        await GossipRouter.instance.sendChannelBackupChunk(
+          msgId: mid,
+          index: i,
+          base64Data: chunks[i],
+        );
+        if (i % 6 == 5) {
+          await Future.delayed(const Duration(milliseconds: 12));
+        }
+      }
+    } catch (e) {
+      debugPrint('[RLINK][ChBak] gossip snapshot broadcast failed: $e');
+    }
   }
 
   Future<String?> _x25519For(String userId) async {
@@ -194,25 +226,14 @@ class ChannelBackupService {
       }
     } catch (_) {}
 
-    await Future.delayed(const Duration(milliseconds: 400));
-    final mid = backupMsgId(channel.id, rev);
-    final chunks = _splitChunks(sealed);
-    await GossipRouter.instance.sendChannelBackupMeta(
-      channelId: channel.id,
-      rev: rev,
-      totalChunks: chunks.length,
-      adminId: myId,
-      msgId: mid,
-    );
-    for (var i = 0; i < chunks.length; i++) {
-      await GossipRouter.instance.sendChannelBackupChunk(
-        msgId: mid,
-        index: i,
-        base64Data: chunks[i],
-      );
-      if (i % 6 == 5) {
-        await Future.delayed(const Duration(milliseconds: 12));
-      }
+    // Broadcast the snapshot to P2P peers. With media embedded the blob is large
+    // and gossip caps img packets at ~500B → thousands of 90B chunks. Awaiting
+    // this made "Опубликовать историю" spin forever AND blocked the Drive upload
+    // below (so new subscribers saw nothing). For Drive-enabled channels skip it
+    // entirely — subscribers background-pull the full snapshot from Drive. Only
+    // non-Drive channels need the gossip path, and even then run it unawaited.
+    if (!channel.driveBackupEnabled) {
+      unawaited(_broadcastSnapshotOverGossip(channel.id, rev, myId, sealed));
     }
 
     String? fileId;

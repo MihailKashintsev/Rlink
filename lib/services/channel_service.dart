@@ -1715,6 +1715,10 @@ class ChannelService {
     try {
       final bytes = await _readMediaBytesWebSafe(path);
       if (bytes == null || bytes.isEmpty) return;
+      // Don't embed very large media in the snapshot — it would bloat the Drive
+      // upload and the per-publish payload. Such media reaches subscribers via
+      // live gossip chunks when online instead.
+      if (bytes.length > 4 * 1024 * 1024) return;
       out[dataKey] = base64Encode(bytes);
       out[nameKey] = kIsWeb ? _uuid.v4() : p.basename(path);
     } catch (e) {
