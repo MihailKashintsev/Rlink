@@ -414,11 +414,107 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       ),
       floatingActionButton: childLinked
           ? null
-          : FloatingActionButton(
-              onPressed: _createChannel,
-              child: const Icon(Icons.add_comment_outlined),
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'joinByLink',
+                  tooltip: 'Войти по ссылке-приглашению',
+                  onPressed: _pasteInviteAndJoin,
+                  child: const Icon(Icons.link_rounded),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'createChannel',
+                  onPressed: _createChannel,
+                  child: const Icon(Icons.add_comment_outlined),
+                ),
+              ],
             ),
     );
+  }
+
+  /// Вступление по вставленной ссылке/коду приглашения. Решает проблему iOS,
+  /// где ссылка открывает Safari, а не установленный PWA: получатель открывает
+  /// СВОЁ приложение и вставляет ссылку сюда.
+  Future<void> _pasteInviteAndJoin() async {
+    final clip = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) return;
+    final ctrl = TextEditingController(text: (clip?.text ?? '').trim());
+    final text = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Войти в канал по ссылке'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Вставьте ссылку-приглашение или код канала.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              minLines: 1,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'rendergames.ru/…?channel=…',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('Войти')),
+        ],
+      ),
+    );
+    if (text == null || text.isEmpty || !mounted) return;
+    await _joinFromInviteText(text);
+  }
+
+  Future<void> _joinFromInviteText(String text) async {
+    String? channelId;
+    final uri = Uri.tryParse(text);
+    if (uri != null) channelId = RlinkDeepLink.parseChannelId(uri);
+    channelId ??= text.trim();
+
+    var ch = await ChannelService.instance.getChannel(channelId);
+    // Fallback: maybe a username / universal code was pasted.
+    if (ch == null) {
+      final found = await ChannelService.instance
+          .searchChannels(text.trim(), includeHidden: true);
+      if (found.isNotEmpty) ch = found.first;
+    }
+    if (!mounted) return;
+    if (ch == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Канал не найден. Подключитесь к сети и попробуйте ещё раз, '
+            'либо попросите прямое приглашение от админа.',
+          ),
+        ),
+      );
+      return;
+    }
+    final myId = CryptoService.instance.publicKeyHex;
+    if (!ch.subscriberIds.contains(myId)) {
+      await ChannelService.instance.subscribe(ch.id, myId);
+      ch = await ChannelService.instance.getChannel(ch.id) ?? ch;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Вы подписаны на «${ch.name}»')),
+    );
+    _openChannel(ch);
   }
 
   void _openChannel(Channel ch) {
