@@ -179,6 +179,21 @@ class ChannelBackupService {
       wrappedKeys[uid] = em.toJson();
     }
 
+    // Always include the admin's OWN wrapped key in the keys file, so the owner
+    // can recover the channel from Drive on a fresh device/session where the
+    // local symmetric key isn't present (e.g. web secure storage didn't persist
+    // it). _x25519For can't resolve self, so use our own X25519 public key.
+    try {
+      final adminX = CryptoService.instance.x25519PublicKeyBase64;
+      if (adminX.isNotEmpty) {
+        final em = await CryptoService.instance.encryptMessage(
+          plaintext: base64.encode(key),
+          recipientX25519KeyBase64: adminX,
+        );
+        wrappedKeys[myId] = em.toJson();
+      }
+    } catch (_) {}
+
     await Future.delayed(const Duration(milliseconds: 400));
     final mid = backupMsgId(channel.id, rev);
     final chunks = _splitChunks(sealed);

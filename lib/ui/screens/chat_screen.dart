@@ -10967,7 +10967,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
   bool _peerProfileBannerVisible(String? p) {
     if (p == null || p.isEmpty) return false;
     if (p.startsWith('http://') || p.startsWith('https://')) return true;
-    if (kIsWeb) return false;
+    if (kIsWeb) return _ChatScreenState._isInlineWebUri(p);
     return File(p).existsSync();
   }
 
@@ -11005,12 +11005,27 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
     final p = _bannerPath;
     if (!_peerProfileBannerVisible(p)) return _bannerFallback(color);
     Widget image;
-    if (p!.startsWith('http://') || p.startsWith('https://')) {
+    if (p!.startsWith('http://') ||
+        p.startsWith('https://') ||
+        p.startsWith('data:')) {
       image = Image.network(
         p,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => _bannerFallback(color),
       );
+    } else if (kIsWeb && isWebStoredFile(p)) {
+      image = FutureBuilder<Uint8List?>(
+        future: readWebStoredFile(p),
+        builder: (_, snap) {
+          final b = snap.data;
+          if (b == null || b.isEmpty) return _bannerFallback(color);
+          return Image.memory(b,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _bannerFallback(color));
+        },
+      );
+    } else if (kIsWeb) {
+      image = _bannerFallback(color);
     } else {
       image = Image.file(
         File(p),

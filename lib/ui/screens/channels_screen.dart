@@ -620,14 +620,34 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     WidgetsBinding.instance.addObserver(this);
     _channel = widget.channel;
     unawaited(_loadAndMarkRead());
-    ChannelService.instance.version.addListener(_load);
+    ChannelService.instance.version.addListener(_scheduleLoad);
     _feedScrollController.addListener(_onFeedScroll);
     // Подтягиваем новые посты из P2P-сети подписчиков. Отвечают все, у кого
     // есть история; дедуп по postId на приёме.
     _requestHistoryDelta();
+    // Seamless: silently pull the Drive snapshot (posts + media) in the
+    // background so attachments appear without a manual "Загрузить" tap.
+    unawaited(_backgroundPullFromDrive());
     _historyPollTimer = Timer.periodic(
         const Duration(minutes: 2), (_) => _requestHistoryDelta());
     NotificationService.instance.currentRoute.value = 'channel:${_channel.id}';
+  }
+
+  bool _bgPulling = false;
+
+  Future<void> _backgroundPullFromDrive() async {
+    if (_bgPulling) return;
+    if (!_isSubscribed && _channel.adminId != _myId) return;
+    if (_channel.driveFileUrl == null || _channel.driveFileUrl!.isEmpty) return;
+    _bgPulling = true;
+    try {
+      final ok =
+          await ChannelBackupService.instance.restoreFromDriveUrl(_channel);
+      if (ok && mounted) await _load();
+    } catch (_) {
+    } finally {
+      _bgPulling = false;
+    }
   }
 
   @override
@@ -659,10 +679,11 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _historyPollTimer?.cancel();
+    _deferredLoadTimer?.cancel();
     unawaited(ChannelService.instance.markChannelRead(_channel.id));
     _feedScrollController.removeListener(_onFeedScroll);
     _feedScrollController.dispose();
-    ChannelService.instance.version.removeListener(_load);
+    ChannelService.instance.version.removeListener(_scheduleLoad);
     _postCtrl.dispose();
     _recordingTimer?.cancel();
     _recordingSecondsNotifier.dispose();
@@ -691,7 +712,35 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     if (mounted) await ChannelService.instance.markChannelRead(_channel.id);
   }
 
+  /// Posts shown in the feed. A post whose attachment hasn't been fetched yet
+  /// is hidden (seamless) until the media arrives in the background — except
+  /// the viewer's own posts, which always have their media locally.
+  List<ChannelPost> get _visiblePosts => _posts
+      .where((p) => p.authorId == _myId || !channelPostMissingLocalMedia(p))
+      .toList();
+
+  DateTime? _lastScrollAt;
+  Timer? _deferredLoadTimer;
+
+  /// Reloads the feed, but defers while the user is actively scrolling so a
+  /// version bump (background pull, history poll, read-marker) doesn't rebuild
+  /// the list mid-scroll and make it jump.
+  void _scheduleLoad() {
+    final last = _lastScrollAt;
+    final scrolling = last != null &&
+        DateTime.now().difference(last) < const Duration(milliseconds: 450);
+    if (scrolling) {
+      _deferredLoadTimer?.cancel();
+      _deferredLoadTimer =
+          Timer(const Duration(milliseconds: 500), _scheduleLoad);
+      return;
+    }
+    _deferredLoadTimer?.cancel();
+    unawaited(_load());
+  }
+
   void _onFeedScroll() {
+    _lastScrollAt = DateTime.now();
     final pos = _feedScrollController.hasClients
         ? _feedScrollController.position
         : null;
@@ -2543,7 +2592,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                       color: cs.onSurface.withValues(alpha: 0.6))),
             ),
           Expanded(
-            child: _posts.isEmpty
+            child: _visiblePosts.isEmpty
                 ? _buildEmptyPostsView(cs)
                 : Stack(
                     fit: StackFit.expand,
@@ -2551,14 +2600,16 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                       ListView.builder(
                         controller: _feedScrollController,
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: _posts.length,
+                        itemCount: _visiblePosts.length,
                         itemBuilder: (_, i) {
-                          final post = _posts[i];
+                          final post = _visiblePosts[i];
                           final showComments = _channel.commentsEnabled ||
                               (post.authorId == _myId &&
                                   _channel.canPost(_myId));
                           return RepaintBoundary(
+                            key: ValueKey('post_${post.id}'),
                             child: _PostCard(
+                              key: ValueKey('postcard_${post.id}'),
                               post: post,
                               isAdmin: _isAdmin,
                               commentsEnabled: showComments,
@@ -2677,6 +2728,7 @@ class _PostCard extends StatefulWidget {
   final String channelAdminId;
 
   const _PostCard({
+    super.key,
     required this.post,
     required this.isAdmin,
     required this.commentsEnabled,

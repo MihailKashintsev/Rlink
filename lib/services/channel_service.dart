@@ -1671,13 +1671,11 @@ class ChannelService {
         orderBy: 'timestamp ASC',
       );
       final postMap = Map<String, dynamic>.from(r);
-      final postMedia =
-          kIsWeb ? const <String, dynamic>{} : await _readRowMediaData(postMap);
+      final postMedia = await _readRowMediaData(postMap);
       final commentsList = <Map<String, dynamic>>[];
       for (final c in crows) {
         final cm = Map<String, dynamic>.from(c);
-        final commentMedia =
-            kIsWeb ? const <String, dynamic>{} : await _readRowMediaData(cm);
+        final commentMedia = await _readRowMediaData(cm);
         commentsList.add({...cm, ...commentMedia});
       }
       posts.add({
@@ -1715,14 +1713,36 @@ class ChannelService {
     final path = row[pathKey] as String?;
     if (path == null || path.isEmpty) return;
     try {
-      final file = File(path);
-      if (!file.existsSync()) return;
-      final bytes = await file.readAsBytes();
+      final bytes = await _readMediaBytesWebSafe(path);
+      if (bytes == null || bytes.isEmpty) return;
       out[dataKey] = base64Encode(bytes);
-      out[nameKey] = p.basename(path);
+      out[nameKey] = kIsWeb ? _uuid.v4() : p.basename(path);
     } catch (e) {
       debugPrint('[RLINK][ChBak] skip media $path: $e');
     }
+  }
+
+  /// Reads media bytes for a snapshot from a data: URL, OPFS (web) or a file.
+  Future<Uint8List?> _readMediaBytesWebSafe(String path) async {
+    if (path.startsWith('data:')) {
+      final comma = path.indexOf(',');
+      if (comma < 0) return null;
+      try {
+        return base64Decode(path.substring(comma + 1));
+      } catch (_) {
+        return null;
+      }
+    }
+    final rp = ImageService.instance.resolveStoredPath(path) ?? path;
+    if (kIsWeb) {
+      if (isWebStoredFile(rp)) return readWebStoredFile(rp);
+      return null;
+    }
+    try {
+      final f = File(rp);
+      if (f.existsSync()) return f.readAsBytes();
+    } catch (_) {}
+    return null;
   }
 
   /// Слияние снимка в локальную БД: снимок полный — посты канала, которых нет в JSON, удаляются.
@@ -1736,7 +1756,7 @@ class ChannelService {
     // Для v2 снимков — восстанавливаем медиафайлы ДО транзакции (IO вне TX).
     final restoredPostMedia = <String, Map<String, String>>{};
     final restoredCommentMedia = <String, Map<String, String>>{};
-    if (!kIsWeb && (json['v'] as int? ?? 1) >= 2) {
+    if ((json['v'] as int? ?? 1) >= 2) {
       for (final item in posts) {
         final m = item as Map<String, dynamic>;
         final postId = (m['post'] as Map?)?['id'] as String?;
@@ -1821,15 +1841,17 @@ class ChannelService {
   Future<Map<String, String>> _restoreRowMediaFiles(
       Map<String, dynamic> entry) async {
     final result = <String, String>{};
-    final docsDir = await getApplicationDocumentsDirectory();
-    await _restoreMediaField(entry, result, '_img', '_img_n', 'image_path',
-        Directory(p.join(docsDir.path, 'images')));
-    await _restoreMediaField(entry, result, '_vid', '_vid_n', 'video_path',
-        Directory(p.join(docsDir.path, 'videos')));
+    final docsDir = kIsWeb ? null : await getApplicationDocumentsDirectory();
+    Directory? sub(String name) =>
+        docsDir == null ? null : Directory(p.join(docsDir.path, name));
+    await _restoreMediaField(
+        entry, result, '_img', '_img_n', 'image_path', sub('images'), 'image/jpeg');
+    await _restoreMediaField(
+        entry, result, '_vid', '_vid_n', 'video_path', sub('videos'), 'video/mp4');
     await _restoreMediaField(entry, result, '_voice', '_voice_n', 'voice_path',
-        Directory(p.join(docsDir.path, 'voices')));
+        sub('voices'), 'audio/mp4');
     await _restoreMediaField(entry, result, '_file', '_file_n', 'file_path',
-        Directory(p.join(docsDir.path, 'files')));
+        sub('files'), 'application/octet-stream');
     return result;
   }
 
@@ -1839,7 +1861,8 @@ class ChannelService {
     String dataKey,
     String nameKey,
     String pathKey,
-    Directory dir,
+    Directory? dir,
+    String mimeType,
   ) async {
     final data = entry[dataKey] as String?;
     if (data == null || data.isEmpty) return;
@@ -1847,6 +1870,16 @@ class ChannelService {
       final name = (entry[nameKey] as String?)?.isNotEmpty == true
           ? entry[nameKey] as String
           : _uuid.v4();
+      if (kIsWeb) {
+        final stored = await writeWebStoredFile(
+          fileName: name,
+          bytes: base64Decode(data),
+          mimeType: mimeType,
+        );
+        if (stored != null && stored.isNotEmpty) out[pathKey] = stored;
+        return;
+      }
+      if (dir == null) return;
       if (!dir.existsSync()) dir.createSync(recursive: true);
       final filePath = p.join(dir.path, name);
       final file = File(filePath);
