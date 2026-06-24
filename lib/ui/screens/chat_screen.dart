@@ -11,6 +11,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, HapticFeedback, rootBundle;
 import 'package:camera/camera.dart';
@@ -120,6 +121,7 @@ import 'emoji_hub_screen.dart';
 import 'emoji_pack_detail_screen.dart';
 import 'stickers_hub_screen.dart';
 import '../widgets/composer_input_bar.dart';
+import '../widgets/message_actions_overlay.dart';
 import '../mention_nav.dart';
 
 bool _dmVideoPathIsSquare(String path) {
@@ -5477,6 +5479,51 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // Per-message keys on the bubble RepaintBoundary, for the Telegram-style
+  // long-press overlay (snapshot the bubble + lift it above a blur).
+  final Map<String, GlobalKey> _bubbleBoundaryKeys = {};
+  GlobalKey _bubbleBoundaryKey(String msgId) =>
+      _bubbleBoundaryKeys.putIfAbsent(msgId, () => GlobalKey());
+
+  RenderRepaintBoundary? _captureBubbleBoundary(String msgId) {
+    final ctx = _bubbleBoundaryKeys[msgId]?.currentContext;
+    final ro = ctx?.findRenderObject();
+    if (ro is RenderRepaintBoundary && !ro.debugNeedsPaint) return ro;
+    return null;
+  }
+
+  Future<void> _copyMessage(ChatMessage msg) async {
+    final plain = _plainTextForClipboard(msg);
+    if (plain.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нечего копировать')),
+      );
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: plain));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Сообщение скопировано')),
+    );
+  }
+
+  Future<void> _importStickerFromMessage(String stickerSourcePath) async {
+    try {
+      await StickerCollectionService.instance
+          .importChatImageToCollection(stickerSourcePath);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Добавлено в стикеры')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   Future<void> _onLongPressMessage(ChatMessage msg) async {
     final stickerSourcePath = msg.imagePath == null
         ? null
@@ -5503,6 +5550,92 @@ class _ChatScreenState extends State<ChatScreen> {
     final canImportSticker = !kIsWeb &&
         stickerSourcePath != null &&
         File(stickerSourcePath).existsSync();
+
+    // Telegram-style overlay: snapshot the bubble, blur the screen, lift the
+    // bubble and show a compact action menu next to it. Falls back to the sheet.
+    final boundary = _captureBubbleBoundary(msg.id);
+    if (boundary != null) {
+      final box = boundary as RenderBox;
+      final rect = box.localToGlobal(Offset.zero) & box.size;
+      final image = await boundary.toImage(
+          pixelRatio: MediaQuery.of(context).devicePixelRatio);
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      final hasFile = msg.filePath != null && msg.filePath!.trim().isNotEmpty;
+      final actions = <MessageMenuAction>[
+        MessageMenuAction(
+            icon: Icons.checklist_rtl,
+            label: 'Выбрать',
+            onTap: () => _enterBulkSelect(msg)),
+        MessageMenuAction(
+            icon: Icons.reply,
+            label: 'Ответить',
+            onTap: () => _startReply(msg)),
+        MessageMenuAction(
+            icon: Icons.copy_outlined,
+            label: 'Скопировать',
+            onTap: () => unawaited(_copyMessage(msg))),
+        MessageMenuAction(
+            icon: _pinnedMsgIds.contains(msg.id)
+                ? Icons.push_pin_outlined
+                : Icons.push_pin,
+            label: _pinnedMsgIds.contains(msg.id) ? 'Открепить' : 'Закрепить',
+            onTap: () => unawaited(_togglePinMessage(msg))),
+        MessageMenuAction(
+            icon: Icons.forward,
+            label: 'Переслать…',
+            onTap: () => unawaited(_pickForwardTargetAndNavigate(msg))),
+        MessageMenuAction(
+            icon: Icons.share_outlined,
+            label: 'Экспортировать…',
+            onTap: () => unawaited(shareChatMessageExternally(context, msg))),
+        if (canSaveImage)
+          MessageMenuAction(
+              icon: Icons.save_alt_outlined,
+              label: 'Сохранить фото',
+              onTap: () => unawaited(_saveImageToGallery(imageSavePath))),
+        if (canSaveVideo)
+          MessageMenuAction(
+              icon: Icons.video_file_outlined,
+              label: 'Сохранить видео',
+              onTap: () => unawaited(_saveVideoToGallery(videoSavePath))),
+        if (canSaveImage || canSaveVideo || hasFile)
+          MessageMenuAction(
+              icon: Icons.add_to_drive_outlined,
+              label: 'На Google Drive',
+              onTap: () => unawaited(_saveMessageMediaToDrive(msg))),
+        if (canImportSticker)
+          MessageMenuAction(
+              icon: Icons.bookmark_add_outlined,
+              label: 'В стикеры',
+              onTap: () => unawaited(_importStickerFromMessage(
+                  stickerSourcePath))),
+        if (msg.isOutgoing)
+          MessageMenuAction(
+              icon: Icons.edit,
+              label: 'Редактировать',
+              onTap: () => _startEdit(msg)),
+        if (msg.isOutgoing)
+          MessageMenuAction(
+              icon: Icons.delete_outline,
+              label: 'Удалить',
+              destructive: true,
+              onTap: () => unawaited(_confirmAndDelete(msg))),
+      ];
+      await showMessageActionsOverlay(
+        context: context,
+        bubbleRect: rect,
+        snapshot: image,
+        actions: actions,
+        onReact: (e) => unawaited(_toggleReaction(msg, e)),
+        onMoreReactions: () => unawaited(_showReactionPicker(msg)),
+      );
+      image.dispose();
+      return;
+    }
+
     await showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -7030,7 +7163,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                                             : () => unawaited(
                                                                 _quickReaction(
                                                                     msg)),
-                                                        child: _MessageBubble(
+                                                        child: RepaintBoundary(
+                                                          key:
+                                                              _bubbleBoundaryKey(
+                                                                  msg.id),
+                                                          child: _MessageBubble(
                                                           msg: msg,
                                                           bulkSelectMode:
                                                               _bulkSelectMode,
@@ -7124,7 +7261,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                                               _openPeerStickersFromMessage,
                                                           onStickerTapFromLocal:
                                                               _openStickerPackFromLocal,
-                                                        ),
+                                                        )),
                                                       ),
                                                     ),
                                                   ),
