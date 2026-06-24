@@ -806,6 +806,8 @@ class _ChannelAdminSettingsScreenState
     final theme = Theme.of(context);
 
     return Scaffold(
+      // Plain themed background instead of the app wallpaper (cleaner here).
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: Text(_isModeratorDriveMode
             ? 'Google Drive: ${ch.name}'

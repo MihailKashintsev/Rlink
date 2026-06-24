@@ -37,10 +37,23 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay>
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..repeat();
+    // Auto-dismiss the invite if the caller cancels / the call ends / times out.
+    CallService.instance.phase.addListener(_onPhase);
+  }
+
+  void _onPhase() {
+    final p = CallService.instance.phase.value;
+    if (p == CallPhase.ended || p == CallPhase.failed || p == CallPhase.idle) {
+      if (mounted && !_busy) {
+        _busy = true;
+        Navigator.of(context).maybePop();
+      }
+    }
   }
 
   @override
   void dispose() {
+    CallService.instance.phase.removeListener(_onPhase);
     _pulseController.dispose();
     super.dispose();
   }

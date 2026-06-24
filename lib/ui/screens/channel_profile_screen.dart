@@ -68,6 +68,32 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
         child: Icon(Icons.image_outlined, color: cs.onSurfaceVariant),
       );
 
+  /// Web-safe banner image for the strip below the avatar.
+  Widget _bannerImage(ColorScheme cs, Channel ch, String? raw, String? resolved,
+      bool isData) {
+    Widget fallback() =>
+        Container(color: Color(ch.avatarColor).withValues(alpha: 0.35));
+    if (isData && raw != null) {
+      return Image.network(raw,
+          fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback());
+    }
+    if (kIsWeb) {
+      final p = resolved ?? raw ?? '';
+      if (!isWebStoredFile(p)) return fallback();
+      return FutureBuilder<Uint8List?>(
+        future: readWebStoredFile(p),
+        builder: (_, snap) => (snap.data != null && snap.data!.isNotEmpty)
+            ? Image.memory(snap.data!, fit: BoxFit.cover)
+            : fallback(),
+      );
+    }
+    if (resolved != null && File(resolved).existsSync()) {
+      return Image.file(File(resolved),
+          fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback());
+    }
+    return fallback();
+  }
+
   /// Web-safe square media thumbnail for the grid.
   Widget _mediaThumb(ColorScheme cs, ChannelPost post) {
     final isVideo = post.videoPath != null && post.videoPath!.isNotEmpty;
@@ -211,8 +237,9 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: hasBanner ? 200 : 120,
             pinned: true,
+            title:
+                Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis),
             actions: [
               IconButton(
                 icon: const Icon(Icons.share_outlined),
@@ -257,59 +284,17 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                   },
                 ),
             ],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (hasBanner && bannerIsData)
-                    Image.network(
-                      bannerRaw,
-                      key: ValueKey(bannerRaw),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                          color:
-                              Color(ch.avatarColor).withValues(alpha: 0.35)),
-                    )
-                  else if (hasBanner)
-                    Image.file(
-                      File(bannerResolved!),
-                      key: ValueKey(bannerResolved),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                          color:
-                              Color(ch.avatarColor).withValues(alpha: 0.35)),
-                    )
-                  else
-                    Container(
-                        color: Color(ch.avatarColor).withValues(alpha: 0.35)),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.15),
-                          Colors.black.withValues(alpha: 0.55),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header: avatar overlaps the banner edge with a surface ring,
-                  // name + stats beside it (no awkward floating overlap).
-                  Transform.translate(
-                    offset: const Offset(0, -34),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                  // Avatar on top (centered), then the banner strip below it.
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
                           decoration: BoxDecoration(
@@ -318,8 +303,8 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
+                                blurRadius: 14,
+                                offset: const Offset(0, 6),
                               ),
                             ],
                           ),
@@ -332,55 +317,51 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                             color: ch.avatarColor,
                             emoji: ch.avatarEmoji,
                             imagePath: ch.avatarImagePath,
-                            size: 92,
+                            size: 104,
                           ),
                         ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        ch.name,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w700,
-                                          height: 1.1,
-                                        ),
-                                      ),
-                                    ),
-                                    if (ch.verified) ...[
-                                      const SizedBox(width: 6),
-                                      const Icon(Icons.verified,
-                                          color: Colors.blue, size: 20),
-                                    ],
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${ch.subscriberIds.length} подписчиков',
-                                  style: TextStyle(
-                                      color: cs.onSurfaceVariant, fontSize: 14),
-                                ),
-                              ],
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                ch.name,
+                                maxLines: 2,
+                                textAlign: TextAlign.center,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 22, fontWeight: FontWeight.w700),
+                              ),
                             ),
-                          ),
+                            if (ch.verified) ...[
+                              const SizedBox(width: 6),
+                              const Icon(Icons.verified,
+                                  color: Colors.blue, size: 20),
+                            ],
+                          ],
                         ),
+                        const SizedBox(height: 4),
+                        Text('${ch.subscriberIds.length} подписчиков',
+                            style: TextStyle(
+                                color: cs.onSurfaceVariant, fontSize: 14)),
                       ],
                     ),
                   ),
-                  // Close part of the translate gap.
-                  Transform.translate(
-                    offset: const Offset(0, -18),
-                    child: Column(
+                  if (hasBanner) ...[
+                    const SizedBox(height: 18),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        height: 150,
+                        width: double.infinity,
+                        child: _bannerImage(
+                            cs, ch, bannerRaw, bannerResolved, bannerIsData),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 18),
+                  Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (ch.description != null &&
@@ -449,7 +430,6 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                           ),
                       ],
                     ),
-                  ),
                 ],
               ),
             ),
