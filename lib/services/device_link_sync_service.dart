@@ -4,17 +4,45 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_message.dart';
+import '../models/contact.dart';
 import 'dm_bot_flags.dart';
 import 'app_settings.dart';
+import 'channel_service.dart';
 import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
 import 'relay_service.dart';
 
+/// Live progress of a linked-device snapshot transfer (drives the sync animation).
+class LinkSyncProgress {
+  final int done;
+  final int total;
+  final String phase;
+
+  /// Recently received items (emoji + color) for the avatar carousel.
+  final List<({String emoji, int color})> avatars;
+  const LinkSyncProgress({
+    required this.done,
+    required this.total,
+    required this.phase,
+    this.avatars = const [],
+  });
+
+  double get fraction => total <= 0 ? 0 : (done / total).clamp(0.0, 1.0);
+}
+
 /// Syncs DM history between linked primary/child devices.
 class DeviceLinkSyncService {
   DeviceLinkSyncService._();
   static final DeviceLinkSyncService instance = DeviceLinkSyncService._();
+
+  /// Non-null while a child device is receiving a snapshot — the UI shows the
+  /// sync animation overlay. Cleared when the transfer finishes.
+  final ValueNotifier<LinkSyncProgress?> progress =
+      ValueNotifier<LinkSyncProgress?>(null);
+  int _progressTotal = 0;
+  int _progressDone = 0;
+  final List<({String emoji, int color})> _progressAvatars = [];
 
   StreamSubscription<ChatMessage>? _messageSub;
   VoidCallback? _relayListener;
@@ -149,43 +177,65 @@ class DeviceLinkSyncService {
 
     _snapshotSending = true;
     try {
-      await GossipRouter.instance.sendDeviceDmSync(
-        publicKey: myKey,
-        recipientId: recipientId,
-        kind: 'dm_reset',
-        snapshot: true,
-      );
+      Future<void> send(String kind, [Map<String, dynamic> data = const {}]) =>
+          GossipRouter.instance.sendDeviceDmSync(
+            publicKey: myKey,
+            recipientId: recipientId,
+            kind: kind,
+            data: data,
+            snapshot: true,
+          );
 
-      var sent = 0;
+      await send('dm_reset');
+
+      // Gather everything up front so the child can show an accurate progress bar.
+      final contacts = (await ChatStorageService.instance.getContacts())
+          .where((c) =>
+              !isDmBotPeerId(c.publicKeyHex) &&
+              _normalizeKey(c.publicKeyHex) != _normalizeKey(recipientId))
+          .toList();
+      final channels = (await ChannelService.instance.getChannels())
+          .where((c) => c.isPublic && !c.blocked)
+          .toList();
       final peerIds = await ChatStorageService.instance.getChatPeerIds();
+      final allMessages = <ChatMessage>[];
       for (final peerId in peerIds) {
         if (isDmBotPeerId(peerId)) continue;
         if (_normalizeKey(peerId) == _normalizeKey(recipientId)) continue;
-        final messages =
-            await ChatStorageService.instance.getAllMessages(peerId);
-        for (final msg in messages) {
-          await GossipRouter.instance.sendDeviceDmSync(
-            publicKey: myKey,
-            recipientId: recipientId,
-            kind: 'dm_msg',
-            data: _encodeMessage(msg),
-            snapshot: true,
-          );
-          sent++;
-          if (sent % 30 == 0) {
-            await Future.delayed(const Duration(milliseconds: 20));
-          }
+        allMessages
+            .addAll(await ChatStorageService.instance.getAllMessages(peerId));
+      }
+
+      final total = contacts.length + channels.length + allMessages.length;
+      await send('link_begin', {'total': total});
+
+      for (final c in contacts) {
+        await send('ct', _encodeContact(c));
+        await Future.delayed(const Duration(milliseconds: 8));
+      }
+      for (final ch in channels) {
+        await send('chan', {
+          'id': ch.id,
+          'n': ch.name,
+          'col': ch.avatarColor,
+          'em': ch.avatarEmoji,
+          'adm': ch.adminId,
+        });
+        await Future.delayed(const Duration(milliseconds: 8));
+      }
+
+      var sent = 0;
+      for (final msg in allMessages) {
+        await send('dm_msg', _encodeMessage(msg));
+        sent++;
+        if (sent % 30 == 0) {
+          await Future.delayed(const Duration(milliseconds: 20));
         }
       }
 
-      await GossipRouter.instance.sendDeviceDmSync(
-        publicKey: myKey,
-        recipientId: recipientId,
-        kind: 'dm_done',
-        data: <String, dynamic>{'count': sent},
-        snapshot: true,
-      );
-      debugPrint('[RLINK][LinkSync] Snapshot sent, messages=$sent');
+      await send('dm_done', <String, dynamic>{'count': sent});
+      debugPrint('[RLINK][LinkSync] Snapshot sent: contacts=${contacts.length} '
+          'channels=${channels.length} messages=$sent');
     } catch (e) {
       debugPrint('[RLINK][LinkSync] Snapshot send failed: $e');
     } finally {
@@ -226,13 +276,34 @@ class DeviceLinkSyncService {
 
     switch (kind) {
       case 'dm_reset':
+        // Child hides its own previous conversations before the parent's arrive.
         await ChatStorageService.instance.deleteAllDirectMessages();
+        return;
+      case 'link_begin':
+        _progressTotal = (data['total'] as num?)?.toInt() ?? 0;
+        _progressDone = 0;
+        _progressAvatars.clear();
+        _emitProgress('Перенос профиля…');
+        return;
+      case 'ct':
+        final c = _decodeContact(data);
+        if (c != null) {
+          await ChatStorageService.instance.saveContact(c);
+          _bumpProgress('Контакты', emoji: c.avatarEmoji, color: c.avatarColor);
+        }
+        return;
+      case 'chan':
+        await _applyChannel(data);
+        _bumpProgress('Каналы',
+            emoji: (data['em'] as String?) ?? '📢',
+            color: (data['col'] as num?)?.toInt() ?? 0xFF42A5F5);
         return;
       case 'dm_msg':
         final msg = _decodeMessage(data);
         if (msg == null) return;
         _suppressLocalMirror(msg.id);
         await ChatStorageService.instance.saveMessage(msg);
+        _bumpProgress('Сообщения');
         return;
       case 'dm_status':
         final msgId = data['id'] as String?;
@@ -248,10 +319,85 @@ class DeviceLinkSyncService {
           debugPrint(
               '[RLINK][LinkSync] Snapshot applied from ${sourceId.substring(0, sourceId.length.clamp(0, 8))}');
         }
+        // Finish the animation a beat later so it doesn't flash away.
+        Future<void>.delayed(const Duration(milliseconds: 900), () {
+          progress.value = null;
+        });
         return;
       default:
         return;
     }
+  }
+
+  void _emitProgress(String phase) {
+    progress.value = LinkSyncProgress(
+      done: _progressDone,
+      total: _progressTotal,
+      phase: phase,
+      avatars: List.unmodifiable(_progressAvatars),
+    );
+  }
+
+  void _bumpProgress(String phase, {String? emoji, int? color}) {
+    _progressDone++;
+    if (emoji != null && color != null) {
+      _progressAvatars.add((emoji: emoji, color: color));
+      if (_progressAvatars.length > 24) _progressAvatars.removeAt(0);
+    }
+    _emitProgress(phase);
+  }
+
+  /// Child applies a channel the parent shared: ensure it exists locally and
+  /// subscribe to it (best-effort; admin co-ownership is not transferred).
+  Future<void> _applyChannel(Map<String, dynamic> data) async {
+    final id = data['id'] as String?;
+    if (id == null || id.isEmpty) return;
+    try {
+      final myId = CryptoService.instance.publicKeyHex;
+      final existing = await ChannelService.instance.getChannel(id);
+      if (existing != null) {
+        if (!existing.subscriberIds.contains(myId)) {
+          await ChannelService.instance.subscribe(id, myId);
+          unawaited(GossipRouter.instance.broadcastChannelSubscribe(
+            channelId: id,
+            userId: myId,
+            x25519: CryptoService.instance.x25519PublicKeyBase64,
+          ));
+        }
+      }
+      // If not present locally yet, the relay directory snapshot will add it;
+      // the child can then join via the channel id.
+    } catch (e) {
+      debugPrint('[RLINK][LinkSync] applyChannel failed: $e');
+    }
+  }
+
+  static Map<String, dynamic> _encodeContact(Contact c) => <String, dynamic>{
+        'pk': c.publicKeyHex,
+        'n': c.nickname,
+        'u': c.username,
+        'col': c.avatarColor,
+        'em': c.avatarEmoji,
+        if (c.x25519Key != null && c.x25519Key!.isNotEmpty) 'x': c.x25519Key,
+        if (c.tags.isNotEmpty) 'tg': c.tags,
+        'se': c.statusEmoji,
+      };
+
+  static Contact? _decodeContact(Map<String, dynamic> data) {
+    final pk = data['pk'] as String?;
+    if (pk == null || pk.isEmpty) return null;
+    return Contact(
+      publicKeyHex: pk,
+      nickname: (data['n'] as String?) ?? '',
+      username: (data['u'] as String?) ?? '',
+      avatarColor: (data['col'] as num?)?.toInt() ?? 0xFF42A5F5,
+      avatarEmoji: (data['em'] as String?) ?? '🙂',
+      x25519Key: data['x'] as String?,
+      addedAt: DateTime.now(),
+      tags: (data['tg'] as List?)?.map((e) => e.toString()).toList() ??
+          const <String>[],
+      statusEmoji: (data['se'] as String?) ?? '',
+    );
   }
 
   String? _linkedPeerKey() {

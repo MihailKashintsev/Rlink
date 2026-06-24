@@ -78,6 +78,7 @@ import 'ui/app_palettes.dart';
 import 'ui/screens/chat_list_screen.dart';
 import 'ui/widgets/audio_queue_mini_player.dart';
 import 'ui/widgets/square_video_queue_pip.dart';
+import 'ui/widgets/link_sync_overlay.dart';
 import 'ui/screens/onboarding_screen.dart';
 import 'ui/widgets/incoming_call_overlay.dart';
 
@@ -4075,6 +4076,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
             children: [
               if (child != null) child,
               const SquareVideoQueuePip(),
+              const LinkSyncOverlay(),
               ValueListenableBuilder<double?>(
                 valueListenable: AudioQueueMiniPlayerLayout.instance.barTop,
                 builder: (ctx, top, _) {
