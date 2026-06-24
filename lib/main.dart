@@ -223,22 +223,22 @@ Future<void> _notifyIncomingDirectEvent({
 Future<void> broadcastMyAvatar() async {
   final myProfile = ProfileService.instance.profile;
   if (myProfile == null) return;
-  final imagePath =
-      ImageService.instance.resolveStoredPath(myProfile.avatarImagePath);
-  if (imagePath != null) {
-    await _broadcastAvatar(myProfile.publicKeyHex, imagePath);
-  }
+  final raw = myProfile.avatarImagePath;
+  if (raw == null || raw.isEmpty) return;
+  // Fall back to the raw path so web data: URLs (resolveStoredPath may null them)
+  // still get broadcast — _readProfileMediaBytes handles data:/opfs/file.
+  final imagePath = ImageService.instance.resolveStoredPath(raw) ?? raw;
+  await _broadcastAvatar(myProfile.publicKeyHex, imagePath);
 }
 
 /// Broadcast my banner to all peers (callable from anywhere).
 Future<void> broadcastMyBanner() async {
   final myProfile = ProfileService.instance.profile;
   if (myProfile == null) return;
-  final bannerPath =
-      ImageService.instance.resolveStoredPath(myProfile.bannerImagePath);
-  if (bannerPath != null) {
-    await _broadcastBanner(myProfile.publicKeyHex, bannerPath);
-  }
+  final raw = myProfile.bannerImagePath;
+  if (raw == null || raw.isEmpty) return;
+  final bannerPath = ImageService.instance.resolveStoredPath(raw) ?? raw;
+  await _broadcastBanner(myProfile.publicKeyHex, bannerPath);
 }
 
 /// Рассылка «музыки профиля» контактам (relay + BLE).

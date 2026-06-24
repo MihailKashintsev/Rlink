@@ -323,13 +323,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       // Если аватар/баннер реально изменились — перешлём изображения контактам,
       // чтобы у них обновилась картинка (а не только метаданные профиля).
-      if (!kIsWeb &&
-          updated.avatarImagePath != null &&
+      if (updated.avatarImagePath != null &&
           updated.avatarImagePath != prevAvatar) {
         unawaited(broadcastMyAvatar());
       }
-      if (!kIsWeb &&
-          updated.bannerImagePath != null &&
+      if (updated.bannerImagePath != null &&
           updated.bannerImagePath != prevBanner) {
         unawaited(broadcastMyBanner());
       }
