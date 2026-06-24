@@ -16,6 +16,7 @@ import 'package:window_manager/window_manager.dart';
 import 'models/channel.dart';
 import 'models/chat_message.dart';
 import 'utils/reaction_limit.dart';
+import 'utils/web_persistent_storage.dart';
 import 'utils/invite_dm_codec.dart';
 import 'utils/custom_emoji_text.dart';
 import 'utils/reaction_emoji_key.dart';
@@ -604,6 +605,10 @@ Future<void> initServices() async {
   try {
     await initWebStorageIfNeeded();
     if (RuntimePlatform.isWeb) {
+      // Ask the browser to keep our storage durable — otherwise IndexedDB
+      // (channel settings), localStorage (linked Google accounts) and OPFS
+      // media can be evicted between sessions, especially on iOS Safari.
+      unawaited(requestPersistentStorage());
       await _runWebStartupStep(
         'hydrate web identity from OPFS',
         WebIdentityPortable.hydrateLayeredStorageFromOpfsIfMissing,
@@ -616,7 +621,9 @@ Future<void> initServices() async {
     await CryptoService.instance.init();
     await AppSettings.instance.init();
     unawaited(MotionController.instance.init());
-    unawaited(GoogleDriveChannelBackup.restoreRelayAccount());
+    // Await so the linked Google account is ready before channel settings /
+    // publish read `hasRelayAccount` (avoids a race that looks like "not linked").
+    await GoogleDriveChannelBackup.restoreRelayAccount();
     if (RuntimePlatform.isWeb) {
       unawaited(GoogleDriveChannelBackup.restoreManualToken());
     }
