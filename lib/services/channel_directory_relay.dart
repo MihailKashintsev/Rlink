@@ -39,6 +39,13 @@ class ChannelDirectoryRelay {
         'driveFileUrl': ch.driveFileUrl,
       if (ch.driveKeysUrl != null && ch.driveKeysUrl!.isNotEmpty)
         'driveKeysUrl': ch.driveKeysUrl,
+      // Persist visual URLs in the directory so offline/late subscribers can
+      // pull avatar+banner from Drive (live gossip meta alone is fragile,
+      // especially for the larger banner).
+      if (ch.driveAvatarUrl != null && ch.driveAvatarUrl!.isNotEmpty)
+        'driveAvatarUrl': ch.driveAvatarUrl,
+      if (ch.driveBannerUrl != null && ch.driveBannerUrl!.isNotEmpty)
+        'driveBannerUrl': ch.driveBannerUrl,
       'allowModeratorsManageDriveAccount': ch.allowModeratorsManageDriveAccount,
       'isPublic': true,
       'linkAdminIds': ch.linkAdminIds,
