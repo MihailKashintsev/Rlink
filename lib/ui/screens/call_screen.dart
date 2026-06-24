@@ -34,6 +34,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _micOn = true;
   bool _camOn = true;
   VoidCallback? _phaseListener;
+  bool _initialRouteApplied = false;
   VoidCallback? _streamListener;
   VoidCallback? _remoteGenListener;
   VoidCallback? _speakerListener;
@@ -90,6 +91,14 @@ class _CallScreenState extends State<CallScreen> {
     _phaseListener = () {
       if (!mounted) return;
       final phase = CallService.instance.phase.value;
+      // On connect, route audio calls to the EARPIECE by default (not the
+      // loudspeaker) — video calls go to the speaker. Applied once so the user's
+      // manual speaker toggle afterwards is respected.
+      if (phase == CallPhase.connected && !_initialRouteApplied) {
+        _initialRouteApplied = true;
+        unawaited(
+            CallService.instance.setSpeakerphone(widget.session.videoEnabled));
+      }
       unawaited(_syncProximityMonitoring());
       if (phase == CallPhase.failed || phase == CallPhase.ended) {
         if (phase == CallPhase.failed) {
@@ -107,6 +116,12 @@ class _CallScreenState extends State<CallScreen> {
       setState(() {});
     };
     CallService.instance.speakerOn.addListener(_speakerListener!);
+    if (CallService.instance.phase.value == CallPhase.connected &&
+        !_initialRouteApplied) {
+      _initialRouteApplied = true;
+      unawaited(
+          CallService.instance.setSpeakerphone(widget.session.videoEnabled));
+    }
     unawaited(_syncProximityMonitoring());
     if (mounted) setState(() {});
   }
