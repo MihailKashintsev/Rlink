@@ -2548,6 +2548,7 @@ class GossipRouter {
     required String channelId,
     required String userId,
     bool unsubscribe = false,
+    String? x25519,
   }) async {
     final packet = GossipPacket(
       id: const Uuid().v4(),
@@ -2558,6 +2559,10 @@ class GossipRouter {
         'channelId': channelId,
         'userId': userId,
         'unsubscribe': unsubscribe,
+        // So the admin can wrap the backup key for this subscriber even if they
+        // never open the channel while the admin is online.
+        if (!unsubscribe && x25519 != null && x25519.isNotEmpty)
+          'x25519': x25519,
       },
     );
     await _forward(packet);
@@ -2665,6 +2670,7 @@ class GossipRouter {
     required String requesterId,
     required String adminId,
     int sinceTs = 0,
+    String? requesterX25519,
   }) async {
     final packet = GossipPacket(
       id: const Uuid().v4(),
@@ -2676,6 +2682,10 @@ class GossipRouter {
         'requesterId': requesterId,
         'adminId': adminId,
         'sinceTs': sinceTs,
+        // The admin uses this to wrap+send the backup key to a new subscriber
+        // whose X25519 key wasn't known at publish time.
+        if (requesterX25519 != null && requesterX25519.isNotEmpty)
+          'x25519': requesterX25519,
       },
     );
     await _forward(packet);

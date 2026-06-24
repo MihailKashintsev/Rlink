@@ -508,6 +508,11 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     final myId = CryptoService.instance.publicKeyHex;
     if (!ch.subscriberIds.contains(myId)) {
       await ChannelService.instance.subscribe(ch.id, myId);
+      unawaited(GossipRouter.instance.broadcastChannelSubscribe(
+        channelId: ch.id,
+        userId: myId,
+        x25519: CryptoService.instance.x25519PublicKeyBase64,
+      ));
       ch = await ChannelService.instance.getChannel(ch.id) ?? ch;
     }
     if (!mounted) return;
@@ -761,6 +766,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       requesterId: _myId,
       adminId: _channel.adminId,
       sinceTs: lastPost?.timestamp ?? 0,
+      requesterX25519: CryptoService.instance.x25519PublicKeyBase64,
     ));
   }
 
@@ -2318,6 +2324,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       unawaited(GossipRouter.instance.broadcastChannelSubscribe(
         channelId: _channel.id,
         userId: _myId,
+        x25519: CryptoService.instance.x25519PublicKeyBase64,
       ));
       // Запрашиваем историю канала у админа — он (или старый подписчик)
       // пришлёт накопившиеся посты через gossip.

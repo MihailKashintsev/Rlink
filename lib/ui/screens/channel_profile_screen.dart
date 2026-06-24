@@ -194,6 +194,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
         channelId: ch.id,
         userId: myId,
         unsubscribe: false,
+        x25519: CryptoService.instance.x25519PublicKeyBase64,
       );
       final lastPost = await ChannelService.instance.getLastPost(ch.id);
       unawaited(GossipRouter.instance.sendChannelHistoryRequest(

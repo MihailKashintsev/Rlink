@@ -158,6 +158,38 @@ class ChannelBackupService {
     }
   }
 
+  /// Admin-only: wrap the channel's symmetric key for [subscriberId] (using the
+  /// X25519 key they sent in their history request) and deliver it P2P. Fixes a
+  /// brand-new subscriber getting "нет ключа" because the admin didn't have
+  /// their key in the published keys-file. Also registers the key so the next
+  /// publish includes them in the keys-file.
+  Future<void> sendChannelKeyToSubscriber(
+      String channelId, String subscriberId, String x25519) async {
+    try {
+      final myId = CryptoService.instance.publicKeyHex;
+      final ch = await ChannelService.instance.getChannel(channelId);
+      if (ch == null || ch.adminId != myId) return;
+      if (x25519.isEmpty) return;
+      // Remember the key for future publishes (keys-file offline path).
+      BleService.instance.registerPeerX25519Key(subscriberId, x25519);
+      final key = await _readSymKeyBytes(channelId);
+      if (key == null) return;
+      final em = await CryptoService.instance.encryptMessage(
+        plaintext: base64.encode(key),
+        recipientX25519KeyBase64: x25519,
+      );
+      await GossipRouter.instance.sendChannelBackupKey(
+        channelId: channelId,
+        recipientPublicKeyHex: subscriberId,
+        wrapped: em,
+      );
+      debugPrint(
+          '[RLINK][ChBak] sent backup key to new subscriber ${subscriberId.substring(0, 8)}');
+    } catch (e) {
+      debugPrint('[RLINK][ChBak] sendChannelKeyToSubscriber failed: $e');
+    }
+  }
+
   Future<String?> _x25519For(String userId) async {
     final c = await ChatStorageService.instance.getContact(userId);
     final fromContact = c?.x25519Key;
@@ -385,6 +417,14 @@ class ChannelBackupService {
       final pend = _pendingDecryptByChannel.remove(cid);
       if (pend != null) {
         await _decryptAndImport(cid, pend.rev, pend.sealed);
+      }
+      // We just received the key — pull the Drive snapshot now in case the
+      // background pull on channel open failed earlier for lack of the key.
+      final ch = await ChannelService.instance.getChannel(cid);
+      if (ch != null &&
+          ch.driveFileUrl != null &&
+          ch.driveFileUrl!.isNotEmpty) {
+        unawaited(restoreFromDriveUrl(ch));
       }
     } catch (_) {}
   }

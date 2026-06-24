@@ -2033,10 +2033,26 @@ Future<void> initServices() async {
       if (unsub) {
         ChannelService.instance.removeSubscriber(channelId, userId);
       } else {
+        final x25519 = payload['x25519'] as String?;
+        if (x25519 != null && x25519.isNotEmpty) {
+          BleService.instance.registerPeerX25519Key(userId, x25519);
+        }
         unawaited(() async {
+          final before = await ChannelService.instance.getChannel(channelId);
+          final wasSub = before?.subscriberIds.contains(userId) ?? false;
           await ChannelService.instance.subscribe(channelId, userId);
           await ChannelService.instance
               .maybeRebroadcastChannelVisualsAfterRemoteSubscribe(channelId);
+          // Genuinely new subscriber whose key we now have: re-publish once so
+          // they land in the Drive keys-file and can restore even when we're
+          // offline. Publish is cheap now (no gossip flood for Drive channels).
+          if (!wasSub && x25519 != null && x25519.isNotEmpty) {
+            final ch = await ChannelService.instance.getChannel(channelId);
+            final me = CryptoService.instance.publicKeyHex;
+            if (ch != null && ch.adminId == me && ch.driveBackupEnabled) {
+              unawaited(ChannelBackupService.instance.publishBackup(ch));
+            }
+          }
         }());
       }
     };
@@ -2083,6 +2099,14 @@ Future<void> initServices() async {
           ch.linkAdminIds.contains(me) ||
           ch.adminId == me;
       if (!amSubscriber) return;
+      // If we're the admin and the requester sent their X25519 key, deliver the
+      // channel backup key directly — covers a new subscriber who wasn't in the
+      // published keys-file (so they can decrypt the Drive/gossip history).
+      final reqX = payload['x25519'] as String?;
+      if (ch.adminId == me && reqX != null && reqX.isNotEmpty) {
+        unawaited(ChannelBackupService.instance
+            .sendChannelKeyToSubscriber(channelId, requesterId, reqX));
+      }
       // Рандомная задержка 300-2500 мс, чтобы несколько подписчиков не отвечали
       // одновременно и не флудили канал (мягкий thundering-herd avoidance).
       final jitter = 300 + (DateTime.now().microsecondsSinceEpoch % 2200);
