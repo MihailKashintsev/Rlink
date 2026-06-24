@@ -1,17 +1,45 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_message.dart';
 import '../models/contact.dart';
+import '../models/group.dart';
+import '../utils/web_file_store.dart';
 import 'dm_bot_flags.dart';
 import 'app_settings.dart';
 import 'channel_service.dart';
 import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
+import 'group_service.dart';
+import 'image_service.dart';
 import 'relay_service.dart';
+
+/// Reassembly buffer for a chunked avatar/banner during a link snapshot.
+class _MediaAsm {
+  final int total;
+  final Map<int, String> parts = {};
+  _MediaAsm(this.total);
+  bool get complete => parts.length >= total && total > 0;
+  Uint8List? assemble() {
+    if (!complete) return null;
+    final sb = StringBuffer();
+    for (var i = 0; i < total; i++) {
+      final p = parts[i];
+      if (p == null) return null;
+      sb.write(p);
+    }
+    try {
+      return base64Decode(sb.toString());
+    } catch (_) {
+      return null;
+    }
+  }
+}
 
 /// Live progress of a linked-device snapshot transfer (drives the sync animation).
 class LinkSyncProgress {
@@ -43,6 +71,7 @@ class DeviceLinkSyncService {
   int _progressTotal = 0;
   int _progressDone = 0;
   final List<({String emoji, int color})> _progressAvatars = [];
+  final Map<String, _MediaAsm> _mediaAsm = {};
 
   StreamSubscription<ChatMessage>? _messageSub;
   VoidCallback? _relayListener;
@@ -197,6 +226,7 @@ class DeviceLinkSyncService {
       final channels = (await ChannelService.instance.getChannels())
           .where((c) => c.isPublic && !c.blocked)
           .toList();
+      final groups = await GroupService.instance.getGroups();
       final peerIds = await ChatStorageService.instance.getChatPeerIds();
       final allMessages = <ChatMessage>[];
       for (final peerId in peerIds) {
@@ -206,11 +236,16 @@ class DeviceLinkSyncService {
             .addAll(await ChatStorageService.instance.getAllMessages(peerId));
       }
 
-      final total = contacts.length + channels.length + allMessages.length;
+      final total = contacts.length +
+          channels.length +
+          groups.length +
+          allMessages.length;
       await send('link_begin', {'total': total});
 
       for (final c in contacts) {
         await send('ct', _encodeContact(c));
+        await _sendMediaChunks(send, c.publicKeyHex, 'a', c.avatarImagePath);
+        await _sendMediaChunks(send, c.publicKeyHex, 'b', c.bannerImagePath);
         await Future.delayed(const Duration(milliseconds: 8));
       }
       for (final ch in channels) {
@@ -221,6 +256,20 @@ class DeviceLinkSyncService {
           'em': ch.avatarEmoji,
           'adm': ch.adminId,
         });
+        await Future.delayed(const Duration(milliseconds: 8));
+      }
+      for (final g in groups) {
+        await send('grp', {
+          'id': g.id,
+          'n': g.name,
+          'cr': g.creatorId,
+          'mem': g.memberIds,
+          'mod': g.moderatorIds,
+          'col': g.avatarColor,
+          'em': g.avatarEmoji,
+          'ca': g.createdAt,
+        });
+        await _sendMediaChunks(send, g.id, 'g', g.avatarImagePath);
         await Future.delayed(const Duration(milliseconds: 8));
       }
 
@@ -298,6 +347,23 @@ class DeviceLinkSyncService {
             emoji: (data['em'] as String?) ?? '📢',
             color: (data['col'] as num?)?.toInt() ?? 0xFF42A5F5);
         return;
+      case 'grp':
+        await _applyGroup(data);
+        _bumpProgress('Группы',
+            emoji: (data['em'] as String?) ?? '👥',
+            color: (data['col'] as num?)?.toInt() ?? 0xFF5C6BC0);
+        return;
+      case 'media_meta':
+        final mo = data['o'] as String?;
+        final mk = data['k'] as String?;
+        final mn = (data['n'] as num?)?.toInt() ?? 0;
+        if (mo != null && mk != null && mn > 0) {
+          _mediaAsm['$mo:$mk'] = _MediaAsm(mn);
+        }
+        return;
+      case 'media_c':
+        await _onMediaChunk(data);
+        return;
       case 'dm_msg':
         final msg = _decodeMessage(data);
         if (msg == null) return;
@@ -370,6 +436,130 @@ class DeviceLinkSyncService {
     } catch (e) {
       debugPrint('[RLINK][LinkSync] applyChannel failed: $e');
     }
+  }
+
+  Future<void> _applyGroup(Map<String, dynamic> data) async {
+    final id = data['id'] as String?;
+    if (id == null || id.isEmpty) return;
+    try {
+      final g = Group(
+        id: id,
+        name: (data['n'] as String?) ?? '',
+        creatorId: (data['cr'] as String?) ?? '',
+        memberIds:
+            (data['mem'] as List?)?.map((e) => e.toString()).toList() ??
+                const <String>[],
+        moderatorIds:
+            (data['mod'] as List?)?.map((e) => e.toString()).toList() ??
+                const <String>[],
+        avatarColor: (data['col'] as num?)?.toInt() ?? 0xFF5C6BC0,
+        avatarEmoji: (data['em'] as String?) ?? '👥',
+        createdAt: (data['ca'] as num?)?.toInt() ??
+            DateTime.now().millisecondsSinceEpoch,
+      );
+      await GroupService.instance.upsertGroupsFromBackup([g]);
+    } catch (e) {
+      debugPrint('[RLINK][LinkSync] applyGroup failed: $e');
+    }
+  }
+
+  /// Send a contact/group avatar or banner as ~400-char base64 chunks (gossip
+  /// packets cap ~700B), so the child copy gets real profile pictures.
+  Future<void> _sendMediaChunks(
+    Future<void> Function(String, [Map<String, dynamic>]) send,
+    String ownerId,
+    String kind,
+    String? path,
+  ) async {
+    final bytes = await _readMediaBytesWebSafe(path);
+    if (bytes == null || bytes.isEmpty || bytes.length > 400 * 1024) return;
+    final b64 = base64Encode(bytes);
+    const chunkChars = 400;
+    final total = (b64.length / chunkChars).ceil();
+    await send('media_meta', {'o': ownerId, 'k': kind, 'n': total});
+    for (var i = 0; i < total; i++) {
+      final start = i * chunkChars;
+      final end = (start + chunkChars) > b64.length
+          ? b64.length
+          : (start + chunkChars);
+      await send('media_c',
+          {'o': ownerId, 'k': kind, 'i': i, 'd': b64.substring(start, end)});
+      if (i % 8 == 7) {
+        await Future.delayed(const Duration(milliseconds: 12));
+      }
+    }
+  }
+
+  Future<void> _onMediaChunk(Map<String, dynamic> data) async {
+    final o = data['o'] as String?;
+    final k = data['k'] as String?;
+    final i = (data['i'] as num?)?.toInt();
+    final d = data['d'] as String?;
+    if (o == null || k == null || i == null || d == null) return;
+    final asm = _mediaAsm['$o:$k'];
+    if (asm == null) return;
+    asm.parts[i] = d;
+    if (!asm.complete) return;
+    _mediaAsm.remove('$o:$k');
+    final bytes = asm.assemble();
+    if (bytes == null || bytes.isEmpty) return;
+    await _saveAssembledMedia(o, k, bytes);
+  }
+
+  Future<void> _saveAssembledMedia(
+      String ownerId, String kind, Uint8List bytes) async {
+    try {
+      if (kind == 'a') {
+        final path =
+            await ImageService.instance.saveContactAvatar(ownerId, bytes);
+        final c = await ChatStorageService.instance.getContact(ownerId);
+        if (c != null) {
+          await ChatStorageService.instance.saveContact(
+              c.copyWith(avatarImagePath: path, setAvatarImagePath: true));
+        }
+      } else if (kind == 'b') {
+        final path =
+            await ImageService.instance.saveBannerImage(ownerId, bytes);
+        final c = await ChatStorageService.instance.getContact(ownerId);
+        if (c != null) {
+          await ChatStorageService.instance.saveContact(
+              c.copyWith(bannerImagePath: path, setBannerImagePath: true));
+        }
+      } else if (kind == 'g') {
+        final path = await ImageService.instance
+            .saveContactAvatar('grp_$ownerId', bytes);
+        final g = await GroupService.instance.getGroup(ownerId);
+        if (g != null) {
+          await GroupService.instance
+              .upsertGroupsFromBackup([g.copyWith(avatarImagePath: path)]);
+        }
+      }
+    } catch (e) {
+      debugPrint('[RLINK][LinkSync] saveAssembledMedia failed: $e');
+    }
+  }
+
+  Future<Uint8List?> _readMediaBytesWebSafe(String? path) async {
+    if (path == null || path.isEmpty) return null;
+    if (path.startsWith('data:')) {
+      final comma = path.indexOf(',');
+      if (comma < 0) return null;
+      try {
+        return base64Decode(path.substring(comma + 1));
+      } catch (_) {
+        return null;
+      }
+    }
+    final rp = ImageService.instance.resolveStoredPath(path) ?? path;
+    if (kIsWeb) {
+      if (isWebStoredFile(rp)) return readWebStoredFile(rp);
+      return null;
+    }
+    try {
+      final f = File(rp);
+      if (f.existsSync()) return f.readAsBytes();
+    } catch (_) {}
+    return null;
   }
 
   static Map<String, dynamic> _encodeContact(Contact c) => <String, dynamic>{
