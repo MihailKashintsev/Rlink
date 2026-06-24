@@ -291,36 +291,67 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar on top (centered), then the banner strip below it.
+                  // Banner on top; avatar overlaps its bottom edge (Telegram-style).
+                  SizedBox(
+                    height: hasBanner ? 206 : 112,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        if (hasBanner)
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: SizedBox(
+                                height: 150,
+                                width: double.infinity,
+                                child: _bannerImage(cs, ch, bannerRaw,
+                                    bannerResolved, bannerIsData),
+                              ),
+                            ),
+                          ),
+                        Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: cs.surface, width: 4),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.35),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: AvatarWidget(
+                                key: ValueKey(
+                                    'ch_prof_av_${ch.id}_${ch.avatarImagePath ?? ''}'),
+                                initials: ch.name.isNotEmpty
+                                    ? ch.name[0].toUpperCase()
+                                    : '?',
+                                color: ch.avatarColor,
+                                emoji: ch.avatarEmoji,
+                                imagePath: ch.avatarImagePath,
+                                size: 104,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: cs.surface, width: 4),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 14,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: AvatarWidget(
-                            key: ValueKey(
-                                'ch_prof_av_${ch.id}_${ch.avatarImagePath ?? ''}'),
-                            initials: ch.name.isNotEmpty
-                                ? ch.name[0].toUpperCase()
-                                : '?',
-                            color: ch.avatarColor,
-                            emoji: ch.avatarEmoji,
-                            imagePath: ch.avatarImagePath,
-                            size: 104,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -348,18 +379,6 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                       ],
                     ),
                   ),
-                  if (hasBanner) ...[
-                    const SizedBox(height: 18),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: SizedBox(
-                        height: 150,
-                        width: double.infinity,
-                        child: _bannerImage(
-                            cs, ch, bannerRaw, bannerResolved, bannerIsData),
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 18),
                   Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

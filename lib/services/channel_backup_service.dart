@@ -43,7 +43,8 @@ class ChannelBackupService {
   ChannelBackupService._();
   static final ChannelBackupService instance = ChannelBackupService._();
 
-  static bool get _isMobile => Platform.isIOS || Platform.isAndroid;
+  static bool get _isMobile =>
+      !kIsWeb && (Platform.isIOS || Platform.isAndroid);
 
   final _secure = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
