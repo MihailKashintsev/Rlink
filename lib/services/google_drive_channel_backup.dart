@@ -797,6 +797,37 @@ class GoogleDriveChannelBackup {
     }
   }
 
+  /// Authenticated download of a Drive file's bytes by id. Used by the OWNER of
+  /// the file (admin / signed-in user): the public `drive.usercontent` URL 403s
+  /// in a browser that's logged into multiple Google accounts, but the
+  /// authenticated Drive API (CORS-enabled) works.
+  static Future<Uint8List?> downloadFileBytes(String fileId,
+      {String? accountPairing}) async {
+    if (fileId.isEmpty) return null;
+    try {
+      final authClient = await _driveAuthClient(
+          interactive: false, relayPairing: accountPairing);
+      if (authClient == null) return null;
+      try {
+        final api = drive.DriveApi(authClient);
+        final media = await api.files.get(
+          fileId,
+          downloadOptions: drive.DownloadOptions.fullMedia,
+        ) as drive.Media;
+        final chunks = <int>[];
+        await for (final c in media.stream) {
+          chunks.addAll(c);
+        }
+        return Uint8List.fromList(chunks);
+      } finally {
+        authClient.close();
+      }
+    } catch (e) {
+      debugPrint('[RLINK][Drive] downloadFileBytes failed: $e');
+      return null;
+    }
+  }
+
   /// Deletes a Drive file by id (best-effort). Used when an avatar/banner is
   /// removed so the old picture doesn't linger in the channel folder.
   static Future<void> deleteFileById(String? fileId,

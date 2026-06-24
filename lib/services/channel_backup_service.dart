@@ -575,21 +575,42 @@ class ChannelBackupService {
 
     try {
       onStep?.call('Скачивание из Google Drive…');
-      debugPrint(
-          '[RLINK][ChBak] restoreFromDriveUrl: fetching ${url.substring(0, url.length.clamp(0, 60))}…');
-      final dio = Dio();
-      final response = await dio.get<List<int>>(
-        GoogleDriveChannelBackup.directDownloadUrl(url),
-        options: Options(
-            responseType: ResponseType.bytes,
-            receiveTimeout: const Duration(seconds: 120)),
-      );
-      if (response.statusCode != 200 || response.data == null) {
-        debugPrint(
-            '[RLINK][ChBak] restoreFromDriveUrl: HTTP ${response.statusCode}');
-        return false;
+      Uint8List? sealed;
+
+      // Owner / signed-in user: download via the authenticated Drive API. The
+      // public drive.usercontent URL 403s in a browser logged into multiple
+      // Google accounts, which is exactly the admin's case.
+      if (channel.driveFileId != null &&
+          channel.driveFileId!.isNotEmpty &&
+          (GoogleDriveChannelBackup.hasRelayAccount ||
+              GoogleDriveChannelBackup.hasValidManualCreds)) {
+        final b = await GoogleDriveChannelBackup.downloadFileBytes(
+          channel.driveFileId!,
+          accountPairing:
+              GoogleDriveChannelBackup.channelAccountPairing(channel.id),
+        );
+        if (b != null && b.isNotEmpty) sealed = b;
       }
-      final sealed = Uint8List.fromList(response.data!);
+
+      // Subscribers (no Drive access) — public direct-download URL.
+      if (sealed == null) {
+        debugPrint(
+            '[RLINK][ChBak] restoreFromDriveUrl: fetching ${url.substring(0, url.length.clamp(0, 60))}…');
+        final dio = Dio();
+        final response = await dio.get<List<int>>(
+          GoogleDriveChannelBackup.directDownloadUrl(url),
+          options: Options(
+              responseType: ResponseType.bytes,
+              receiveTimeout: const Duration(seconds: 120)),
+        );
+        if (response.statusCode != 200 || response.data == null) {
+          debugPrint(
+              '[RLINK][ChBak] restoreFromDriveUrl: HTTP ${response.statusCode}');
+          return false;
+        }
+        sealed = Uint8List.fromList(response.data!);
+      }
+      if (sealed.isEmpty) return false;
       onStep?.call('Расшифровка данных…');
       await _decryptAndImport(channel.id, channel.driveBackupRev, sealed);
       onStep?.call('Применение истории…');
@@ -613,15 +634,35 @@ class ChannelBackupService {
     try {
       onStep?.call('Получение ключа расшифровки…');
       debugPrint('[RLINK][ChBak] fetching keys file for ${channel.id}');
-      final dio = Dio();
-      final response = await dio.get<String>(
-        GoogleDriveChannelBackup.directDownloadUrl(keysUrl),
-        options: Options(
-            responseType: ResponseType.plain,
-            receiveTimeout: const Duration(seconds: 30)),
-      );
-      if (response.statusCode != 200 || response.data == null) return null;
-      final parsed = jsonDecode(response.data!) as Map<String, dynamic>;
+      String? body;
+
+      // Owner / signed-in: authenticated download by file id (public URL 403s
+      // in a multi-account browser).
+      final keysFileId = await _readKeysFileId(channel.id);
+      if (keysFileId != null &&
+          keysFileId.isNotEmpty &&
+          (GoogleDriveChannelBackup.hasRelayAccount ||
+              GoogleDriveChannelBackup.hasValidManualCreds)) {
+        final b = await GoogleDriveChannelBackup.downloadFileBytes(
+          keysFileId,
+          accountPairing:
+              GoogleDriveChannelBackup.channelAccountPairing(channel.id),
+        );
+        if (b != null && b.isNotEmpty) body = utf8.decode(b);
+      }
+
+      if (body == null) {
+        final dio = Dio();
+        final response = await dio.get<String>(
+          GoogleDriveChannelBackup.directDownloadUrl(keysUrl),
+          options: Options(
+              responseType: ResponseType.plain,
+              receiveTimeout: const Duration(seconds: 30)),
+        );
+        if (response.statusCode != 200 || response.data == null) return null;
+        body = response.data!;
+      }
+      final parsed = jsonDecode(body) as Map<String, dynamic>;
       final keys = parsed['keys'] as Map<String, dynamic>?;
       if (keys == null) return null;
       final myEntry = keys[myId];
