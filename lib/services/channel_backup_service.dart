@@ -579,13 +579,18 @@ class ChannelBackupService {
 
       // Owner / signed-in user: download via the authenticated Drive API. The
       // public drive.usercontent URL 403s in a browser logged into multiple
-      // Google accounts, which is exactly the admin's case.
-      if (channel.driveFileId != null &&
-          channel.driveFileId!.isNotEmpty &&
+      // Google accounts, which is exactly the admin's case. The stored
+      // driveFileId can be null (older publish saved only the URL) — recover the
+      // id from the URL itself.
+      final fileId = (channel.driveFileId != null &&
+              channel.driveFileId!.isNotEmpty)
+          ? channel.driveFileId!
+          : (GoogleDriveChannelBackup.extractDriveFileId(url) ?? '');
+      if (fileId.isNotEmpty &&
           (GoogleDriveChannelBackup.hasRelayAccount ||
               GoogleDriveChannelBackup.hasValidManualCreds)) {
         final b = await GoogleDriveChannelBackup.downloadFileBytes(
-          channel.driveFileId!,
+          fileId,
           accountPairing:
               GoogleDriveChannelBackup.channelAccountPairing(channel.id),
         );
@@ -637,8 +642,9 @@ class ChannelBackupService {
       String? body;
 
       // Owner / signed-in: authenticated download by file id (public URL 403s
-      // in a multi-account browser).
-      final keysFileId = await _readKeysFileId(channel.id);
+      // in a multi-account browser). Fall back to the id embedded in the URL.
+      final keysFileId = (await _readKeysFileId(channel.id)) ??
+          GoogleDriveChannelBackup.extractDriveFileId(keysUrl);
       if (keysFileId != null &&
           keysFileId.isNotEmpty &&
           (GoogleDriveChannelBackup.hasRelayAccount ||
