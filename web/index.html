@@ -73,9 +73,12 @@
       } catch (_) {}
     }
 
+    // Bump on every deploy that changes Dart code — busts the cached bootstrap
+    // AND main.dart.js (see web/flutter_bootstrap.js).
+    window.__rlinkBuildV = '20260624-1';
     function _rlinkLoadFlutter() {
       const script = document.createElement('script');
-      script.src = 'flutter_bootstrap.js?v=20260615-2';
+      script.src = 'flutter_bootstrap.js?v=' + window.__rlinkBuildV;
       script.async = true;
       document.body.appendChild(script);
     }
