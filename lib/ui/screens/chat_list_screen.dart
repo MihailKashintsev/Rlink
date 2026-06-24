@@ -591,7 +591,17 @@ class _ChatListScreenState extends State<ChatListScreen>
             ),
         ],
       ),
-      body: GestureDetector(
+      body: Row(
+        children: [
+          if (MediaQuery.sizeOf(context).width >= 900) ...[
+            _DesktopNavRail(
+              selectedIndex: _currentTab,
+              onSelect: _selectDesktopTab,
+            ),
+            const VerticalDivider(width: 1, thickness: 1),
+          ],
+          Expanded(
+            child: GestureDetector(
         onHorizontalDragEnd: (details) {
           if (details.primaryVelocity == null) return;
           // Swipe right to previous tab (negative velocity)
@@ -633,21 +643,28 @@ class _ChatListScreenState extends State<ChatListScreen>
             const _MeTab(),
           ],
         ),
+            ),
+          ),
+        ],
       ),
-      bottomNavigationBar: _AnimatedNavBar(
-        selectedIndex: _currentTab,
-        onDestinationSelected: (i) => setState(() {
-          _currentTab = i;
-          if (_searchActive) {
-            _searchActive = false;
-            _searchController.clear();
-            RelayService.instance.searchResults.value = [];
-          }
-          if (i == 2) EtherService.instance.markRead();
-        }),
-      ),
+      bottomNavigationBar: MediaQuery.sizeOf(context).width >= 900
+          ? null
+          : _AnimatedNavBar(
+              selectedIndex: _currentTab,
+              onDestinationSelected: _selectDesktopTab,
+            ),
     );
   }
+
+  void _selectDesktopTab(int i) => setState(() {
+        _currentTab = i;
+        if (_searchActive) {
+          _searchActive = false;
+          _searchController.clear();
+          RelayService.instance.searchResults.value = [];
+        }
+        if (i == 2) EtherService.instance.markRead();
+      });
 
   // ── Глобальный поиск (контакты + каналы + люди) ──
   Timer? _globalSearchDebounce;
@@ -771,6 +788,74 @@ class _AnimatedNavBar extends StatelessWidget {
           icon: const _MeTabNavIcon(selected: false),
           selectedIcon: const _MeTabNavIcon(selected: true),
           label: AppL10n.t('nav_me'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Telegram-style vertical navigation rail shown on wide screens (≥900px)
+/// instead of the bottom bar.
+class _DesktopNavRail extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
+  const _DesktopNavRail({
+    required this.selectedIndex,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return NavigationRail(
+      selectedIndex: selectedIndex.clamp(0, 4),
+      onDestinationSelected: onSelect,
+      labelType: NavigationRailLabelType.all,
+      groupAlignment: -0.9,
+      backgroundColor:
+          isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2),
+      indicatorColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+      indicatorShape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      destinations: [
+        NavigationRailDestination(
+          icon: const Icon(Icons.chat_bubble_outline),
+          selectedIcon: const Icon(Icons.chat_bubble),
+          label: Text(AppL10n.t('nav_chats')),
+        ),
+        NavigationRailDestination(
+          icon: ValueListenableBuilder<int>(
+            valueListenable: BleService.instance.peersCount,
+            builder: (_, count, __) =>
+                count > 0 && AppSettings.instance.connectionMode != 1
+                    ? Badge(
+                        label: Text('$count'), child: const Icon(Icons.radar))
+                    : const Icon(Icons.radar_outlined),
+          ),
+          selectedIcon: const Icon(Icons.radar),
+          label: Text(AppL10n.t('nav_nearby')),
+        ),
+        NavigationRailDestination(
+          icon: ValueListenableBuilder<int>(
+            valueListenable: EtherService.instance.unreadCount,
+            builder: (_, count, __) => count > 0
+                ? Badge(
+                    label: Text('$count'), child: const Icon(Icons.cell_tower))
+                : const Icon(Icons.cell_tower),
+          ),
+          selectedIcon: const Icon(Icons.cell_tower),
+          label: Text(AppL10n.t('nav_ether')),
+        ),
+        NavigationRailDestination(
+          icon: const Icon(Icons.history),
+          selectedIcon: const Icon(Icons.history),
+          label: Text(AppL10n.t('nav_call_history')),
+        ),
+        NavigationRailDestination(
+          icon: const _MeTabNavIcon(selected: false),
+          selectedIcon: const _MeTabNavIcon(selected: true),
+          label: Text(AppL10n.t('nav_me')),
         ),
       ],
     );

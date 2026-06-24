@@ -2700,7 +2700,12 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                 : Stack(
                     fit: StackFit.expand,
                     children: [
-                      ListView.builder(
+                      // Keep the feed a comfortable reading width — narrow,
+                      // centered column on desktop; full-width on phone.
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 680),
+                          child: ListView.builder(
                         controller: _feedScrollController,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         itemCount: _visiblePosts.length,
@@ -2726,6 +2731,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                             ),
                           );
                         },
+                          ),
+                        ),
                       ),
                       if (_showScrollToBottomFab)
                         Positioned(
