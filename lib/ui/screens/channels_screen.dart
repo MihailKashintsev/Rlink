@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -1869,8 +1870,15 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       withData: true,
     );
     final bytes = r?.files.single.bytes;
-    if (bytes == null) return;
-    await _publishImageBytesPost(bytes);
+    if (bytes == null || !mounted) return;
+    // Open the photo editor (web-safe via data: URL), then post the result.
+    final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+    final edited = await Navigator.push<Uint8List>(
+      context,
+      MaterialPageRoute(builder: (_) => ImageEditorScreen(imagePath: dataUrl)),
+    );
+    if (edited == null || !mounted) return;
+    await _publishImageBytesPost(edited);
   }
 
   /// Discard the in-progress voice recording without sending (swipe-to-cancel).
@@ -2612,7 +2620,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               onPickSquareVideo: () => unawaited(_recordAndSendSquarePost()),
               onPickFile: () => unawaited(_openChannelMediaGallery()),
               onVoiceHoldStart: () => unawaited(_startVoiceRecording()),
-              onVideoHoldStart: () async {},
+              onVideoHoldStart: _recordAndSendSquarePost,
               onHoldReleaseSend: _stopAndSendVoice,
               onHoldCancelDiscard: _cancelVoiceRecording,
               onVoicePause: () async {},
@@ -3865,7 +3873,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
             onPickSquareVideo: () => unawaited(_sendCommentSquareVideo()),
             onPickFile: () => unawaited(_sendCommentFile()),
             onVoiceHoldStart: () => unawaited(_commentMicDown()),
-            onVideoHoldStart: () async {},
+            onVideoHoldStart: _sendCommentSquareVideo,
             onHoldReleaseSend: _commentMicUp,
             onHoldCancelDiscard: _cancelCommentVoice,
             onVoicePause: () async {},
