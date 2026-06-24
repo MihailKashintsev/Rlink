@@ -99,8 +99,25 @@ class _SquareVideoCameraPreviewInnerState
   @override
   Widget build(BuildContext context) {
     final ctrl = widget.controller;
-    if (!ctrl.value.isInitialized || ctrl.value.previewSize == null) {
+    if (!ctrl.value.isInitialized) {
       return Container(color: const Color(0xFF111111));
+    }
+    // On web previewSize is usually null and the platform view (HTML <video>)
+    // sizes itself — render CameraPreview directly so the live feed shows.
+    if (kIsWeb || ctrl.value.previewSize == null) {
+      return ClipRect(
+        child: SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+              width: ctrl.value.previewSize?.height ?? 720,
+              height: ctrl.value.previewSize?.width ?? 720,
+              child: CameraPreview(ctrl),
+            ),
+          ),
+        ),
+      );
     }
     return LayoutBuilder(
       builder: (ctx, constraints) {

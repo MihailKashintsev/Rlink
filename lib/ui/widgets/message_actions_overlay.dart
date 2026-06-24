@@ -90,7 +90,11 @@ class _MessageActionsLayer extends StatelessWidget {
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: dismiss,
+                // Ignore the tap that's part of the opening long-press release;
+                // only dismiss once the open animation has settled.
+                onTap: () {
+                  if (anim.value >= 0.95) dismiss();
+                },
                 child: BackdropFilter(
                   filter: ui.ImageFilter.blur(sigmaX: 16 * t, sigmaY: 16 * t),
                   child: Container(

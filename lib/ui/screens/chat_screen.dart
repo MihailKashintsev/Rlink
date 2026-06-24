@@ -328,6 +328,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // the gesture arena on web behind the swipe/selection recognizers).
   Timer? _msgLongPressTimer;
   Offset? _msgLongPressPos;
+  DateTime? _lastMenuOpenAt;
   double? _pendingLat;
   double? _pendingLng;
   Timer? _typingDebounce;
@@ -5527,6 +5528,14 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _onLongPressMessage(ChatMessage msg) async {
+    // Debounce: the manual long-press timer and GestureDetector.onLongPress can
+    // both fire — don't open two menus.
+    final now = DateTime.now();
+    if (_lastMenuOpenAt != null &&
+        now.difference(_lastMenuOpenAt!) < const Duration(milliseconds: 600)) {
+      return;
+    }
+    _lastMenuOpenAt = now;
     final stickerSourcePath = msg.imagePath == null
         ? null
         : (ImageService.instance.resolveStoredPath(msg.imagePath) ??
@@ -5559,13 +5568,16 @@ class _ChatScreenState extends State<ChatScreen> {
         _bubbleBoundaryKeys[msg.id]?.currentContext?.findRenderObject();
     if (bubbleRo is RenderBox && bubbleRo.hasSize) {
       final rect = bubbleRo.localToGlobal(Offset.zero) & bubbleRo.size;
-      // Snapshot is best-effort (toImage can fail on the web HTML renderer);
-      // the menu still works without the lifted bubble.
+      // Snapshot is best-effort. Skip it on web entirely — toImage can hang on
+      // the web renderer, which would block the menu from ever opening.
       ui.Image? image;
-      if (bubbleRo is RenderRepaintBoundary && !bubbleRo.debugNeedsPaint) {
+      if (!kIsWeb &&
+          bubbleRo is RenderRepaintBoundary &&
+          !bubbleRo.debugNeedsPaint) {
         try {
-          image = await bubbleRo.toImage(
-              pixelRatio: MediaQuery.of(context).devicePixelRatio);
+          image = await bubbleRo
+              .toImage(pixelRatio: MediaQuery.of(context).devicePixelRatio)
+              .timeout(const Duration(milliseconds: 600));
         } catch (_) {
           image = null;
         }
@@ -7214,6 +7226,13 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                 _toggleBulkMessageSelection(
                                                                     msg)
                                                             : null,
+                                                        onLongPress: _bulkSelectMode
+                                                            ? () =>
+                                                                _bulkSelectRangeThrough(
+                                                                    messages, i)
+                                                            : () => unawaited(
+                                                                _onLongPressMessage(
+                                                                    msg)),
                                                         onDoubleTap: _bulkSelectMode
                                                             ? null
                                                             : () => unawaited(
