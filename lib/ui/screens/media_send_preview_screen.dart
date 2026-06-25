@@ -40,6 +40,32 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
   void initState() {
     super.initState();
     _bytes = widget.imageBytes;
+    _maybeDownscale();
+  }
+
+  /// Pure-Dart decode/rotate/crop of a full-res photo blocks the main thread
+  /// (especially on web) → rotate/crop feel like they "don't work". Downscale
+  /// once on entry so every edit is fast.
+  Future<void> _maybeDownscale() async {
+    if (_bytes.length < 700 * 1024) return;
+    setState(() => _busy = true);
+    try {
+      final decoded = img.decodeImage(_bytes);
+      if (decoded != null &&
+          (decoded.width > 2000 || decoded.height > 2000)) {
+        final resized = img.copyResize(
+          decoded,
+          width: decoded.width >= decoded.height ? 2000 : null,
+          height: decoded.height > decoded.width ? 2000 : null,
+          interpolation: img.Interpolation.average,
+        );
+        final out = Uint8List.fromList(img.encodeJpg(resized, quality: 88));
+        if (mounted) setState(() => _bytes = out);
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -57,6 +83,10 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
         final rotated = img.copyRotate(decoded, angle: 90);
         final out = Uint8List.fromList(img.encodeJpg(rotated, quality: 90));
         if (mounted) setState(() => _bytes = out);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось обработать изображение')),
+        );
       }
     } catch (_) {
       // Non-decodable image — leave as-is.
@@ -80,6 +110,12 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        bottom: _busy
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(2),
+                child: LinearProgressIndicator(minHeight: 2),
+              )
+            : null,
         title: Text(
           widget.peerName != null && widget.peerName!.isNotEmpty
               ? 'Отправить → ${widget.peerName}'
