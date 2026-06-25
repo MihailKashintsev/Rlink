@@ -102,10 +102,39 @@ class _SquareVideoCameraPreviewInnerState
     if (!ctrl.value.isInitialized) {
       return Container(color: const Color(0xFF111111));
     }
-    // On web the platform view (HTML <video>) doesn't render well inside nested
-    // FittedBox/Transform — keep it simple so the live feed actually shows.
+    // On web the platform view (HTML <video>) breaks inside FittedBox/Transform,
+    // so cover the square via an OverflowBox (no transform): size CameraPreview to
+    // the camera's aspect ratio, larger than the square, and clip — fills the
+    // square with no top/bottom gaps.
     if (kIsWeb || ctrl.value.previewSize == null) {
-      return ClipRect(child: Center(child: CameraPreview(ctrl)));
+      var ar = ctrl.value.aspectRatio;
+      if (!ar.isFinite || ar <= 0) ar = 1.0;
+      return ClipRect(
+        child: LayoutBuilder(
+          builder: (ctx, c) {
+            final side = c.biggest.shortestSide.isFinite
+                ? c.biggest.shortestSide
+                : 320.0;
+            final double w, h;
+            if (ar >= 1) {
+              h = side;
+              w = side * ar; // wider than the square → crop sides
+            } else {
+              w = side;
+              h = side / ar; // taller than the square → crop top/bottom
+            }
+            return OverflowBox(
+              maxWidth: double.infinity,
+              maxHeight: double.infinity,
+              child: SizedBox(
+                width: w,
+                height: h,
+                child: CameraPreview(ctrl),
+              ),
+            );
+          },
+        ),
+      );
     }
     return LayoutBuilder(
       builder: (ctx, constraints) {
