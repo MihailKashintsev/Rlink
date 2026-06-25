@@ -4602,6 +4602,84 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Send photo with compression + editing (opens fullscreen on tap in chat).
+  /// Open an existing image (sent or received) in the editor and send the
+  /// edited version as a new image — works for both sender and recipient.
+  Future<void> _editAndResendImage(String path) async {
+    final myId = CryptoService.instance.publicKeyHex;
+    if (myId.isEmpty) return;
+    final resolved = ImageService.instance.resolveStoredPath(path) ?? path;
+    Uint8List? bytes;
+    try {
+      if (kIsWeb) {
+        if (resolved.startsWith('data:')) {
+          bytes = _bytesFromDataUri(resolved);
+        } else if (isWebStoredFile(resolved)) {
+          bytes = await readWebStoredFile(resolved);
+        }
+      } else if (File(resolved).existsSync()) {
+        bytes = await File(resolved).readAsBytes();
+      }
+    } catch (_) {}
+    if (bytes == null || bytes.isEmpty || !mounted) return;
+
+    if (kIsWeb) {
+      final result = await Navigator.of(context).push<MediaPreviewResult>(
+        MaterialPageRoute(
+          builder: (_) => MediaSendPreviewScreen(
+            imageBytes: bytes!,
+            peerName: widget.peerNickname,
+          ),
+        ),
+      );
+      if (result == null || !mounted) return;
+      await _sendWebBytesAsFile(
+        bytes: result.bytes,
+        fileName: 'edited.jpg',
+        myId: myId,
+        textFallback: '',
+        caption: result.caption,
+        asImage: true,
+      );
+      return;
+    }
+    final tmpDir = await getTemporaryDirectory();
+    final srcFile = File(
+        '${tmpDir.path}/edit_src_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await srcFile.writeAsBytes(bytes);
+    if (!mounted) return;
+    final edited = await Navigator.push<Uint8List>(
+      context,
+      MaterialPageRoute(builder: (_) => ImageEditorScreen(imagePath: srcFile.path)),
+    );
+    if (edited == null || !mounted) return;
+    setState(() => _isSending = true);
+    try {
+      final outFile = File(
+          '${tmpDir.path}/edit_${DateTime.now().millisecondsSinceEpoch}.png');
+      await outFile.writeAsBytes(edited);
+      final p = await ImageService.instance.compressAndSave(outFile.path);
+      final outBytes = await File(p).readAsBytes();
+      final msgId = _uuid.v4();
+      final targetPeerId = _looksLikePublicKey(_resolvedPeerId)
+          ? _resolvedPeerId
+          : widget.peerId;
+      final wasQueued =
+          await _sendMedia(bytes: outBytes, msgId: msgId, myId: myId, filePath: p);
+      final imgMsg = ChatMessage(
+        id: msgId,
+        peerId: targetPeerId,
+        text: '',
+        isOutgoing: true,
+        timestamp: DateTime.now(),
+        status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
+        imagePath: p,
+      );
+      await _saveAndTrack(imgMsg, wasQueued: wasQueued);
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
   Future<void> _sendImageCompressed(XFile picked, String myId) async {
     if (kIsWeb) {
       final bytes = await picked.readAsBytes();
@@ -7256,6 +7334,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                   msg.replyToMessageId],
                                                           onDownloadImage:
                                                               _saveImageToGallery,
+                                                          onEditImage:
+                                                              _editAndResendImage,
                                                           onLongPressSaveImageToGallery:
                                                               _bulkSelectMode
                                                                   ? null
@@ -8202,6 +8282,7 @@ class _MessageBubble extends StatelessWidget {
   final String? replyPreviewText;
   final bool bulkSelectMode;
   final Function(String)? onDownloadImage;
+  final Future<void> Function(String path)? onEditImage;
   final void Function(String path)? onLongPressSaveImageToGallery;
   final void Function(String path)? onLongPressSaveVideoToGallery;
   final Future<void> Function(ChatMessage msg, String newEncoded)?
@@ -8233,6 +8314,7 @@ class _MessageBubble extends StatelessWidget {
     this.replyPreviewText,
     this.bulkSelectMode = false,
     this.onDownloadImage,
+    this.onEditImage,
     this.onLongPressSaveImageToGallery,
     this.onLongPressSaveVideoToGallery,
     this.onCollabPersist,
@@ -8527,6 +8609,9 @@ class _MessageBubble extends StatelessWidget {
                                         await (onDownloadImage!(msg.imagePath!)
                                             as Future<void>);
                                       },
+                                onEdit: onEditImage == null
+                                    ? null
+                                    : () => onEditImage!(msg.imagePath!),
                               ),
                             ),
                           );
@@ -12162,10 +12247,12 @@ class _DmImage extends StatelessWidget {
 class _FullScreenImageViewer extends StatefulWidget {
   final String imagePath;
   final Future<void> Function()? onSaveToGallery;
+  final Future<void> Function()? onEdit;
 
   const _FullScreenImageViewer({
     required this.imagePath,
     this.onSaveToGallery,
+    this.onEdit,
   });
 
   @override
@@ -12204,25 +12291,54 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
               ),
             ),
           ),
+          // Top gradient scrim so the buttons stay legible over any photo.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: Container(
+                height: 120,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.45),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Row(
                 children: [
-                  IconButton(
-                    icon:
-                        const Icon(Icons.close, color: Colors.white, size: 28),
-                    onPressed: () => Navigator.of(context).pop(),
+                  _ViewerCircleButton(
+                    icon: Icons.close_rounded,
+                    onTap: () => Navigator.of(context).pop(),
                   ),
                   const Spacer(),
+                  if (widget.onEdit != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _ViewerCircleButton(
+                        icon: Icons.tune_rounded,
+                        tooltip: 'Редактировать',
+                        onTap: () async {
+                          Navigator.of(context).maybePop();
+                          await widget.onEdit!();
+                        },
+                      ),
+                    ),
                   if (widget.onSaveToGallery != null)
-                    IconButton(
-                      tooltip: 'Сохранить в галерею',
-                      icon: const Icon(Icons.download,
-                          color: Colors.white, size: 26),
-                      onPressed: () async {
-                        await widget.onSaveToGallery!();
-                      },
+                    _ViewerCircleButton(
+                      icon: Icons.download_rounded,
+                      tooltip: 'Сохранить',
+                      onTap: () async => widget.onSaveToGallery!(),
                     ),
                 ],
               ),
@@ -12231,5 +12347,33 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
         ],
       ),
     );
+  }
+}
+
+class _ViewerCircleButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+  const _ViewerCircleButton({
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final btn = Material(
+      color: Colors.black.withValues(alpha: 0.42),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(9),
+          child: Icon(icon, color: Colors.white, size: 24),
+        ),
+      ),
+    );
+    return tooltip == null ? btn : Tooltip(message: tooltip!, child: btn);
   }
 }
