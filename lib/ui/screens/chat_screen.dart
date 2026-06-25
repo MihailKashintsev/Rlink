@@ -88,6 +88,7 @@ import '../../utils/web_object_url.dart';
 import '../../utils/external_message_share.dart';
 import '../../utils/invite_dm_codec.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/avatar_viewer.dart';
 import '../widgets/voice_wave_line.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/reactions.dart';
@@ -11066,17 +11067,11 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
         errorBuilder: (_, __, ___) => _bannerFallback(color),
       );
     }
+    // Full-bleed banner — stretch to fill the header width (looked narrow with
+    // empty sides on desktop when capped at 620px). BoxFit.cover crops to fill.
     return Container(
       color: Color(color).withValues(alpha: 0.2),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 620),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: image,
-          ),
-        ),
-      ),
+      child: SizedBox.expand(child: image),
     );
   }
 
@@ -11608,17 +11603,26 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar circle centred
+                  // Avatar circle centred — tap to view the photo fullscreen.
                   Center(
-                    child: AvatarWidget(
-                      initials: nick.isNotEmpty ? nick[0].toUpperCase() : '?',
-                      color: color,
-                      emoji: emoji,
-                      imagePath: avatarPath,
-                      size: 80,
-                      hasStory: stories.isNotEmpty,
-                      hasUnviewedStory:
-                          StoryService.instance.hasUnviewedStory(widget.peerId),
+                    child: GestureDetector(
+                      onTap: () => showAvatarViewer(
+                        context,
+                        imagePath: avatarPath,
+                        color: color,
+                        emoji: emoji,
+                        initials: nick.isNotEmpty ? nick[0].toUpperCase() : '?',
+                      ),
+                      child: AvatarWidget(
+                        initials: nick.isNotEmpty ? nick[0].toUpperCase() : '?',
+                        color: color,
+                        emoji: emoji,
+                        imagePath: avatarPath,
+                        size: 80,
+                        hasStory: stories.isNotEmpty,
+                        hasUnviewedStory: StoryService.instance
+                            .hasUnviewedStory(widget.peerId),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 10),

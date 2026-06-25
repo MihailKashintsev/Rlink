@@ -28,6 +28,7 @@ import '../../services/audio_queue_mini_player_layout.dart';
 import '../../services/platform_capabilities.dart';
 import '../../services/wifi_direct_service.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/avatar_viewer.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/mesh_radar_widget.dart';
 import '../widgets/status_emoji_view.dart';
@@ -936,10 +937,17 @@ class _MeTab extends StatelessWidget {
             child: ListTile(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              leading: Hero(
-                tag: 'avatar_my_profile',
-                child: Material(
-                  color: Colors.transparent,
+              leading: Material(
+                color: Colors.transparent,
+                child: GestureDetector(
+                  onTap: () => showAvatarViewer(
+                    context,
+                    imagePath: profile.avatarImagePath,
+                    color: profile.avatarColor,
+                    emoji: profile.avatarEmoji,
+                    initials: profile.initials,
+                  ),
+                  onLongPress: () => _showOwnAvatarMenu(context, profile),
                   child: AvatarWidget(
                     initials: profile.initials,
                     color: profile.avatarColor,
@@ -981,6 +989,59 @@ class _MeTab extends StatelessWidget {
           child: SettingsCategoryCards(),
         ),
       ],
+    );
+  }
+
+  void _showOwnAvatarMenu(BuildContext context, UserProfile profile) {
+    final hasPhoto = avatarHasPhoto(profile.avatarImagePath);
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasPhoto)
+              ListTile(
+                leading: const Icon(Icons.visibility_outlined),
+                title: const Text('Открыть фото'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showAvatarViewer(
+                    context,
+                    imagePath: profile.avatarImagePath,
+                    color: profile.avatarColor,
+                    emoji: profile.avatarEmoji,
+                    initials: profile.initials,
+                  );
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(hasPhoto ? 'Изменить фото' : 'Добавить фото'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, rlinkPushRoute(const ProfileScreen()));
+              },
+            ),
+            if (hasPhoto)
+              ListTile(
+                leading: Icon(Icons.delete_outline,
+                    color: Theme.of(context).colorScheme.error),
+                title: Text('Удалить фото',
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await ProfileService.instance.updateProfile(
+                    setAvatarImagePath: true,
+                    avatarImagePath: null,
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
