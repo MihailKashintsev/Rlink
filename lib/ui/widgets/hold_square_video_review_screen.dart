@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -212,41 +213,50 @@ class _HoldSquareVideoReviewScreenState
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: Text(
-                          'При необходимости выберите фрагмент или отправьте целиком',
+                          'Потяните за края, чтобы обрезать, или отправьте целиком',
                           style: TextStyle(
                             fontSize: 13,
                             color: cs.onSurfaceVariant,
                           ),
                         ),
                       ),
-                      RangeSlider(
-                        values: RangeValues(_rangeStart, _rangeEnd),
-                        min: 0,
-                        max: _durationSec,
-                        onChanged: _busy ? null : _onRangeChanged,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '${_rangeStart.toStringAsFixed(1)} с',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
-                            Text(
-                              '${_rangeEnd.toStringAsFixed(1)} с',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
+                      if (kIsWeb) ...[
+                        RangeSlider(
+                          values: RangeValues(_rangeStart, _rangeEnd),
+                          min: 0,
+                          max: _durationSec,
+                          onChanged: _busy ? null : _onRangeChanged,
                         ),
-                      ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '${_rangeStart.toStringAsFixed(1)} с',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                              Text(
+                                '${_rangeEnd.toStringAsFixed(1)} с',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else
+                        _FilmstripTrimBar(
+                          videoPath: widget.videoPath,
+                          durationSec: _durationSec,
+                          start: _rangeStart,
+                          end: _rangeEnd,
+                          onChanged: _busy ? (_) {} : _onRangeChanged,
+                        ),
                     ] else
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -283,6 +293,204 @@ class _HoldSquareVideoReviewScreenState
                 );
               },
             ),
+    );
+  }
+}
+
+/// A filmstrip trim bar: a row of extracted frame thumbnails with two draggable
+/// handles. The region outside the selection is dimmed. Native only (uses
+/// VideoCompress thumbnails); the web path keeps the plain RangeSlider.
+class _FilmstripTrimBar extends StatefulWidget {
+  final String videoPath;
+  final double durationSec;
+  final double start;
+  final double end;
+  final ValueChanged<RangeValues> onChanged;
+
+  const _FilmstripTrimBar({
+    required this.videoPath,
+    required this.durationSec,
+    required this.start,
+    required this.end,
+    required this.onChanged,
+  });
+
+  @override
+  State<_FilmstripTrimBar> createState() => _FilmstripTrimBarState();
+}
+
+class _FilmstripTrimBarState extends State<_FilmstripTrimBar> {
+  static const _frames = 8;
+  static const _barH = 56.0;
+  static const _handleW = 16.0;
+  List<Uint8List?> _thumbs = List<Uint8List?>.filled(_frames, null);
+
+  @override
+  void initState() {
+    super.initState();
+    _extract();
+  }
+
+  Future<void> _extract() async {
+    for (var i = 0; i < _frames; i++) {
+      final pos =
+          (widget.durationSec * 1000 * (i + 0.5) / _frames).round();
+      Uint8List? b;
+      try {
+        b = await VideoCompress.getByteThumbnail(
+          widget.videoPath,
+          quality: 40,
+          position: pos,
+        );
+      } catch (_) {
+        b = null;
+      }
+      if (!mounted) return;
+      setState(() => _thumbs[i] = b);
+    }
+  }
+
+  String _fmt(double s) => '${s.toStringAsFixed(1)} с';
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final dur = widget.durationSec <= 0 ? 1.0 : widget.durationSec;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          LayoutBuilder(
+            builder: (ctx, c) {
+              final w = c.maxWidth;
+              double xOf(double t) =>
+                  (t / dur).clamp(0.0, 1.0) * (w - _handleW) + _handleW / 2;
+              final lx = xOf(widget.start);
+              final rx = xOf(widget.end);
+              final span = (w - _handleW);
+
+              void dragStartBy(double ddx) {
+                final dt = span <= 0 ? 0.0 : ddx / span * dur;
+                final t = (widget.start + dt).clamp(0.0, widget.end - 0.25);
+                widget.onChanged(RangeValues(t, widget.end));
+              }
+
+              void dragEndBy(double ddx) {
+                final dt = span <= 0 ? 0.0 : ddx / span * dur;
+                final t = (widget.end + dt).clamp(widget.start + 0.25, dur);
+                widget.onChanged(RangeValues(widget.start, t));
+              }
+
+              return SizedBox(
+                height: _barH,
+                width: w,
+                child: Stack(
+                  children: [
+                    // Filmstrip.
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Row(
+                          children: [
+                            for (final t in _thumbs)
+                              Expanded(
+                                child: t == null
+                                    ? Container(color: const Color(0xFF222222))
+                                    : Image.memory(t,
+                                        fit: BoxFit.cover,
+                                        height: _barH,
+                                        gaplessPlayback: true),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Dim outside selection.
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: lx,
+                      child: Container(color: Colors.black.withValues(alpha: 0.55)),
+                    ),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      left: rx,
+                      child: Container(color: Colors.black.withValues(alpha: 0.55)),
+                    ),
+                    // Selection border.
+                    Positioned(
+                      left: lx,
+                      width: rx - lx,
+                      top: 0,
+                      bottom: 0,
+                      child: IgnorePointer(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border.symmetric(
+                              horizontal:
+                                  BorderSide(color: cs.primary, width: 3),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Left handle.
+                    _handle(lx - _handleW / 2, cs.primary,
+                        (d) => dragStartBy(d.delta.dx)),
+                    // Right handle.
+                    _handle(rx - _handleW / 2, cs.primary,
+                        (d) => dragEndBy(d.delta.dx)),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(_fmt(widget.start),
+                  style:
+                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              Text('${_fmt(widget.end - widget.start)} выбрано',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: cs.primary,
+                      fontWeight: FontWeight.w600)),
+              Text(_fmt(widget.end),
+                  style:
+                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _handle(double left, Color color, GestureDragUpdateCallback onDrag) {
+    return Positioned(
+      left: left,
+      top: 0,
+      bottom: 0,
+      width: _handleW,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate: onDrag,
+        child: Center(
+          child: Container(
+            width: _handleW,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(Icons.drag_indicator,
+                size: 14, color: Colors.white),
+          ),
+        ),
+      ),
     );
   }
 }
