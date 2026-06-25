@@ -324,6 +324,9 @@ class _ChatScreenState extends State<ChatScreen> {
   int _dmHoldCameraIndex = 0;
   final List<String> _dmHoldVideoSegments = [];
   bool _dmHoldSwitchingCam = false;
+  // Inline playback of the recorded-so-far while the круг is paused.
+  VideoPlayerController? _dmHoldPausePreview;
+  String? _dmHoldPausePreviewTemp;
   final _recordingSecondsNotifier = ValueNotifier<double>(0);
   Timer? _recordingTimer;
   // Reliable manual long-press on a message (GestureDetector.onLongPress loses
@@ -1197,6 +1200,7 @@ class _ChatScreenState extends State<ChatScreen> {
         } catch (_) {}
       });
     }
+    _dmHoldPausePreview?.dispose();
     _dmHoldVideoPausedNotifier.dispose();
     _voicePausedNotifier.dispose();
     _recordingSecondsNotifier.dispose();
@@ -1691,6 +1695,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _dmHoldVideoCam = null;
       _dmHoldLockedWhileVideo = false;
       _dmHoldVideoPausedNotifier.value = false;
+      await _disposeDmHoldPausePreview();
       for (final path in _dmHoldVideoSegments) {
         try {
           await File(path).delete();
@@ -1840,6 +1845,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _recordingTimer = null;
     _dmHoldLockedWhileVideo = false;
     _dmHoldVideoPausedNotifier.value = false;
+    await _disposeDmHoldPausePreview();
 
     final ctrl = _dmHoldVideoCam;
     _dmHoldVideoCam = null;
@@ -1939,6 +1945,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (cam == null || !cam.value.isInitialized) return;
     try {
       if (_dmHoldVideoPausedNotifier.value) {
+        await _disposeDmHoldPausePreview();
         await cam.startVideoRecording();
         if (mounted) _dmHoldVideoPausedNotifier.value = false;
       } else {
@@ -1949,9 +1956,83 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         }
         if (mounted) _dmHoldVideoPausedNotifier.value = true;
+        unawaited(_buildDmHoldPausePreview());
       }
     } catch (e) {
       debugPrint('[DmHoldVideo] pause toggle: $e');
+    }
+  }
+
+  static bool _isInlineMediaUri(String p) =>
+      p.startsWith('blob:') || p.startsWith('http') || p.startsWith('data:');
+
+  /// Builds a looping inline player of the круг recorded-so-far for the paused
+  /// view (Telegram-style review without leaving the recorder).
+  Future<void> _buildDmHoldPausePreview() async {
+    final paths = List<String>.from(_dmHoldVideoSegments);
+    if (paths.isEmpty) return;
+    var path = paths.last;
+    String? temp;
+    try {
+      if (paths.length > 1) {
+        final merged = await ImageService.instance.mergeVideoSegments(paths);
+        if (merged != null && merged.isNotEmpty) {
+          path = merged;
+          temp = merged;
+        }
+      }
+    } catch (_) {}
+    if (!mounted || !_dmHoldVideoPausedNotifier.value) {
+      if (temp != null) {
+        try {
+          await File(temp).delete();
+        } catch (_) {}
+      }
+      return;
+    }
+    try {
+      final c = _isInlineMediaUri(path)
+          ? VideoPlayerController.networkUrl(Uri.parse(path))
+          : VideoPlayerController.file(File(path));
+      await c.initialize();
+      if (!mounted || !_dmHoldVideoPausedNotifier.value) {
+        await c.dispose();
+        if (temp != null) {
+          try {
+            await File(temp).delete();
+          } catch (_) {}
+        }
+        return;
+      }
+      await c.setLooping(true);
+      await c.play();
+      setState(() {
+        _dmHoldPausePreview = c;
+        _dmHoldPausePreviewTemp = temp;
+      });
+    } catch (_) {
+      if (temp != null) {
+        try {
+          await File(temp).delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  Future<void> _disposeDmHoldPausePreview() async {
+    final c = _dmHoldPausePreview;
+    final temp = _dmHoldPausePreviewTemp;
+    _dmHoldPausePreview = null;
+    _dmHoldPausePreviewTemp = null;
+    if (mounted) setState(() {});
+    try {
+      await c?.pause();
+      await c?.dispose();
+    } catch (_) {}
+    if (temp != null) {
+      try {
+        await File(temp).delete();
+      } catch (_) {}
     }
   }
 
@@ -7692,6 +7773,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     isPaused: paused,
                                     onToggleRecordingPause: () =>
                                         unawaited(_toggleDmHoldVideoPause()),
+                                    pausePreview: _dmHoldPausePreview,
                                   ),
                                   const SizedBox(height: 20),
                                   Padding(

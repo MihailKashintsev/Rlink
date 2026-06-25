@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -249,6 +249,17 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
       unawaited(widget.onVideoHoldStart());
     } else {
       widget.onVoiceHoldStart();
+    }
+    // On web (mouse) you can't keep the button held AND tap the pause control —
+    // releasing the pointer would send. Swipe-up-to-lock is touch-only. So for
+    // the video circle, auto-lock immediately: recording continues and the
+    // pause / send / delete controls are usable without an accidental send.
+    if (kIsWeb && _videoMode) {
+      _locked = true;
+      widget.onHoldLockChanged?.call(true);
+      _removeGestureShield();
+      _showLockHud();
+      if (mounted) setState(() {});
     }
   }
 
