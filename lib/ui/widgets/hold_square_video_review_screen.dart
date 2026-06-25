@@ -8,6 +8,7 @@ import 'package:video_compress/video_compress.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../services/embedded_video_pause_bus.dart';
+import '../../utils/web_video_frames.dart';
 import 'square_video_recording_widgets.dart';
 
 /// Предпросмотр «видеоквадратика» перед отправкой (удержание или полноэкранный рекордер).
@@ -115,11 +116,13 @@ class _HoldSquareVideoReviewScreenState
     if (_busy || !_ready) return;
     final nav = Navigator.of(context);
 
-    if (!widget.allowTrim || _effectivelyFullTrim) {
+    if (kIsWeb) {
+      // Browsers can't re-encode → send the original (trimming is app-only).
       nav.pop(widget.videoPath);
       return;
     }
-    if (kIsWeb) {
+
+    if (!widget.allowTrim || _effectivelyFullTrim) {
       nav.pop(widget.videoPath);
       return;
     }
@@ -231,50 +234,23 @@ class _HoldSquareVideoReviewScreenState
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: Text(
-                          'Потяните за края, чтобы обрезать, или отправьте целиком',
+                          kIsWeb
+                              ? 'Предпросмотр перед отправкой'
+                              : 'Потяните за края, чтобы обрезать, или отправьте целиком',
                           style: TextStyle(
                             fontSize: 13,
                             color: cs.onSurfaceVariant,
                           ),
                         ),
                       ),
-                      if (kIsWeb) ...[
-                        RangeSlider(
-                          values: RangeValues(_rangeStart, _rangeEnd),
-                          min: 0,
-                          max: _durationSec,
-                          onChanged: _busy ? null : _onRangeChanged,
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '${_rangeStart.toStringAsFixed(1)} с',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: cs.onSurfaceVariant,
-                                ),
-                              ),
-                              Text(
-                                '${_rangeEnd.toStringAsFixed(1)} с',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ] else
-                        _FilmstripTrimBar(
-                          videoPath: widget.videoPath,
-                          durationSec: _durationSec,
-                          start: _rangeStart,
-                          end: _rangeEnd,
-                          onChanged: _busy ? (_) {} : _onRangeChanged,
-                        ),
+                      _FilmstripTrimBar(
+                        videoPath: widget.videoPath,
+                        durationSec: _durationSec,
+                        start: _rangeStart,
+                        end: _rangeEnd,
+                        onChanged: _busy ? (_) {} : _onRangeChanged,
+                        readOnly: kIsWeb, // web can't cut → frames are visual only
+                      ),
                     ] else
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -324,6 +300,7 @@ class _FilmstripTrimBar extends StatefulWidget {
   final double start;
   final double end;
   final ValueChanged<RangeValues> onChanged;
+  final bool readOnly;
 
   const _FilmstripTrimBar({
     required this.videoPath,
@@ -331,6 +308,7 @@ class _FilmstripTrimBar extends StatefulWidget {
     required this.start,
     required this.end,
     required this.onChanged,
+    this.readOnly = false,
   });
 
   @override
@@ -350,6 +328,20 @@ class _FilmstripTrimBarState extends State<_FilmstripTrimBar> {
   }
 
   Future<void> _extract() async {
+    if (kIsWeb) {
+      // Web: extract frames via a hidden <video> + <canvas>.
+      try {
+        final frames =
+            await webVideoThumbnails(widget.videoPath, count: _frames);
+        if (!mounted || frames.isEmpty) return;
+        setState(() {
+          for (var i = 0; i < _frames && i < frames.length; i++) {
+            _thumbs[i] = frames[i];
+          }
+        });
+      } catch (_) {}
+      return;
+    }
     for (var i = 0; i < _frames; i++) {
       final pos =
           (widget.durationSec * 1000 * (i + 0.5) / _frames).round();
@@ -399,30 +391,38 @@ class _FilmstripTrimBarState extends State<_FilmstripTrimBar> {
                 widget.onChanged(RangeValues(widget.start, t));
               }
 
+              final filmstrip = Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Row(
+                    children: [
+                      for (final t in _thumbs)
+                        Expanded(
+                          child: t == null
+                              ? Container(color: const Color(0xFF222222))
+                              : Image.memory(t,
+                                  fit: BoxFit.cover,
+                                  height: _barH,
+                                  gaplessPlayback: true),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+              if (widget.readOnly) {
+                // Frames only (web can't cut — visual timeline).
+                return SizedBox(
+                  height: _barH,
+                  width: w,
+                  child: Stack(children: [filmstrip]),
+                );
+              }
               return SizedBox(
                 height: _barH,
                 width: w,
                 child: Stack(
                   children: [
-                    // Filmstrip.
-                    Positioned.fill(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Row(
-                          children: [
-                            for (final t in _thumbs)
-                              Expanded(
-                                child: t == null
-                                    ? Container(color: const Color(0xFF222222))
-                                    : Image.memory(t,
-                                        fit: BoxFit.cover,
-                                        height: _barH,
-                                        gaplessPlayback: true),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    filmstrip,
                     // Dim outside selection.
                     Positioned(
                       left: 0,
@@ -467,22 +467,26 @@ class _FilmstripTrimBarState extends State<_FilmstripTrimBar> {
             },
           ),
           const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_fmt(widget.start),
-                  style:
-                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-              Text('${_fmt(widget.end - widget.start)} выбрано',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: cs.primary,
-                      fontWeight: FontWeight.w600)),
-              Text(_fmt(widget.end),
-                  style:
-                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            ],
-          ),
+          if (widget.readOnly)
+            Text('Обрезка видео доступна в приложении',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(_fmt(widget.start),
+                    style:
+                        TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                Text('${_fmt(widget.end - widget.start)} выбрано',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: cs.primary,
+                        fontWeight: FontWeight.w600)),
+                Text(_fmt(widget.end),
+                    style:
+                        TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              ],
+            ),
         ],
       ),
     );

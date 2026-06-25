@@ -4007,22 +4007,28 @@ class _ChatScreenState extends State<ChatScreen> {
     return (chosen == null || chosen.isEmpty) ? null : chosen;
   }
 
-  /// Web can't re-encode, so the editor is preview-only; returns true to send.
-  Future<bool> _reviewVideoWeb(Uint8List bytes) async {
-    if (!mounted) return false;
+  /// Web video editor: filmstrip timeline (real frames) + preview before send.
+  /// Browsers can't re-encode, so trimming is app-only; web sends the original.
+  /// Returns the bytes+filename to send, or null if cancelled.
+  Future<({Uint8List bytes, String fileName})?> _reviewVideoWeb(
+      Uint8List bytes, String fileName) async {
+    if (!mounted) return (bytes: bytes, fileName: fileName);
     final url = webBytesObjectUrl(bytes, mimeType: 'video/mp4');
-    if (url == null) return true; // can't preview → just send
+    if (url == null) {
+      return (bytes: bytes, fileName: fileName); // can't preview → send original
+    }
     final chosen = await Navigator.of(context).push<String?>(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (ctx) => HoldSquareVideoReviewScreen(
           videoPath: url,
-          allowTrim: false,
+          allowTrim: true,
           square: false,
         ),
       ),
     );
-    return chosen != null && chosen.isNotEmpty;
+    if (chosen == null) return null; // cancelled
+    return (bytes: bytes, fileName: fileName);
   }
 
   Future<void> _sendWebVideoBytes({
@@ -4034,28 +4040,29 @@ class _ChatScreenState extends State<ChatScreen> {
       _showErrorSnack('Видео пустое или не было прочитано браузером');
       return;
     }
-    if (!await _reviewVideoWeb(bytes)) return;
+    final reviewed = await _reviewVideoWeb(bytes, fileName);
+    if (reviewed == null) return; // cancelled
+    final data = reviewed.bytes;
+    final name = reviewed.fileName;
+    final mime = _mimeTypeForFileName(name, fallbackMime: 'video/mp4');
     setState(() => _isSending = true);
     _sendActivity(Activity.sendingFile);
     try {
       final msgId = _uuid.v4();
       final localPath = kIsWeb
           ? (await writeWebStoredFile(
-                fileName: '${msgId}_$fileName',
-                bytes: bytes,
-                mimeType: _mimeTypeForFileName(
-                  fileName,
-                  fallbackMime: 'video/mp4',
-                ),
+                fileName: '${msgId}_$name',
+                bytes: data,
+                mimeType: mime,
               ) ??
               _webMediaRefForPickedBytes(
-                bytes,
-                fileName,
+                data,
+                name,
                 fallbackMime: 'video/mp4',
               ))
           : await _persistPickedBytes(
-              bytes: bytes,
-              fileName: fileName,
+              bytes: data,
+              fileName: name,
               subdir: 'videos',
               fallbackExt: 'mp4',
             );
@@ -4065,12 +4072,12 @@ class _ChatScreenState extends State<ChatScreen> {
       var wasQueued = false;
       if (!_savedMessagesLocalOnly) {
         wasQueued = await _sendMedia(
-          bytes: bytes,
+          bytes: data,
           msgId: msgId,
           myId: myId,
           isVideo: true,
           isSquare: false,
-          fileName: fileName,
+          fileName: name,
           filePath: kIsWeb ? null : localPath,
         );
       }
@@ -4083,8 +4090,8 @@ class _ChatScreenState extends State<ChatScreen> {
           timestamp: DateTime.now(),
           status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
           videoPath: localPath,
-          fileName: fileName,
-          fileSize: bytes.length,
+          fileName: name,
+          fileSize: data.length,
         ),
         wasQueued: wasQueued,
       );
