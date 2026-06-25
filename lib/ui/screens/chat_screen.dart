@@ -7894,10 +7894,43 @@ class _DmInviteBubbleActions extends StatelessWidget {
     );
     await ChannelService.instance.saveChannelFromBroadcast(channel);
     await ChannelService.instance.subscribe(channelId, myId);
+    // Tell the admin (with our X25519) so we land in the channel's keys-file and
+    // they know about us, then pull history+media. Without this the local
+    // subscribe was inert — no posts, admin never learned of the subscriber.
+    unawaited(GossipRouter.instance.broadcastChannelSubscribe(
+      channelId: channelId,
+      userId: myId,
+      x25519: CryptoService.instance.x25519PublicKeyBase64,
+    ));
+    final lastPost = await ChannelService.instance.getLastPost(channelId);
+    unawaited(GossipRouter.instance.sendChannelHistoryRequest(
+      channelId: channelId,
+      requesterId: myId,
+      adminId: adminId,
+      sinceTs: lastPost?.timestamp ?? 0,
+      requesterX25519: CryptoService.instance.x25519PublicKeyBase64,
+    ));
+    // Persist the invite as a card on the message so it doesn't revert to a
+    // plain text message (with the buttons gone) once the pending invite clears.
+    final inviteId = data['inviteMessageId'] as String?;
+    if (inviteId != null && inviteId.isNotEmpty) {
+      final existingMsg =
+          await ChatStorageService.instance.getMessageById(inviteId);
+      if (existingMsg != null) {
+        final enriched = <String, dynamic>{
+          ...data,
+          'kind': 'channel',
+          'acceptedAt': DateTime.now().millisecondsSinceEpoch,
+        }..remove('inviteMessageId');
+        await ChatStorageService.instance.saveMessage(
+          existingMsg.copyWith(invitePayloadJson: jsonEncode(enriched)),
+        );
+      }
+    }
     ChannelService.instance.removeChannelInvite(channelId);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Вы подписались на канал')),
+        SnackBar(content: Text('Вы подписались на «$name»')),
       );
     }
   }

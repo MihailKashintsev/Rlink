@@ -44,7 +44,6 @@ import 'ether_screen.dart';
 import 'groups_screen.dart';
 import 'location_map_screen.dart';
 import 'profile_screen.dart';
-import 'call_history_screen.dart';
 import 'chat_inbox_filters_manage_screen.dart';
 import 'settings_screen.dart';
 import 'story_creator_screen.dart';
@@ -454,9 +453,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           ? AppL10n.t('nav_nearby')
                           : _currentTab == 2
                               ? AppL10n.t('nav_ether')
-                              : _currentTab == 3
-                                  ? AppL10n.t('nav_call_history')
-                                  : AppL10n.t('nav_me'),
+                              : AppL10n.t('nav_me'),
                   key: ValueKey<int>(_currentTab),
                   style: const TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 22),
@@ -616,7 +613,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             });
           }
           // Swipe left to next tab (positive velocity)
-          else if (details.primaryVelocity! > 300 && _currentTab < 4) {
+          else if (details.primaryVelocity! > 300 && _currentTab < 3) {
             setState(() {
               _currentTab++;
               if (_searchActive) {
@@ -639,7 +636,6 @@ class _ChatListScreenState extends State<ChatListScreen>
             ),
             _NearbyTab(showRadar: _nearbyShowRadar),
             const EtherScreen(),
-            const CallHistoryScreen(),
             const _MeTab(),
           ],
         ),
@@ -780,11 +776,6 @@ class _AnimatedNavBar extends StatelessWidget {
           label: AppL10n.t('nav_ether'),
         ),
         NavigationDestination(
-          icon: const Icon(Icons.history),
-          selectedIcon: const Icon(Icons.history),
-          label: AppL10n.t('nav_call_history'),
-        ),
-        NavigationDestination(
           icon: const _MeTabNavIcon(selected: false),
           selectedIcon: const _MeTabNavIcon(selected: true),
           label: AppL10n.t('nav_me'),
@@ -809,7 +800,7 @@ class _DesktopNavRail extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     return NavigationRail(
-      selectedIndex: selectedIndex.clamp(0, 4),
+      selectedIndex: selectedIndex.clamp(0, 3),
       onDestinationSelected: onSelect,
       labelType: NavigationRailLabelType.all,
       groupAlignment: -0.9,
@@ -846,11 +837,6 @@ class _DesktopNavRail extends StatelessWidget {
           ),
           selectedIcon: const Icon(Icons.cell_tower),
           label: Text(AppL10n.t('nav_ether')),
-        ),
-        NavigationRailDestination(
-          icon: const Icon(Icons.history),
-          selectedIcon: const Icon(Icons.history),
-          label: Text(AppL10n.t('nav_call_history')),
         ),
         NavigationRailDestination(
           icon: const _MeTabNavIcon(selected: false),

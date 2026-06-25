@@ -79,7 +79,12 @@ class _MessageActionsLayer extends StatelessWidget {
     final spaceBelow = size.height - rect.bottom - media.padding.bottom - 16;
     final placeBelow = spaceBelow > menuEst || spaceBelow > size.height * 0.4;
 
-    void dismiss() => Navigator.of(context).maybePop();
+    var dismissed = false;
+    Future<void> dismiss() async {
+      if (dismissed) return;
+      dismissed = true;
+      await Navigator.of(context).maybePop();
+    }
 
     return AnimatedBuilder(
       animation: anim,
@@ -237,7 +242,7 @@ class _ActionMenu extends StatelessWidget {
   final double width;
   final List<MessageMenuAction> actions;
   final ColorScheme cs;
-  final VoidCallback onPick;
+  final Future<void> Function() onPick;
   const _ActionMenu({
     required this.width,
     required this.actions,
@@ -261,8 +266,11 @@ class _ActionMenu extends StatelessWidget {
             children: [
               for (final a in actions)
                 InkWell(
-                  onTap: () {
-                    onPick();
+                  onTap: () async {
+                    // Fully close the overlay before running the action, so an
+                    // action that opens a dialog (e.g. delete) doesn't race the
+                    // dismiss and leave the blur stuck on screen.
+                    await onPick();
                     a.onTap();
                   },
                   child: Padding(
