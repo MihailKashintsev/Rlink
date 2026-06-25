@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -28,9 +29,17 @@ class CallScreen extends StatefulWidget {
   State<CallScreen> createState() => _CallScreenState();
 }
 
-class _CallScreenState extends State<CallScreen> {
+class _CallScreenState extends State<CallScreen>
+    with SingleTickerProviderStateMixin {
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+
+  /// Ambient loop for the gradient drift + avatar ring pulse.
+  late final AnimationController _ambient = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  )..repeat();
+
   bool _micOn = true;
   bool _camOn = true;
   VoidCallback? _phaseListener;
@@ -301,6 +310,7 @@ class _CallScreenState extends State<CallScreen> {
       _speakerListener = null;
     }
     unawaited(CallProximityService.instance.stop());
+    _ambient.dispose();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
     super.dispose();
@@ -324,142 +334,284 @@ class _CallScreenState extends State<CallScreen> {
   Widget _buildAudioCallUi(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: ValueListenableBuilder<bool>(
-          valueListenable: CallProximityService.instance.isNear,
-          builder: (_, near, __) {
-            return Stack(
-              children: [
-                Positioned(
-                  width: 1,
-                  height: 1,
-                  left: -10,
-                  top: -10,
-                  child: IgnorePointer(
-                    child: Opacity(
-                      opacity: 0.01,
-                      child: RTCVideoView(_remoteRenderer),
-                    ),
+      body: ValueListenableBuilder<bool>(
+        valueListenable: CallProximityService.instance.isNear,
+        builder: (_, near, __) {
+          return Stack(
+            children: [
+              Positioned(
+                width: 1,
+                height: 1,
+                left: -10,
+                top: -10,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.01,
+                    child: RTCVideoView(_remoteRenderer),
                   ),
                 ),
-                Column(
+              ),
+              Positioned.fill(child: _ambientBackground()),
+              SafeArea(
+                child: Column(
                   children: [
-                    const SizedBox(height: 40),
-                    AvatarWidget(
-                      initials: _initials(widget.peerName),
-                      color: widget.peerAvatarColor,
-                      emoji: widget.peerAvatarEmoji,
-                      imagePath: widget.peerAvatarImagePath,
-                      size: 112,
-                    ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 52),
+                    _pulsingAvatar(),
+                    const SizedBox(height: 24),
                     Text(
                       widget.peerName,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 24,
+                        fontSize: 26,
                         fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    ValueListenableBuilder<CallPhase>(
-                      valueListenable: CallService.instance.phase,
-                      builder: (_, phase, __) {
-                        final label = switch (phase) {
-                          CallPhase.ringing when widget.session.incoming =>
-                            'Входящий звонок',
-                          CallPhase.ringing => 'Ждём ответа...',
-                          CallPhase.connecting => 'Соединение...',
-                          CallPhase.connected => 'Аудиозвонок',
-                          CallPhase.failed => 'Соединение не удалось',
-                          CallPhase.ended => 'Звонок завершён',
-                          CallPhase.idle => 'Звонок',
-                        };
-                        return Text(
-                          label,
-                          style: const TextStyle(
-                              color: Colors.white60, fontSize: 14),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 8),
+                    _statusLine(),
+                    const SizedBox(height: 36),
                     ValueListenableBuilder<CallPhase>(
                       valueListenable: CallService.instance.phase,
                       builder: (_, phase, __) {
                         final live = phase == CallPhase.connected;
-                        return SizedBox(
-                          width: 240,
-                          height: 52,
-                          child: WaveLine(
-                            seed: widget.peerName.hashCode,
-                            progress: 1.0,
-                            animating: live,
-                            level: live ? CallService.instance.audioLevel : null,
-                            activeColor: Colors.white.withValues(alpha: 0.92),
-                            inactiveColor: Colors.white24,
-                            strokeWidth: 2.8,
+                        return AnimatedOpacity(
+                          opacity: live ? 1 : 0.45,
+                          duration: const Duration(milliseconds: 300),
+                          child: SizedBox(
+                            width: 250,
+                            height: 56,
+                            child: WaveLine(
+                              seed: widget.peerName.hashCode,
+                              progress: 1.0,
+                              animating: live,
+                              level: live
+                                  ? CallService.instance.audioLevel
+                                  : null,
+                              activeColor: Colors.white.withValues(alpha: 0.95),
+                              inactiveColor: Colors.white24,
+                              strokeWidth: 2.8,
+                            ),
                           ),
                         );
                       },
                     ),
                     const Spacer(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton.filled(
-                          onPressed: () async {
-                            _micOn = !_micOn;
-                            await CallService.instance.toggleMic(_micOn);
-                            if (mounted) setState(() {});
-                          },
-                          icon: Icon(_micOn ? Icons.mic : Icons.mic_off),
-                        ),
-                        const SizedBox(width: 10),
-                        ValueListenableBuilder<bool>(
-                          valueListenable: CallService.instance.speakerOn,
-                          builder: (_, speaker, __) {
-                            return IconButton.filled(
-                              tooltip: speaker
-                                  ? 'Выключить громкую связь'
-                                  : 'Громкая связь',
-                              onPressed: () async {
-                                await CallService.instance
-                                    .setSpeakerphone(!speaker);
-                                await _syncProximityMonitoring();
-                              },
-                              icon: Icon(speaker
-                                  ? Icons.volume_up_rounded
-                                  : Icons.volume_down_outlined),
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 10),
-                        _recordControl(),
-                        const SizedBox(width: 10),
-                        IconButton.filled(
-                          style:
-                              IconButton.styleFrom(backgroundColor: Colors.red),
-                          onPressed: _end,
-                          icon: const Icon(Icons.call_end),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 42),
+                    _audioControls(),
+                    const SizedBox(height: 44),
                   ],
                 ),
-                _callTopOverlay(),
-                if (near)
-                  Positioned.fill(
-                    child: AbsorbPointer(
-                      absorbing: true,
-                      child: Container(color: Colors.black),
-                    ),
+              ),
+              _callTopOverlay(),
+              if (near)
+                Positioned.fill(
+                  child: AbsorbPointer(
+                    absorbing: true,
+                    child: Container(color: Colors.black),
                   ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Soft colour glow drawn from the peer's avatar colour, gently drifting,
+  /// fading to black at the edges.
+  Widget _ambientBackground() {
+    final base = Color(widget.peerAvatarColor);
+    return AnimatedBuilder(
+      animation: _ambient,
+      builder: (_, __) {
+        final a = math.sin(_ambient.value * 2 * math.pi);
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(a * 0.10, -0.55 + a * 0.05),
+              radius: 1.25,
+              colors: [
+                Color.lerp(base, Colors.black, 0.40)!,
+                Color.lerp(base, Colors.black, 0.74)!,
+                Colors.black,
               ],
+              stops: const [0.0, 0.55, 1.0],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _pulsingAvatar() {
+    return ValueListenableBuilder<CallPhase>(
+      valueListenable: CallService.instance.phase,
+      builder: (_, phase, __) {
+        final ringing =
+            phase == CallPhase.ringing || phase == CallPhase.connecting;
+        return SizedBox(
+          width: 196,
+          height: 196,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (ringing)
+                AnimatedBuilder(
+                  animation: _ambient,
+                  builder: (_, __) {
+                    final p = _ambient.value;
+                    final p2 = (p + 0.5) % 1.0;
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        _ring(124 + p * 64, (1 - p) * 0.34),
+                        _ring(124 + p2 * 64, (1 - p2) * 0.28),
+                      ],
+                    );
+                  },
+                ),
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.82, end: 1.0),
+                duration: const Duration(milliseconds: 460),
+                curve: const Cubic(0.23, 1, 0.32, 1),
+                builder: (_, s, child) =>
+                    Transform.scale(scale: s, child: child),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(widget.peerAvatarColor)
+                            .withValues(alpha: 0.45),
+                        blurRadius: 34,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: AvatarWidget(
+                    initials: _initials(widget.peerName),
+                    color: widget.peerAvatarColor,
+                    emoji: widget.peerAvatarEmoji,
+                    imagePath: widget.peerAvatarImagePath,
+                    size: 124,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _ring(double size, double opacity) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white.withValues(alpha: opacity.clamp(0.0, 1.0)),
+          width: 1.6,
+        ),
+      ),
+    );
+  }
+
+  Widget _statusLine() {
+    return ValueListenableBuilder<CallPhase>(
+      valueListenable: CallService.instance.phase,
+      builder: (_, phase, __) {
+        if (phase == CallPhase.connected) {
+          return ValueListenableBuilder<Duration>(
+            valueListenable: CallService.instance.callElapsed,
+            builder: (_, elapsed, __) => Text(
+              elapsed == Duration.zero
+                  ? 'Аудиозвонок'
+                  : _formatElapsed(elapsed),
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 15,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+          );
+        }
+        final label = switch (phase) {
+          CallPhase.ringing when widget.session.incoming => 'Входящий звонок',
+          CallPhase.ringing => 'Ждём ответа…',
+          CallPhase.connecting => 'Соединение…',
+          CallPhase.failed => 'Соединение не удалось',
+          CallPhase.ended => 'Звонок завершён',
+          CallPhase.idle => 'Звонок',
+          CallPhase.connected => 'Аудиозвонок',
+        };
+        return Text(
+          label,
+          style: const TextStyle(color: Colors.white60, fontSize: 15),
+        );
+      },
+    );
+  }
+
+  Widget _audioControls() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _CallButton(
+          icon: _micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
+          label: _micOn ? 'Микрофон' : 'Без звука',
+          active: !_micOn,
+          onTap: () async {
+            _micOn = !_micOn;
+            await CallService.instance.toggleMic(_micOn);
+            if (mounted) setState(() {});
+          },
+        ),
+        const SizedBox(width: 18),
+        ValueListenableBuilder<bool>(
+          valueListenable: CallService.instance.speakerOn,
+          builder: (_, speaker, __) {
+            return _CallButton(
+              icon: speaker
+                  ? Icons.volume_up_rounded
+                  : Icons.volume_down_rounded,
+              label: 'Динамик',
+              active: speaker,
+              onTap: () async {
+                await CallService.instance.setSpeakerphone(!speaker);
+                await _syncProximityMonitoring();
+              },
             );
           },
         ),
-      ),
+        const SizedBox(width: 18),
+        ValueListenableBuilder<bool>(
+          valueListenable: CallService.instance.localRecording,
+          builder: (_, rec, __) {
+            return _CallButton(
+              icon: rec
+                  ? Icons.stop_rounded
+                  : Icons.fiber_manual_record_rounded,
+              label: rec ? 'Стоп' : 'Запись',
+              active: rec,
+              activeColor: Colors.red,
+              onTap: () async {
+                await CallService.instance.setCallRecording(!rec);
+                if (mounted) setState(() {});
+              },
+            );
+          },
+        ),
+        const SizedBox(width: 18),
+        _CallButton(
+          icon: Icons.call_end_rounded,
+          label: 'Завершить',
+          onTap: _end,
+          background: Colors.red,
+          foreground: Colors.white,
+        ),
+      ],
     );
   }
 
@@ -568,6 +720,79 @@ class _CallScreenState extends State<CallScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A round call-control button with a label and scale-on-press feedback.
+class _CallButton extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool active;
+  final Color? activeColor;
+  final Color? background;
+  final Color? foreground;
+
+  const _CallButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+    this.activeColor,
+    this.background,
+    this.foreground,
+  });
+
+  @override
+  State<_CallButton> createState() => _CallButtonState();
+}
+
+class _CallButtonState extends State<_CallButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.background ??
+        (widget.active
+            ? (widget.activeColor ?? Colors.white).withValues(alpha: 0.95)
+            : Colors.white.withValues(alpha: 0.14));
+    final fg = widget.foreground ??
+        (widget.active
+            ? (widget.activeColor != null ? Colors.white : Colors.black)
+            : Colors.white);
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedScale(
+            scale: _pressed ? 0.9 : 1.0,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+              child: Icon(widget.icon, color: fg, size: 26),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 72,
+            child: Text(
+              widget.label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ),
+        ],
       ),
     );
   }
