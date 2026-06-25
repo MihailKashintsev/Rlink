@@ -15,6 +15,7 @@ import '../../services/relay_service.dart';
 import '../../services/story_service.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/reactions.dart';
+import '../widgets/story_strokes_painter.dart';
 
 /// Full-screen story viewer with animated progress bar (Telegram/Instagram-style).
 class StoryViewerScreen extends StatefulWidget {
@@ -605,6 +606,16 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                       Shadow(blurRadius: 8, color: Colors.black54),
                     ],
                   ),
+                ),
+              ),
+            ),
+
+          // Freehand drawing layer
+          if (story.strokes.isNotEmpty)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: StoryStrokesPainter(strokes: story.strokes),
                 ),
               ),
             ),

@@ -199,7 +199,8 @@ typedef OnStoryReceived = void Function(
     bool textBold,
     bool textItalic,
     double textBgOpacity,
-    List<Map<String, dynamic>> overlays);
+    List<Map<String, dynamic>> overlays,
+    List<Map<String, dynamic>> strokes);
 
 /// Вызывается при получении запроса историй от пира.
 typedef OnStoryRequest = void Function(String fromId);
@@ -943,6 +944,7 @@ class GossipRouter {
     bool textItalic = false,
     double textBgOpacity = 0,
     List<Map<String, dynamic>> overlays = const [],
+    List<Map<String, dynamic>> strokes = const [],
   }) async {
     final packet = GossipPacket(
       id: storyId,
@@ -961,6 +963,7 @@ class GossipRouter {
         if (textItalic) 'ti': true,
         if (textBgOpacity != 0) 'tbo': textBgOpacity,
         if (overlays.isNotEmpty) 'ov': overlays,
+        if (strokes.isNotEmpty) 'st': strokes,
       },
     );
     _markSeen(packet.id);
@@ -1809,6 +1812,10 @@ class GossipRouter {
               .whereType<Map>()
               .map((e) => Map<String, dynamic>.from(e))
               .toList();
+          final strokes = ((packet.payload['st'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
           onStoryReceived?.call(
             packet.id,
             authorId,
@@ -1822,6 +1829,7 @@ class GossipRouter {
             textItalic,
             textBgOpacity,
             overlays,
+            strokes,
           );
         }
         return;

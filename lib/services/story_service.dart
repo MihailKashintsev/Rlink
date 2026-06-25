@@ -41,6 +41,36 @@ class StoryOverlayItem {
   }
 }
 
+/// A freehand drawing stroke on a story. Points are normalised to the canvas
+/// (0..1 pairs: x0,y0,x1,y1,…) so they map across any screen size.
+class StoryStroke {
+  final List<double> points;
+  final int color;
+  final double width;
+
+  const StoryStroke({
+    required this.points,
+    required this.color,
+    this.width = 0.012,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'p': points,
+        'c': color,
+        'w': width,
+      };
+
+  factory StoryStroke.fromJson(Map<String, dynamic> j) {
+    return StoryStroke(
+      points: ((j['p'] as List?) ?? const [])
+          .map((e) => (e as num).toDouble())
+          .toList(),
+      color: j['c'] as int? ?? 0xFFFFFFFF,
+      width: (j['w'] as num?)?.toDouble() ?? 0.012,
+    );
+  }
+}
+
 class StoryItem {
   final String id;
   final String authorId; // Ed25519 public key
@@ -59,6 +89,7 @@ class StoryItem {
   bool textItalic;
   double textBgOpacity;
   List<StoryOverlayItem> overlays;
+  List<StoryStroke> strokes;
   // Emoji → list of reactor public keys. Хранится локально.
   Map<String, List<String>> reactions;
   // Viewer public key hexes (reported back from each viewer to the author).
@@ -81,9 +112,11 @@ class StoryItem {
     this.textItalic = false,
     this.textBgOpacity = 0,
     List<StoryOverlayItem>? overlays,
+    List<StoryStroke>? strokes,
     Map<String, List<String>>? reactions,
     List<String>? viewers,
   })  : overlays = overlays ?? <StoryOverlayItem>[],
+        strokes = strokes ?? <StoryStroke>[],
         reactions = reactions ?? <String, List<String>>{},
         viewers = viewers ?? <String>[];
 
@@ -129,6 +162,7 @@ class StoryItem {
         if (textItalic) 'textItalic': true,
         if (textBgOpacity != 0) 'textBgOpacity': textBgOpacity,
         if (overlays.isNotEmpty) 'overlays': overlays.map((e) => e.toJson()).toList(),
+        if (strokes.isNotEmpty) 'strokes': strokes.map((e) => e.toJson()).toList(),
         if (reactions.isNotEmpty) 'reactions': reactions,
         if (viewers.isNotEmpty) 'viewers': viewers,
       };
@@ -149,6 +183,11 @@ class StoryItem {
         .map((e) => StoryOverlayItem.fromJson(Map<String, dynamic>.from(e)))
         .where((e) => e.value.isNotEmpty)
         .toList();
+    final strokes = ((j['strokes'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => StoryStroke.fromJson(Map<String, dynamic>.from(e)))
+        .where((e) => e.points.length >= 2)
+        .toList();
     return StoryItem(
       id: j['id'] as String,
       authorId: j['authorId'] as String,
@@ -166,6 +205,7 @@ class StoryItem {
       textItalic: j['textItalic'] as bool? ?? false,
       textBgOpacity: (j['textBgOpacity'] as num?)?.toDouble() ?? 0,
       overlays: overlays,
+      strokes: strokes,
       reactions: reactions,
       viewers: viewers,
     );

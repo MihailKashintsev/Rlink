@@ -16,6 +16,7 @@ import '../../services/media_upload_queue.dart';
 import '../../services/relay_service.dart';
 import '../../services/story_service.dart';
 import '../widgets/reactions.dart';
+import '../widgets/story_strokes_painter.dart';
 
 /// Story creator with draggable text overlay, pinch-to-zoom image, and text size control.
 class StoryCreatorScreen extends StatefulWidget {
@@ -49,6 +50,19 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
   double _textBgOpacity = 0.0;
   final List<StoryOverlayItem> _overlays = <StoryOverlayItem>[];
   int _activeOverlay = -1;
+
+  // ── Drawing (freehand pen) ────────────────────────────────────
+  // Points are normalised (0..1 of the canvas) so they map across screens.
+  bool _drawMode = false;
+  final List<StoryStroke> _strokes = <StoryStroke>[];
+  List<double>? _activeStrokePts;
+  int _penColor = 0xFFFF3B30;
+  double _penWidth = 0.012;
+
+  static const _penColors = [
+    0xFFFF3B30, 0xFFFFFFFF, 0xFF000000, 0xFF34C759,
+    0xFF0A84FF, 0xFFFFD60A, 0xFFAF52DE, 0xFFFF9F0A,
+  ];
 
   Duration _videoTrimStart = Duration.zero;
   Duration _videoTrimEnd = Duration.zero;
@@ -223,6 +237,61 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
     });
   }
 
+  Widget _buildPenBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Отменить штрих',
+            onPressed: _strokes.isEmpty
+                ? null
+                : () => setState(() => _strokes.removeLast()),
+            icon: const Icon(Icons.undo_rounded, color: Colors.white),
+          ),
+          Expanded(
+            child: SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final c in _penColors)
+                    GestureDetector(
+                      onTap: () => setState(() => _penColor = c),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        curve: Curves.easeOutCubic,
+                        margin: const EdgeInsets.symmetric(horizontal: 5),
+                        width: _penColor == c ? 34 : 28,
+                        height: _penColor == c ? 34 : 28,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Color(c),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _penColor == c
+                                ? Colors.white
+                                : Colors.white24,
+                            width: _penColor == c ? 3 : 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => setState(() => _drawMode = false),
+            child: const Text('Готово',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _publish() async {
     if (_publishing) return;
     final text = _textCtrl.text.trim();
@@ -269,6 +338,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
       textItalic: _textItalic,
       textBgOpacity: _textBgOpacity,
       overlays: List<StoryOverlayItem>.from(_overlays),
+      strokes: List<StoryStroke>.from(_strokes),
     );
     StoryService.instance.addStory(story);
 
@@ -306,6 +376,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
         textItalic: story.textItalic,
         textBgOpacity: story.textBgOpacity,
         overlays: story.overlays.map((e) => e.toJson()).toList(),
+        strokes: story.strokes.map((e) => e.toJson()).toList(),
       );
 
       // ── Video blob path ────────────────────────────────────────
@@ -778,6 +849,66 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                                 ),
                               ),
                             ),
+
+                          // Freehand drawing layer (always rendered).
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: StoryStrokesPainter(
+                                  strokes: _strokes,
+                                  active: _activeStrokePts,
+                                  activeColor: _penColor,
+                                  activeWidth: _penWidth,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          // Drawing capture (topmost, only in draw mode).
+                          if (_drawMode)
+                            Positioned.fill(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onPanStart: (d) {
+                                  final s = _canvasSize;
+                                  if (s.width <= 0 || s.height <= 0) return;
+                                  setState(() {
+                                    _activeStrokePts = [
+                                      (d.localPosition.dx / s.width)
+                                          .clamp(0.0, 1.0),
+                                      (d.localPosition.dy / s.height)
+                                          .clamp(0.0, 1.0),
+                                    ];
+                                  });
+                                },
+                                onPanUpdate: (d) {
+                                  final s = _canvasSize;
+                                  final pts = _activeStrokePts;
+                                  if (pts == null ||
+                                      s.width <= 0 ||
+                                      s.height <= 0) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    pts.add((d.localPosition.dx / s.width)
+                                        .clamp(0.0, 1.0));
+                                    pts.add((d.localPosition.dy / s.height)
+                                        .clamp(0.0, 1.0));
+                                  });
+                                },
+                                onPanEnd: (_) {
+                                  final pts = _activeStrokePts;
+                                  if (pts != null && pts.length >= 4) {
+                                    _strokes.add(StoryStroke(
+                                      points: List<double>.from(pts),
+                                      color: _penColor,
+                                      width: _penWidth,
+                                    ));
+                                  }
+                                  setState(() => _activeStrokePts = null);
+                                },
+                              ),
+                            ),
                         ],
                       ),
                     );
@@ -785,6 +916,9 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                 ),
               ),
             ),
+
+            // Pen colour palette (only while drawing).
+            if (_drawMode) _buildPenBar(),
 
             // ── Bottom controls ───────────────────────────────────
             Container(
@@ -999,6 +1133,15 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                           color: _textBgOpacity > 0
                               ? Colors.amberAccent
                               : Colors.white70,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: _drawMode ? 'Завершить рисование' : 'Рисовать',
+                        onPressed: () =>
+                            setState(() => _drawMode = !_drawMode),
+                        icon: Icon(
+                          Icons.brush_rounded,
+                          color: _drawMode ? Colors.amber : Colors.white70,
                         ),
                       ),
                       IconButton(

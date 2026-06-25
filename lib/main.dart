@@ -1091,7 +1091,7 @@ Future<void> initServices() async {
         ));
       },
       onStory: (storyId, authorId, text, bgColor, textX, textY, textSize,
-          textColor, textBold, textItalic, textBgOpacity, overlays) {
+          textColor, textBold, textItalic, textBgOpacity, overlays, strokes) {
         debugPrint(
             '[RLINK][Main] onStory: author=${authorId.substring(0, 16)} text=${text.substring(0, text.length.clamp(0, 20))}');
         StoryService.instance.addStory(StoryItem(
@@ -1110,6 +1110,10 @@ Future<void> initServices() async {
           overlays: overlays
               .map((e) => StoryOverlayItem.fromJson(e))
               .where((e) => e.value.isNotEmpty)
+              .toList(),
+          strokes: strokes
+              .map((e) => StoryStroke.fromJson(e))
+              .where((e) => e.points.length >= 2)
               .toList(),
         ));
         final myKey = CryptoService.instance.publicKeyHex;
@@ -2356,6 +2360,7 @@ Future<void> initServices() async {
             textItalic: story.textItalic,
             textBgOpacity: story.textBgOpacity,
             overlays: story.overlays.map((e) => e.toJson()).toList(),
+            strokes: story.strokes.map((e) => e.toJson()).toList(),
           );
           // Re-send image to the requester via relay
           if (story.imagePath != null && RelayService.instance.isConnected) {
