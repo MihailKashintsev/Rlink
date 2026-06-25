@@ -15,10 +15,15 @@ class HoldSquareVideoReviewScreen extends StatefulWidget {
   final String videoPath;
   final bool allowTrim;
 
+  /// Preview-only: shown while recording is paused so the user can watch what
+  /// they've recorded so far, then go back and resume. No trim / send.
+  final bool previewOnly;
+
   const HoldSquareVideoReviewScreen({
     super.key,
     required this.videoPath,
     required this.allowTrim,
+    this.previewOnly = false,
   });
 
   @override
@@ -164,10 +169,10 @@ class _HoldSquareVideoReviewScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Просмотр'),
+        title: Text(widget.previewOnly ? 'Запись' : 'Просмотр'),
         leading: IconButton(
-          icon: const Icon(Icons.close),
-          tooltip: 'Отмена',
+          icon: Icon(widget.previewOnly ? Icons.arrow_back : Icons.close),
+          tooltip: widget.previewOnly ? 'Назад к записи' : 'Отмена',
           onPressed: _busy ? null : () => Navigator.pop(context),
         ),
       ),
@@ -203,7 +208,7 @@ class _HoldSquareVideoReviewScreenState
                         ),
                       ),
                     ),
-                    if (widget.allowTrim) ...[
+                    if (widget.allowTrim && !widget.previewOnly) ...[
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: Text(
@@ -246,7 +251,9 @@ class _HoldSquareVideoReviewScreenState
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
-                          'Проверьте кадр и нажмите «Отправить»',
+                          widget.previewOnly
+                              ? 'Это снято на данный момент. Вернитесь, чтобы продолжить запись.'
+                              : 'Проверьте кадр и нажмите «Отправить»',
                           style: TextStyle(
                             fontSize: 13,
                             color: cs.onSurfaceVariant,
@@ -260,8 +267,14 @@ class _HoldSquareVideoReviewScreenState
                         child: SizedBox(
                           width: double.infinity,
                           child: FilledButton(
-                            onPressed: _busy ? null : _send,
-                            child: Text(_busy ? 'Обработка…' : 'Отправить'),
+                            onPressed: _busy
+                                ? null
+                                : (widget.previewOnly
+                                    ? () => Navigator.pop(context)
+                                    : _send),
+                            child: Text(widget.previewOnly
+                                ? 'Продолжить запись'
+                                : (_busy ? 'Обработка…' : 'Отправить')),
                           ),
                         ),
                       ),

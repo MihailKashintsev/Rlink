@@ -46,6 +46,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
   int _selectedCamera = -1;
   bool _isRecording = false;
   bool _recordingPaused = false;
+  bool _previewing = false;
 
   /// Прогресс записи без setState на каждый тик — меньше лагов превью.
   final ValueNotifier<double> _recordingSeconds = ValueNotifier(0);
@@ -278,6 +279,48 @@ class _VideoOverlayState extends State<_VideoOverlay>
     }
   }
 
+  /// While paused, play back what's been recorded so far, then return to keep
+  /// recording (resume) or stop+send.
+  Future<void> _previewRecordedSoFar() async {
+    if (!_recordingPaused || _previewing) return;
+    final paths = List<String>.from(_recordedSegmentPaths);
+    if (paths.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Пока нечего показывать')),
+      );
+      return;
+    }
+    setState(() => _previewing = true);
+    var previewPath = paths.last;
+    var isTemp = false;
+    try {
+      if (paths.length > 1) {
+        final merged = await ImageService.instance.mergeVideoSegments(paths);
+        if (merged != null && merged.isNotEmpty) {
+          previewPath = merged;
+          isTemp = true;
+        }
+      }
+    } catch (_) {}
+    if (!mounted) {
+      if (isTemp) await _deleteTempVideos([previewPath]);
+      return;
+    }
+    EmbeddedVideoPauseBus.instance.bump();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => HoldSquareVideoReviewScreen(
+          videoPath: previewPath,
+          allowTrim: false,
+          previewOnly: true,
+        ),
+      ),
+    );
+    if (isTemp) await _deleteTempVideos([previewPath]);
+    if (mounted) setState(() => _previewing = false);
+  }
+
   Future<void> _stopAndSend() async {
     if (!_isRecording) return;
     _recordingTimer?.cancel();
@@ -475,7 +518,29 @@ class _VideoOverlayState extends State<_VideoOverlay>
               ),
             ),
             const SizedBox(width: 32),
-            const SizedBox(width: 52, height: 52),
+            (_isRecording && _recordingPaused)
+                ? GestureDetector(
+                    onTap: _previewing
+                        ? null
+                        : () => unawaited(_previewRecordedSoFar()),
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade800,
+                        shape: BoxShape.circle,
+                      ),
+                      child: _previewing
+                          ? const Padding(
+                              padding: EdgeInsets.all(15),
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.visibility_rounded,
+                              color: Colors.white, size: 24),
+                    ),
+                  )
+                : const SizedBox(width: 52, height: 52),
           ],
         ),
         const SizedBox(height: 14),
@@ -483,9 +548,11 @@ class _VideoOverlayState extends State<_VideoOverlay>
           duration: const Duration(milliseconds: 200),
           child: Text(
             _isRecording
-                ? 'Нажмите для остановки · пауза на превью'
+                ? (_recordingPaused
+                    ? 'Пауза · 👁 просмотр или ▶ продолжить'
+                    : 'Нажмите для остановки · ⏸ пауза')
                 : 'Нажмите для записи',
-            key: ValueKey(_isRecording),
+            key: ValueKey('$_isRecording-$_recordingPaused'),
             style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
             textAlign: TextAlign.center,
           ),
