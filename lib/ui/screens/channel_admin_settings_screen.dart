@@ -603,7 +603,9 @@ class _ChannelAdminSettingsScreenState
       isScrollControlled: true,
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx2, setModal) {
-          final mods = ch.moderatorIds;
+          // Read the LIVE channel, not the captured `ch` — otherwise the switch
+          // reads stale moderatorIds after a toggle and snaps back.
+          final mods = (_channel ?? ch).moderatorIds;
           return SafeArea(
             child: Column(
               mainAxisSize: MainAxisSize.min,
