@@ -29,6 +29,7 @@ import '../../services/platform_capabilities.dart';
 import '../../services/wifi_direct_service.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/avatar_viewer.dart';
+import '../widgets/profile_photo_actions.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/mesh_radar_widget.dart';
 import '../widgets/status_emoji_view.dart';
@@ -1021,7 +1022,7 @@ class _MeTab extends StatelessWidget {
               title: Text(hasPhoto ? 'Изменить фото' : 'Добавить фото'),
               onTap: () {
                 Navigator.pop(ctx);
-                Navigator.push(context, rlinkPushRoute(const ProfileScreen()));
+                unawaited(pickAndSaveProfileAvatar(context));
               },
             ),
             if (hasPhoto)
@@ -1033,10 +1034,7 @@ class _MeTab extends StatelessWidget {
                         TextStyle(color: Theme.of(context).colorScheme.error)),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  await ProfileService.instance.updateProfile(
-                    setAvatarImagePath: true,
-                    avatarImagePath: null,
-                  );
+                  await deleteProfileAvatar();
                 },
               ),
           ],

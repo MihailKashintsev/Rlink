@@ -106,39 +106,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _tags = List<String>.from(p.tags);
   }
 
-  Future<void> _pickImage() async {
-    if (kIsWeb) {
-      final r = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-        withData: true,
-      );
-      final bytes = r?.files.single.bytes;
-      if (bytes == null) return;
-      final dataUrl = await _webCompressedDataUrl(bytes, isBanner: false);
-      if (dataUrl == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content:
-                  Text('Аватар слишком большой. Выберите изображение меньше.'),
-            ),
-          );
-        }
-        return;
-      }
-      setState(() => _selectedImagePath = dataUrl);
-      return;
-    }
-    final raw = await pickImagePathDesktopAware(imagePicker: _picker);
-    if (raw == null) return;
-    final path = await ImageService.instance.compressAndSave(
-      raw,
-      isAvatar: true,
-    );
-    setState(() => _selectedImagePath = path);
-  }
-
   Future<void> _pickBanner() async {
     if (kIsWeb) {
       final r = await FilePicker.platform.pickFiles(
@@ -295,8 +262,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         username: rawUsername,
         avatarColor: _selectedColor,
         avatarEmoji: _selectedEmoji,
-        setAvatarImagePath: true,
-        avatarImagePath: _selectedImagePath,
+        // Photo is managed via the avatar long-press menu, not here — don't
+        // overwrite it (avoids reverting a photo changed from the Me tab).
+        setAvatarImagePath: false,
         tags: _tags,
         bannerImagePath: _bannerImagePath,
         profileMusicPath: _profileMusicPath,
@@ -503,56 +471,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-                    // Кнопка выбора фото
-                    Positioned(
-                      left: 0,
-                      bottom: 0,
-                      child: GestureDetector(
-                        onTap: _pickImage,
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color:
-                                    Theme.of(context).scaffoldBackgroundColor,
-                                width: 2),
-                          ),
-                          child: const Icon(Icons.photo_camera,
-                              size: 14, color: Colors.white),
-                        ),
-                      ),
-                    ),
-                    if (_selectedImagePath != null)
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: GestureDetector(
-                          onTap: () =>
-                              setState(() => _selectedImagePath = null),
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                  color:
-                                      Theme.of(context).scaffoldBackgroundColor,
-                                  width: 2),
-                            ),
-                            child: Icon(Icons.close,
-                                size: 14,
-                                color: Theme.of(context).colorScheme.onSurface),
-                          ),
-                        ),
-                      ),
+                    // Фото профиля редактируется не здесь, а через зажатие
+                    // аватарки во вкладке «Я» (изменить/удалить/открыть).
                   ],
                 ]),
               ),

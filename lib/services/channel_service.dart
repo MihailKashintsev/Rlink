@@ -15,13 +15,13 @@ import '../models/channel.dart';
 import '../models/message_poll.dart';
 import '../utils/web_file_store.dart';
 import '../utils/reaction_emoji_key.dart';
-import 'google_drive_channel_backup.dart';
 import '../utils/reaction_limit.dart';
 import 'gossip_router.dart';
 import 'image_service.dart';
 import 'account_sync_publish.dart';
 import 'channel_backup_service.dart';
 import 'channel_directory_relay.dart';
+// google_drive_channel_backup is reached via ChannelBackupService.channelDownloadUrl.
 import 'crypto_service.dart';
 import 'web_identity_portable.dart';
 
