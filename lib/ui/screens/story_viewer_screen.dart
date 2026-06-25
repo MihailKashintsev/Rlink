@@ -3,13 +3,17 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../models/chat_message.dart';
+import '../../services/ble_service.dart';
 import '../../services/chat_storage_service.dart';
-import '../../services/app_settings.dart';
 import '../../services/crypto_service.dart';
 import '../../services/gossip_router.dart';
+import '../../services/relay_service.dart';
 import '../../services/story_service.dart';
+import '../widgets/avatar_widget.dart';
 import '../widgets/reactions.dart';
 
 /// Full-screen story viewer with animated progress bar (Telegram/Instagram-style).
@@ -38,6 +42,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   late AnimationController _progressCtrl;
   Timer? _timer;
   VideoPlayerController? _videoCtrl;
+
+  final _uuid = const Uuid();
+  bool _sendingReply = false;
+
+  // Author avatar (looked up once for the redesigned header).
+  int _authorColor = 0xFF5C6BC0;
+  String _authorEmoji = '';
+  String? _authorImage;
 
   static const _storyDuration = Duration(seconds: 5);
 
@@ -88,6 +100,138 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     );
     _startStory();
     StoryService.instance.version.addListener(_onStoryUpdate);
+    _loadAuthorAvatar();
+  }
+
+  Future<void> _loadAuthorAvatar() async {
+    final c = await ChatStorageService.instance.getContact(widget.authorId);
+    if (!mounted || c == null) return;
+    setState(() {
+      _authorColor = c.avatarColor;
+      _authorEmoji = c.avatarEmoji;
+      _authorImage = c.avatarImagePath;
+    });
+  }
+
+  /// Opens a bottom sheet with a text field to reply privately to the author
+  /// (sent as a normal encrypted DM). Self-contained focus scope avoids any
+  /// gesture conflict with the story canvas.
+  Future<void> _openReplySheet() async {
+    final myId = CryptoService.instance.publicKeyHex;
+    if (_stories[_index].authorId == myId) return;
+    _pauseStory();
+    final ctrl = TextEditingController();
+    final text = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1C1C1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 14,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: ctrl,
+                autofocus: true,
+                minLines: 1,
+                maxLines: 4,
+                style: const TextStyle(color: Colors.white),
+                textInputAction: TextInputAction.send,
+                onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+                decoration: InputDecoration(
+                  hintText: 'Ответить ${widget.authorName}…',
+                  hintStyle: const TextStyle(color: Colors.white54),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.1),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              icon: const Icon(Icons.send_rounded),
+            ),
+          ],
+        ),
+      ),
+    );
+    ctrl.dispose();
+    if (text != null && text.isNotEmpty) {
+      await _sendStoryReply(text);
+    }
+    if (mounted) _resumeStory();
+  }
+
+  Future<void> _sendStoryReply(String text) async {
+    if (text.isEmpty || _sendingReply) return;
+    final story = _stories[_index];
+    final myId = CryptoService.instance.publicKeyHex;
+    final target = story.authorId;
+    if (target == myId) return;
+    setState(() => _sendingReply = true);
+    final body = '↩️ Ответ на историю: $text';
+    try {
+      final msgId = _uuid.v4();
+      var x25519Key = BleService.instance.getPeerX25519Key(target) ??
+          RelayService.instance.getPeerX25519Key(target);
+      x25519Key ??=
+          (await ChatStorageService.instance.getContact(target))?.x25519Key;
+      final msg = ChatMessage(
+        id: msgId,
+        peerId: target,
+        text: body,
+        isOutgoing: true,
+        timestamp: DateTime.now(),
+        status: MessageStatus.sending,
+      );
+      await ChatStorageService.instance.saveMessage(msg);
+      if (x25519Key != null && x25519Key.isNotEmpty) {
+        final enc = await CryptoService.instance.encryptMessage(
+          plaintext: body,
+          recipientX25519KeyBase64: x25519Key,
+        );
+        await GossipRouter.instance.sendEncryptedMessage(
+          encrypted: enc,
+          senderId: myId,
+          recipientId: target,
+          messageId: msgId,
+        );
+        await ChatStorageService.instance
+            .updateMessageStatusPreserveDelivered(msgId, MessageStatus.sent);
+      } else {
+        await ChatStorageService.instance
+            .updateMessageStatusPreserveDelivered(msgId, MessageStatus.failed);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Ответ отправлен'),
+              duration: Duration(seconds: 2)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось отправить ответ')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sendingReply = false);
+    }
   }
 
   void _onStoryUpdate() {
@@ -339,7 +483,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     final bgColor = Color(story.bgColor);
     final myId = CryptoService.instance.publicKeyHex;
     final isAuthor = story.authorId == myId;
-    final showQuickBar = AppSettings.instance.showReactionsQuickBar;
 
     final storyCanvas = GestureDetector(
       onTapDown: (details) {
@@ -349,6 +492,17 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           _prevStory();
         } else {
           _nextStory();
+        }
+      },
+      // Hold to pause, release to resume (Instagram/Telegram-style).
+      onLongPressStart: (_) => _pauseStory(),
+      onLongPressEnd: (_) {
+        if (mounted) _resumeStory();
+      },
+      // Swipe down to dismiss.
+      onVerticalDragEnd: (d) {
+        if ((d.primaryVelocity ?? 0) > 250) {
+          Navigator.of(context).maybePop();
         }
       },
       child: Stack(
@@ -491,15 +645,29 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: Row(
                     children: [
-                      Text(
-                        widget.authorName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                          shadows: [
-                            Shadow(blurRadius: 4, color: Colors.black54)
-                          ],
+                      AvatarWidget(
+                        initials: widget.authorName.isNotEmpty
+                            ? widget.authorName[0].toUpperCase()
+                            : '?',
+                        color: _authorColor,
+                        emoji: _authorEmoji,
+                        imagePath: _authorImage,
+                        size: 34,
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Text(
+                          widget.authorName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                            shadows: [
+                              Shadow(blurRadius: 4, color: Colors.black54)
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -627,55 +795,47 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                             ),
                           ),
                       ] else ...[
-                        // Viewer: quick reactions + full picker
+                        // Viewer: reply field (opens sheet) + react button
                         Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                if (showQuickBar)
-                                  for (final e in kQuickReactionEmojis)
-                                    GestureDetector(
-                                      onTap: () async {
-                                        _pauseStory();
-                                        await _trySendStoryReaction(e);
-                                        if (mounted) _resumeStory();
-                                      },
-                                      child: Container(
-                                        margin: const EdgeInsets.only(right: 6),
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(
-                                          color: story.reactions[e]
-                                                      ?.contains(myId) ==
-                                                  true
-                                              ? Colors.white
-                                                  .withValues(alpha: 0.28)
-                                              : Colors.white
-                                                  .withValues(alpha: 0.12),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Text(e,
-                                            style:
-                                                const TextStyle(fontSize: 22)),
-                                      ),
-                                    ),
-                                GestureDetector(
-                                  onTap: _openReactionPicker,
-                                  child: Container(
-                                    margin: EdgeInsets.only(
-                                        left: showQuickBar ? 2 : 0),
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.12),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(Icons.add,
-                                        color: Colors.white, size: 22),
-                                  ),
-                                ),
-                              ],
+                          child: GestureDetector(
+                            onTap: _sendingReply ? null : _openReplySheet,
+                            child: Container(
+                              height: 44,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              alignment: Alignment.centerLeft,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: Text(
+                                _sendingReply ? 'Отправка…' : 'Ответить…',
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 14),
+                              ),
                             ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () async {
+                            _pauseStory();
+                            await _trySendStoryReaction(
+                                kQuickReactionEmojis.isNotEmpty
+                                    ? kQuickReactionEmojis.first
+                                    : '❤️');
+                            if (mounted) _resumeStory();
+                          },
+                          onLongPress: _openReactionPicker,
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.14),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.favorite_border_rounded,
+                                color: Colors.white, size: 22),
                           ),
                         ),
                       ],
