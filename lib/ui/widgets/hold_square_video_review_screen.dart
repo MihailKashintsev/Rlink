@@ -20,11 +20,16 @@ class HoldSquareVideoReviewScreen extends StatefulWidget {
   /// they've recorded so far, then go back and resume. No trim / send.
   final bool previewOnly;
 
+  /// Square crop preview (square video recordings). When false, the video is
+  /// shown in its natural aspect ratio (picked / arbitrary videos).
+  final bool square;
+
   const HoldSquareVideoReviewScreen({
     super.key,
     required this.videoPath,
     required this.allowTrim,
     this.previewOnly = false,
+    this.square = true,
   });
 
   @override
@@ -191,22 +196,35 @@ class _HoldSquareVideoReviewScreenState
                   children: [
                     Expanded(
                       child: Center(
-                        child: SizedBox(
-                          width: side,
-                          height: side,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: FittedBox(
-                              fit: BoxFit.cover,
-                              alignment: Alignment.center,
-                              child: SizedBox(
-                                width: p.value.size.width,
-                                height: p.value.size.height,
-                                child: VideoPlayer(p),
+                        child: widget.square
+                            ? SizedBox(
+                                width: side,
+                                height: side,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: FittedBox(
+                                    fit: BoxFit.cover,
+                                    alignment: Alignment.center,
+                                    child: SizedBox(
+                                      width: p.value.size.width,
+                                      height: p.value.size.height,
+                                      child: VideoPlayer(p),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: AspectRatio(
+                                    aspectRatio: p.value.aspectRatio > 0
+                                        ? p.value.aspectRatio
+                                        : 16 / 9,
+                                    child: VideoPlayer(p),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
                       ),
                     ),
                     if (widget.allowTrim && !widget.previewOnly) ...[

@@ -3933,6 +3933,41 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Shows the video editor (preview + trim) before sending a picked video.
+  /// Native returns the (possibly trimmed) path or null if cancelled.
+  Future<String?> _reviewVideoNative(String path) async {
+    if (!mounted) return null;
+    final chosen = await Navigator.of(context).push<String?>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => HoldSquareVideoReviewScreen(
+          videoPath: path,
+          allowTrim: true,
+          square: false,
+        ),
+      ),
+    );
+    return (chosen == null || chosen.isEmpty) ? null : chosen;
+  }
+
+  /// Web can't re-encode, so the editor is preview-only; returns true to send.
+  Future<bool> _reviewVideoWeb(Uint8List bytes) async {
+    if (!mounted) return false;
+    final url = webBytesObjectUrl(bytes, mimeType: 'video/mp4');
+    if (url == null) return true; // can't preview → just send
+    final chosen = await Navigator.of(context).push<String?>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => HoldSquareVideoReviewScreen(
+          videoPath: url,
+          allowTrim: false,
+          square: false,
+        ),
+      ),
+    );
+    return chosen != null && chosen.isNotEmpty;
+  }
+
   Future<void> _sendWebVideoBytes({
     required Uint8List bytes,
     required String fileName,
@@ -3942,6 +3977,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _showErrorSnack('Видео пустое или не было прочитано браузером');
       return;
     }
+    if (!await _reviewVideoWeb(bytes)) return;
     setState(() => _isSending = true);
     _sendActivity(Activity.sendingFile);
     try {
@@ -4540,10 +4576,12 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       return;
     }
+    final reviewed = await _reviewVideoNative(picked.path);
+    if (reviewed == null) return;
     setState(() => _isSending = true);
     try {
       final path =
-          await ImageService.instance.saveVideo(picked.path, isSquare: false);
+          await ImageService.instance.saveVideo(reviewed, isSquare: false);
       final msgId = _uuid.v4();
       final targetPeerId = _looksLikePublicKey(_resolvedPeerId)
           ? _resolvedPeerId

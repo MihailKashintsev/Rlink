@@ -48,6 +48,9 @@ Future<String?> webStoredFileObjectUrl(
 }) =>
     impl.webStoredFileObjectUrl(path, mimeType: mimeType);
 
+String? webBytesObjectUrl(List<int> bytes, {required String mimeType}) =>
+    impl.webBytesObjectUrl(bytes, mimeType: mimeType);
+
 Future<void> downloadWebFile(
   String path, {
   required String fileName,

@@ -86,6 +86,19 @@ Future<Uint8List?> readWebStoredFile(String path) async {
   }
 }
 
+/// Creates an in-memory blob object URL from raw bytes (e.g. to preview a
+/// just-picked video in a player before sending). Caller should revoke it.
+String? webBytesObjectUrl(List<int> bytes, {required String mimeType}) {
+  try {
+    final data = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+    final blob = web.Blob([data.toJS].toJS,
+        web.BlobPropertyBag(type: mimeType.isEmpty ? 'video/mp4' : mimeType));
+    return web.URL.createObjectURL(blob);
+  } catch (_) {
+    return null;
+  }
+}
+
 Future<String?> webStoredFileObjectUrl(
   String path, {
   required String mimeType,

@@ -15,6 +15,8 @@ Future<String?> webStoredFileObjectUrl(
 }) async =>
     null;
 
+String? webBytesObjectUrl(List<int> bytes, {required String mimeType}) => null;
+
 Future<void> downloadWebFile(
   String path, {
   required String fileName,
