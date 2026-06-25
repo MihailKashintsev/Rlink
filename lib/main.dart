@@ -80,6 +80,9 @@ import 'ui/screens/chat_list_screen.dart';
 import 'ui/widgets/audio_queue_mini_player.dart';
 import 'ui/widgets/square_video_queue_pip.dart';
 import 'ui/widgets/link_sync_overlay.dart';
+import 'ui/widgets/in_app_notification_overlay.dart';
+import 'services/in_app_notification_service.dart';
+import 'ui/mention_nav.dart';
 import 'ui/screens/onboarding_screen.dart';
 import 'ui/widgets/incoming_call_overlay.dart';
 
@@ -162,6 +165,18 @@ Future<String> _peerDisplayName(String peerId) async {
   final nick = contact?.nickname.trim();
   if (nick != null && nick.isNotEmpty) return nick;
   return _shortPeerId(peerId);
+}
+
+/// Opens the chat/channel for a tapped in-app notification banner.
+void _openChatFromNotif(String payload) {
+  final ctx = navigatorKey.currentContext;
+  if (ctx == null) return;
+  if (payload.startsWith('channel:')) {
+    unawaited(RlinkDeepLinkService.instance
+        .openChannelInApp(payload.substring('channel:'.length)));
+  } else if (payload.startsWith('dm:')) {
+    openDmFromMentionKey(ctx, payload.substring('dm:'.length));
+  }
 }
 
 void _bindIncomingCallOverlay() {
@@ -1802,6 +1817,7 @@ Future<void> initServices() async {
     );
     CallService.instance.bindSignaling();
     _bindIncomingCallOverlay();
+    InAppNotificationService.instance.onOpen = _openChatFromNotif;
 
     GossipRouter.instance.onDeviceLinkRequest = (_, publicKey, nick, username) {
       if (BlockService.instance.isBlocked(publicKey)) return;
@@ -4084,6 +4100,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
               if (child != null) child,
               const SquareVideoQueuePip(),
               const LinkSyncOverlay(),
+              const InAppNotificationOverlay(),
               ValueListenableBuilder<double?>(
                 valueListenable: AudioQueueMiniPlayerLayout.instance.barTop,
                 builder: (ctx, top, _) {

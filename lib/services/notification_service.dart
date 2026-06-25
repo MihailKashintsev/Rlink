@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'app_settings.dart';
 import 'sound_effects_service.dart';
 import 'web_notification_bridge.dart';
+import 'in_app_notification_service.dart';
 
 /// Единая служба локальных уведомлений.
 ///
@@ -95,14 +96,43 @@ class NotificationService {
 
   // ── Public show methods ─────────────────────────────────────
 
+  // Stable accent colour from an id, for the in-app banner avatar.
+  static int _accentFor(String id) {
+    const palette = [
+      0xFF42A5F5, 0xFFAB47BC, 0xFF26A69A, 0xFFEF5350,
+      0xFFFFA726, 0xFF5C6BC0, 0xFF66BB6A, 0xFFEC407A,
+    ];
+    var h = 0;
+    for (final c in id.codeUnits) {
+      h = (h * 31 + c) & 0x7fffffff;
+    }
+    return palette[h % palette.length];
+  }
+
   Future<void> showPersonalMessage({
     required String peerId,
     required String title,
     required String body,
+    int? avatarColor,
+    String avatarEmoji = '',
+    String? avatarImagePath,
   }) async {
     if (!AppSettings.instance.notificationsEnabled) return;
     if (!AppSettings.instance.notifyPersonal) return;
     if (currentRoute.value == 'dm:$peerId' && !isInBackground.value) return;
+    // App open elsewhere → in-app banner (no OS permission needed). Backgrounded
+    // → fall through to the OS/web notification.
+    if (!isInBackground.value) {
+      InAppNotificationService.instance.show(
+        title: title,
+        body: body,
+        payload: 'dm:$peerId',
+        color: avatarColor ?? _accentFor(peerId),
+        emoji: avatarEmoji,
+        imagePath: avatarImagePath,
+      );
+      return;
+    }
     await _show(
       id: _stableId('dm', peerId),
       channelId: 'personal',
@@ -122,6 +152,16 @@ class NotificationService {
     if (!AppSettings.instance.notificationsEnabled) return;
     if (!AppSettings.instance.notifyGroups) return;
     if (currentRoute.value == 'group:$groupId' && !isInBackground.value) return;
+    if (!isInBackground.value) {
+      InAppNotificationService.instance.show(
+        title: title,
+        body: body,
+        payload: 'group:$groupId',
+        color: _accentFor(groupId),
+        emoji: '👥',
+      );
+      return;
+    }
     await _show(
       id: _stableId('group', groupId),
       channelId: 'groups',
@@ -141,6 +181,16 @@ class NotificationService {
     if (!AppSettings.instance.notificationsEnabled) return;
     if (!AppSettings.instance.notifyChannels) return;
     if (currentRoute.value == 'channel:$channelId' && !isInBackground.value) {
+      return;
+    }
+    if (!isInBackground.value) {
+      InAppNotificationService.instance.show(
+        title: title,
+        body: body,
+        payload: 'channel:$channelId',
+        color: _accentFor(channelId),
+        emoji: '📢',
+      );
       return;
     }
     await _show(
