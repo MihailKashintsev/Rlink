@@ -1920,33 +1920,9 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     if (!mounted) return;
-    final chosen = await Navigator.of(context).push<String?>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (ctx) => HoldSquareVideoReviewScreen(
-          videoPath: rawPath,
-          allowTrim: true,
-        ),
-      ),
-    );
-    if (!mounted) return;
-    if (chosen == null || chosen.isEmpty) {
-      try {
-        await File(rawPath).delete();
-      } catch (_) {}
-      return;
-    }
-    if (chosen != rawPath) {
-      try {
-        await File(rawPath).delete();
-      } catch (_) {}
-    }
-    await _publishSquareVideoFromDisk(chosen);
-    if (chosen != rawPath) {
-      try {
-        await File(chosen).delete();
-      } catch (_) {}
-    }
+    // Квадратик отправляется сразу, без редактора обрезки (редактор — только
+    // для обычного видео; просмотр доступен на паузе во время записи).
+    await _publishSquareVideoFromDisk(rawPath);
   }
 
   void _onHoldRecordingLockChanged(bool locked) {

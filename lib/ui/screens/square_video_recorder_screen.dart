@@ -4,11 +4,11 @@ import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../services/image_service.dart';
 import '../../services/embedded_video_pause_bus.dart';
 import '../../services/voice_service.dart';
-import '../widgets/hold_square_video_review_screen.dart';
 import '../widgets/square_video_recording_widgets.dart';
 
 /// Показывает квадратный видеорекордер-оверлей поверх чата с блюром.
@@ -46,7 +46,11 @@ class _VideoOverlayState extends State<_VideoOverlay>
   int _selectedCamera = -1;
   bool _isRecording = false;
   bool _recordingPaused = false;
-  bool _previewing = false;
+
+  /// Inline playback of what's been recorded so far while paused (Telegram-style
+  /// review without leaving the recording window).
+  VideoPlayerController? _pausePreviewCtrl;
+  String? _pausePreviewTemp;
 
   /// Прогресс записи без setState на каждый тик — меньше лагов превью.
   final ValueNotifier<double> _recordingSeconds = ValueNotifier(0);
@@ -77,6 +81,10 @@ class _VideoOverlayState extends State<_VideoOverlay>
     _recordingTimer?.cancel();
     _recordingSeconds.dispose();
     _pulseController.dispose();
+    _pausePreviewCtrl?.dispose();
+    if (_pausePreviewTemp != null) {
+      unawaited(_deleteTempVideos([_pausePreviewTemp!]));
+    }
     _controller?.dispose();
     super.dispose();
   }
@@ -258,6 +266,8 @@ class _VideoOverlayState extends State<_VideoOverlay>
     if (ctrl == null || !ctrl.value.isInitialized || !_isRecording) return;
     try {
       if (_recordingPaused) {
+        // Resume: drop the inline preview and continue recording.
+        await _disposePausePreview();
         await ctrl.startVideoRecording();
         if (mounted) setState(() => _recordingPaused = false);
       } else {
@@ -268,6 +278,8 @@ class _VideoOverlayState extends State<_VideoOverlay>
           }
         }
         if (mounted) setState(() => _recordingPaused = true);
+        // Build inline playback of what's recorded so far (no separate screen).
+        unawaited(_buildPausePreview());
       }
     } catch (e) {
       debugPrint('[SquareVideo] pause toggle: $e');
@@ -279,46 +291,60 @@ class _VideoOverlayState extends State<_VideoOverlay>
     }
   }
 
-  /// While paused, play back what's been recorded so far, then return to keep
-  /// recording (resume) or stop+send.
-  Future<void> _previewRecordedSoFar() async {
-    if (!_recordingPaused || _previewing) return;
+  static bool _isInlineUri(String p) =>
+      p.startsWith('blob:') || p.startsWith('http') || p.startsWith('data:');
+
+  /// Prepares a looping inline player of the recorded-so-far for the paused view.
+  Future<void> _buildPausePreview() async {
     final paths = List<String>.from(_recordedSegmentPaths);
-    if (paths.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пока нечего показывать')),
-      );
-      return;
-    }
-    setState(() => _previewing = true);
-    var previewPath = paths.last;
-    var isTemp = false;
+    if (paths.isEmpty) return;
+    var path = paths.last;
+    String? temp;
     try {
       if (paths.length > 1) {
         final merged = await ImageService.instance.mergeVideoSegments(paths);
         if (merged != null && merged.isNotEmpty) {
-          previewPath = merged;
-          isTemp = true;
+          path = merged;
+          temp = merged;
         }
       }
     } catch (_) {}
-    if (!mounted) {
-      if (isTemp) await _deleteTempVideos([previewPath]);
+    if (!mounted || !_recordingPaused) {
+      if (temp != null) await _deleteTempVideos([temp]);
       return;
     }
-    EmbeddedVideoPauseBus.instance.bump();
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (ctx) => HoldSquareVideoReviewScreen(
-          videoPath: previewPath,
-          allowTrim: false,
-          previewOnly: true,
-        ),
-      ),
-    );
-    if (isTemp) await _deleteTempVideos([previewPath]);
-    if (mounted) setState(() => _previewing = false);
+    try {
+      final c = _isInlineUri(path)
+          ? VideoPlayerController.networkUrl(Uri.parse(path))
+          : VideoPlayerController.file(File(path));
+      await c.initialize();
+      if (!mounted || !_recordingPaused) {
+        await c.dispose();
+        if (temp != null) await _deleteTempVideos([temp]);
+        return;
+      }
+      await c.setLooping(true);
+      await c.play();
+      setState(() {
+        _pausePreviewCtrl = c;
+        _pausePreviewTemp = temp;
+      });
+    } catch (_) {
+      if (temp != null) await _deleteTempVideos([temp]);
+    }
+  }
+
+  Future<void> _disposePausePreview() async {
+    final c = _pausePreviewCtrl;
+    final temp = _pausePreviewTemp;
+    _pausePreviewCtrl = null;
+    _pausePreviewTemp = null;
+    if (mounted) setState(() {});
+    try {
+      await c?.pause();
+      await c?.dispose();
+    } catch (_) {}
+    if (temp != null) await _deleteTempVideos([temp]);
   }
 
   Future<void> _stopAndSend() async {
@@ -327,6 +353,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
     _recordingTimer = null;
     _pulseController.stop();
     _pulseController.reset();
+    await _disposePausePreview();
     final ctrl = _controller;
     if (ctrl == null) return;
     try {
@@ -375,27 +402,10 @@ class _VideoOverlayState extends State<_VideoOverlay>
         return;
       }
 
+      // Квадратик отправляется сразу, без редактора обрезки (он только для
+      // обычного видео). Просмотр доступен на паузе во время записи.
       if (!mounted) return;
-      final nav = Navigator.of(context);
-      final chosen = await nav.push<String?>(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (ctx) => HoldSquareVideoReviewScreen(
-            videoPath: outPath,
-            allowTrim: true,
-          ),
-        ),
-      );
-      if (!mounted) return;
-      if (chosen == null || chosen.isEmpty) {
-        await _deleteTempVideos([outPath]);
-        return;
-      }
-      if (chosen != outPath) {
-        await _deleteTempVideos([outPath]);
-      }
-      if (!mounted) return;
-      Navigator.pop(context, chosen);
+      Navigator.pop(context, outPath);
     } catch (e) {
       debugPrint('[SquareVideo] stopVideoRecording error: $e');
       setState(() {
@@ -410,24 +420,18 @@ class _VideoOverlayState extends State<_VideoOverlay>
   Widget build(BuildContext context) {
     final squareSize = squareVideoPreviewSize(context);
 
+    // Always blur the chat behind — including while recording (Telegram-style).
     return Material(
       type: MaterialType.transparency,
-      child: _isRecording
-          ? Container(
-              color: Colors.black.withValues(alpha: 0.72),
-              child: SafeArea(
-                child: _buildRecorderColumn(context, squareSize),
-              ),
-            )
-          : BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.45),
-                child: SafeArea(
-                  child: _buildRecorderColumn(context, squareSize),
-                ),
-              ),
-            ),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          color: Colors.black.withValues(alpha: _isRecording ? 0.6 : 0.45),
+          child: SafeArea(
+            child: _buildRecorderColumn(context, squareSize),
+          ),
+        ),
+      ),
     );
   }
 
@@ -457,6 +461,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
                     ? () => unawaited(_toggleRecordingPause())
                     : null,
                 recordingPaused: _recordingPaused,
+                pausePreview: _pausePreviewCtrl,
               )
             : SizedBox(
                 width: squareSize + 6,
@@ -518,29 +523,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
               ),
             ),
             const SizedBox(width: 32),
-            (_isRecording && _recordingPaused)
-                ? GestureDetector(
-                    onTap: _previewing
-                        ? null
-                        : () => unawaited(_previewRecordedSoFar()),
-                    child: Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade800,
-                        shape: BoxShape.circle,
-                      ),
-                      child: _previewing
-                          ? const Padding(
-                              padding: EdgeInsets.all(15),
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.visibility_rounded,
-                              color: Colors.white, size: 24),
-                    ),
-                  )
-                : const SizedBox(width: 52, height: 52),
+            const SizedBox(width: 52, height: 52),
           ],
         ),
         const SizedBox(height: 14),
@@ -549,7 +532,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
           child: Text(
             _isRecording
                 ? (_recordingPaused
-                    ? 'Пауза · 👁 просмотр или ▶ продолжить'
+                    ? 'Пауза · смотрите запись · ▶ продолжить'
                     : 'Нажмите для остановки · ⏸ пауза')
                 : 'Нажмите для записи',
             key: ValueKey('$_isRecording-$_recordingPaused'),

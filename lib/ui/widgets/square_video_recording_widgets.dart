@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 
 /// Размер превью «квадратика»: на широком окне ПК не растягивается на всю ширину.
 double squareVideoPreviewSize(BuildContext context) {
@@ -194,6 +195,10 @@ class SquareVideoFramedCameraView extends StatelessWidget {
   final VoidCallback? onToggleRecordingPause;
   final bool recordingPaused;
 
+  /// When paused, an inline looping player of the recorded-so-far (shown in
+  /// place of the live camera so the user can review without leaving).
+  final VideoPlayerController? pausePreview;
+
   const SquareVideoFramedCameraView({
     super.key,
     required this.controller,
@@ -208,6 +213,7 @@ class SquareVideoFramedCameraView extends StatelessWidget {
     this.isPaused = false,
     this.onToggleRecordingPause,
     this.recordingPaused = false,
+    this.pausePreview,
   });
 
   Color get _borderColor {
@@ -237,7 +243,23 @@ class SquareVideoFramedCameraView extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                _SquareVideoCameraPreviewInner(controller: controller),
+                // While paused with a ready preview, show the recorded-so-far
+                // (looping) instead of the live camera.
+                if (pausePreview != null &&
+                    pausePreview!.value.isInitialized)
+                  ClipRect(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: pausePreview!.value.size.width,
+                        height: pausePreview!.value.size.height,
+                        child: VideoPlayer(pausePreview!),
+                      ),
+                    ),
+                  )
+                else
+                  _SquareVideoCameraPreviewInner(controller: controller),
                 if (isRecording)
                   Positioned(
                     top: 0,
