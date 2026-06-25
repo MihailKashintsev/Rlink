@@ -127,7 +127,6 @@ class ComposerInputBarState extends State<ComposerInputBar> {
   late final VoidCallback _controllerListener;
 
   /// Панель B/I/S… не перекрывает поле — открывается кнопкой при выделении.
-  bool _showFormatStrip = false;
 
   // @-mention picker state. Active when the cursor sits inside a `@token`.
   String? _mentionQuery;
@@ -332,10 +331,6 @@ class ComposerInputBarState extends State<ComposerInputBar> {
     _controllerListener = () {
       if (mounted) {
         setState(() {
-          final sel = widget.controller.selection;
-          if (!sel.isValid || sel.isCollapsed) {
-            _showFormatStrip = false;
-          }
           _updateMention();
         });
       }
@@ -357,10 +352,6 @@ class ComposerInputBarState extends State<ComposerInputBar> {
     if (!identical(oldWidget.controller, widget.controller)) {
       oldWidget.controller.removeListener(_controllerListener);
       widget.controller.addListener(_controllerListener);
-      final sel = widget.controller.selection;
-      if (!sel.isValid || sel.isCollapsed) {
-        _showFormatStrip = false;
-      }
     }
   }
 
@@ -375,6 +366,37 @@ class ComposerInputBarState extends State<ComposerInputBar> {
     widget.controller.value = widget.controller.value.copyWith(
       text: newText,
       selection: TextSelection.collapsed(offset: newOffset),
+    );
+  }
+
+  /// Selection toolbar (shown on select / long-press of the selection) with the
+  /// system items + formatting actions — replaces the old format-toggle button.
+  Widget _formatContextMenu(
+      BuildContext context, EditableTextState editableState) {
+    final items = List<ContextMenuButtonItem>.from(
+        editableState.contextMenuButtonItems);
+    final sel = widget.controller.selection;
+    if (sel.isValid && !sel.isCollapsed) {
+      void fmt(String p, String s) {
+        _wrapSelection(p, s);
+        editableState.hideToolbar();
+      }
+
+      items.addAll([
+        ContextMenuButtonItem(
+            label: 'Жирный', onPressed: () => fmt('**', '**')),
+        ContextMenuButtonItem(label: 'Курсив', onPressed: () => fmt('_', '_')),
+        ContextMenuButtonItem(
+            label: 'Зачёркнутый', onPressed: () => fmt('~~', '~~')),
+        ContextMenuButtonItem(
+            label: 'Подчёркнутый', onPressed: () => fmt('__', '__')),
+        ContextMenuButtonItem(
+            label: 'Скрытый', onPressed: () => fmt('||', '||')),
+      ]);
+    }
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editableState.contextMenuAnchors,
+      buttonItems: items,
     );
   }
 
@@ -396,8 +418,6 @@ class ComposerInputBarState extends State<ComposerInputBar> {
     final hasText = widget.controller.text.trim().isNotEmpty;
 
     final cs = Theme.of(context).colorScheme;
-    final sel = widget.controller.selection;
-    final hasSelection = sel.isValid && sel.baseOffset != sel.extentOffset;
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -411,49 +431,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
           children: [
             if (_mentionQuery != null && _filteredMentions.isNotEmpty)
               _buildMentionList(cs),
-            if (hasSelection && _showFormatStrip)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    _FmtBtn(
-                        label: 'B',
-                        bold: true,
-                        onTap: () => _wrapSelection('**', '**')),
-                    _FmtBtn(
-                        label: 'I',
-                        italic: true,
-                        onTap: () => _wrapSelection('_', '_')),
-                    _FmtBtn(
-                        label: 'S',
-                        strikethrough: true,
-                        onTap: () => _wrapSelection('~~', '~~')),
-                    _FmtBtn(
-                        label: 'U',
-                        underline: true,
-                        onTap: () => _wrapSelection('__', '__')),
-                    _FmtBtn(
-                        label: '||', onTap: () => _wrapSelection('||', '||')),
-                  ],
-                ),
-              ),
             Row(children: [
-              if (hasSelection)
-                IconButton(
-                  onPressed: () =>
-                      setState(() => _showFormatStrip = !_showFormatStrip),
-                  icon: Icon(
-                    Icons.text_fields_rounded,
-                    color: _showFormatStrip ? cs.primary : cs.onSurfaceVariant,
-                    size: 22,
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints(minWidth: 36, minHeight: 36),
-                  tooltip: _showFormatStrip
-                      ? 'Скрыть формат'
-                      : 'Формат выделенного текста',
-                ),
               if (!widget.aiTextOnlyComposer) ...[
                 ..._buildButtonsInOrder(cs, leftSide: true),
                 const SizedBox(width: 2),
@@ -605,6 +583,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
                                   controller: widget.controller,
                                   focusNode: _focusNode,
                                   onTapOutside: (_) => _focusNode.unfocus(),
+                                  contextMenuBuilder: _formatContextMenu,
                                   enabled: true,
                                   maxLines: sendOnEnter ? 1 : 4,
                                   minLines: 1,
@@ -789,46 +768,5 @@ class _LiveRecordingWaveformPainter extends CustomPainter {
   }
 }
 
-class _FmtBtn extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  final bool bold;
-  final bool italic;
-  final bool strikethrough;
-  final bool underline;
-
-  const _FmtBtn({
-    required this.label,
-    required this.onTap,
-    this.bold = false,
-    this.italic = false,
-    this.strikethrough = false,
-    this.underline = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-            fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-            decoration: strikethrough
-                ? TextDecoration.lineThrough
-                : underline
-                    ? TextDecoration.underline
-                    : null,
-            fontSize: 15,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ── Stranger Banner Action Button ─────────────────────────────

@@ -60,6 +60,7 @@ import '../widgets/forward_target_sheet.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../utils/web_file_store.dart';
+import '../widgets/markdown_editing_controller.dart';
 import '../../utils/web_object_url.dart';
 
 // ══════════════════════════════════════════════════════════════════
@@ -690,7 +691,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     with WidgetsBindingObserver {
   List<ChannelPost> _posts = [];
   late Channel _channel;
-  final _postCtrl = TextEditingController();
+  final _postCtrl = MarkdownEditingController();
   final _feedScrollController = ScrollController();
   // ValueNotifier (not setState) so scrolling never rebuilds the whole feed —
   // a setState here caused a jitter feedback loop on mobile web.
@@ -3222,7 +3223,7 @@ class PostCommentsScreen extends StatefulWidget {
 }
 
 class _PostCommentsScreenState extends State<PostCommentsScreen> {
-  final _commentCtrl = TextEditingController();
+  final _commentCtrl = MarkdownEditingController();
   final _scrollController = ScrollController();
   final _commentImagePicker = ImagePicker();
   final _commentFocus = FocusNode();

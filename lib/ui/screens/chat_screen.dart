@@ -89,6 +89,7 @@ import '../../utils/external_message_share.dart';
 import '../../utils/invite_dm_codec.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/avatar_viewer.dart';
+import '../widgets/markdown_editing_controller.dart';
 import '../widgets/voice_wave_line.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/reactions.dart';
@@ -279,7 +280,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final GlobalKey _audioQueueMiniPlayerAnchor =
       GlobalKey(debugLabel: 'audioQueueMiniPlayerAnchor');
-  final _controller = TextEditingController();
+  final _controller = MarkdownEditingController();
   final _scrollController = ScrollController();
   final _uuid = const Uuid();
   final _picker = ImagePicker();
