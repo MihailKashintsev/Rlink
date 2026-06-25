@@ -435,8 +435,6 @@ class ChannelBackupService {
 
   Future<void> _decryptAndImport(
       String channelId, int rev, Uint8List sealed) async {
-    final applied = await _appliedRev(channelId);
-    if (rev <= applied) return;
     final key = await _readSymKeyBytes(channelId);
     if (key == null) {
       _pendingDecryptByChannel[channelId] =
@@ -452,14 +450,19 @@ class ChannelBackupService {
       return;
     }
     if (json['type'] != 'rlink_channel_backup') return;
-    final jr = (json['rev'] as num?)?.toInt();
-    if (jr == null || jr != rev) return;
     final channelIdJ = json['channelId'] as String?;
     if (channelIdJ != channelId) return;
+    // Trust the snapshot's OWN rev, not the caller's expected rev. On a Drive
+    // pull the caller passes the subscriber's local driveBackupRev, which lags
+    // the actually-published rev — the old strict `jr != rev` check then silently
+    // dropped newer snapshots (e.g. one that added an image post).
+    final jr = (json['rev'] as num?)?.toInt() ?? rev;
+    final applied = await _appliedRev(channelId);
+    if (jr <= applied) return;
     await ChannelService.instance.importChannelBackupSnapshot(channelId, json);
-    await _setAppliedRev(channelId, rev);
+    await _setAppliedRev(channelId, jr);
     if (kDebugMode) {
-      debugPrint('[RLINK][ChBak] Imported rev=$rev channel=$channelId');
+      debugPrint('[RLINK][ChBak] Imported rev=$jr channel=$channelId');
     }
   }
 

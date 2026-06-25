@@ -7,11 +7,29 @@ import 'package:flutter/material.dart';
 import '../../utils/web_file_store.dart';
 import 'platform_layout.dart';
 
+// Cache of decoded OPFS image bytes so that scrolling a feed (which recycles
+// list items) doesn't re-read from OPFS each time — the async gap produced a
+// 0-height placeholder → full-height image flip on every recycle, i.e. scroll
+// jitter. Bounded LRU.
+final Map<String, Uint8List> _webImgCache = {};
+final List<String> _webImgCacheOrder = [];
+void _cacheWebImg(String path, Uint8List b) {
+  if (_webImgCache.containsKey(path)) return;
+  _webImgCache[path] = b;
+  _webImgCacheOrder.add(path);
+  if (_webImgCacheOrder.length > 80) {
+    _webImgCache.remove(_webImgCacheOrder.removeAt(0));
+  }
+}
+
 /// Web-safe image for a channel path that may be a `data:` URL, an OPFS web
 /// path, or a native file path. Never touches dart:io File on web.
 Widget _feedImg(String path,
     {required BoxFit fit, double? width, double? height}) {
   Widget broken() => const SizedBox.shrink();
+  // Reserve vertical space while loading so the post height stays stable.
+  Widget loadingBox() =>
+      SizedBox(width: width == double.infinity ? null : width, height: 200);
   if (path.startsWith('data:')) {
     return Image.network(path,
         width: width,
@@ -21,15 +39,27 @@ Widget _feedImg(String path,
   }
   if (kIsWeb) {
     if (!isWebStoredFile(path)) return broken();
+    final cached = _webImgCache[path];
+    if (cached != null) {
+      return Image.memory(cached,
+          width: width,
+          height: height,
+          fit: fit,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => broken());
+    }
     return FutureBuilder<Uint8List?>(
       future: readWebStoredFile(path),
       builder: (_, snap) {
+        if (snap.connectionState != ConnectionState.done) return loadingBox();
         final b = snap.data;
         if (b == null || b.isEmpty) return broken();
+        _cacheWebImg(path, b);
         return Image.memory(b,
             width: width,
             height: height,
             fit: fit,
+            gaplessPlayback: true,
             errorBuilder: (_, __, ___) => broken());
       },
     );
