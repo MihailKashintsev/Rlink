@@ -432,6 +432,13 @@ class SettingsCategoryCards extends StatelessWidget {
             onTap: () => _open(context, const InputBarButtonOrderSettings()),
           ),
           _CategoryItem(
+            icon: Icons.emoji_emotions_outlined,
+            color: const Color(0xFFEC407A),
+            title: AppL10n.t('emoji_my_packs'),
+            subtitle: 'Свои :код: и анимированные эмодзи',
+            onTap: () => _open(context, const EmojiHubScreen()),
+          ),
+          _CategoryItem(
             icon: Icons.lock_outline,
             color: const Color(0xFF4CAF50),
             title: AppL10n.t('settings_privacy'),
