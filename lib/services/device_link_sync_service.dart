@@ -389,6 +389,15 @@ class DeviceLinkSyncService {
           debugPrint(
               '[RLINK][LinkSync] Snapshot applied from ${sourceId.substring(0, sourceId.length.clamp(0, 8))}');
         }
+        // Any custom-emoji packs that arrived (kind 'epk') may have installed
+        // after the chat already rendered — force a re-warm + version bump so
+        // ':shortcode:' in messages resolves to the actual emoji image.
+        unawaited(() async {
+          try {
+            await EmojiPackService.instance.warmIndex();
+            EmojiPackService.instance.version.value++;
+          } catch (_) {}
+        }());
         // Finish the animation a beat later so it doesn't flash away.
         Future<void>.delayed(const Duration(milliseconds: 900), () {
           progress.value = null;
@@ -572,8 +581,11 @@ class DeviceLinkSyncService {
       } else if (kind == 'epk') {
         final payload = jsonDecode(utf8.decode(bytes));
         if (payload is Map) {
-          await EmojiPackService.instance
-              .installFromSharePayload(Map<String, dynamic>.from(payload));
+          await EmojiPackService.instance.installFromSharePayload(
+            Map<String, dynamic>.from(payload),
+            replaceByName: true,
+          );
+          EmojiPackService.instance.version.value++;
         }
       }
     } catch (e) {

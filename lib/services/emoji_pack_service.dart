@@ -430,13 +430,25 @@ class EmojiPackService {
 
   /// Карточка чата: [payload] с `type`/`kind` = emoji_pack, name,
   /// emojis: [{shortcode, data}] (base64). Works on web + native.
-  Future<String?> installFromSharePayload(Map<String, dynamic> payload) async {
+  Future<String?> installFromSharePayload(
+    Map<String, dynamic> payload, {
+    bool replaceByName = false,
+  }) async {
     await ensureInitialized();
     final name = (payload['name'] as String?)?.trim().isNotEmpty == true
         ? (payload['name'] as String).trim()
         : 'Набор';
     final rawEmojis = (payload['emojis'] as List?) ?? const [];
     if (rawEmojis.isEmpty) return null;
+
+    // On a re-link, drop any prior pack with the same name so we don't pile up
+    // duplicate "synced" packs each time devices reconnect.
+    if (replaceByName) {
+      final existing = await _readPacksRaw();
+      for (final p0 in existing.where((e) => e.name == name).toList()) {
+        await deletePack(p0.id);
+      }
+    }
 
     final packId = await createPack(
       name: name,
@@ -460,8 +472,19 @@ class EmojiPackService {
         continue;
       }
       if (bytes.isEmpty) continue;
+      // Animated emoji arrive as GIF — keep the right extension on native so the
+      // file decodes (and animates) correctly.
+      final isGif = bytes.length > 3 &&
+          bytes[0] == 0x47 &&
+          bytes[1] == 0x49 &&
+          bytes[2] == 0x46;
       try {
-        await addEmojiBytes(packId: packId, shortcode: norm, bytes: bytes);
+        await addEmojiBytes(
+          packId: packId,
+          shortcode: norm,
+          bytes: bytes,
+          ext: isGif ? '.gif' : '.png',
+        );
         added++;
       } catch (_) {}
     }
@@ -522,6 +545,7 @@ class EmojiPackService {
   /// Builds a share payload (base64 images) for all packs — used to sync custom
   /// emoji to a linked device. Returns one map per pack.
   Future<List<Map<String, dynamic>>> exportAllPacksAsPayloads() async {
+    await warmIndex(); // ensure _shortcodeToRef is populated before reading bytes
     final packs = await _readPacksRaw();
     final out = <Map<String, dynamic>>[];
     for (final pack in packs) {
