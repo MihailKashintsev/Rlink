@@ -14,9 +14,6 @@ const _kGithubRepo = String.fromEnvironment('GITHUB_REPO', defaultValue: '');
 const _kDefaultReleaseOwner = 'MihailKashintsev';
 const _kDefaultReleaseRepo = 'Rlink-releases';
 
-/// Страница загрузки APK / инструкций (после обнаружения более новой версии на GitHub).
-const _kMobileDownloadPageUrl = 'https://rendergames.ru/rlink';
-
 /// Уведомление UI о доступном обновлении (после фоновой проверки GitHub).
 final ValueNotifier<UpdateInfo?> pendingUpdateNotifier =
     ValueNotifier<UpdateInfo?>(null);
@@ -32,14 +29,14 @@ Map<String, String> _githubApiHeaders() {
   return h;
 }
 
-/// Обновление: десктоп (ассеты с GitHub), мобильные — страница загрузки.
+/// Само-обновление поддерживается ТОЛЬКО на десктопе (ассеты с GitHub).
+/// Мобильные сборки (Android/iOS) обновляются исключительно через магазин
+/// (RuStore / App Store) — правила RuStore запрещают предлагать установку/
+/// обновление в обход магазина, поэтому встроенную проверку обновлений на
+/// мобильных мы не выполняем.
 bool get isUpdateSupported =>
     !kIsWeb &&
-    (Platform.isWindows ||
-        Platform.isMacOS ||
-        Platform.isLinux ||
-        Platform.isAndroid ||
-        Platform.isIOS);
+    (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
 class UpdateInfo {
   final String version;
@@ -106,16 +103,6 @@ class UpdateService {
       if (bestRelease == null || bestTag == null) return null;
 
       final displayTag = bestRelease['tag_name'] as String? ?? bestTag;
-
-      if (Platform.isAndroid || Platform.isIOS) {
-        return UpdateInfo(
-          version: displayTag,
-          body: bestRelease['body'] as String? ?? '',
-          downloadUrl: _kMobileDownloadPageUrl,
-          assetName: 'web',
-          openExternalDownloadPage: true,
-        );
-      }
 
       final assets = bestRelease['assets'] as List<dynamic>?;
       if (assets == null) return null;

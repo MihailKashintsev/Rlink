@@ -20,9 +20,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- Установка APK из неизвестных источников -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-
     <!-- Галерея изображений (Android 13+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
@@ -153,7 +150,7 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- FileProvider для установки APK на Android 7+ -->
+        <!-- FileProvider для обмена файлами (фото/видео/документы) на Android 7+ -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -6,20 +6,23 @@ import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
-/// Размер превью «квадратика»: на широком окне ПК не растягивается на всю ширину.
+/// Размер превью «квадратика»: на широком окне ПК (в т.ч. в браузере) не
+/// растягивается на всю ширину.
 double squareVideoPreviewSize(BuildContext context) {
   final s = MediaQuery.sizeOf(context);
   final w = s.width;
   final h = s.height;
   final short = math.min(w, h);
-  final isDesktop = !kIsWeb &&
+  final isDesktopNative = !kIsWeb &&
       (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
-  final maxSide = isDesktop ? 180.0 : 360.0;
+  // Любое широкое окно (включая веб на ПК) считаем «десктопным» → маленький квадрат.
+  final desktopLike = isDesktopNative || w >= 700;
+  final maxSide = desktopLike ? 190.0 : 360.0;
   final raw = math.min(
-    w * 0.40,
-    math.min(short * 0.45, math.min(h * 0.35, maxSide)),
+    w * (desktopLike ? 0.28 : 0.40),
+    math.min(short * 0.40, math.min(h * 0.32, maxSide)),
   );
-  return raw.clamp(isDesktop ? 140.0 : 232.0, maxSide).toDouble();
+  return raw.clamp(desktopLike ? 150.0 : 232.0, maxSide).toDouble();
 }
 
 /// Одна «логическая» камера на направление (wide в приоритете), как в рекордере каналов.

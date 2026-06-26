@@ -40,7 +40,6 @@ import '../widgets/animated_transitions.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/mesh_radar_widget.dart';
 import '../widgets/status_emoji_view.dart';
-import '../widgets/update_available_banner.dart';
 import '../widgets/missing_local_media.dart';
 import '../widgets/channel_feed_image.dart';
 import '../widgets/desktop_image_picker.dart';

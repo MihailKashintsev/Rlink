@@ -3978,6 +3978,8 @@ Future<void> _processBlobAssemble({
 }
 
 Future<void> _checkUpdate() async {
+  // Mobile (RuStore / App Store) builds never self-check for updates.
+  if (!isUpdateSupported) return;
   await Future.delayed(const Duration(seconds: 5));
   final update = await UpdateService.instance.checkForUpdate();
   if (update != null) pendingUpdateNotifier.value = update;
