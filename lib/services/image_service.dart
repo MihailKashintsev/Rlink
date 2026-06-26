@@ -649,6 +649,7 @@ class ImageService {
     bool isSquare = false,
     Duration? trimStart,
     Duration? trimEnd,
+    bool includeAudio = true,
   }) async {
     final dir = await _videosDir();
     final suffix = isSquare ? '_sq' : '';
@@ -694,7 +695,7 @@ class ImageService {
       final mediaInfo = await VideoCompress.compressVideo(
         inputForCompress,
         quality: VideoQuality.MediumQuality,
-        includeAudio: true,
+        includeAudio: includeAudio,
         deleteOrigin: false,
         startTime: startSec,
         duration: trimDurationSec,

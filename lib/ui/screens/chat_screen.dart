@@ -4659,8 +4659,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final asGif = reviewed.asGif;
     setState(() => _isSending = true);
     try {
-      final path =
-          await ImageService.instance.saveVideo(reviewed.path, isSquare: false);
+      final path = await ImageService.instance
+          .saveVideo(reviewed.path, isSquare: false, includeAudio: !asGif);
       final msgId = _uuid.v4();
       final targetPeerId = _looksLikePublicKey(_resolvedPeerId)
           ? _resolvedPeerId
