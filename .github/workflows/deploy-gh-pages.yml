@@ -39,10 +39,9 @@ jobs:
           # is empty, TURN stays disabled (CallService falls back to STUN only).
           TURN_HOST: ${{ vars.TURN_HOST || '185.244.172.90' }}
           TURN_USER: ${{ vars.TURN_USER || 'rlink' }}
-          # Falls back to the value committed in relay_server/turnserver.conf
-          # (already public). Override with a real secret after rotating coturn's
-          # password — see relay_server/README_TURN.md.
-          TURN_PASSWORD: ${{ secrets.TURN_PASSWORD || 'RlinkSecure2024!' }}
+          # NO hardcoded fallback — the password must come from the repo secret.
+          # If the secret is unset, TURN stays disabled (calls fall back to STUN).
+          TURN_PASSWORD: ${{ secrets.TURN_PASSWORD }}
         run: |
           short_sha="${GITHUB_SHA::7}"
           flutter build web --release \

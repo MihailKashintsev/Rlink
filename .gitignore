@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Build artifacts / bloat (not for the public repo)
+/dist/
+relay_server/bin/server
+relay_server/.env
+.vscode/launch.json.local

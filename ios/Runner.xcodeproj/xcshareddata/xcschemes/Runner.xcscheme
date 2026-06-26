@@ -120,7 +120,7 @@
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "TURN_PASSWORD"
-            value = "s7yd9vLTNjhyWJr1TLfBUqhj"
+            value = ""
             isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>

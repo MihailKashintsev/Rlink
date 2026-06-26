@@ -8,7 +8,7 @@
       "args": [
         "--dart-define=TURN_HOST=185.244.172.90",
         "--dart-define=TURN_USER=rlink",
-        "--dart-define=TURN_PASSWORD=s7yd9vLTNjhyWJr1TLfBUqhj"
+        "--dart-define=TURN_PASSWORD=${env:TURN_PASSWORD}"
       ]
     },
     {
@@ -19,7 +19,7 @@
       "args": [
         "--dart-define=TURN_HOST=185.244.172.90",
         "--dart-define=TURN_USER=rlink",
-        "--dart-define=TURN_PASSWORD=s7yd9vLTNjhyWJr1TLfBUqhj"
+        "--dart-define=TURN_PASSWORD=${env:TURN_PASSWORD}"
       ]
     },
     {
@@ -30,7 +30,7 @@
       "args": [
         "--dart-define=TURN_HOST=185.244.172.90",
         "--dart-define=TURN_USER=rlink",
-        "--dart-define=TURN_PASSWORD=s7yd9vLTNjhyWJr1TLfBUqhj"
+        "--dart-define=TURN_PASSWORD=${env:TURN_PASSWORD}"
       ]
     }
   ]
