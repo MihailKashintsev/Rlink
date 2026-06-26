@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:io';
 
 import '../../models/emoji_pack.dart';
 import '../../services/emoji_pack_service.dart';
@@ -238,11 +237,11 @@ class ReactionKeyGlyph extends StatelessWidget {
         }
 
         if (shortcodeForFile != null) {
-          final path =
-              EmojiPackService.instance.absolutePathForShortcode(shortcodeForFile);
-          if (path != null && File(path).existsSync()) {
-            return Image.file(
-              File(path),
+          final provider =
+              EmojiPackService.instance.emojiImageProvider(shortcodeForFile);
+          if (provider != null) {
+            return Image(
+              image: provider,
               width: size + 2,
               height: size + 2,
               fit: BoxFit.cover,

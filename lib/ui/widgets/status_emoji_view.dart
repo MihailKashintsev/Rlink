@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -37,12 +36,12 @@ class StatusEmojiView extends StatelessWidget {
           return Text(v, style: base);
         }
         final sc = m.group(1)!;
-        final abs = EmojiPackService.instance.absolutePathForShortcode(sc);
-        if (abs == null || !File(abs).existsSync()) {
+        final provider = EmojiPackService.instance.emojiImageProvider(sc);
+        if (provider == null) {
           return Text(v, style: base);
         }
-        return Image.file(
-          File(abs),
+        return Image(
+          image: provider,
           width: fontSize + 2,
           height: fontSize + 2,
           fit: BoxFit.cover,
@@ -81,12 +80,12 @@ class CustomEmojiInlineText extends StatelessWidget {
             spans.add(TextSpan(text: text.substring(pos, m.start), style: style));
           }
           final sc = m.group(1)!;
-          final abs = EmojiPackService.instance.absolutePathForShortcode(sc);
-          if (abs != null && File(abs).existsSync()) {
+          final provider = EmojiPackService.instance.emojiImageProvider(sc);
+          if (provider != null) {
             spans.add(WidgetSpan(
               alignment: PlaceholderAlignment.middle,
-              child: Image.file(
-                File(abs),
+              child: Image(
+                image: provider,
                 width: (style.fontSize ?? 15) + 2,
                 height: (style.fontSize ?? 15) + 2,
                 fit: BoxFit.cover,

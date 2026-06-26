@@ -1,13 +1,19 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show ImageProvider, FileImage, MemoryImage;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/emoji_pack.dart';
+import '../utils/web_file_store.dart';
 
-/// Локальные наборы кастомных эмодзи: каталог [emoji_packs/], индекс [emoji_packs.json].
+/// Локальные наборы кастомных эмодзи.
+/// • Native: каталог [emoji_packs/] + индекс [emoji_packs.json] в documents.
+/// • Web: индекс в OPFS (`emoji_packs.json`); сами картинки хранятся как
+///   inline data-URL прямо в [CustomEmoji.relPath] (рендер через MemoryImage,
+///   синхронно). Это делает кастом-эмодзи рабочими и синхронизируемыми на вебе.
 class EmojiPackService {
   EmojiPackService._();
   static final EmojiPackService instance = EmojiPackService._();
@@ -15,15 +21,24 @@ class EmojiPackService {
   final ValueNotifier<int> version = ValueNotifier(0);
   static const _jsonName = 'emoji_packs.json';
   static const _packDirName = 'emoji_packs';
+  // OPFS path for the web index (writeWebStoredFile keeps the name stable).
+  static const _webIndexPath = 'opfs://rlink/$_jsonName';
 
   final _uuid = const Uuid();
   String? _docsRoot;
 
-  /// shortcode (lower) → absolute path для синхронного рендера в [RichMessageText].
-  final Map<String, String> _shortcodeToAbsPath = {};
+  /// In-memory source of truth (mirrors the file/OPFS index). Lets the
+  /// shortcode maps rebuild synchronously on every platform.
+  List<EmojiPack> _cachedPacks = [];
+  bool _initialised = false;
+
+  /// shortcode (lower) → native absolute path OR web data-URL (for sync render).
+  final Map<String, String> _shortcodeToRef = {};
 
   /// shortcode (lower) → исходный регистр shortcode + relPath
   final Map<String, CustomEmoji> _shortcodeToEmoji = {};
+
+  // ── Storage primitives (branch web/native) ──────────────────────
 
   Future<File> _packsFile() async {
     final d = await getApplicationDocumentsDirectory();
@@ -33,60 +48,91 @@ class EmojiPackService {
   Future<Directory> _packsRootDir() async {
     final d = await getApplicationDocumentsDirectory();
     final dir = Directory(p.join(d.path, _packDirName));
-    if (!dir.existsSync()) {
-      dir.createSync(recursive: true);
-    }
+    if (!dir.existsSync()) dir.createSync(recursive: true);
     return dir;
   }
 
-  Future<void> ensureInitialized() async {
-    final d = await getApplicationDocumentsDirectory();
-    _docsRoot = d.path;
-    final f = await _packsFile();
-    if (!await f.exists()) {
-      await f.writeAsString(EmojiPack.encodeList(const []));
+  Future<String?> _readIndexRaw() async {
+    if (kIsWeb) {
+      final bytes = await readWebStoredFile(_webIndexPath);
+      if (bytes == null || bytes.isEmpty) return null;
+      try {
+        return utf8.decode(bytes);
+      } catch (_) {
+        return null;
+      }
     }
-    await _packsRootDir();
+    final f = await _packsFile();
+    if (!await f.exists()) return null;
+    return f.readAsString();
+  }
+
+  Future<void> _writeIndexRaw(String json) async {
+    if (kIsWeb) {
+      await writeWebStoredFile(
+        fileName: _jsonName,
+        bytes: Uint8List.fromList(utf8.encode(json)),
+        mimeType: 'application/json',
+      );
+      return;
+    }
+    final f = await _packsFile();
+    await f.writeAsString(json);
+  }
+
+  // ── Init / index ────────────────────────────────────────────────
+
+  Future<void> ensureInitialized() async {
+    if (!kIsWeb) {
+      final d = await getApplicationDocumentsDirectory();
+      _docsRoot = d.path;
+      final f = await _packsFile();
+      if (!await f.exists()) {
+        await f.writeAsString(EmojiPack.encodeList(const []));
+      }
+      await _packsRootDir();
+    }
+    if (!_initialised) {
+      final raw = await _readIndexRaw();
+      _cachedPacks = raw == null ? [] : EmojiPack.decodeList(raw);
+      _initialised = true;
+    }
     refreshIndexSync();
   }
 
   void refreshIndexSync() {
-    final root = _docsRoot;
-    _shortcodeToAbsPath.clear();
+    _shortcodeToRef.clear();
     _shortcodeToEmoji.clear();
-    if (root == null) return;
-    try {
-      final f = File(p.join(root, _jsonName));
-      if (!f.existsSync()) return;
-      final packs = EmojiPack.decodeList(f.readAsStringSync());
-      for (final pack in packs) {
-        for (final e in pack.emojis) {
+    for (final pack in _cachedPacks) {
+      for (final e in pack.emojis) {
+        final k = e.shortcode.toLowerCase();
+        if (_shortcodeToRef.containsKey(k)) continue;
+        final String ref;
+        if (kIsWeb) {
+          // relPath holds the data-URL on web.
+          if (!e.relPath.startsWith('data:')) continue;
+          ref = e.relPath;
+        } else {
+          final root = _docsRoot;
+          if (root == null) continue;
           final abs = p.join(root, e.relPath);
           if (!File(abs).existsSync()) continue;
-          final k = e.shortcode.toLowerCase();
-          if (_shortcodeToAbsPath.containsKey(k)) continue;
-          _shortcodeToAbsPath[k] = abs;
-          _shortcodeToEmoji[k] =
-              CustomEmoji(shortcode: e.shortcode, relPath: e.relPath);
+          ref = abs;
         }
+        _shortcodeToRef[k] = ref;
+        _shortcodeToEmoji[k] =
+            CustomEmoji(shortcode: e.shortcode, relPath: e.relPath);
       }
-    } catch (_) {}
+    }
   }
 
   Future<List<EmojiPack>> _readPacksRaw() async {
     await ensureInitialized();
-    final f = await _packsFile();
-    if (!await f.exists()) return [];
-    try {
-      final raw = await f.readAsString();
-      final list = EmojiPack.decodeList(raw);
-      return await _pruneMissingFiles(list);
-    } catch (_) {
-      return [];
-    }
+    return await _pruneMissingFiles(List<EmojiPack>.from(_cachedPacks));
   }
 
   Future<List<EmojiPack>> _pruneMissingFiles(List<EmojiPack> packs) async {
+    if (kIsWeb) return packs; // data-URLs are always present
     final docs = await getApplicationDocumentsDirectory();
     var changed = false;
     final out = <EmojiPack>[];
@@ -106,15 +152,13 @@ class EmojiPackService {
         sourcePeerId: pack.sourcePeerId,
       ));
     }
-    if (changed) {
-      await _writePacks(out);
-    }
+    if (changed) await _writePacks(out);
     return out;
   }
 
   Future<void> _writePacks(List<EmojiPack> packs) async {
-    final f = await _packsFile();
-    await f.writeAsString(EmojiPack.encodeList(packs));
+    _cachedPacks = List<EmojiPack>.from(packs);
+    await _writeIndexRaw(EmojiPack.encodeList(packs));
     refreshIndexSync();
     version.value++;
   }
@@ -139,8 +183,10 @@ class EmojiPackService {
     if (k.isEmpty) return null;
     final em = _shortcodeToEmoji[k];
     if (em == null) return null;
-    final abs = _shortcodeToAbsPath[k];
-    if (abs == null || !File(abs).existsSync()) return null;
+    if (!kIsWeb) {
+      final abs = _shortcodeToRef[k];
+      if (abs == null || !File(abs).existsSync()) return null;
+    }
     return em;
   }
 
@@ -157,14 +203,36 @@ class EmojiPackService {
     return out;
   }
 
+  /// Native absolute path for a shortcode (null on web — use [emojiImageProvider]).
   String? absolutePathForShortcode(String shortcode) {
+    if (kIsWeb) return null;
     final k = shortcode.trim().toLowerCase();
-    final abs = _shortcodeToAbsPath[k];
+    final abs = _shortcodeToRef[k];
     if (abs == null || !File(abs).existsSync()) return null;
     return abs;
   }
 
+  /// A ready ImageProvider for a custom emoji shortcode — works on every
+  /// platform (FileImage on native, MemoryImage from the data-URL on web).
+  ImageProvider? emojiImageProvider(String shortcode) {
+    final k = shortcode.trim().toLowerCase();
+    final ref = _shortcodeToRef[k];
+    if (ref == null) return null;
+    if (ref.startsWith('data:')) {
+      final comma = ref.indexOf(',');
+      if (comma < 0) return null;
+      try {
+        return MemoryImage(base64Decode(ref.substring(comma + 1)));
+      } catch (_) {
+        return null;
+      }
+    }
+    if (!File(ref).existsSync()) return null;
+    return FileImage(File(ref));
+  }
+
   Future<String?> absolutePathForEmoji(CustomEmoji e) async {
+    if (kIsWeb) return null;
     final docs = await getApplicationDocumentsDirectory();
     final abs = p.join(docs.path, e.relPath);
     if (File(abs).existsSync()) return abs;
@@ -173,12 +241,24 @@ class EmojiPackService {
 
   Future<Uint8List?> readEmojiBytesByShortcode(String shortcode) async {
     await ensureInitialized();
-    final abs = absolutePathForShortcode(shortcode);
-    if (abs == null) return null;
-    final f = File(abs);
+    final k = shortcode.trim().toLowerCase();
+    final ref = _shortcodeToRef[k];
+    if (ref == null) return null;
+    if (ref.startsWith('data:')) {
+      final comma = ref.indexOf(',');
+      if (comma < 0) return null;
+      try {
+        return base64Decode(ref.substring(comma + 1));
+      } catch (_) {
+        return null;
+      }
+    }
+    final f = File(ref);
     if (!f.existsSync()) return null;
     return f.readAsBytes();
   }
+
+  // ── Mutations ───────────────────────────────────────────────────
 
   Future<String> createPack({
     required String name,
@@ -187,17 +267,14 @@ class EmojiPackService {
     await ensureInitialized();
     final packs = await _readPacksRaw();
     final id = _uuid.v4();
-    final root = await _packsRootDir();
-    Directory(p.join(root.path, id)).createSync(recursive: true);
+    if (!kIsWeb) {
+      final root = await _packsRootDir();
+      Directory(p.join(root.path, id)).createSync(recursive: true);
+    }
     final n = name.trim().isEmpty ? 'Набор' : name.trim();
     packs.insert(
       0,
-      EmojiPack(
-        id: id,
-        name: n,
-        emojis: const [],
-        sourcePeerId: sourcePeerId,
-      ),
+      EmojiPack(id: id, name: n, emojis: const [], sourcePeerId: sourcePeerId),
     );
     await _writePacks(packs);
     return id;
@@ -218,41 +295,41 @@ class EmojiPackService {
     await _writePacks(packs);
   }
 
-  Future<void> addEmoji({
+  /// Adds an emoji from raw image bytes (works on web + native).
+  Future<void> addEmojiBytes({
     required String packId,
     required String shortcode,
-    required String absoluteImagePath,
+    required Uint8List bytes,
+    String ext = '.png',
   }) async {
     final sc = _normalizeShortcode(shortcode);
-    if (sc == null) {
-      throw ArgumentError('invalid shortcode');
+    if (sc == null) throw ArgumentError('invalid shortcode');
+    if (bytes.isEmpty) throw StateError('image empty');
+    await ensureInitialized();
+
+    final String relPath;
+    if (kIsWeb) {
+      // Inline data-URL stored directly in the index.
+      relPath = 'data:image/png;base64,${base64Encode(bytes)}';
+    } else {
+      final docs = await getApplicationDocumentsDirectory();
+      final safeExt =
+          (ext.isNotEmpty && ext.length <= 6) ? ext.toLowerCase() : '.png';
+      final name = '${_uuid.v4()}$safeExt';
+      final rel = p.join(_packDirName, packId, name);
+      final dest = File(p.join(docs.path, rel));
+      dest.parent.createSync(recursive: true);
+      await dest.writeAsBytes(bytes, flush: true);
+      relPath = rel;
     }
-    final src = File(absoluteImagePath);
-    if (!src.existsSync()) {
-      throw StateError('image missing');
-    }
-    final docs = await getApplicationDocumentsDirectory();
-    final ext = p.extension(src.path);
-    final safeExt =
-        (ext.isNotEmpty && ext.length <= 6) ? ext.toLowerCase() : '.png';
-    final name = '${_uuid.v4()}$safeExt';
-    final rel = p.join(_packDirName, packId, name);
-    final dest = File(p.join(docs.path, rel));
-    dest.parent.createSync(recursive: true);
-    await src.copy(dest.path);
 
     final packs = await _readPacksRaw();
     final i = packs.indexWhere((e) => e.id == packId);
-    if (i < 0) {
-      try {
-        await dest.delete();
-      } catch (_) {}
-      throw StateError('pack not found');
-    }
+    if (i < 0) throw StateError('pack not found');
     final p0 = packs[i];
     final emojis = List<CustomEmoji>.from(p0.emojis)
       ..removeWhere((e) => e.shortcode.toLowerCase() == sc.toLowerCase());
-    emojis.add(CustomEmoji(shortcode: sc, relPath: rel));
+    emojis.add(CustomEmoji(shortcode: sc, relPath: relPath));
     packs[i] = EmojiPack(
       id: p0.id,
       name: p0.name,
@@ -260,6 +337,35 @@ class EmojiPackService {
       sourcePeerId: p0.sourcePeerId,
     );
     await _writePacks(packs);
+  }
+
+  /// Adds an emoji from an image path (native file or web OPFS/data URL).
+  Future<void> addEmoji({
+    required String packId,
+    required String shortcode,
+    required String absoluteImagePath,
+  }) async {
+    Uint8List? bytes;
+    if (kIsWeb) {
+      final pth = absoluteImagePath;
+      if (pth.startsWith('data:')) {
+        final comma = pth.indexOf(',');
+        if (comma > 0) bytes = base64Decode(pth.substring(comma + 1));
+      } else if (isWebStoredFile(pth)) {
+        bytes = await readWebStoredFile(pth);
+      }
+    } else {
+      final src = File(absoluteImagePath);
+      if (src.existsSync()) bytes = await src.readAsBytes();
+    }
+    if (bytes == null || bytes.isEmpty) throw StateError('image missing');
+    final ext = p.extension(absoluteImagePath);
+    await addEmojiBytes(
+      packId: packId,
+      shortcode: shortcode,
+      bytes: bytes,
+      ext: ext.isEmpty ? '.png' : ext,
+    );
   }
 
   String? _normalizeShortcode(String raw) {
@@ -278,7 +384,6 @@ class EmojiPackService {
     final i = packs.indexWhere((e) => e.id == packId);
     if (i < 0) return;
     final p0 = packs[i];
-    final docs = await getApplicationDocumentsDirectory();
     CustomEmoji? removed;
     final emojis = <CustomEmoji>[];
     for (final e in p0.emojis) {
@@ -288,8 +393,9 @@ class EmojiPackService {
         emojis.add(e);
       }
     }
-    if (removed != null) {
+    if (removed != null && !kIsWeb && !removed.relPath.startsWith('data:')) {
       try {
+        final docs = await getApplicationDocumentsDirectory();
         final f = File(p.join(docs.path, removed.relPath));
         if (f.existsSync()) await f.delete();
       } catch (_) {}
@@ -304,21 +410,17 @@ class EmojiPackService {
   }
 
   Future<void> deletePack(String packId) async {
-    final docs = await getApplicationDocumentsDirectory();
     final packs = await _readPacksRaw();
     final kept = <EmojiPack>[];
     for (final e in packs) {
       if (e.id == packId) {
-        for (final em in e.emojis) {
+        if (!kIsWeb) {
           try {
-            final f = File(p.join(docs.path, em.relPath));
-            if (f.existsSync()) f.deleteSync();
+            final docs = await getApplicationDocumentsDirectory();
+            final dir = Directory(p.join(docs.path, _packDirName, packId));
+            if (dir.existsSync()) dir.deleteSync(recursive: true);
           } catch (_) {}
         }
-        try {
-          final dir = Directory(p.join(docs.path, _packDirName, packId));
-          if (dir.existsSync()) dir.deleteSync(recursive: true);
-        } catch (_) {}
         continue;
       }
       kept.add(e);
@@ -326,7 +428,8 @@ class EmojiPackService {
     await _writePacks(kept);
   }
 
-  /// Карточка чата: [payload] с `type`/`kind` = emoji_pack, name, emojis: [{shortcode, data}] (base64).
+  /// Карточка чата: [payload] с `type`/`kind` = emoji_pack, name,
+  /// emojis: [{shortcode, data}] (base64). Works on web + native.
   Future<String?> installFromSharePayload(Map<String, dynamic> payload) async {
     await ensureInitialized();
     final name = (payload['name'] as String?)?.trim().isNotEmpty == true
@@ -335,53 +438,37 @@ class EmojiPackService {
     final rawEmojis = (payload['emojis'] as List?) ?? const [];
     if (rawEmojis.isEmpty) return null;
 
-    final packId = _uuid.v4();
-    final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docs.path, _packDirName, packId));
-    dir.createSync(recursive: true);
-
-    final built = <CustomEmoji>[];
-    final seenShortcodes = <String>{};
+    final packId = await createPack(
+      name: name,
+      sourcePeerId: payload['sourcePeerId'] as String?,
+    );
+    var added = 0;
+    final seen = <String>{};
     for (final e in rawEmojis) {
       if (e is! Map) continue;
       final m = Map<String, dynamic>.from(e);
       final scRaw = (m['shortcode'] as String? ?? '').trim();
-      final b64 = m['data'] as String? ?? m['imageBase64'] as String? ?? '';
+      final b64 = (m['data'] as String? ?? m['imageBase64'] as String? ?? '')
+          .trim();
       if (scRaw.isEmpty || b64.isEmpty) continue;
-      final List<int> bytes;
+      final norm = _normalizeShortcode(scRaw);
+      if (norm == null || !seen.add(norm)) continue;
+      Uint8List bytes;
       try {
         bytes = base64Decode(b64);
       } catch (_) {
         continue;
       }
       if (bytes.isEmpty) continue;
-      final norm = _normalizeShortcode(scRaw);
-      if (norm == null) continue;
-      if (!seenShortcodes.add(norm)) continue;
-      final fileName = '${_uuid.v4()}.png';
-      final rel = p.join(_packDirName, packId, fileName);
-      final dest = File(p.join(docs.path, rel));
-      await dest.writeAsBytes(bytes, flush: true);
-      built.add(CustomEmoji(shortcode: norm, relPath: rel));
-    }
-    if (built.isEmpty) {
       try {
-        if (dir.existsSync()) dir.deleteSync(recursive: true);
+        await addEmojiBytes(packId: packId, shortcode: norm, bytes: bytes);
+        added++;
       } catch (_) {}
+    }
+    if (added == 0) {
+      await deletePack(packId);
       return null;
     }
-
-    final packs = await _readPacksRaw();
-    packs.insert(
-      0,
-      EmojiPack(
-        id: packId,
-        name: name,
-        emojis: built,
-        sourcePeerId: payload['sourcePeerId'] as String?,
-      ),
-    );
-    await _writePacks(packs);
     return packId;
   }
 
@@ -404,7 +491,6 @@ class EmojiPackService {
     }
     packId ??= await createPack(name: 'Автоимпорт', sourcePeerId: sourcePeerId);
 
-    final tmpDir = await getTemporaryDirectory();
     var n = 0;
     for (final e in rawEmojis) {
       if (e is! Map) continue;
@@ -414,33 +500,44 @@ class EmojiPackService {
       if (scRaw.isEmpty || b64.isEmpty) continue;
       final norm = _normalizeShortcode(scRaw);
       if (norm == null) continue;
-      List<int> bytes;
+      Uint8List bytes;
       try {
         bytes = base64Decode(b64);
       } catch (_) {
         continue;
       }
       if (bytes.isEmpty) continue;
-      final tmp = File(p.join(tmpDir.path, 'emoji_auto_${_uuid.v4()}.png'));
       try {
-        await tmp.writeAsBytes(bytes, flush: true);
-        await addEmoji(
-          packId: packId,
-          shortcode: norm,
-          absoluteImagePath: tmp.path,
-        );
+        await addEmojiBytes(packId: packId, shortcode: norm, bytes: bytes);
         n++;
-      } catch (_) {
-      } finally {
-        try {
-          if (tmp.existsSync()) await tmp.delete();
-        } catch (_) {}
-      }
+      } catch (_) {}
     }
     if (n > 0) {
       refreshIndexSync();
       version.value++;
     }
     return n;
+  }
+
+  /// Builds a share payload (base64 images) for all packs — used to sync custom
+  /// emoji to a linked device. Returns one map per pack.
+  Future<List<Map<String, dynamic>>> exportAllPacksAsPayloads() async {
+    final packs = await _readPacksRaw();
+    final out = <Map<String, dynamic>>[];
+    for (final pack in packs) {
+      final emojis = <Map<String, dynamic>>[];
+      for (final e in pack.emojis) {
+        final bytes = await readEmojiBytesByShortcode(e.shortcode);
+        if (bytes == null || bytes.isEmpty) continue;
+        emojis.add({'shortcode': e.shortcode, 'data': base64Encode(bytes)});
+      }
+      if (emojis.isEmpty) continue;
+      out.add({
+        'name': pack.name,
+        'emojis': emojis,
+        if (pack.sourcePeerId != null) 'sourcePeerId': pack.sourcePeerId,
+      });
+    }
+    return out;
   }
 }

@@ -209,13 +209,13 @@ class AvatarWidget extends StatelessWidget {
     if (emoji.isNotEmpty) {
       final m = _shortcodeRe.firstMatch(emoji.trim());
       if (m != null) {
-        final abs =
-            EmojiPackService.instance.absolutePathForShortcode(m.group(1)!);
-        if (abs != null && File(abs).existsSync()) {
+        final provider =
+            EmojiPackService.instance.emojiImageProvider(m.group(1)!);
+        if (provider != null) {
           return ClipRRect(
             borderRadius: BorderRadius.circular(innerSize * 0.16),
-            child: Image.file(
-              File(abs),
+            child: Image(
+              image: provider,
               width: innerSize * 0.72,
               height: innerSize * 0.72,
               fit: BoxFit.cover,
@@ -431,18 +431,12 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                           // For now, insert as text - the recipient needs the emoji pack installed
                           widget.onSelected(':${emoji.shortcode}:');
                         },
-                        child: FutureBuilder<String?>(
-                          future: EmojiPackService.instance
-                              .absolutePathForEmoji(emoji),
-                          builder: (context, snapshot) {
-                            final path = snapshot.data;
-                            if (path == null) {
-                              return const SizedBox();
-                            }
-                            return Image.file(
-                              File(path),
-                              fit: BoxFit.contain,
-                            );
+                        child: Builder(
+                          builder: (context) {
+                            final provider = EmojiPackService.instance
+                                .emojiImageProvider(emoji.shortcode);
+                            if (provider == null) return const SizedBox();
+                            return Image(image: provider, fit: BoxFit.contain);
                           },
                         ),
                       );

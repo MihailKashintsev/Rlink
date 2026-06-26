@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -343,8 +342,8 @@ List<InlineSpan> _spansForPlain(
         ),
       ));
     } else if (h.kind == 'cemoji') {
-      final path = EmojiPackService.instance.absolutePathForShortcode(h.raw);
-      if (path == null || !File(path).existsSync()) {
+      final provider = EmojiPackService.instance.emojiImageProvider(h.raw);
+      if (provider == null) {
         spans.add(
             TextSpan(text: s.substring(h.start, h.end), style: baseStyle));
       } else {
@@ -353,8 +352,8 @@ List<InlineSpan> _spansForPlain(
           baseline: TextBaseline.alphabetic,
           child: GestureDetector(
             onTap: onCustomEmojiTap == null ? null : () => onCustomEmojiTap(h.raw),
-            child: Image.file(
-              File(path),
+            child: Image(
+              image: provider,
               width: 18,
               height: 18,
               fit: BoxFit.cover,

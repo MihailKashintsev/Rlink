@@ -15,6 +15,7 @@ import 'channel_service.dart';
 import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
+import 'emoji_pack_service.dart';
 import 'group_service.dart';
 import 'image_service.dart';
 import 'relay_service.dart';
@@ -273,6 +274,9 @@ class DeviceLinkSyncService {
         await Future.delayed(const Duration(milliseconds: 8));
       }
 
+      // Custom emoji packs (as base64 share payloads, chunked).
+      await _sendEmojiPacks(send);
+
       var sent = 0;
       for (final msg in allMessages) {
         await send('dm_msg', _encodeMessage(msg));
@@ -490,6 +494,38 @@ class DeviceLinkSyncService {
     }
   }
 
+  /// Sends every custom emoji pack as a base64 share payload, chunked over the
+  /// same media_meta/media_c transport (kind 'epk') so they sync to the child.
+  Future<void> _sendEmojiPacks(
+    Future<void> Function(String, [Map<String, dynamic>]) send,
+  ) async {
+    try {
+      final payloads =
+          await EmojiPackService.instance.exportAllPacksAsPayloads();
+      for (var idx = 0; idx < payloads.length; idx++) {
+        final b64 = base64Encode(utf8.encode(jsonEncode(payloads[idx])));
+        const chunkChars = 400;
+        final total = (b64.length / chunkChars).ceil();
+        final owner = 'epk_$idx';
+        await send('media_meta', {'o': owner, 'k': 'epk', 'n': total});
+        for (var i = 0; i < total; i++) {
+          final start = i * chunkChars;
+          final end =
+              (start + chunkChars) > b64.length ? b64.length : start + chunkChars;
+          await send('media_c',
+              {'o': owner, 'k': 'epk', 'i': i, 'd': b64.substring(start, end)});
+          if (i % 8 == 7) {
+            await Future.delayed(const Duration(milliseconds: 12));
+          }
+        }
+        await Future.delayed(const Duration(milliseconds: 10));
+      }
+      debugPrint('[RLINK][LinkSync] Emoji packs sent: ${payloads.length}');
+    } catch (e) {
+      debugPrint('[RLINK][LinkSync] emoji packs send: $e');
+    }
+  }
+
   Future<void> _onMediaChunk(Map<String, dynamic> data) async {
     final o = data['o'] as String?;
     final k = data['k'] as String?;
@@ -532,6 +568,12 @@ class DeviceLinkSyncService {
         if (g != null) {
           await GroupService.instance
               .upsertGroupsFromBackup([g.copyWith(avatarImagePath: path)]);
+        }
+      } else if (kind == 'epk') {
+        final payload = jsonDecode(utf8.decode(bytes));
+        if (payload is Map) {
+          await EmojiPackService.instance
+              .installFromSharePayload(Map<String, dynamic>.from(payload));
         }
       }
     } catch (e) {
