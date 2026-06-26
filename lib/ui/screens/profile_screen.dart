@@ -612,8 +612,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             border: OutlineInputBorder(),
                           ),
                           onChanged: (v) {
-                            final normalized =
-                                UserProfile.normalizeStatusEmoji(v);
+                            // Don't truncate while the user is mid-typing a
+                            // :shortcode: — normalizeStatusEmoji caps to 4 chars
+                            // for raw emoji, which used to eat ":rlink:" at the
+                            // 5th keystroke. Keep colon-input as typed; the final
+                            // save normalizes it via ProfileService.
+                            String normalized;
+                            if (v.startsWith(':')) {
+                              normalized = v.length > 50 ? v.substring(0, 50) : v;
+                            } else {
+                              normalized = UserProfile.normalizeStatusEmoji(v);
+                            }
                             if (normalized != v) {
                               _statusEmojiController.value = TextEditingValue(
                                 text: normalized,

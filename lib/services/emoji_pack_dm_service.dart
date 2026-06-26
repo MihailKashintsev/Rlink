@@ -40,8 +40,9 @@ class EmojiPackDmService {
       if (sc.isEmpty) continue;
       final key = sc.toLowerCase();
       if (!seen.add(key)) continue;
-      final abs = EmojiPackService.instance.absolutePathForShortcode(sc);
-      if (abs == null) continue;
+      // NB: must NOT gate on absolutePathForShortcode() — it returns null on web,
+      // which silently dropped every emoji from the auto-payload (recipient then
+      // saw only ':code:'). readEmojiBytesByShortcode is web-safe (data-URL).
       final rawBytes =
           await EmojiPackService.instance.readEmojiBytesByShortcode(sc);
       if (rawBytes == null || rawBytes.isEmpty) continue;
