@@ -48,7 +48,7 @@ class _EmojiHubScreenState extends State<EmojiHubScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Новый набор'),
+        title: Text(AppL10n.t('cm_new_pack')),
         content: TextField(
           controller: ctrl,
           decoration: const InputDecoration(
@@ -88,12 +88,12 @@ class _EmojiHubScreenState extends State<EmojiHubScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Эмодзи'),
+        title: Text(AppL10n.t('cm_emoji')),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createPack,
         icon: const Icon(Icons.add),
-        label: const Text('Новый набор'),
+        label: Text(AppL10n.t('cm_new_pack')),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

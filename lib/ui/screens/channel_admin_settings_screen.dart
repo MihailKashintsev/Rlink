@@ -221,7 +221,7 @@ class _ChannelAdminSettingsScreenState
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Отвязать'),
+            child: Text(AppL10n.t('cm_unlink')),
           ),
         ],
       ),
@@ -456,7 +456,7 @@ class _ChannelAdminSettingsScreenState
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить канал?'),
+        title: Text(AppL10n.t('cm_delete_channel_q')),
         content: const Text('Канал и все посты будут удалены навсегда.'),
         actions: [
           TextButton(
@@ -823,13 +823,13 @@ class _ChannelAdminSettingsScreenState
     final ch = _channel;
     if (ch == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Настройки канала')),
+        appBar: AppBar(title: Text(AppL10n.t('cm_channel_settings'))),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (!_isOwnerMode && !_canManageDriveAccount) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Настройки канала')),
+        appBar: AppBar(title: Text(AppL10n.t('cm_channel_settings'))),
         body: const Center(
           child: Text('Недостаточно прав для настроек канала'),
         ),
@@ -837,7 +837,7 @@ class _ChannelAdminSettingsScreenState
     }
     if (_isOwnerMode && ch.adminId != _myId) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Настройки канала')),
+        appBar: AppBar(title: Text(AppL10n.t('cm_channel_settings'))),
         body: const Center(
           child: Text('Доступно только владельцу канала'),
         ),
@@ -1055,7 +1055,7 @@ class _ChannelAdminSettingsScreenState
             ),
             ListTile(
               leading: const Icon(Icons.people_outline),
-              title: const Text('Подписчики'),
+              title: Text(AppL10n.t('cm_subscribers')),
               subtitle: Text('${ch.subscriberIds.length} подписчиков',
                   style: TextStyle(
                       fontSize: 12,

@@ -165,7 +165,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Новая группа'),
+        title: Text(AppL10n.t('cm_new_group')),
         content: TextField(
           controller: nameCtrl,
           maxLength: 30,
@@ -942,7 +942,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) {
           return AlertDialog(
-            title: const Text('Опрос'),
+            title: Text(AppL10n.t('cm_poll')),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -998,7 +998,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   SwitchListTile(
                     value: randomOrder,
                     onChanged: (v) => setSt(() => randomOrder = v),
-                    title: const Text('Случайный порядок'),
+                    title: Text(AppL10n.t('cm_shuffle')),
                   ),
                 ],
               ),
@@ -2387,22 +2387,22 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.emoji_emotions_outlined),
-              title: const Text('Реакция'),
+              title: Text(AppL10n.t('cm_reaction')),
               onTap: () => Navigator.pop(ctx, 'react'),
             ),
             ListTile(
               leading: const Icon(Icons.copy_outlined),
-              title: const Text('Скопировать'),
+              title: Text(AppL10n.t('cm_copy')),
               onTap: () => Navigator.pop(ctx, 'copy'),
             ),
             ListTile(
               leading: const Icon(Icons.forward),
-              title: const Text('Переслать…'),
+              title: Text(AppL10n.t('cm_forward')),
               onTap: () => Navigator.pop(ctx, 'fwd'),
             ),
             ListTile(
               leading: const Icon(Icons.share_outlined),
-              title: const Text('Экспортировать…'),
+              title: Text(AppL10n.t('cm_export')),
               onTap: () => Navigator.pop(ctx, 'share'),
             ),
           ],
@@ -2426,14 +2426,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       if (plain.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Нечего копировать')),
+          SnackBar(content: Text(AppL10n.t('cm_nothing_copy'))),
         );
         return;
       }
       await Clipboard.setData(ClipboardData(text: plain));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Сообщение скопировано')),
+        SnackBar(content: Text(AppL10n.t('cm_msg_copied'))),
       );
     } else if (action == 'fwd') {
       await _forwardGroupMessageToDm(m);

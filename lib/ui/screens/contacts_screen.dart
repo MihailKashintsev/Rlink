@@ -628,7 +628,7 @@ class _ContactTile extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Удалить контакт?'),
+        title: Text(AppL10n.t('cm_delete_contact_q')),
         content: Text('${contact.nickname} будет удалён из контактов.'),
         actions: [
           TextButton(

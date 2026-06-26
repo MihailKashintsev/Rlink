@@ -129,8 +129,8 @@ class _HomeScreenState extends State<HomeScreen>
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Поиск устройств...'),
+          SnackBar(
+            content: Text(AppL10n.t('cm_searching_devices')),
             duration: Duration(seconds: 2),
           ),
         );
@@ -227,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen>
               Clipboard.setData(ClipboardData(text: id));
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Скопировано!')),
+                SnackBar(content: Text(AppL10n.t('cm_copied'))),
               );
             },
             child: const Text('Копировать'),

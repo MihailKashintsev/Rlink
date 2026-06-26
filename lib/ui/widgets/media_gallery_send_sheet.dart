@@ -1244,19 +1244,19 @@ class _ExtraActionsMenuTab extends StatelessWidget {
       if (onTodo != null)
         ListTile(
           leading: const Icon(Icons.checklist_rtl),
-          title: const Text('Список дел'),
+          title: Text(AppL10n.t('cm_todo')),
           onTap: () => unawaited(_runAndClose(onTodo!)),
         ),
       if (onCalendarEvent != null)
         ListTile(
           leading: const Icon(Icons.event_available_outlined),
-          title: const Text('Событие'),
+          title: Text(AppL10n.t('cm_event')),
           onTap: () => unawaited(_runAndClose(onCalendarEvent!)),
         ),
       if (onPoll != null)
         ListTile(
           leading: const Icon(Icons.poll_outlined),
-          title: const Text('Опрос'),
+          title: Text(AppL10n.t('cm_poll')),
           onTap: () => unawaited(_runAndClose(onPoll!)),
         ),
     ];

@@ -145,7 +145,7 @@ Future<void> showChannelProfileEditDialog(
       builder: (ctx, setDialogState) {
         final cs = Theme.of(ctx).colorScheme;
         return AlertDialog(
-          title: const Text('Настройки канала'),
+          title: Text(AppL10n.t('cm_channel_settings')),
           contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
           content: Padding(
             padding:

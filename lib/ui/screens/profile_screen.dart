@@ -321,7 +321,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor:
           isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8),
       appBar: AppBar(
-        title: const Text('Профиль'),
+        title: Text(AppL10n.t('cm_profile')),
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor:
@@ -807,7 +807,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onCopy: () {
                   Clipboard.setData(ClipboardData(text: profile.publicKeyHex));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Скопировано!')),
+                    SnackBar(content: Text(AppL10n.t('cm_copied'))),
                   );
                 },
               ),

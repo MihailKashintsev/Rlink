@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../services/chat_inbox_service.dart';
 
@@ -77,7 +78,7 @@ class _ChatInboxCustomGroupScreenState extends State<ChatInboxCustomGroupScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Новая группа'),
+        title: Text(AppL10n.t('cm_new_group')),
         actions: [
           if (_saving)
             const Padding(

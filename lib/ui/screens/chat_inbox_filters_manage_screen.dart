@@ -32,7 +32,7 @@ class ChatInboxFiltersManageScreen extends StatelessWidget {
                     ),
                     FilledButton(
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Сбросить'),
+                      child: Text(AppL10n.t('cm_reset')),
                     ),
                   ],
                 ),

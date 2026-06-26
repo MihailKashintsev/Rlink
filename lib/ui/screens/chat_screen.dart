@@ -921,7 +921,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!ok) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Подождите — идёт обмен профилями')),
+            SnackBar(content: Text(AppL10n.t('cm_wait_exchange'))),
           );
         }
         return false;
@@ -1333,8 +1333,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!hasPerm) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Нет доступа к микрофону — проверьте разрешения'),
+          SnackBar(
+            content: Text(AppL10n.t('cm_no_mic')),
           ),
         );
       }
@@ -1918,7 +1918,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!ok) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Подождите — идёт обмен профилями')),
+            SnackBar(content: Text(AppL10n.t('cm_wait_exchange'))),
           );
         }
         try {
@@ -2146,8 +2146,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (myId.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ошибка: приложение еще не готово'),
+          SnackBar(
+            content: Text(AppL10n.t('cm_app_not_ready')),
             backgroundColor: Colors.red,
           ),
         );
@@ -2864,8 +2864,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final myId = CryptoService.instance.publicKeyHex;
     if (myId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ошибка: приложение еще не готово'),
+        SnackBar(
+          content: Text(AppL10n.t('cm_app_not_ready')),
           backgroundColor: Colors.red,
         ),
       );
@@ -2883,8 +2883,8 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!ok) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Подождите — идёт обмен профилями'),
+              SnackBar(
+                content: Text(AppL10n.t('cm_wait_exchange')),
               ),
             );
           }
@@ -3259,7 +3259,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!ok) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Подождите — идёт обмен профилями')),
+            SnackBar(content: Text(AppL10n.t('cm_wait_exchange'))),
           );
         }
         return;
@@ -3663,13 +3663,13 @@ class _ChatScreenState extends State<ChatScreen> {
               if (!_isDmBot)
                 ListTile(
                   leading: const Icon(Icons.checklist_rtl),
-                  title: const Text('Список дел'),
+                  title: Text(AppL10n.t('cm_todo')),
                   onTap: () => Navigator.pop(ctx, 'todo'),
                 ),
               if (!_isDmBot)
                 ListTile(
                   leading: const Icon(Icons.event_available_outlined),
-                  title: const Text('Событие'),
+                  title: Text(AppL10n.t('cm_event')),
                   onTap: () => Navigator.pop(ctx, 'calendar'),
                 ),
             ],
@@ -3833,7 +3833,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Большой файл'),
+        title: Text(AppL10n.t('cm_large_file')),
         content: Text(
           'Файл ${_humanSize(size)}. Отправить через Google Drive (быстро) '
           'или напрямую через Rlink (медленно, по частям)?\n\n'
@@ -4960,7 +4960,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!ok) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Подождите — идёт обмен профилями')),
+            SnackBar(content: Text(AppL10n.t('cm_wait_exchange'))),
           );
         }
         return;
@@ -4971,8 +4971,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (myId.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ошибка: приложение еще не готово'),
+        SnackBar(
+          content: Text(AppL10n.t('cm_app_not_ready')),
           backgroundColor: Colors.red,
         ),
       );
@@ -5018,7 +5018,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!ok) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Подождите — идёт обмен профилями')),
+            SnackBar(content: Text(AppL10n.t('cm_wait_exchange'))),
           );
         }
         return;
@@ -5715,14 +5715,14 @@ class _ChatScreenState extends State<ChatScreen> {
     if (plain.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нечего копировать')),
+        SnackBar(content: Text(AppL10n.t('cm_nothing_copy'))),
       );
       return;
     }
     await Clipboard.setData(ClipboardData(text: plain));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Сообщение скопировано')),
+      SnackBar(content: Text(AppL10n.t('cm_msg_copied'))),
     );
   }
 
@@ -5889,7 +5889,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.emoji_emotions),
-              title: const Text('Реакция'),
+              title: Text(AppL10n.t('cm_reaction')),
               onTap: () {
                 Navigator.pop(ctx);
                 _showReactionPicker(msg);
@@ -5905,21 +5905,21 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.copy_outlined),
-              title: const Text('Скопировать'),
+              title: Text(AppL10n.t('cm_copy')),
               onTap: () async {
                 Navigator.pop(ctx);
                 final plain = _plainTextForClipboard(msg);
                 if (plain.isEmpty) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Нечего копировать')),
+                    SnackBar(content: Text(AppL10n.t('cm_nothing_copy'))),
                   );
                   return;
                 }
                 await Clipboard.setData(ClipboardData(text: plain));
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Сообщение скопировано')),
+                  SnackBar(content: Text(AppL10n.t('cm_msg_copied'))),
                 );
               },
             ),
@@ -5936,7 +5936,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.forward),
-              title: const Text('Переслать…'),
+              title: Text(AppL10n.t('cm_forward')),
               onTap: () {
                 Navigator.pop(ctx);
                 unawaited(_pickForwardTargetAndNavigate(msg));
@@ -5944,7 +5944,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.share_outlined),
-              title: const Text('Экспортировать…'),
+              title: Text(AppL10n.t('cm_export')),
               onTap: () {
                 Navigator.pop(ctx);
                 unawaited(shareChatMessageExternally(context, msg));
@@ -6287,7 +6287,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!ok) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Подождите — идёт обмен профилями')),
+          SnackBar(content: Text(AppL10n.t('cm_wait_exchange'))),
         );
         return;
       }
@@ -6295,7 +6295,7 @@ class _ChatScreenState extends State<ChatScreen> {
     await sendFullProfileToPeer(_resolvedPeerId);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Профиль отправлен повторно')),
+      SnackBar(content: Text(AppL10n.t('cm_profile_resent'))),
     );
   }
 
@@ -6893,8 +6893,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                     .chatBgForPeer('__global__')) !=
                             null;
                         return [
-                          const PopupMenuItem(
-                              value: 'profile', child: Text('Профиль')),
+                          PopupMenuItem(
+                              value: 'profile', child: Text(AppL10n.t('cm_profile'))),
                           if (!_isDmBot && !_savedMessagesLocalOnly)
                             const PopupMenuItem(
                               value: 'exchange_profiles',
@@ -8013,8 +8013,8 @@ class _DmInviteBubbleActions extends StatelessWidget {
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Связка уже активна на этом устройстве')),
+          SnackBar(
+              content: Text(AppL10n.t('cm_link_active'))),
         );
       }
       return;
@@ -11319,7 +11319,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
     await sendFullProfileToPeer(widget.peerId);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Профиль отправлен повторно')),
+      SnackBar(content: Text(AppL10n.t('cm_profile_resent'))),
     );
   }
 
@@ -11676,7 +11676,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
-          title: const Text('Удалить контакт?'),
+          title: Text(AppL10n.t('cm_delete_contact_q')),
           content: const Text(
             'Контакт и вся переписка будут удалены без возможности восстановления.',
           ),

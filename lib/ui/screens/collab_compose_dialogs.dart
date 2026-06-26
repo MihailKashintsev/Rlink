@@ -21,7 +21,7 @@ Future<String?> showSharedTodoComposeDialog(BuildContext context) async {
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Список дел'),
+        title: Text(AppL10n.t('cm_todo')),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,

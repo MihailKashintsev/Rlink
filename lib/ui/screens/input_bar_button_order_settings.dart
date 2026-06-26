@@ -70,11 +70,11 @@ class _InputBarButtonOrderSettingsState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Порядок кнопок'),
+        title: Text(AppL10n.t('cm_button_order')),
         actions: [
           TextButton(
             onPressed: _resetToDefault,
-            child: const Text('Сбросить'),
+            child: Text(AppL10n.t('cm_reset')),
           ),
         ],
       ),

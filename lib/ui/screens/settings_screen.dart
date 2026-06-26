@@ -90,7 +90,7 @@ Future<void> _doUnlinkDevice(BuildContext context) async {
   await applyConnectionTransport();
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Связка устройств снята')),
+    SnackBar(content: Text(AppL10n.t('cm_link_removed'))),
   );
 }
 
@@ -721,7 +721,7 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Отвязать'),
+            child: Text(AppL10n.t('cm_unlink')),
           ),
         ],
       ),
@@ -1950,7 +1950,7 @@ class _MessagingPageState extends State<_MessagingPage> {
           _SectionHeader('Панель ввода'),
           ListTile(
             leading: Icon(Icons.reorder, color: cs.primary),
-            title: Text('Порядок кнопок'),
+            title: Text(AppL10n.t('cm_button_order')),
             subtitle: Text(
               'Перетащите для изменения порядка',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
@@ -2187,7 +2187,7 @@ class _ProfilePageState extends State<_ProfilePage> {
           ),
           ListTile(
             leading: Icon(Icons.emoji_emotions, color: cs.primary),
-            title: const Text('Эмодзи'),
+            title: Text(AppL10n.t('cm_emoji')),
             subtitle: const Text(
               'Свои :shortcode: и бот Emoji',
               style: TextStyle(fontSize: 12),

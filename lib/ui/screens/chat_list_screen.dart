@@ -118,8 +118,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     await BleService.instance.rescan();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text('Поиск устройств...'), duration: Duration(seconds: 2)),
+      SnackBar(
+          content: Text(AppL10n.t('cm_searching_devices')), duration: Duration(seconds: 2)),
     );
     setState(() => _currentTab = 1);
   }
@@ -144,8 +144,8 @@ class _ChatListScreenState extends State<ChatListScreen>
   void _createChannel() {
     if (!AppSettings.instance.channelsEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Каналы недоступны в текущем режиме'),
+        SnackBar(
+          content: Text(AppL10n.t('cm_channels_unavailable')),
         ),
       );
       return;
@@ -158,7 +158,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Новый канал'),
+          title: Text(AppL10n.t('cm_new_channel')),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(
@@ -275,7 +275,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Новая группа'),
+        title: Text(AppL10n.t('cm_new_group')),
         content: TextField(
           controller: nameCtrl,
           autofocus: true,
@@ -520,7 +520,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       Icon(Icons.campaign_outlined,
                           size: 20, color: Theme.of(ctx).colorScheme.primary),
                       const SizedBox(width: 10),
-                      const Text('Новый канал'),
+                      Text(AppL10n.t('cm_new_channel')),
                     ]),
                   ),
                 PopupMenuItem(
@@ -529,7 +529,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     Icon(Icons.group_add_outlined,
                         size: 20, color: Theme.of(ctx).colorScheme.primary),
                     const SizedBox(width: 10),
-                    const Text('Новая группа'),
+                    Text(AppL10n.t('cm_new_group')),
                   ]),
                 ),
               ],
@@ -928,7 +928,7 @@ class _MeTab extends StatelessWidget {
                         ),
                         FilledButton(
                           onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Отвязать'),
+                          child: Text(AppL10n.t('cm_unlink')),
                         ),
                       ],
                     ),
@@ -950,7 +950,7 @@ class _MeTab extends StatelessWidget {
               await applyConnectionTransport();
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Связка устройств снята')),
+                SnackBar(content: Text(AppL10n.t('cm_link_removed'))),
               );
             },
           ),
@@ -1460,8 +1460,8 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
       case _ChatItemType.channel:
         if (!AppSettings.instance.channelsEnabled) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Каналы недоступны в текущем режиме'),
+            SnackBar(
+              content: Text(AppL10n.t('cm_channels_unavailable')),
             ),
           );
           return;

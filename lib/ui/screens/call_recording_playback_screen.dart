@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../services/app_settings.dart';
@@ -116,7 +117,7 @@ class _CallRecordingPlaybackScreenState
     if (path == null || path.isEmpty || !localFileExistsForPath(path)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Файл записи не найден')));
+            SnackBar(content: Text(AppL10n.t('cm_rec_not_found'))));
       }
       return;
     }
@@ -163,7 +164,7 @@ class _CallRecordingPlaybackScreenState
     if (path == null || path.isEmpty || !localFileExistsForPath(path)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Файл записи не найден')));
+            SnackBar(content: Text(AppL10n.t('cm_rec_not_found'))));
       }
       return;
     }

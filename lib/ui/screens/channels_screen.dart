@@ -526,7 +526,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   void _openChannel(Channel ch) {
     if (!_channelsFeatureEnabled()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Каналы недоступны в текущем режиме')),
+        SnackBar(content: Text(AppL10n.t('cm_channels_unavailable'))),
       );
       return;
     }
@@ -548,7 +548,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     }
     if (!_channelsFeatureEnabled()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Каналы недоступны в текущем режиме')),
+        SnackBar(content: Text(AppL10n.t('cm_channels_unavailable'))),
       );
       return;
     }
@@ -557,7 +557,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Новый канал'),
+        title: Text(AppL10n.t('cm_new_channel')),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(
             controller: nameCtrl,
@@ -943,7 +943,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) {
           return AlertDialog(
-            title: const Text('Опрос'),
+            title: Text(AppL10n.t('cm_poll')),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -999,7 +999,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                   SwitchListTile(
                     value: randomOrder,
                     onChanged: (v) => setSt(() => randomOrder = v),
-                    title: const Text('Случайный порядок'),
+                    title: Text(AppL10n.t('cm_shuffle')),
                   ),
                 ],
               ),
@@ -1263,7 +1263,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Большой файл'),
+          title: Text(AppL10n.t('cm_large_file')),
           content: Text(
             'Файл ${(fileBytes.length / 1024).toStringAsFixed(0)} КБ — '
             'передача по Bluetooth займёт несколько минут. Продолжить?',
@@ -1714,7 +1714,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Большой файл'),
+          title: Text(AppL10n.t('cm_large_file')),
           content: Text(
             'Файл ${(fileBytes.length / 1024).toStringAsFixed(0)} КБ — '
             'передача по Bluetooth займёт несколько минут. Продолжить?',
@@ -1816,8 +1816,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     if (!hasPerm) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Нет доступа к микрофону — проверьте разрешения'),
+          SnackBar(
+            content: Text(AppL10n.t('cm_no_mic')),
           ),
         );
       }
@@ -2167,7 +2167,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
             ),
             ListTile(
               leading: const Icon(Icons.tune, color: Colors.orange),
-              title: const Text('Стандарт'),
+              title: Text(AppL10n.t('cm_standard')),
               subtitle: const Text('320px, баланс скорость/качество'),
               onTap: () => Navigator.pop(
                   ctx, const _ImageQuality(quality: 55, maxSize: 320)),
@@ -2615,12 +2615,12 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                     Text(AppL10n.t('common_edit')),
                   ]),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'subscribers',
                   child: Row(children: [
                     Icon(Icons.people_outline, size: 18),
                     SizedBox(width: 8),
-                    Text('Подписчики'),
+                    Text(AppL10n.t('cm_subscribers')),
                   ]),
                 ),
               ],
@@ -2917,12 +2917,12 @@ class _PostCardState extends State<_PostCard> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.forward),
-                  title: const Text('Переслать…'),
+                  title: Text(AppL10n.t('cm_forward')),
                   onTap: () => Navigator.pop(ctx, 'fwd'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.share_outlined),
-                  title: const Text('Экспортировать…'),
+                  title: Text(AppL10n.t('cm_export')),
                   onTap: () => Navigator.pop(ctx, 'share'),
                 ),
                 if (post.text.trim().isNotEmpty)
@@ -2964,7 +2964,7 @@ class _PostCardState extends State<_PostCard> {
           await Clipboard.setData(ClipboardData(text: post.text));
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Текст скопирован')),
+              SnackBar(content: Text(AppL10n.t('cm_text_copied'))),
             );
           }
         } else if (action == 'del_post') {
@@ -3298,7 +3298,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.tune, color: Colors.orange),
-              title: const Text('Стандарт'),
+              title: Text(AppL10n.t('cm_standard')),
               subtitle: const Text('320px, баланс скорость/качество'),
               onTap: () => Navigator.pop(
                   ctx, const _ImageQuality(quality: 55, maxSize: 320)),
@@ -3565,7 +3565,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Большой файл'),
+          title: Text(AppL10n.t('cm_large_file')),
           content: Text(
             'Файл ${(fileBytes.length / 1024).toStringAsFixed(0)} КБ — '
             'передача по Bluetooth займёт несколько минут. Продолжить?',
@@ -3652,8 +3652,8 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     if (!hasPerm) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Нет доступа к микрофону — проверьте разрешения'),
+          SnackBar(
+            content: Text(AppL10n.t('cm_no_mic')),
           ),
         );
       }
@@ -4624,12 +4624,12 @@ class _CommentBubble extends StatelessWidget {
                   ),
                   ListTile(
                     leading: const Icon(Icons.forward),
-                    title: const Text('Переслать…'),
+                    title: Text(AppL10n.t('cm_forward')),
                     onTap: () => Navigator.pop(ctx, 'fwd'),
                   ),
                   ListTile(
                     leading: const Icon(Icons.share_outlined),
-                    title: const Text('Экспортировать…'),
+                    title: Text(AppL10n.t('cm_export')),
                     onTap: () => Navigator.pop(ctx, 'share'),
                   ),
                   if (text.trim().isNotEmpty)
@@ -4670,7 +4670,7 @@ class _CommentBubble extends StatelessWidget {
             await Clipboard.setData(ClipboardData(text: text));
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Текст скопирован')),
+                SnackBar(content: Text(AppL10n.t('cm_text_copied'))),
               );
             }
           } else if (action == 'del') {

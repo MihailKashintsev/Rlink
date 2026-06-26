@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../models/contact.dart';
 import '../../models/sticker_pack.dart';
@@ -124,7 +125,7 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
           );
         },
         icon: const Icon(Icons.add),
-        label: const Text('Новый набор'),
+        label: Text(AppL10n.t('cm_new_pack')),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

@@ -75,7 +75,7 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить набор?'),
+        title: Text(AppL10n.t('cm_delete_pack_q')),
         content: const Text('Файлы эмодзи будут удалены с устройства.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppL10n.t('common_cancel'))),
@@ -115,14 +115,14 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
     final cs = Theme.of(context).colorScheme;
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Набор')),
+        appBar: AppBar(title: Text(AppL10n.t('cm_pack'))),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     final pack = _pack;
     if (pack == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Набор')),
+        appBar: AppBar(title: Text(AppL10n.t('cm_pack'))),
         body: const Center(child: Text('Набор не найден')),
       );
     }

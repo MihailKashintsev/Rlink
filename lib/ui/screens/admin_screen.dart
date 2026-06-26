@@ -557,7 +557,7 @@ class _AdminScreenState extends State<AdminScreen>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить канал?'),
+        title: Text(AppL10n.t('cm_delete_channel_q')),
         content: Text(
             'Канал "${ch.name}" будет удалён у всех по уникальному коду '
             '${ch.universalCode.isNotEmpty ? ch.universalCode : ch.id.substring(0, 8)}… '

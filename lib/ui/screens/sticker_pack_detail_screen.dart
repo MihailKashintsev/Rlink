@@ -65,7 +65,7 @@ class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить набор?'),
+        title: Text(AppL10n.t('cm_delete_pack_q')),
         content: const Text(
           'Стикеры останутся в общей коллекции, удалится только группировка.',
         ),
@@ -92,14 +92,14 @@ class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
     final cs = Theme.of(context).colorScheme;
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Набор')),
+        appBar: AppBar(title: Text(AppL10n.t('cm_pack'))),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     final pack = _pack;
     if (pack == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Набор')),
+        appBar: AppBar(title: Text(AppL10n.t('cm_pack'))),
         body: const Center(child: Text('Набор не найден')),
       );
     }

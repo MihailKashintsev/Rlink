@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:flutter/material.dart';
+import 'l10n/app_l10n.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -1855,8 +1856,8 @@ Future<void> initServices() async {
           await sendAck(false);
           if (ctx.mounted) {
             ScaffoldMessenger.of(ctx).showSnackBar(
-              const SnackBar(
-                content: Text('Связка уже активна на этом устройстве'),
+              SnackBar(
+                content: Text(AppL10n.t('cm_link_active')),
               ),
             );
           }
