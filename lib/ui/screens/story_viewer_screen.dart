@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
+
+import '../../utils/web_file_store.dart';
 
 import '../../models/chat_message.dart';
 import '../../services/ble_service.dart';
@@ -296,22 +300,38 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       ));
     }
 
-    // Init video player if story has a local video file
-    if (story.videoPath != null && File(story.videoPath!).existsSync()) {
-      final ctrl = VideoPlayerController.file(File(story.videoPath!));
-      try {
-        await ctrl.initialize();
-        ctrl.setLooping(true);
-        ctrl.play();
-        if (mounted) {
-          setState(() => _videoCtrl = ctrl);
-        } else {
-          ctrl.dispose();
-          return;
+    // Init video player (native file or web OPFS/blob/data URL).
+    final vp = story.videoPath;
+    if (vp != null && vp.isNotEmpty) {
+      String? playable;
+      if (kIsWeb) {
+        if (_isInlineWebUri(vp)) {
+          playable = vp;
+        } else if (vp.startsWith('opfs://')) {
+          playable = await webStoredFileObjectUrl(vp.split('#').first,
+              mimeType: 'video/mp4');
         }
-      } catch (e) {
-        debugPrint('[StoryViewer] Video init error: $e');
-        ctrl.dispose();
+      } else if (File(vp).existsSync()) {
+        playable = vp;
+      }
+      if (playable != null) {
+        final ctrl = (kIsWeb && _isInlineWebUri(playable))
+            ? VideoPlayerController.networkUrl(Uri.parse(playable))
+            : VideoPlayerController.file(File(playable));
+        try {
+          await ctrl.initialize();
+          ctrl.setLooping(true);
+          ctrl.play();
+          if (mounted) {
+            setState(() => _videoCtrl = ctrl);
+          } else {
+            ctrl.dispose();
+            return;
+          }
+        } catch (e) {
+          debugPrint('[StoryViewer] Video init error: $e');
+          ctrl.dispose();
+        }
       }
     }
 
@@ -525,9 +545,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 ),
               ),
             )
-          else if (story.imagePath != null &&
-              File(story.imagePath!).existsSync())
-            Image.file(File(story.imagePath!), fit: BoxFit.cover)
+          else if (story.imagePath != null && story.imagePath!.isNotEmpty)
+            _StoryImage(path: story.imagePath!, bgColor: bgColor)
           else
             Container(color: bgColor),
 
@@ -886,6 +905,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     );
   }
 
+  static bool _isInlineWebUri(String v) =>
+      v.startsWith('data:') ||
+      v.startsWith('blob:') ||
+      v.startsWith('http://') ||
+      v.startsWith('https://');
+
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return 'только что';
@@ -909,5 +934,71 @@ class _ProgressBar extends StatelessWidget {
         minHeight: 3,
       ),
     );
+  }
+}
+
+/// Renders a story image from a native file or a web path (OPFS / data URL).
+class _StoryImage extends StatefulWidget {
+  final String path;
+  final Color bgColor;
+  const _StoryImage({required this.path, required this.bgColor});
+
+  @override
+  State<_StoryImage> createState() => _StoryImageState();
+}
+
+class _StoryImageState extends State<_StoryImage> {
+  Uint8List? _bytes;
+  bool _useFile = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StoryImage old) {
+    super.didUpdateWidget(old);
+    if (old.path != widget.path) {
+      _bytes = null;
+      _useFile = false;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final path = widget.path;
+    if (!kIsWeb) {
+      if (File(path).existsSync()) setState(() => _useFile = true);
+      return;
+    }
+    Uint8List? bytes;
+    try {
+      if (isWebStoredFile(path)) {
+        bytes = await readWebStoredFile(path);
+      } else if (path.startsWith('data:')) {
+        final comma = path.indexOf(',');
+        if (comma > 0) {
+          final meta = path.substring(0, comma);
+          final data = path.substring(comma + 1);
+          bytes = meta.contains(';base64')
+              ? base64Decode(data)
+              : Uint8List.fromList(utf8.encode(Uri.decodeFull(data)));
+        }
+      }
+    } catch (_) {}
+    if (mounted && bytes != null) setState(() => _bytes = bytes);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_useFile) {
+      return Image.file(File(widget.path), fit: BoxFit.cover);
+    }
+    if (_bytes != null) {
+      return Image.memory(_bytes!, fit: BoxFit.cover, gaplessPlayback: true);
+    }
+    return Container(color: widget.bgColor);
   }
 }

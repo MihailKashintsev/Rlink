@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/channel.dart';
+import '../../services/channel_backup_service.dart';
 import '../../services/channel_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/gossip_router.dart';
@@ -42,6 +43,45 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
   void dispose() {
     ChannelService.instance.version.removeListener(_load);
     super.dispose();
+  }
+
+  bool _refreshingHistory = false;
+
+  /// Re-pulls the channel's posts/history (for non-admin subscribers): asks the
+  /// admin/peers to re-send via gossip and restores from the Drive backup if any.
+  Future<void> _refreshChannelHistory() async {
+    final ch = _channel;
+    if (ch == null || _refreshingHistory) return;
+    setState(() => _refreshingHistory = true);
+    final myId = CryptoService.instance.publicKeyHex;
+    try {
+      await GossipRouter.instance.sendChannelHistoryRequest(
+        channelId: ch.id,
+        requesterId: myId,
+        adminId: ch.adminId,
+        sinceTs: 0,
+        requesterX25519: CryptoService.instance.x25519PublicKeyBase64,
+      );
+      if (ch.driveFileUrl != null && ch.driveFileUrl!.isNotEmpty) {
+        try {
+          await ChannelBackupService.instance.restoreFromDriveUrl(ch);
+        } catch (_) {}
+      }
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('История канала обновляется…')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось обновить историю: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _refreshingHistory = false);
+    }
   }
 
   Future<void> _load() async {
@@ -425,7 +465,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                           ),
                           const SizedBox(height: 16),
                         ],
-                        if (!isAdmin)
+                        if (!isAdmin) ...[
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
@@ -437,6 +477,25 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                                   subscribed ? 'Отписаться' : 'Подписаться'),
                             ),
                           ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _refreshingHistory
+                                  ? null
+                                  : _refreshChannelHistory,
+                              icon: _refreshingHistory
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.history_rounded),
+                              label: const Text('Обновить историю канала'),
+                            ),
+                          ),
+                        ],
                         if (isAdmin)
                           Row(
                             children: [

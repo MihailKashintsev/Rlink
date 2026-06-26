@@ -15,6 +15,7 @@ import '../../services/image_service.dart';
 import '../../services/media_upload_queue.dart';
 import '../../services/relay_service.dart';
 import '../../services/story_service.dart';
+import '../../utils/web_file_store.dart';
 import '../widgets/reactions.dart';
 import '../widgets/story_strokes_painter.dart';
 
@@ -298,6 +299,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
     if (text.isEmpty && _imagePath == null && _videoPath == null) return;
     _publishing = true;
 
+    final storyId = const Uuid().v4();
     String? savedImagePath;
     String? savedVideoPath;
 
@@ -310,6 +312,16 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
       } catch (_) {
         savedImagePath = _imagePath!;
       }
+    } else if (kIsWeb &&
+        _webImageBytes != null &&
+        _webImageBytes!.isNotEmpty) {
+      // Web: persist the picked image to OPFS so the author's own story shows
+      // it (not just text/colour). Recipients receive it via the upload queue.
+      savedImagePath = await writeWebStoredFile(
+        fileName: 'story_$storyId.jpg',
+        bytes: _webImageBytes!,
+        mimeType: 'image/jpeg',
+      );
     }
 
     if (_videoPath != null && !kIsWeb) {
@@ -320,10 +332,18 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
         trimStart: _videoTrimStart,
         trimEnd: _videoTrimEnd,
       );
+    } else if (kIsWeb &&
+        _webVideoBytes != null &&
+        _webVideoBytes!.isNotEmpty) {
+      savedVideoPath = await writeWebStoredFile(
+        fileName: 'story_$storyId.mp4',
+        bytes: _webVideoBytes!,
+        mimeType: 'video/mp4',
+      );
     }
 
     final story = StoryItem(
-      id: const Uuid().v4(),
+      id: storyId,
       authorId: widget.authorId,
       text: text,
       imagePath: savedImagePath,

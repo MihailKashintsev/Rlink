@@ -2317,8 +2317,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         userId: _myId,
         unsubscribe: true,
       ));
-      // Remove channel completely from local DB and pop back
-      await ChannelService.instance.deleteChannel(_channel.id);
+      // Keep the channel's public metadata so it stays searchable / re-subscribable
+      // (just drop our subscription + cached visuals); don't wipe it from the DB.
+      await ChannelService.instance.unsubscribe(_channel.id, _myId);
       if (mounted) Navigator.pop(context);
     } else {
       await ChannelService.instance.subscribe(_channel.id, _myId);

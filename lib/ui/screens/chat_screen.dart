@@ -96,7 +96,6 @@ import '../widgets/voice_wave_line.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/reactions.dart';
 import '../widgets/status_emoji_view.dart';
-import 'image_editor_screen.dart';
 import 'media_send_preview_screen.dart';
 import 'profile_screen.dart';
 import 'bot_profile_screen.dart';
@@ -4751,11 +4750,18 @@ class _ChatScreenState extends State<ChatScreen> {
         '${tmpDir.path}/edit_src_${DateTime.now().millisecondsSinceEpoch}.jpg');
     await srcFile.writeAsBytes(bytes);
     if (!mounted) return;
-    final edited = await Navigator.push<Uint8List>(
+    final result = await Navigator.push<MediaPreviewResult>(
       context,
-      MaterialPageRoute(builder: (_) => ImageEditorScreen(imagePath: srcFile.path)),
+      MaterialPageRoute(
+        builder: (_) => MediaSendPreviewScreen(
+          imageBytes: bytes!,
+          peerName: widget.peerNickname,
+        ),
+      ),
     );
-    if (edited == null || !mounted) return;
+    if (result == null || !mounted) return;
+    final edited = result.bytes;
+    final caption = result.caption;
     setState(() => _isSending = true);
     try {
       final outFile = File(
@@ -4767,12 +4773,16 @@ class _ChatScreenState extends State<ChatScreen> {
       final targetPeerId = _looksLikePublicKey(_resolvedPeerId)
           ? _resolvedPeerId
           : widget.peerId;
-      final wasQueued =
-          await _sendMedia(bytes: outBytes, msgId: msgId, myId: myId, filePath: p);
+      final wasQueued = await _sendMedia(
+          bytes: outBytes,
+          msgId: msgId,
+          myId: myId,
+          filePath: p,
+          caption: caption.isEmpty ? null : caption);
       final imgMsg = ChatMessage(
         id: msgId,
         peerId: targetPeerId,
-        text: '',
+        text: caption,
         isOutgoing: true,
         timestamp: DateTime.now(),
         status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
@@ -4811,12 +4821,20 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       return;
     }
-    final editedBytes = await Navigator.push<Uint8List>(
+    final srcBytes = await picked.readAsBytes();
+    if (srcBytes.isEmpty || !mounted) return;
+    final result = await Navigator.push<MediaPreviewResult>(
       context,
       MaterialPageRoute(
-          builder: (_) => ImageEditorScreen(imagePath: picked.path)),
+        builder: (_) => MediaSendPreviewScreen(
+          imageBytes: srcBytes,
+          peerName: widget.peerNickname,
+        ),
+      ),
     );
-    if (editedBytes == null || !mounted) return;
+    if (result == null || !mounted) return;
+    final editedBytes = result.bytes;
+    final caption = result.caption;
 
     setState(() => _isSending = true);
     try {
@@ -4832,11 +4850,15 @@ class _ChatScreenState extends State<ChatScreen> {
           : widget.peerId;
 
       final wasQueued = await _sendMedia(
-          bytes: bytes, msgId: msgId, myId: myId, filePath: path);
+          bytes: bytes,
+          msgId: msgId,
+          myId: myId,
+          filePath: path,
+          caption: caption.isEmpty ? null : caption);
       final imgMsg = ChatMessage(
         id: msgId,
         peerId: targetPeerId,
-        text: '',
+        text: caption,
         isOutgoing: true,
         timestamp: DateTime.now(),
         status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
@@ -8841,7 +8863,13 @@ class _MessageBubble extends StatelessWidget {
                   ],
                 ),
               ),
-            if (SharedTodoPayload.tryDecode(msg.text) != null &&
+            if (msg.text.startsWith(_kStoryReplyPrefix))
+              _StoryReplyCard(
+                reply: msg.text.substring(_kStoryReplyPrefix.length),
+                isOut: isOut,
+                cs: cs,
+              )
+            else if (SharedTodoPayload.tryDecode(msg.text) != null &&
                 onCollabPersist != null)
               SharedTodoMessageCard(
                 encoded: msg.text,
@@ -10902,6 +10930,60 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                     ),
         ),
       ),
+    );
+  }
+}
+
+/// Marker prefix for "replied to a story" messages (see story_viewer_screen).
+const _kStoryReplyPrefix = '↩️ Ответ на историю: ';
+
+/// Renders a story reply as a styled block (left accent bar + header), like a
+/// quoted/link card, instead of raw "↩️ Ответ на историю: …" text.
+class _StoryReplyCard extends StatelessWidget {
+  final String reply;
+  final bool isOut;
+  final ColorScheme cs;
+  const _StoryReplyCard({
+    required this.reply,
+    required this.isOut,
+    required this.cs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = isOut ? cs.onPrimary : cs.onSurface;
+    final accent =
+        isOut ? cs.onPrimary.withValues(alpha: 0.92) : cs.primary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(8, 6, 10, 6),
+          decoration: BoxDecoration(
+            color: (isOut ? Colors.white : cs.primary).withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(8),
+            border: Border(left: BorderSide(color: accent, width: 3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.auto_stories_rounded, size: 15, color: accent),
+              const SizedBox(width: 6),
+              Text(
+                'Ответ на историю',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(reply, style: TextStyle(color: fg, fontSize: 15)),
+      ],
     );
   }
 }
