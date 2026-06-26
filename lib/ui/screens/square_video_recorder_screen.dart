@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../services/image_service.dart';
@@ -584,7 +585,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: _initCamera,
-                  child: const Text('Повторить',
+                  child: Text(AppL10n.t('common_retry'),
                       style: TextStyle(color: Colors.white38, fontSize: 12)),
                 ),
               ],

@@ -423,7 +423,7 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
                           setState(() => _busy = true);
                           _cropController.crop();
                         },
-                  child: Text('Готово',
+                  child: Text(AppL10n.t('common_done'),
                       style: TextStyle(
                           color: cs.primary, fontWeight: FontWeight.w600)),
                 ),
@@ -448,7 +448,7 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
                         _drawMode = false;
                         _textMode = false;
                       }),
-                      child: Text('Готово',
+                      child: Text(AppL10n.t('common_done'),
                           style: TextStyle(
                               color: cs.primary, fontWeight: FontWeight.w600)),
                     ),

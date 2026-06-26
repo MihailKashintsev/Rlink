@@ -468,7 +468,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+            child: Text(AppL10n.t('common_delete'), style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

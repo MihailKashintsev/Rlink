@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:flutter/rendering.dart';
 
 /// Экран обрезки аватарки по круглому шаблону.
@@ -68,7 +69,7 @@ class _AvatarCropScreenState extends State<AvatarCropScreen> {
                     height: 20,
                     child:
                         CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Готово',
+                : Text(AppL10n.t('common_done'),
                     style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,

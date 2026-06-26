@@ -927,7 +927,7 @@ class _RequestTile extends StatelessWidget {
               children: [
                 TextButton(
                   onPressed: onReject,
-                  child: const Text('Отклонить',
+                  child: Text(AppL10n.t('common_decline'),
                       style: TextStyle(color: Colors.red)),
                 ),
                 const SizedBox(width: 8),
@@ -1458,7 +1458,7 @@ class _ChannelAdminTile extends StatelessWidget {
                           horizontal: 12, vertical: 8)),
                   onPressed: onDelete,
                   icon: const Icon(Icons.delete_outline, size: 16),
-                  label: const Text('Удалить', style: TextStyle(fontSize: 12)),
+                  label: Text(AppL10n.t('common_delete'), style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),

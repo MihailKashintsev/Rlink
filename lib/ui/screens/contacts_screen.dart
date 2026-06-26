@@ -343,7 +343,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                   _lastQuery = '';
                                   _triggerSearch(_effectiveQuery);
                                 },
-                                child: const Text('Повторить',
+                                child: Text(AppL10n.t('common_retry'),
                                     style: TextStyle(fontSize: 12)),
                               ),
                             ]),

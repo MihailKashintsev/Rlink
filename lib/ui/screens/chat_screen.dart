@@ -6987,7 +6987,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       child: Text(AppL10n.t('common_cancel'))),
                                   TextButton(
                                     onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Удалить',
+                                    child: Text(AppL10n.t('common_delete'),
                                         style: TextStyle(color: Colors.red)),
                                   ),
                                 ],

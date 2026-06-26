@@ -244,7 +244,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                 )
               : TextButton(
                   onPressed: _confirm,
-                  child: const Text('Готово',
+                  child: Text(AppL10n.t('common_done'),
                       style: TextStyle(
                           color: Colors.white, fontWeight: FontWeight.w700)),
                 ),
@@ -319,7 +319,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                                         setState(() => _texts.remove(item));
                                         Navigator.pop(ctx);
                                       },
-                                      child: const Text('Удалить',
+                                      child: Text(AppL10n.t('common_delete'),
                                           style: TextStyle(color: Colors.red))),
                                   FilledButton(
                                       onPressed: () =>

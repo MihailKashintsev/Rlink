@@ -3135,7 +3135,7 @@ class _PostCardState extends State<_PostCard> {
                           size: 14,
                           color: cs.onSurface.withValues(alpha: 0.55)),
                       const SizedBox(width: 4),
-                      Text('Реакция',
+                      Text(AppL10n.t('cm_reaction'),
                           style: TextStyle(
                               fontSize: 12,
                               color: cs.onSurface.withValues(alpha: 0.5))),
@@ -4641,7 +4641,7 @@ class _CommentBubble extends StatelessWidget {
                   if (canDelete)
                     ListTile(
                       leading: Icon(Icons.delete_outline, color: cs.error),
-                      title: Text('Удалить', style: TextStyle(color: cs.error)),
+                      title: Text(AppL10n.t('common_delete'), style: TextStyle(color: cs.error)),
                       onTap: () => Navigator.pop(ctx, 'del'),
                     ),
                 ],

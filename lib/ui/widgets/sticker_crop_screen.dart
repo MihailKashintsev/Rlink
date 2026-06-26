@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:crop_your_image/crop_your_image.dart';
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Квадратная обрезка изображения под стикер (как в Telegram).
 class StickerCropScreen extends StatefulWidget {
@@ -34,7 +35,7 @@ class _StickerCropScreenState extends State<StickerCropScreen> {
                     setState(() => _busy = true);
                     _cropController.crop();
                   },
-            child: Text('Готово', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
+            child: Text(AppL10n.t('common_done'), style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

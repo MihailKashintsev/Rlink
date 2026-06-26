@@ -3593,7 +3593,7 @@ class _PairRequestScreenState extends State<_PairRequestScreen>
                       height: 48,
                       child: OutlinedButton(
                         onPressed: _decline,
-                        child: const Text('Отклонить',
+                        child: Text(AppL10n.t('common_decline'),
                             style: TextStyle(fontSize: 15)),
                       ),
                     ),

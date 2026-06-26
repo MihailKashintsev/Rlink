@@ -2045,8 +2045,7 @@ class _InputBarButtonOrderSheetState extends State<_InputBarButtonOrderSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Порядок кнопок',
+                Text(AppL10n.t('cm_button_order'),
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,

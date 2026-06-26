@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
@@ -284,7 +285,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
           ),
           TextButton(
             onPressed: () => setState(() => _drawMode = false),
-            child: const Text('Готово',
+            child: Text(AppL10n.t('common_done'),
                 style: TextStyle(
                     color: Colors.white, fontWeight: FontWeight.w600)),
           ),
