@@ -31,6 +31,7 @@ class AppL10n {
   static AppL10n get s => AppL10n._();
 
   static const _ru = <String, String>{
+    'emoji_my_packs': 'Мои наборы эмодзи',
     // ── channels batch ──
     'chn_160px': '160px, маленький размер',
     'chn_320px': '320px, баланс скорость/качество',
@@ -537,6 +538,7 @@ class AppL10n {
   };
 
   static const _en = <String, String>{
+    'emoji_my_packs': 'My emoji packs',
     // ── channels batch ──
     'chn_160px': '160px, small size',
     'chn_320px': '320px, balance of speed/quality',
@@ -1045,6 +1047,7 @@ class AppL10n {
   };
 
   static const _es = <String, String>{
+    'emoji_my_packs': 'Mis paquetes de emoji',
     // ── channels batch ──
     'chn_160px': '160px, tamaño pequeño',
     'chn_320px': '320px, equilibrio velocidad/calidad',
@@ -1551,6 +1554,7 @@ class AppL10n {
   };
 
   static const _de = <String, String>{
+    'emoji_my_packs': 'Meine Emoji-Pakete',
     // ── channels batch ──
     'chn_160px': '160px, kleine Größe',
     'chn_320px': '320px, Balance aus Tempo/Qualität',
@@ -2057,6 +2061,7 @@ class AppL10n {
   };
 
   static const _fr = <String, String>{
+    'emoji_my_packs': 'Mes packs d’emoji',
     // ── channels batch ──
     'chn_160px': '160px, petite taille',
     'chn_320px': '320px, équilibre vitesse/qualité',
@@ -2563,6 +2568,7 @@ class AppL10n {
   };
 
   static const _uk = <String, String>{
+    'emoji_my_packs': 'Мої набори емодзі',
     // ── channels batch ──
     'chn_160px': '160px, малий розмір',
     'chn_320px': '320px, баланс швидкість/якість',
@@ -3069,6 +3075,7 @@ class AppL10n {
   };
 
   static const _zh = <String, String>{
+    'emoji_my_packs': '我的表情包',
     // ── channels batch ──
     'chn_160px': '160px，小尺寸',
     'chn_320px': '320px，速度/质量平衡',

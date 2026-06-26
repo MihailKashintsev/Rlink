@@ -3192,17 +3192,25 @@ class _ChatScreenState extends State<ChatScreen> {
     if (widget.peerId != kEmojiBotPeerId) return;
     if (!msg.isOutgoing) return;
     final ip = msg.imagePath;
-    if (ip == null || ip.trim().isEmpty) return;
-    final resolved = ImageService.instance.resolveStoredPath(ip) ?? ip;
+    final vp = msg.videoPath;
+    final isVid = (ip == null || ip.trim().isEmpty) &&
+        (vp != null && vp.trim().isNotEmpty);
+    final raw = isVid ? vp : ip;
+    if (raw == null || raw.trim().isEmpty) return;
+    final resolved = ImageService.instance.resolveStoredPath(raw) ?? raw;
     // On web the path is an OPFS/data ref, not a real file — addEmoji reads it
     // web-safely, so only gate on existence natively.
     if (!kIsWeb && !File(resolved).existsSync()) return;
     if (_tearingDown || !mounted) return;
     setState(() => _aiThinking = true);
     try {
-      final lines = await EmojiBotService.instance.handleOutgoingImage(
-        resolvedImagePath: resolved,
-      );
+      final lines = isVid
+          ? await EmojiBotService.instance.handleOutgoingVideo(
+              resolvedVideoPath: resolved,
+            )
+          : await EmojiBotService.instance.handleOutgoingImage(
+              resolvedImagePath: resolved,
+            );
       if (_tearingDown || !mounted) return;
       final text = lines.join('\n').trim();
       if (text.isNotEmpty) {
@@ -4090,6 +4098,7 @@ class _ChatScreenState extends State<ChatScreen> {
           myId: myId,
           isVideo: true,
           isSquare: false,
+          isSticker: asGif,
           fileName: name,
           filePath: kIsWeb ? null : localPath,
         );
@@ -4678,6 +4687,7 @@ class _ChatScreenState extends State<ChatScreen> {
             fromId: myId,
             isVideo: true,
             isSquare: false,
+            isSticker: asGif,
           ));
           wasQueued = true;
         } else {
@@ -4689,6 +4699,7 @@ class _ChatScreenState extends State<ChatScreen> {
             myId: myId,
             isVideo: true,
             isSquare: false,
+            isSticker: asGif,
             filePath: path,
           );
         }
@@ -10314,6 +10325,8 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
             (!kIsWeb && File(widget.videoPath).existsSync());
     if ((_isSquare || widget.isGif) && mediaExists) {
       _initPlayer();
+      // GIF also gets a poster so the first frame shows while it loads.
+      if (widget.isGif) unawaited(_extractPoster());
     } else if (!_isSquare) {
       unawaited(_extractPoster());
     }
@@ -10663,7 +10676,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     final ready = _initialized && ctrl != null;
     final ar = ready && ctrl.value.aspectRatio > 0
         ? ctrl.value.aspectRatio
-        : 1.0;
+        : (_poster != null ? _posterAspect : 1.0);
     const maxSide = 190.0;
     final w = ar >= 1 ? maxSide : maxSide * ar;
     final h = ar >= 1 ? maxSide / ar : maxSide;
@@ -10678,6 +10691,9 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
             fit: StackFit.expand,
             children: [
               Container(color: const Color(0xFF1A1A1A)),
+              // Poster (first frame) shows immediately; player covers it once ready.
+              if (_poster != null)
+                Image.memory(_poster!, fit: BoxFit.cover, gaplessPlayback: true),
               if (ready)
                 FittedBox(
                   fit: BoxFit.cover,
@@ -10688,7 +10704,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                     child: VideoPlayer(ctrl),
                   ),
                 )
-              else
+              else if (_poster == null)
                 const Center(
                   child: SizedBox(
                     width: 22,

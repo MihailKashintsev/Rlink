@@ -88,7 +88,7 @@ class _EmojiHubScreenState extends State<EmojiHubScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppL10n.t('cm_emoji')),
+        title: Text(AppL10n.t('emoji_my_packs')),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createPack,
