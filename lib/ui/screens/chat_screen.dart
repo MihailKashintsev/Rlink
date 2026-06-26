@@ -26,6 +26,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
+import 'package:video_compress/video_compress.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
@@ -83,6 +84,7 @@ import '../../utils/channel_mentions.dart';
 import '../../utils/custom_emoji_text.dart';
 import '../../utils/reaction_emoji_key.dart';
 import '../../utils/web_file_store.dart';
+import '../../utils/web_video_frames.dart';
 import '../../services/google_drive_channel_backup.dart';
 import '../../utils/web_object_url.dart';
 import '../../utils/external_message_share.dart';
@@ -5270,10 +5272,17 @@ class _ChatScreenState extends State<ChatScreen> {
         _editingPreviewText = null;
         _controller.clear();
       }
+      // Play the crumble effect first; storage removal happens on completion.
+      _deletingIds.add(msg.id);
     });
+    // Fallback in case the bubble is recycled before the animation completes.
+    Future.delayed(
+        const Duration(milliseconds: 700), () => _finalizeDelete(msg));
+  }
 
+  Future<void> _finalizeDelete(ChatMessage msg) async {
+    if (!_deletingIds.remove(msg.id)) return; // already finalized
     try {
-      // Удаляем локально для мгновенного отклика.
       await ChatStorageService.instance.deleteMessage(msg.id);
       if (!_savedMessagesLocalOnly) {
         await GossipRouter.instance.sendDeleteMessage(
@@ -5288,7 +5297,6 @@ class _ChatScreenState extends State<ChatScreen> {
         SnackBar(
             content: Text('Ошибка удаления: $e'), backgroundColor: Colors.red),
       );
-      // Возвращаем UI в согласованное состояние.
       await ChatStorageService.instance.loadMessages(_resolvedPeerId);
     }
   }
@@ -5672,6 +5680,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Per-message keys on the bubble RepaintBoundary, for the Telegram-style
   // long-press overlay (snapshot the bubble + lift it above a blur).
+  // Messages mid delete-animation (crumble) — kept until the effect finishes.
+  final Set<String> _deletingIds = {};
   final Map<String, GlobalKey> _bubbleBoundaryKeys = {};
   GlobalKey _bubbleBoundaryKey(String msgId) =>
       _bubbleBoundaryKeys.putIfAbsent(msgId, () => GlobalKey());
@@ -7420,7 +7430,13 @@ class _ChatScreenState extends State<ChatScreen> {
                                                             : () => unawaited(
                                                                 _quickReaction(
                                                                     msg)),
-                                                        child: RepaintBoundary(
+                                                        child: _CrumbleAway(
+                                                          active: _deletingIds
+                                                              .contains(msg.id),
+                                                          onComplete: () =>
+                                                              _finalizeDelete(
+                                                                  msg),
+                                                          child: RepaintBoundary(
                                                           key:
                                                               _bubbleBoundaryKey(
                                                                   msg.id),
@@ -7520,7 +7536,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                                               _openPeerStickersFromMessage,
                                                           onStickerTapFromLocal:
                                                               _openStickerPackFromLocal,
-                                                        )),
+                                                        ))),
                                                       ),
                                                     ),
                                                   ),
@@ -10083,6 +10099,12 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   String? _initError;
   int _embedPauseGen = 0;
 
+  // Poster frame for the in-chat preview (regular videos): a real frame shown
+  // cover-filled, instead of a black box. Cached across rebuilds.
+  static final Map<String, Uint8List> _posterCache = {};
+  Uint8List? _poster;
+  double _posterAspect = 16 / 9;
+
   /// Воспроизведение квадратика из очереди голосовых (без полноэкранного плеера).
   bool _queueDriveActive = false;
   bool _squareEndDispatched = false;
@@ -10242,6 +10264,8 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         ((kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)) ||
             (!kIsWeb && File(widget.videoPath).existsSync()))) {
       _initPlayer();
+    } else if (!_isSquare) {
+      unawaited(_extractPoster());
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -10250,6 +10274,62 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         _scheduleSquareViewportReportForPip();
       }
     });
+  }
+
+  Future<void> _applyPoster(Uint8List bytes) async {
+    _posterCache[widget.videoPath] = bytes;
+    var aspect = _posterAspect;
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final img = frame.image;
+      if (img.width > 0 && img.height > 0) {
+        aspect = img.width / img.height;
+      }
+      img.dispose();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _poster = bytes;
+      _posterAspect = aspect;
+    });
+  }
+
+  /// Extracts a single poster frame so regular video previews show an actual
+  /// frame (cover-filled) rather than a black placeholder.
+  Future<void> _extractPoster() async {
+    final cached = _posterCache[widget.videoPath];
+    if (cached != null) {
+      await _applyPoster(cached);
+      return;
+    }
+    try {
+      Uint8List? bytes;
+      if (kIsWeb) {
+        String? url;
+        if (_ChatScreenState._isInlineWebUri(widget.videoPath)) {
+          url = widget.videoPath;
+        } else if (widget.videoPath.startsWith('opfs://rlink/')) {
+          final clean = widget.videoPath.split('#').first;
+          for (final mime in webVideoMimeCandidatesForPath(widget.videoPath)) {
+            url = await webStoredFileObjectUrl(clean, mimeType: mime);
+            if (url != null) break;
+          }
+        }
+        if (url != null) {
+          bytes = await webVideoPoster(url);
+        }
+      } else if (File(widget.videoPath).existsSync()) {
+        bytes = await VideoCompress.getByteThumbnail(
+          widget.videoPath,
+          quality: 55,
+          position: -1,
+        );
+      }
+      if (bytes != null && bytes.isNotEmpty) {
+        await _applyPoster(bytes);
+      }
+    } catch (_) {}
   }
 
   void _onPlaybackSessionForSquareUi() {
@@ -10669,12 +10749,14 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     final exists = kIsWeb
         ? _ChatScreenState._isInlineWebUri(widget.videoPath)
         : File(widget.videoPath).existsSync();
-    // Aspect ratio from the video itself; fall back to 16:9.
-    final ar = (_initialized && _ctrl != null && _ctrl!.value.aspectRatio > 0)
-        ? _ctrl!.value.aspectRatio
-        : 16 / 9;
-    const w = 220.0;
-    final h = (w / ar).clamp(80.0, 320.0);
+    // Aspect ratio from the poster (or the controller); fall back to 16:9.
+    final ar = _poster != null
+        ? _posterAspect
+        : (_initialized && _ctrl != null && _ctrl!.value.aspectRatio > 0)
+            ? _ctrl!.value.aspectRatio
+            : 16 / 9;
+    const w = 240.0;
+    final h = (w / ar).clamp(140.0, 320.0);
 
     return GestureDetector(
       onTap: exists && !_initFailed
@@ -10741,38 +10823,80 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                       children: [
                         // Dark backdrop
                         Container(color: const Color(0xFF111111)),
-                        // Превью без обрезки до квадрата — сохраняем пропорции ролика.
-                        if (_initialized && _ctrl != null)
+                        // Real poster frame, cover-filled (Telegram-style).
+                        if (_poster != null)
+                          Image.memory(
+                            _poster!,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          )
+                        else if (_initialized && _ctrl != null)
                           Builder(builder: (_) {
                             final paintSize = _videoPaintSize();
                             return FittedBox(
-                              fit: BoxFit.contain,
+                              fit: BoxFit.cover,
+                              clipBehavior: Clip.hardEdge,
                               child: SizedBox(
                                 width: paintSize.width,
                                 height: paintSize.height,
                                 child: VideoPlayer(_ctrl!),
                               ),
                             );
-                          }),
-                        // Semi-transparent overlay so play icon pops
-                        Container(color: Colors.black.withValues(alpha: 0.28)),
+                          })
+                        else
+                          const Center(
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white54),
+                            ),
+                          ),
+                        // Gentle gradient so the play icon + badge pop
+                        const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0x22000000), Color(0x55000000)],
+                            ),
+                          ),
+                        ),
                         // Play button
-                        const Center(
-                          child: Icon(Icons.play_circle_fill,
-                              color: Colors.white, size: 54),
+                        Center(
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.38),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.play_arrow_rounded,
+                                color: Colors.white, size: 38),
+                          ),
                         ),
                         // Videocam badge
-                        const Positioned(
+                        Positioned(
                           bottom: 6,
-                          right: 8,
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Icons.videocam,
-                                color: Colors.white70, size: 14),
-                            SizedBox(width: 4),
-                            Text('Видео',
-                                style: TextStyle(
-                                    color: Colors.white70, fontSize: 11)),
-                          ]),
+                          left: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.videocam_rounded,
+                                      color: Colors.white, size: 13),
+                                  SizedBox(width: 4),
+                                  Text('Видео',
+                                      style: TextStyle(
+                                          color: Colors.white, fontSize: 11)),
+                                ]),
+                          ),
                         ),
                       ],
                     ),
@@ -10780,6 +10904,147 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
       ),
     );
   }
+}
+
+/// Plays a "crumble into dust" exit effect when [active] turns true, then calls
+/// [onComplete]. Web-safe (no toImage): the child fades/scales/drifts while a
+/// burst of dust particles scatters over it.
+class _CrumbleAway extends StatefulWidget {
+  final bool active;
+  final Widget child;
+  final VoidCallback onComplete;
+  const _CrumbleAway({
+    required this.active,
+    required this.child,
+    required this.onComplete,
+  });
+
+  @override
+  State<_CrumbleAway> createState() => _CrumbleAwayState();
+}
+
+class _CrumbleAwayState extends State<_CrumbleAway>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 540),
+  )..addStatusListener((s) {
+      if (s == AnimationStatus.completed) widget.onComplete();
+    });
+  late final List<_Dust> _dust = _genDust();
+  bool _started = false;
+
+  static List<_Dust> _genDust() {
+    final r = math.Random();
+    return List.generate(28, (_) {
+      final ang = r.nextDouble() * math.pi * 2;
+      final spd = 0.25 + r.nextDouble() * 0.65;
+      return _Dust(
+        ox: r.nextDouble(),
+        oy: r.nextDouble(),
+        vx: math.cos(ang) * spd,
+        vy: math.sin(ang) * spd - 0.25,
+        size: 1.5 + r.nextDouble() * 3.0,
+        delay: r.nextDouble() * 0.25,
+      );
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) _start();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CrumbleAway old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) _start();
+  }
+
+  void _start() {
+    if (_started) return;
+    _started = true;
+    _c.forward();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_started) return widget.child;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        final t = _c.value;
+        final fade = (1.0 - Curves.easeIn.transform(t)).clamp(0.0, 1.0);
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Opacity(
+              opacity: fade,
+              child: Transform.translate(
+                offset: Offset(0, 10 * t),
+                child: Transform.scale(scale: 1.0 - 0.10 * t, child: child),
+              ),
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _DustPainter(
+                    _dust,
+                    t,
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+class _Dust {
+  final double ox, oy, vx, vy, size, delay;
+  const _Dust({
+    required this.ox,
+    required this.oy,
+    required this.vx,
+    required this.vy,
+    required this.size,
+    required this.delay,
+  });
+}
+
+class _DustPainter extends CustomPainter {
+  final List<_Dust> dust;
+  final double t;
+  final Color color;
+  _DustPainter(this.dust, this.t, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint();
+    for (final d in dust) {
+      final lt = ((t - d.delay) / (1 - d.delay)).clamp(0.0, 1.0);
+      if (lt <= 0) continue;
+      final dx = (d.ox + d.vx * lt) * size.width;
+      final dy = (d.oy + d.vy * lt + 0.5 * lt * lt) * size.height; // gravity
+      final op = (1.0 - lt) * 0.9;
+      p.color = color.withValues(alpha: op.clamp(0.0, 1.0));
+      canvas.drawCircle(Offset(dx, dy), d.size * (1 - lt * 0.4), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DustPainter old) => old.t != t;
 }
 
 // ── Профиль пира (из меню чата) ──────────────────────────────────
