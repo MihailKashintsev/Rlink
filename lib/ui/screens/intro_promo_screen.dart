@@ -21,6 +21,7 @@ enum _Art {
   welcome,
   universal,
   messages,
+  privacy,
   bots,
   groups,
   channels,
@@ -42,6 +43,7 @@ const _scenes = <_Scene>[
   _Scene(_Art.welcome, 'intro_welcome_title', 'intro_welcome_sub'),
   _Scene(_Art.universal, 'intro_universal_title', 'intro_universal_sub'),
   _Scene(_Art.messages, 'intro_messages_title', 'intro_messages_sub'),
+  _Scene(_Art.privacy, 'intro_privacy_title', 'intro_privacy_sub'),
   _Scene(_Art.bots, 'intro_bots_title', 'intro_bots_sub'),
   _Scene(_Art.groups, 'intro_groups_title', 'intro_groups_sub'),
   _Scene(_Art.channels, 'intro_channels_title', 'intro_channels_sub'),
@@ -520,6 +522,63 @@ class _SceneArt extends StatelessWidget {
 
       case _Art.messages:
         return _MessagesArt(cs: cs, t: t);
+
+      case _Art.privacy:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _rings(
+              Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      cs.primary,
+                      Color.lerp(cs.primary, cs.tertiary, 0.7)!
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                        color: cs.primary.withValues(alpha: 0.4),
+                        blurRadius: 50),
+                  ],
+                ),
+                child: Icon(Icons.verified_user_rounded,
+                    size: 84, color: cs.onPrimary),
+              ),
+            ),
+            const SizedBox(height: 26),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: cs.primary.withValues(alpha: 0.5), width: 1.4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.phonelink_erase_rounded,
+                      color: cs.primary, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    AppL10n.t('intro_privacy_title'),
+                    style: TextStyle(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
 
       case _Art.bots:
         return Column(
