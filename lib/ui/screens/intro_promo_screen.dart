@@ -467,26 +467,40 @@ class _SceneArt extends StatelessWidget {
   }
 
   Widget _rings(Widget child) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        for (var i = 0; i < 3; i++)
-          Builder(builder: (_) {
-            final p = ((phase / (2 * math.pi) + i * 0.33) % 1.0);
-            return Container(
-              width: 180 + p * 150,
-              height: 180 + p * 150,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: cs.primary.withValues(alpha: (1 - p) * 0.4),
-                  width: 2,
+    // Fixed 200x200 footprint so the expanding rings (which grow past 300px) do
+    // NOT change this widget's layout size each frame — otherwise anything placed
+    // below it in a Column (e.g. the "без телефона" plashka) drifts up/down as the
+    // rings pulse. OverflowBox lets the rings paint larger while the Stack stays put.
+    return SizedBox(
+      width: 200,
+      height: 200,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          for (var i = 0; i < 3; i++)
+            Builder(builder: (_) {
+              final p = ((phase / (2 * math.pi) + i * 0.33) % 1.0);
+              final d = 180 + p * 150;
+              return OverflowBox(
+                maxWidth: double.infinity,
+                maxHeight: double.infinity,
+                child: Container(
+                  width: d,
+                  height: d,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: cs.primary.withValues(alpha: (1 - p) * 0.4),
+                      width: 2,
+                    ),
+                  ),
                 ),
-              ),
-            );
-          }),
-        child,
-      ],
+              );
+            }),
+          child,
+        ],
+      ),
     );
   }
 
