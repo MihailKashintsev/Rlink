@@ -46,6 +46,7 @@ import '../screens/input_bar_button_order_settings.dart';
 import '../../main.dart' show sendProfileToAllContacts;
 import '../widgets/reactions.dart';
 import '../rlink_nav_routes.dart';
+import 'intro_promo_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared top-level helpers
@@ -436,6 +437,18 @@ class SettingsCategoryCards extends StatelessWidget {
             title: AppL10n.t('settings_privacy'),
             subtitle: 'Прочтение, статус онлайн',
             onTap: () => _open(context, const _PrivacyPage()),
+          ),
+          _CategoryItem(
+            icon: Icons.play_circle_outline,
+            color: const Color(0xFF1DB954),
+            title: AppL10n.t('intro_guide_title'),
+            subtitle: 'Анимированный обзор возможностей',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    const IntroPromoScreen(markSeenOnFinish: false),
+              ),
+            ),
           ),
           _CategoryItem(
             icon: Icons.record_voice_over_outlined,

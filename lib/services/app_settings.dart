@@ -27,6 +27,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyFontSize = 'font_size'; // 0=small,1=medium,2=large
   static const _keySendOnEnter = 'send_on_enter';
   static const _keyShowReadReceipts = 'show_read_receipts';
+  static const _keyHasSeenIntro = 'has_seen_intro';
   static const _keyShowOnlineStatus = 'show_online_status';
   static const _keyAutoDownloadMedia = 'auto_download_media';
   static const _keyCompactMode = 'compact_mode';
@@ -154,6 +155,7 @@ class AppSettings extends ChangeNotifier {
   String _locale = 'system';
   int _fontSize = 1; // 0=small, 1=medium, 2=large
   bool _sendOnEnter = false; // false = send button, true = Enter sends
+  bool _hasSeenIntro = false; // animated promo/intro shown once per device
   bool _showReadReceipts = true;
   bool _showOnlineStatus = true;
   bool _autoDownloadMedia = true;
@@ -205,6 +207,7 @@ class AppSettings extends ChangeNotifier {
   String get locale => _locale;
   int get fontSize => _fontSize;
   bool get sendOnEnter => _sendOnEnter;
+  bool get hasSeenIntro => _hasSeenIntro;
   bool get showReadReceipts => _showReadReceipts;
   bool get showOnlineStatus => _showOnlineStatus;
   bool get autoDownloadMedia => _autoDownloadMedia;
@@ -387,6 +390,7 @@ class AppSettings extends ChangeNotifier {
     _locale = _prefs.getString(_keyLocale) ?? 'system';
     _fontSize = (_prefs.getInt(_keyFontSize) ?? 1).clamp(0, 2);
     _sendOnEnter = _prefs.getBool(_keySendOnEnter) ?? false;
+    _hasSeenIntro = _prefs.getBool(_keyHasSeenIntro) ?? false;
     _showReadReceipts = _prefs.getBool(_keyShowReadReceipts) ?? true;
     _showOnlineStatus = _prefs.getBool(_keyShowOnlineStatus) ?? true;
     _autoDownloadMedia = _prefs.getBool(_keyAutoDownloadMedia) ?? true;
@@ -854,6 +858,11 @@ class AppSettings extends ChangeNotifier {
     _sendOnEnter = value;
     await _runPrefsWrite((p) => p.setBool(_keySendOnEnter, value));
     _notifySettingsChanged();
+  }
+
+  Future<void> setHasSeenIntro(bool value) async {
+    _hasSeenIntro = value;
+    await _runPrefsWrite((p) => p.setBool(_keyHasSeenIntro, value));
   }
 
   Future<void> setShowReadReceipts(bool value) async {

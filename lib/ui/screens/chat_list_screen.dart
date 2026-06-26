@@ -49,6 +49,7 @@ import 'profile_screen.dart';
 import 'chat_inbox_filters_manage_screen.dart';
 import 'settings_screen.dart';
 import 'story_creator_screen.dart';
+import 'intro_promo_screen.dart';
 import 'story_viewer_screen.dart';
 import '../rlink_nav_routes.dart';
 
@@ -73,6 +74,23 @@ class _ChatListScreenState extends State<ChatListScreen>
     super.initState();
     registerUpdateBannerListener();
     ChatStorageService.instance.loadContacts();
+    _maybeShowIntro();
+  }
+
+  void _maybeShowIntro() {
+    if (AppSettings.instance.hasSeenIntro) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || AppSettings.instance.hasSeenIntro) return;
+      Navigator.of(context).push(
+        PageRouteBuilder(
+          opaque: true,
+          transitionDuration: const Duration(milliseconds: 350),
+          pageBuilder: (_, __, ___) => const IntroPromoScreen(),
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+        ),
+      );
+    });
   }
 
   @override
