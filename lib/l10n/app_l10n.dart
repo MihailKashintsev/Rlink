@@ -31,6 +31,14 @@ class AppL10n {
   static AppL10n get s => AppL10n._();
 
   static const _ru = <String, String>{
+    // ── Guide illustrations ──
+    'help_here': 'Сюда',
+    'il_name_user_code': 'Имя · #юзернейм · код',
+    'il_username': '@юзернейм',
+    'il_new_group': 'Новая группа',
+    'il_new_channel': 'Новый канал',
+    'il_connect': 'Подключить',
+    'il_nearby_device': 'Устройство рядом',
     // ── Common buttons (shared across screens) ──
     'common_cancel': 'Отмена',
     'common_delete': 'Удалить',
@@ -361,6 +369,14 @@ class AppL10n {
   };
 
   static const _en = <String, String>{
+    // ── Guide illustrations ──
+    'help_here': 'Here',
+    'il_name_user_code': 'Name · #username · code',
+    'il_username': '@username',
+    'il_new_group': 'New group',
+    'il_new_channel': 'New channel',
+    'il_connect': 'Connect',
+    'il_nearby_device': 'Nearby device',
     // ── Common buttons ──
     'common_cancel': 'Cancel',
     'common_delete': 'Delete',
@@ -693,6 +709,14 @@ class AppL10n {
   };
 
   static const _es = <String, String>{
+    // ── Guide illustrations ──
+    'help_here': 'Aquí',
+    'il_name_user_code': 'Nombre · #usuario · código',
+    'il_username': '@usuario',
+    'il_new_group': 'Nuevo grupo',
+    'il_new_channel': 'Nuevo canal',
+    'il_connect': 'Conectar',
+    'il_nearby_device': 'Dispositivo cercano',
     // ── Common buttons ──
     'common_cancel': 'Cancelar',
     'common_delete': 'Eliminar',
@@ -1023,6 +1047,14 @@ class AppL10n {
   };
 
   static const _de = <String, String>{
+    // ── Guide illustrations ──
+    'help_here': 'Hier',
+    'il_name_user_code': 'Name · #Benutzername · Code',
+    'il_username': '@Benutzername',
+    'il_new_group': 'Neue Gruppe',
+    'il_new_channel': 'Neuer Kanal',
+    'il_connect': 'Verbinden',
+    'il_nearby_device': 'Gerät in der Nähe',
     // ── Common buttons ──
     'common_cancel': 'Abbrechen',
     'common_delete': 'Löschen',
@@ -1353,6 +1385,14 @@ class AppL10n {
   };
 
   static const _fr = <String, String>{
+    // ── Guide illustrations ──
+    'help_here': 'Ici',
+    'il_name_user_code': 'Nom · #pseudo · code',
+    'il_username': '@pseudo',
+    'il_new_group': 'Nouveau groupe',
+    'il_new_channel': 'Nouveau canal',
+    'il_connect': 'Connecter',
+    'il_nearby_device': 'Appareil à proximité',
     // ── Common buttons ──
     'common_cancel': 'Annuler',
     'common_delete': 'Supprimer',
@@ -1683,6 +1723,14 @@ class AppL10n {
   };
 
   static const _uk = <String, String>{
+    // ── Guide illustrations ──
+    'help_here': 'Сюди',
+    'il_name_user_code': 'Ім’я · #юзернейм · код',
+    'il_username': '@юзернейм',
+    'il_new_group': 'Нова група',
+    'il_new_channel': 'Новий канал',
+    'il_connect': 'Підключити',
+    'il_nearby_device': 'Пристрій поруч',
     // ── Common buttons ──
     'common_cancel': 'Скасувати',
     'common_delete': 'Видалити',
@@ -2013,6 +2061,14 @@ class AppL10n {
   };
 
   static const _zh = <String, String>{
+    // ── Guide illustrations ──
+    'help_here': '这里',
+    'il_name_user_code': '名字 · #用户名 · 代码',
+    'il_username': '@用户名',
+    'il_new_group': '新建群组',
+    'il_new_channel': '新建频道',
+    'il_connect': '连接',
+    'il_nearby_device': '附近的设备',
     // ── Common buttons ──
     'common_cancel': '取消',
     'common_delete': '删除',
