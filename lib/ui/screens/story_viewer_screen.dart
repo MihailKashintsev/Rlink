@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 
@@ -463,7 +464,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),

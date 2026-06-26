@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../models/contact.dart';
@@ -116,7 +117,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Сохранить'),
+                : Text(AppL10n.t('common_save')),
           ),
         ],
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../services/call_service.dart';
 import 'avatar_widget.dart';
@@ -145,7 +146,7 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay>
                             onPressed: _busy ? null : _decline,
                             icon: const Icon(Icons.call_end_rounded,
                                 color: Colors.red),
-                            label: const Text('Отклонить'),
+                            label: Text(AppL10n.t('common_decline')),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -153,7 +154,7 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay>
                           child: FilledButton.icon(
                             onPressed: _busy ? null : _accept,
                             icon: const Icon(Icons.call_rounded),
-                            label: const Text('Принять'),
+                            label: Text(AppL10n.t('common_accept')),
                           ),
                         ),
                       ],

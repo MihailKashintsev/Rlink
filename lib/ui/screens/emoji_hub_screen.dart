@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../models/emoji_pack.dart';
 import '../../services/emoji_pack_service.dart';
@@ -60,11 +61,11 @@ class _EmojiHubScreenState extends State<EmojiHubScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Создать'),
+            child: Text(AppL10n.t('common_create')),
           ),
         ],
       ),

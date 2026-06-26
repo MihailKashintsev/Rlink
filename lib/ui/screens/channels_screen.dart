@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -469,7 +470,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена')),
+              child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
               child: const Text('Войти')),
@@ -580,7 +581,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () async {
@@ -597,7 +598,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
               await ch.broadcastGossipMeta();
               if (mounted) _openChannel(ch);
             },
-            child: const Text('Создать'),
+            child: Text(AppL10n.t('common_create')),
           ),
         ],
       ),
@@ -1006,7 +1007,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Отмена')),
+                  child: Text(AppL10n.t('common_cancel'))),
               FilledButton(
                 onPressed: () {
                   final opts = [
@@ -1270,10 +1271,10 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Отмена')),
+                child: Text(AppL10n.t('common_cancel'))),
             TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Отправить')),
+                child: Text(AppL10n.t('common_send'))),
           ],
         ),
       );
@@ -1721,10 +1722,10 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Отмена')),
+                child: Text(AppL10n.t('common_cancel'))),
             TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Отправить')),
+                child: Text(AppL10n.t('common_send'))),
           ],
         ),
       );
@@ -2605,16 +2606,16 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                 if (v == 'edit') _editChannel();
                 if (v == 'subscribers') _manageSubscribers();
               },
-              itemBuilder: (_) => const [
+              itemBuilder: (_) => [
                 PopupMenuItem(
                   value: 'edit',
                   child: Row(children: [
-                    Icon(Icons.edit_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Редактировать'),
+                    const Icon(Icons.edit_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Text(AppL10n.t('common_edit')),
                   ]),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   value: 'subscribers',
                   child: Row(children: [
                     Icon(Icons.people_outline, size: 18),
@@ -3572,10 +3573,10 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Отмена')),
+                child: Text(AppL10n.t('common_cancel'))),
             TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Отправить')),
+                child: Text(AppL10n.t('common_send'))),
           ],
         ),
       );
@@ -3799,12 +3800,12 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('common_delete')),
           ),
         ],
       ),

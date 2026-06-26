@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -97,7 +98,7 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
                         children: [
                           TextButton(
                             onPressed: () => Navigator.pop(ctx, sel),
-                            child: const Text('Готово'),
+                            child: Text(AppL10n.t('common_done')),
                           ),
                           const Spacer(),
                           Text(
@@ -228,7 +229,7 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
         actions: [
           TextButton(
             onPressed: _save,
-            child: const Text('Сохранить'),
+            child: Text(AppL10n.t('common_save')),
           ),
         ],
       ),

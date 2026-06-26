@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../models/channel.dart';
 import '../../services/channel_backup_service.dart';
@@ -406,7 +407,7 @@ Future<void> showChannelProfileEditDialog(
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Отмена')),
+                child: Text(AppL10n.t('common_cancel'))),
             FilledButton(
               onPressed: () async {
                 final name = nameCtrl.text.trim();
@@ -441,7 +442,7 @@ Future<void> showChannelProfileEditDialog(
                   gossipFromId: myId,
                 ));
               },
-              child: const Text('Сохранить'),
+              child: Text(AppL10n.t('common_save')),
             ),
           ],
         );

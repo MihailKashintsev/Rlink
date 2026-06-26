@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../models/contact.dart';
 import '../../services/ble_service.dart';
@@ -632,7 +633,7 @@ class _ContactTile extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -642,7 +643,7 @@ class _ContactTile extends StatelessWidget {
                   .deleteContact(contact.publicKeyHex);
               BleService.instance.resetPeerMapping(contact.publicKeyHex);
             },
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('common_delete')),
           ),
         ],
       ),

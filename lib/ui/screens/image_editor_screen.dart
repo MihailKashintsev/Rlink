@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:flutter/rendering.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,10 +200,10 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена')),
+              child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Добавить')),
+              child: Text(AppL10n.t('common_add'))),
         ],
       ),
     );

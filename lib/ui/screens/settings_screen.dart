@@ -580,11 +580,11 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Готово'),
+            child: Text(AppL10n.t('common_done')),
           ),
         ],
       ),
@@ -678,7 +678,7 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () async {
@@ -717,7 +717,7 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -2055,7 +2055,7 @@ class _InputBarButtonOrderSheetState extends State<_InputBarButtonOrderSheet> {
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text('Отмена'),
+                  child: Text(AppL10n.t('common_cancel')),
                 ),
               ],
             ),
@@ -2096,7 +2096,7 @@ class _InputBarButtonOrderSheetState extends State<_InputBarButtonOrderSheet> {
                   await widget.onSave(_order);
                   if (mounted) Navigator.pop(context);
                 },
-                child: const Text('Сохранить'),
+                child: Text(AppL10n.t('common_save')),
               ),
             ),
           ],
@@ -3319,7 +3319,7 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
                 TextButton.icon(
                   onPressed: busy ? null : () => _deleteModel(s),
                   icon: const Icon(Icons.delete_outline, size: 18),
-                  label: const Text('Удалить'),
+                  label: Text(AppL10n.t('common_delete')),
                 ),
               ] else ...[
                 const Spacer(),

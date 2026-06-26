@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -2276,7 +2277,7 @@ class _GalleryTabState extends State<_GalleryTab> {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: _loadNative,
-                child: const Text('Повторить'),
+                child: Text(AppL10n.t('common_retry')),
               ),
               const SizedBox(height: 8),
               const TextButton(

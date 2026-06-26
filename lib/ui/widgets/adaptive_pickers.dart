@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../utils/platform_features.dart';
 
@@ -41,11 +42,11 @@ Future<DateTime?> showAdaptiveDatePicker({
                   children: [
                     CupertinoButton(
                       onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Отмена'),
+                      child: Text(AppL10n.t('common_cancel')),
                     ),
                     CupertinoButton(
                       onPressed: () => Navigator.pop(ctx, chosen),
-                      child: const Text('Готово'),
+                      child: Text(AppL10n.t('common_done')),
                     ),
                   ],
                 ),
@@ -94,11 +95,11 @@ Future<TimeOfDay?> showAdaptiveTimePicker({
                   children: [
                     CupertinoButton(
                       onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Отмена'),
+                      child: Text(AppL10n.t('common_cancel')),
                     ),
                     CupertinoButton(
                       onPressed: () => Navigator.pop(ctx, dt),
-                      child: const Text('Готово'),
+                      child: Text(AppL10n.t('common_done')),
                     ),
                   ],
                 ),

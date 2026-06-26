@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../models/channel.dart';
 import '../../services/channel_backup_service.dart';
@@ -216,7 +217,7 @@ class _ChannelAdminSettingsScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -327,12 +328,12 @@ class _ChannelAdminSettingsScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('common_delete')),
           ),
         ],
       ),
@@ -460,11 +461,11 @@ class _ChannelAdminSettingsScreenState
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена')),
+              child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('common_delete')),
           ),
         ],
       ),
@@ -746,7 +747,7 @@ class _ChannelAdminSettingsScreenState
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена'),
+              child: Text(AppL10n.t('common_cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
@@ -780,7 +781,7 @@ class _ChannelAdminSettingsScreenState
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Отмена'),
+                  child: Text(AppL10n.t('common_cancel')),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),

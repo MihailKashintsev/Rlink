@@ -13,6 +13,7 @@ import 'package:flutter/gestures.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, HapticFeedback, rootBundle;
@@ -3353,7 +3354,7 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Закрыть')),
+              child: Text(AppL10n.t('common_close'))),
         ],
       ),
     );
@@ -5272,11 +5273,11 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('common_delete')),
           ),
         ],
       ),
@@ -5456,11 +5457,11 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('common_delete')),
           ),
         ],
       ),
@@ -6005,7 +6006,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (msg.isOutgoing) ...[
               ListTile(
                 leading: const Icon(Icons.edit),
-                title: const Text('Редактировать'),
+                title: Text(AppL10n.t('common_edit')),
                 onTap: () {
                   Navigator.pop(ctx);
                   _startEdit(msg);
@@ -6013,7 +6014,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline),
-                title: const Text('Удалить'),
+                title: Text(AppL10n.t('common_delete')),
                 onTap: () async {
                   Navigator.pop(ctx);
                   await _confirmAndDelete(msg);
@@ -6983,7 +6984,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   TextButton(
                                       onPressed: () =>
                                           Navigator.pop(ctx, false),
-                                      child: const Text('Отмена')),
+                                      child: Text(AppL10n.t('common_cancel'))),
                                   TextButton(
                                     onPressed: () => Navigator.pop(ctx, true),
                                     child: const Text('Удалить',
@@ -8273,7 +8274,7 @@ class _DmInviteBubbleActions extends StatelessWidget {
                 : () => unawaited(
                       _respondDeviceLink(context, accepted: true),
                     ),
-            child: const Text('Принять'),
+            child: Text(AppL10n.t('common_accept')),
           ),
           const SizedBox(height: 6),
           OutlinedButton(
@@ -8282,7 +8283,7 @@ class _DmInviteBubbleActions extends StatelessWidget {
                 : () => unawaited(
                       _respondDeviceLink(context, accepted: false),
                     ),
-            child: const Text('Отклонить'),
+            child: Text(AppL10n.t('common_decline')),
           ),
         ],
       );
@@ -11654,7 +11655,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(c, false),
-              child: const Text('Отмена'),
+              child: Text(AppL10n.t('common_cancel')),
             ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Colors.orange),
@@ -11682,12 +11683,12 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(c, false),
-              child: const Text('Отмена'),
+              child: Text(AppL10n.t('common_cancel')),
             ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () => Navigator.pop(c, true),
-              child: const Text('Удалить'),
+              child: Text(AppL10n.t('common_delete')),
             ),
           ],
         ),
@@ -11798,11 +11799,11 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена'),
+              child: Text(AppL10n.t('common_cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Сохранить'),
+              child: Text(AppL10n.t('common_save')),
             ),
           ],
         ),

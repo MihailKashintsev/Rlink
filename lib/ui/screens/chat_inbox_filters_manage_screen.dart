@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../services/chat_inbox_service.dart';
 import '../rlink_nav_routes.dart';
@@ -27,7 +28,7 @@ class ChatInboxFiltersManageScreen extends StatelessWidget {
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Отмена'),
+                      child: Text(AppL10n.t('common_cancel')),
                     ),
                     FilledButton(
                       onPressed: () => Navigator.pop(ctx, true),
@@ -89,11 +90,11 @@ class ChatInboxFiltersManageScreen extends StatelessWidget {
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Отмена'),
+                                  child: Text(AppL10n.t('common_cancel')),
                                 ),
                                 FilledButton(
                                   onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('Удалить'),
+                                  child: Text(AppL10n.t('common_delete')),
                                 ),
                               ],
                             ),

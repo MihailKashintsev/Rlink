@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../models/chat_message.dart';
 import '../../services/chat_storage_service.dart';
@@ -100,11 +101,11 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена'),
+              child: Text(AppL10n.t('common_cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Добавить'),
+              child: Text(AppL10n.t('common_add')),
             ),
           ],
         ),

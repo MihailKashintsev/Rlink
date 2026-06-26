@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/shared_collab.dart';
@@ -59,7 +60,7 @@ Future<String?> showSharedTodoComposeDialog(BuildContext context) async {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -158,7 +159,7 @@ Future<String?> showSharedCalendarComposeDialog(BuildContext context) async {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),

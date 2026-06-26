@@ -31,6 +31,19 @@ class AppL10n {
   static AppL10n get s => AppL10n._();
 
   static const _ru = <String, String>{
+    // ── Common buttons (shared across screens) ──
+    'common_cancel': 'Отмена',
+    'common_delete': 'Удалить',
+    'common_done': 'Готово',
+    'common_save': 'Сохранить',
+    'common_create': 'Создать',
+    'common_send': 'Отправить',
+    'common_add': 'Добавить',
+    'common_accept': 'Принять',
+    'common_decline': 'Отклонить',
+    'common_edit': 'Редактировать',
+    'common_retry': 'Повторить',
+    'common_close': 'Закрыть',
     // ── Intro / promo (animated onboarding) ──
     'intro_skip': 'Пропустить',
     'intro_next': 'Далее',
@@ -348,6 +361,19 @@ class AppL10n {
   };
 
   static const _en = <String, String>{
+    // ── Common buttons ──
+    'common_cancel': 'Cancel',
+    'common_delete': 'Delete',
+    'common_done': 'Done',
+    'common_save': 'Save',
+    'common_create': 'Create',
+    'common_send': 'Send',
+    'common_add': 'Add',
+    'common_accept': 'Accept',
+    'common_decline': 'Decline',
+    'common_edit': 'Edit',
+    'common_retry': 'Retry',
+    'common_close': 'Close',
     // ── Intro / promo (animated onboarding) ──
     'intro_skip': 'Skip',
     'intro_next': 'Next',
@@ -667,6 +693,19 @@ class AppL10n {
   };
 
   static const _es = <String, String>{
+    // ── Common buttons ──
+    'common_cancel': 'Cancelar',
+    'common_delete': 'Eliminar',
+    'common_done': 'Hecho',
+    'common_save': 'Guardar',
+    'common_create': 'Crear',
+    'common_send': 'Enviar',
+    'common_add': 'Añadir',
+    'common_accept': 'Aceptar',
+    'common_decline': 'Rechazar',
+    'common_edit': 'Editar',
+    'common_retry': 'Reintentar',
+    'common_close': 'Cerrar',
     'intro_skip': 'Saltar',
     'intro_next': 'Siguiente',
     'intro_start': 'Empezar a chatear',
@@ -984,6 +1023,19 @@ class AppL10n {
   };
 
   static const _de = <String, String>{
+    // ── Common buttons ──
+    'common_cancel': 'Abbrechen',
+    'common_delete': 'Löschen',
+    'common_done': 'Fertig',
+    'common_save': 'Speichern',
+    'common_create': 'Erstellen',
+    'common_send': 'Senden',
+    'common_add': 'Hinzufügen',
+    'common_accept': 'Annehmen',
+    'common_decline': 'Ablehnen',
+    'common_edit': 'Bearbeiten',
+    'common_retry': 'Wiederholen',
+    'common_close': 'Schließen',
     'intro_skip': 'Überspringen',
     'intro_next': 'Weiter',
     'intro_start': 'Loslegen',
@@ -1301,6 +1353,19 @@ class AppL10n {
   };
 
   static const _fr = <String, String>{
+    // ── Common buttons ──
+    'common_cancel': 'Annuler',
+    'common_delete': 'Supprimer',
+    'common_done': 'Terminé',
+    'common_save': 'Enregistrer',
+    'common_create': 'Créer',
+    'common_send': 'Envoyer',
+    'common_add': 'Ajouter',
+    'common_accept': 'Accepter',
+    'common_decline': 'Refuser',
+    'common_edit': 'Modifier',
+    'common_retry': 'Réessayer',
+    'common_close': 'Fermer',
     'intro_skip': 'Passer',
     'intro_next': 'Suivant',
     'intro_start': 'Commencer à discuter',
@@ -1618,6 +1683,19 @@ class AppL10n {
   };
 
   static const _uk = <String, String>{
+    // ── Common buttons ──
+    'common_cancel': 'Скасувати',
+    'common_delete': 'Видалити',
+    'common_done': 'Готово',
+    'common_save': 'Зберегти',
+    'common_create': 'Створити',
+    'common_send': 'Надіслати',
+    'common_add': 'Додати',
+    'common_accept': 'Прийняти',
+    'common_decline': 'Відхилити',
+    'common_edit': 'Редагувати',
+    'common_retry': 'Повторити',
+    'common_close': 'Закрити',
     'intro_skip': 'Пропустити',
     'intro_next': 'Далі',
     'intro_start': 'Почати спілкування',
@@ -1935,6 +2013,19 @@ class AppL10n {
   };
 
   static const _zh = <String, String>{
+    // ── Common buttons ──
+    'common_cancel': '取消',
+    'common_delete': '删除',
+    'common_done': '完成',
+    'common_save': '保存',
+    'common_create': '创建',
+    'common_send': '发送',
+    'common_add': '添加',
+    'common_accept': '接受',
+    'common_decline': '拒绝',
+    'common_edit': '编辑',
+    'common_retry': '重试',
+    'common_close': '关闭',
     'intro_skip': '跳过',
     'intro_next': '下一步',
     'intro_start': '开始聊天',

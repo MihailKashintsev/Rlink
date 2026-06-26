@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
@@ -177,7 +178,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () async {
@@ -192,7 +193,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
               );
               if (mounted) _openGroup(group);
             },
-            child: const Text('Создать'),
+            child: Text(AppL10n.t('common_create')),
           ),
         ],
       ),
@@ -481,10 +482,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+              onPressed: () => Navigator.pop(ctx), child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, urlCtrl.text.trim()),
-            child: const Text('Готово'),
+            child: Text(AppL10n.t('common_done')),
           ),
         ],
       ),
@@ -757,7 +758,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Закрыть')),
+              child: Text(AppL10n.t('common_close'))),
         ],
       ),
     );
@@ -1005,7 +1006,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Отмена')),
+                  child: Text(AppL10n.t('common_cancel'))),
               FilledButton(
                 onPressed: () {
                   final opts = [
@@ -1029,7 +1030,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     ),
                   );
                 },
-                child: const Text('Отправить'),
+                child: Text(AppL10n.t('common_send')),
               ),
             ],
           );
@@ -2007,7 +2008,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена')),
+              child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -2086,7 +2087,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Отмена')),
+                child: Text(AppL10n.t('common_cancel'))),
             FilledButton(
               onPressed: () async {
                 final name = nameCtrl.text.trim();
@@ -2102,7 +2103,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 await GroupService.instance.updateGroup(updated);
                 if (mounted) setState(() => _group = updated);
               },
-              child: const Text('Сохранить'),
+              child: Text(AppL10n.t('common_save')),
             ),
           ],
         ),
@@ -2486,12 +2487,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             },
             itemBuilder: (_) => [
               if (_isCreator || _group.canModerate(_myId))
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'edit',
                   child: Row(children: [
-                    Icon(Icons.edit_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Редактировать'),
+                    const Icon(Icons.edit_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Text(AppL10n.t('common_edit')),
                   ]),
                 ),
               if (_isCreator)
@@ -3144,7 +3145,7 @@ class _GroupInviteCard extends StatelessWidget {
                   accepterNick: myProfile?.nickname ?? '',
                 );
               },
-              child: const Text('Принять'),
+              child: Text(AppL10n.t('common_accept')),
             ),
           ]),
         ),

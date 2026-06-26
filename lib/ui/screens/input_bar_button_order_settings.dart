@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import '../../services/app_settings.dart';
 
 /// Экран настроек порядка кнопок панели ввода с drag-and-drop
@@ -170,7 +171,7 @@ class _InputBarButtonOrderSettingsState
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 48),
               ),
-              child: const Text('Готово'),
+              child: Text(AppL10n.t('common_done')),
             ),
           ),
         ],

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
@@ -334,7 +335,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Сохранить'),
+                  : Text(AppL10n.t('common_save')),
             )
           else
             IconButton(
@@ -970,7 +971,7 @@ class _GigaChatProfileCardState extends State<_GigaChatProfileCard> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Сохранить'),
+                          : Text(AppL10n.t('common_save')),
                     ),
                     OutlinedButton(
                       onPressed: _saving ? null : _clear,

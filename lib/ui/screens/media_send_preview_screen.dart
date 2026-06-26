@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:crop_your_image/crop_your_image.dart';
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:image/image.dart' as img;
 
 /// A freehand pen stroke (local coords in the editing area).
@@ -269,10 +270,10 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+              onPressed: () => Navigator.pop(ctx), child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('Добавить')),
+              child: Text(AppL10n.t('common_add'))),
         ],
       ),
     );

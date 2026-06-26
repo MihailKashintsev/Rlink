@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -57,10 +58,10 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
           autofocus: true,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Сохранить'),
+            child: Text(AppL10n.t('common_save')),
           ),
         ],
       ),
@@ -77,10 +78,10 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
         title: const Text('Удалить набор?'),
         content: const Text('Файлы эмодзи будут удалены с устройства.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('common_delete')),
           ),
         ],
       ),
@@ -96,10 +97,10 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
       builder: (ctx) => AlertDialog(
         title: Text('Удалить :${e.shortcode}:?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('common_delete')),
           ),
         ],
       ),

@@ -204,7 +204,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Отмена')),
+                child: Text(AppL10n.t('common_cancel'))),
             FilledButton(
               onPressed: () async {
                 final name = nameCtrl.text.trim();
@@ -262,7 +262,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   }
                 }
               },
-              child: const Text('Создать'),
+              child: Text(AppL10n.t('common_create')),
             ),
           ],
         ),
@@ -284,7 +284,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+              onPressed: () => Navigator.pop(ctx), child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
             onPressed: () async {
               final name = nameCtrl.text.trim();
@@ -312,7 +312,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 }
               }
             },
-            child: const Text('Создать'),
+            child: Text(AppL10n.t('common_create')),
           ),
         ],
       ),
@@ -924,7 +924,7 @@ class _MeTab extends StatelessWidget {
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Отмена'),
+                          child: Text(AppL10n.t('common_cancel')),
                         ),
                         FilledButton(
                           onPressed: () => Navigator.pop(ctx, true),
@@ -1653,7 +1653,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
                         await inbox.setPinOrder(keys);
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
-                      child: const Text('Готово'),
+                      child: Text(AppL10n.t('common_done')),
                     ),
                   ],
                 ),
@@ -3140,7 +3140,7 @@ class _PendingDeviceTile extends StatelessWidget {
               FilledButton.icon(
                 onPressed: () => _sendInvite(context),
                 icon: const Icon(Icons.person_add_outlined, size: 18),
-                label: const Text('Добавить'),
+                label: Text(AppL10n.t('common_add')),
                 style: FilledButton.styleFrom(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

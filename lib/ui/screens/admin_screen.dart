@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 import '../../models/channel.dart';
 import '../../services/ai_bot_constants.dart';
@@ -564,12 +565,12 @@ class _AdminScreenState extends State<AdminScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('common_delete')),
           ),
         ],
       ),
@@ -691,12 +692,12 @@ class _AdminScreenState extends State<AdminScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('common_delete')),
           ),
         ],
       ),
@@ -775,7 +776,7 @@ class _AdminScreenState extends State<AdminScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('common_cancel')),
           ),
           FilledButton(
             onPressed: () async {
@@ -852,7 +853,7 @@ class _AdminScreenState extends State<AdminScreen>
                 ),
               );
             },
-            child: const Text('Сохранить'),
+            child: Text(AppL10n.t('common_save')),
           ),
         ],
       ),
@@ -1301,7 +1302,7 @@ class _RelayBotAdminTile extends StatelessWidget {
                   onPressed: bot.revoked ? null : onRevoke,
                   style: FilledButton.styleFrom(backgroundColor: Colors.red),
                   icon: const Icon(Icons.delete_outline, size: 16),
-                  label: const Text('Удалить'),
+                  label: Text(AppL10n.t('common_delete')),
                 ),
               ],
             ),
