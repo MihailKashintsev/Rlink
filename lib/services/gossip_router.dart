@@ -23,6 +23,12 @@ const _kMaxEncPayloadBytes =
 /// base64 до ~256K символов — держим запас, BLE этим путём не ходит.
 const _kMaxCallSigBytes = 65536;
 
+/// Effective cap for encrypted 'msg' packets. On web there is no BLE mesh — text
+/// goes straight to the relay, which accepts large packets (see
+/// [_kMaxCallSigBytes]), so long messages must not be dropped. On mobile we keep
+/// the BLE-MTU-conscious 780-byte cap so mesh forwarding stays reliable.
+int get _encCap => kIsWeb ? _kMaxCallSigBytes : _kMaxEncPayloadBytes;
+
 /// JSON numbers on dart2js are often [double]; gossip must still decode.
 int? _jsonIntLoose(dynamic v) {
   if (v is int) return v;
@@ -601,7 +607,7 @@ class GossipRouter {
         timestamp: DateTime.now().millisecondsSinceEpoch,
         payload: p,
       );
-      if (testPacket.encode().length <= _kMaxEncPayloadBytes) {
+      if (testPacket.encode().length <= _encCap) {
         if (rt != null) payload['rt'] = rt;
         if (ffid != null) payload['ffid'] = ffid;
         if (ffn != null) payload['ffn'] = ffn;
@@ -2236,7 +2242,7 @@ class GossipRouter {
       return;
     }
     final bytes = packet.encode();
-    if (bytes.length > _kMaxEncPayloadBytes) {
+    if (bytes.length > _encCap) {
       debugPrint(
           '[Gossip] Encrypted packet too large (${bytes.length} bytes), dropping');
       return;

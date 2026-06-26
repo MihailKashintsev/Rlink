@@ -689,11 +689,13 @@ Future<void> initServices() async {
       } catch (e, st) {
         debugPrint('[RLINK][Init] StickerCollectionService skipped: $e\n$st');
       }
-      try {
-        await EmojiPackService.instance.ensureInitialized();
-      } catch (e, st) {
-        debugPrint('[RLINK][Init] EmojiPackService skipped: $e\n$st');
-      }
+    }
+    // Emoji index must warm on web too (it reads OPFS, web-safe). Otherwise
+    // lookupByShortcode() is empty and every custom :shortcode: renders as text.
+    try {
+      await EmojiPackService.instance.ensureInitialized();
+    } catch (e, st) {
+      debugPrint('[RLINK][Init] EmojiPackService skipped: $e\n$st');
     }
     await ChatStorageService.instance.init();
     await ChannelService.instance.init();
