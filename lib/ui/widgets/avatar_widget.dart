@@ -313,9 +313,13 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
   }
 
   Future<void> _initEmojiPacks() async {
-    final docs = await getApplicationDocumentsDirectory();
-    if (mounted) {
-      setState(() => _docsPath = docs.path);
+    // getApplicationDocumentsDirectory() THROWS on web — guard it, otherwise
+    // _loadEmojiPacks() never runs and the "Мои эмодзи" section never appears.
+    if (!kIsWeb) {
+      try {
+        final docs = await getApplicationDocumentsDirectory();
+        if (mounted) setState(() => _docsPath = docs.path);
+      } catch (_) {}
     }
     _loadEmojiPacks();
   }
@@ -547,22 +551,31 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
-                                            if (pack.emojis.isNotEmpty &&
-                                                _docsPath != null)
-                                              Image.file(
-                                                File(p.join(
-                                                  _docsPath!,
-                                                  pack.emojis[0].relPath,
-                                                )),
-                                                width: 32,
-                                                height: 32,
-                                              )
-                                            else
-                                              Icon(
-                                                Icons.emoji_emotions_outlined,
-                                                size: 24,
-                                                color: cs.onSurfaceVariant,
-                                              ),
+                                            Builder(
+                                              builder: (_) {
+                                                final provider = pack
+                                                        .emojis.isNotEmpty
+                                                    ? EmojiPackService.instance
+                                                        .emojiImageProvider(pack
+                                                            .emojis[0]
+                                                            .shortcode)
+                                                    : null;
+                                                if (provider == null) {
+                                                  return Icon(
+                                                    Icons
+                                                        .emoji_emotions_outlined,
+                                                    size: 24,
+                                                    color: cs.onSurfaceVariant,
+                                                  );
+                                                }
+                                                return Image(
+                                                  image: provider,
+                                                  width: 32,
+                                                  height: 32,
+                                                  fit: BoxFit.contain,
+                                                );
+                                              },
+                                            ),
                                             const SizedBox(height: 4),
                                             Text(
                                               pack.name,
