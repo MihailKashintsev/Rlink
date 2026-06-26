@@ -44,6 +44,10 @@ class AppL10n {
     'intro_messages_sub': 'Текст, голос и расшифровка',
     'intro_privacy_title': 'Без номера телефона',
     'intro_privacy_sub': 'Анонимно и под твоим контролем',
+    'empty_chats_title': 'Здесь появятся ваши чаты',
+    'empty_chats_sub':
+        'Добавьте первого собеседника — найдите устройства рядом или поделитесь профилем',
+    'empty_find_nearby': 'Найти рядом',
     'intro_bots_title': 'Боты',
     'intro_bots_sub': 'Команды и кнопки прямо в чате',
     'intro_groups_title': 'Группы',
@@ -290,6 +294,10 @@ class AppL10n {
     'intro_messages_sub': 'Text, voice and transcription',
     'intro_privacy_title': 'No phone number',
     'intro_privacy_sub': 'Anonymous and in your control',
+    'empty_chats_title': 'Your chats will appear here',
+    'empty_chats_sub':
+        'Add your first contact — find nearby devices or share your profile',
+    'empty_find_nearby': 'Find nearby',
     'intro_bots_title': 'Bots',
     'intro_bots_sub': 'Commands and buttons in chat',
     'intro_groups_title': 'Groups',

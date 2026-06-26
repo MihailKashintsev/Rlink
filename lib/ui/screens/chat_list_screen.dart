@@ -653,6 +653,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               layoutActive: _currentTab == 0 &&
                   !_searchActive &&
                   (ModalRoute.of(context)?.isCurrent ?? true),
+              onGoNearby: () => setState(() => _currentTab = 1),
             ),
             _NearbyTab(showRadar: _nearbyShowRadar),
             const EtherScreen(),
@@ -1093,9 +1094,13 @@ class _UnifiedChatsTab extends StatefulWidget {
 
   /// Вкладка «Чаты» видна и поиск не открыт — якорь под фильтрами актуален.
   final bool layoutActive;
+
+  /// Переключить на вкладку «Рядом» (из пустого состояния «нет чатов»).
+  final VoidCallback? onGoNearby;
   const _UnifiedChatsTab({
     this.searchQuery = '',
     this.layoutActive = true,
+    this.onGoNearby,
   });
 
   @override
@@ -1877,7 +1882,9 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         _StoriesStrip(chatItems: _storiesSource()),
         _buildPendingBanners(context),
         SizedBox(height: 0, key: _miniPlayerListAnchor),
-        const Expanded(child: _EmptyChatsState()),
+        Expanded(
+          child: _EmptyChatsState(onFindNearby: widget.onGoNearby),
+        ),
       ]);
       _layoutMiniPlayerAnchor();
       return col;
@@ -2210,7 +2217,8 @@ class _TelegramChatRow extends StatelessWidget {
 // ── Empty chats animation ───────────────────────────────────────
 
 class _EmptyChatsState extends StatefulWidget {
-  const _EmptyChatsState();
+  final VoidCallback? onFindNearby;
+  const _EmptyChatsState({this.onFindNearby});
   @override
   State<_EmptyChatsState> createState() => _EmptyChatsStateState();
 }
@@ -2240,26 +2248,66 @@ class _EmptyChatsStateState extends State<_EmptyChatsState>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        AnimatedBuilder(
-          animation: _pulseAnimation,
-          builder: (context, child) {
-            return Transform.scale(
-              scale: _pulseAnimation.value,
-              child: child,
-            );
-          },
-          child: Icon(Icons.chat_bubble_outline,
-              size: 64, color: Colors.grey.shade700),
-        ),
-        const SizedBox(height: 16),
-        Text('Нет чатов',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 16)),
-        const SizedBox(height: 8),
-        Text('Найди устройства на вкладке "Рядом"',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-      ]),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 36),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          AnimatedBuilder(
+            animation: _pulseAnimation,
+            builder: (context, child) =>
+                Transform.scale(scale: _pulseAnimation.value, child: child),
+            child: Container(
+              width: 132,
+              height: 132,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    cs.primary,
+                    Color.lerp(cs.primary, cs.tertiary, 0.6)!,
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: cs.primary.withValues(alpha: 0.35),
+                    blurRadius: 40,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Icon(Icons.forum_rounded, size: 62, color: cs.onPrimary),
+            ),
+          ),
+          const SizedBox(height: 26),
+          Text(
+            AppL10n.t('empty_chats_title'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: cs.onSurface, fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            AppL10n.t('empty_chats_sub'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14.5, height: 1.35),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: widget.onFindNearby,
+            icon: const Icon(Icons.wifi_tethering_rounded),
+            label: Text(AppL10n.t('empty_find_nearby')),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ]),
+      ),
     );
   }
 }
