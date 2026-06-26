@@ -202,8 +202,8 @@ Future<void> _showContactMentionPicker(
   final contacts = ChatStorageService.instance.contactsNotifier.value;
   if (contacts.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text('Нет контактов — добавьте людей в разделе «Контакты»')),
+      SnackBar(
+          content: Text(AppL10n.t('chn_no_contacts_add'))),
     );
     return;
   }
@@ -213,8 +213,8 @@ Future<void> _showContactMentionPicker(
       child: ListView(
         shrinkWrap: true,
         children: [
-          const ListTile(
-            title: Text('Отметить человека'),
+          ListTile(
+            title: Text(AppL10n.t('chn_tag_person')),
             subtitle: Text('В текст добавится уникальный код (ключ). '
                 'Для других он отобразится как @ник.'),
           ),
@@ -370,12 +370,12 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                 Icon(Icons.campaign_outlined,
                     size: 64, color: cs.primary.withValues(alpha: 0.3)),
                 const SizedBox(height: 16),
-                Text('Нет каналов',
+                Text(AppL10n.t('chn_no_channels'),
                     style: TextStyle(
                         fontSize: 18,
                         color: cs.onSurface.withValues(alpha: 0.5))),
                 const SizedBox(height: 8),
-                Text('Создайте канал для публикаций',
+                Text(AppL10n.t('chn_create_for_posts'),
                     style: TextStyle(
                         fontSize: 13,
                         color: cs.onSurface.withValues(alpha: 0.3))),
@@ -392,7 +392,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   child: Row(children: [
                     Icon(Icons.mail_outline, size: 16, color: cs.primary),
                     const SizedBox(width: 6),
-                    Text('Приглашения',
+                    Text(AppL10n.t('chn_invitations'),
                         style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -445,7 +445,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     final text = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Войти в канал по ссылке'),
+        title: Text(AppL10n.t('chn_enter_by_link')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,7 +473,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
               child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('Войти')),
+              child: Text(AppL10n.t('chn_enter'))),
         ],
       ),
     );
@@ -539,9 +539,9 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   void _createChannel() {
     if (AppSettings.instance.isLinkedChildDevice) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content:
-              Text('Создание канала доступно только на главном устройстве'),
+              Text(AppL10n.t('chn_create_main_only')),
         ),
       );
       return;
@@ -972,17 +972,17 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                   SwitchListTile(
                     value: anon,
                     onChanged: (v) => setSt(() => anon = v),
-                    title: const Text('Анонимный'),
+                    title: Text(AppL10n.t('chn_anonymous')),
                   ),
                   SwitchListTile(
                     value: multi,
                     onChanged: (v) => setSt(() => multi = v),
-                    title: const Text('Несколько ответов'),
+                    title: Text(AppL10n.t('chn_multiple_answers')),
                   ),
                   SwitchListTile(
                     value: quiz,
                     onChanged: (v) => setSt(() => quiz = v),
-                    title: const Text('Викторина'),
+                    title: Text(AppL10n.t('chn_quiz')),
                   ),
                   if (quiz)
                     DropdownButtonFormField<int>(
@@ -1031,7 +1031,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                     ),
                   );
                 },
-                child: const Text('Опубликовать'),
+                child: Text(AppL10n.t('chn_publish')),
               ),
             ],
           );
@@ -2023,8 +2023,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                 const SizedBox(height: 8),
                 ListTile(
                   leading: Icon(Icons.photo_library_outlined, color: cs.primary),
-                  title: const Text('Фото или GIF'),
-                  subtitle: const Text('Выбрать из файлов'),
+                  title: Text(AppL10n.t('chn_photo_or_gif')),
+                  subtitle: Text(AppL10n.t('chn_pick_from_files')),
                   onTap: () => Navigator.pop(ctx, true),
                 ),
                 const SizedBox(height: 8),
@@ -2153,29 +2153,29 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Качество фото',
+              child: Text(AppL10n.t('chn_photo_quality'),
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             ),
             ListTile(
               leading: const Icon(Icons.flash_on, color: Colors.green),
-              title: const Text('Быстрое'),
-              subtitle: const Text('160px, маленький размер'),
+              title: Text(AppL10n.t('chn_fast')),
+              subtitle: Text(AppL10n.t('chn_160px')),
               onTap: () => Navigator.pop(
                   ctx, const _ImageQuality(quality: 40, maxSize: 160)),
             ),
             ListTile(
               leading: const Icon(Icons.tune, color: Colors.orange),
               title: Text(AppL10n.t('cm_standard')),
-              subtitle: const Text('320px, баланс скорость/качество'),
+              subtitle: Text(AppL10n.t('chn_320px')),
               onTap: () => Navigator.pop(
                   ctx, const _ImageQuality(quality: 55, maxSize: 320)),
             ),
             ListTile(
               leading: const Icon(Icons.high_quality, color: Colors.blue),
-              title: const Text('Высокое'),
-              subtitle: const Text('640px, дольше передача'),
+              title: Text(AppL10n.t('chn_high')),
+              subtitle: Text(AppL10n.t('chn_640px')),
               onTap: () => Navigator.pop(
                   ctx, const _ImageQuality(quality: 70, maxSize: 640)),
             ),
@@ -2247,16 +2247,16 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('Подписчики канала',
+                  child: Text(AppL10n.t('chn_channel_subscribers'),
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 ),
                 if (current.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.all(16),
-                    child: Text('Нет подписчиков',
+                    child: Text(AppL10n.t('chn_no_subscribers'),
                         style: TextStyle(color: Colors.grey)),
                   )
                 else
@@ -2345,7 +2345,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     final contacts = ChatStorageService.instance.contactsNotifier.value;
     if (contacts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нет контактов для приглашения')),
+        SnackBar(content: Text(AppL10n.t('chn_no_contacts_invite'))),
       );
       return;
     }
@@ -2355,7 +2355,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         .toList();
     if (available.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Все контакты уже подписаны')),
+        SnackBar(content: Text(AppL10n.t('chn_all_subscribed'))),
       );
       return;
     }
@@ -2365,9 +2365,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Пригласить в канал',
+              child: Text(AppL10n.t('chn_invite_to_channel'),
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             ),
             ...available.map((c) => ListTile(
@@ -2437,7 +2437,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         _channel.driveFileUrl != null && _channel.driveFileUrl!.isNotEmpty;
     if (!hasUrl) {
       return Center(
-        child: Text('Нет постов',
+        child: Text(AppL10n.t('chn_no_posts'),
             style: TextStyle(color: cs.onSurface.withValues(alpha: 0.3))),
       );
     }
@@ -2469,7 +2469,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
             ] else
               FilledButton.icon(
                 icon: const Icon(Icons.download_rounded),
-                label: const Text('Загрузить историю'),
+                label: Text(AppL10n.t('chn_load_history')),
                 onPressed: _restoreFromDrive,
               ),
           ],
@@ -2494,8 +2494,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (ok) {
         await _loadAndMarkRead();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('История восстановлена из Google Drive')),
+          SnackBar(
+              content: Text(AppL10n.t('chn_history_restored'))),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2912,7 +2912,7 @@ class _PostCardState extends State<_PostCard> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.emoji_emotions_outlined),
-                  title: const Text('Реакция…'),
+                  title: Text(AppL10n.t('chn_reaction_ellipsis')),
                   onTap: () => Navigator.pop(ctx, 'react'),
                 ),
                 ListTile(
@@ -2928,14 +2928,14 @@ class _PostCardState extends State<_PostCard> {
                 if (post.text.trim().isNotEmpty)
                   ListTile(
                     leading: const Icon(Icons.copy),
-                    title: const Text('Копировать текст'),
+                    title: Text(AppL10n.t('chn_copy_text')),
                     onTap: () => Navigator.pop(ctx, 'copy'),
                   ),
                 if (widget.onDelete != null)
                   ListTile(
                     leading: Icon(Icons.delete_outline, color: cs.error),
                     title:
-                        Text('Удалить пост', style: TextStyle(color: cs.error)),
+                        Text(AppL10n.t('chn_delete_post'), style: TextStyle(color: cs.error)),
                     onTap: () => Navigator.pop(ctx, 'del_post'),
                   ),
               ],
@@ -3284,29 +3284,29 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Качество фото',
+              child: Text(AppL10n.t('chn_photo_quality'),
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             ),
             ListTile(
               leading: const Icon(Icons.flash_on, color: Colors.green),
-              title: const Text('Быстрое'),
-              subtitle: const Text('160px, маленький размер'),
+              title: Text(AppL10n.t('chn_fast')),
+              subtitle: Text(AppL10n.t('chn_160px')),
               onTap: () => Navigator.pop(
                   ctx, const _ImageQuality(quality: 40, maxSize: 160)),
             ),
             ListTile(
               leading: const Icon(Icons.tune, color: Colors.orange),
               title: Text(AppL10n.t('cm_standard')),
-              subtitle: const Text('320px, баланс скорость/качество'),
+              subtitle: Text(AppL10n.t('chn_320px')),
               onTap: () => Navigator.pop(
                   ctx, const _ImageQuality(quality: 55, maxSize: 320)),
             ),
             ListTile(
               leading: const Icon(Icons.high_quality, color: Colors.blue),
-              title: const Text('Высокое'),
-              subtitle: const Text('640px, дольше передача'),
+              title: Text(AppL10n.t('chn_high')),
+              subtitle: Text(AppL10n.t('chn_640px')),
               onTap: () => Navigator.pop(
                   ctx, const _ImageQuality(quality: 70, maxSize: 640)),
             ),
@@ -3795,8 +3795,8 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить комментарий?'),
-        content: const Text('У всех подписчиков он исчезнет.'),
+        title: Text(AppL10n.t('chn_delete_comment_q')),
+        content: Text(AppL10n.t('chn_disappear_all_subs')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -3839,7 +3839,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Обсуждение'),
+        title: Text(AppL10n.t('chn_discussion')),
       ),
       body: Column(
         children: [
@@ -3989,7 +3989,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                             size: 48,
                             color: cs.onSurface.withValues(alpha: 0.2)),
                         const SizedBox(height: 8),
-                        Text('Будьте первым!',
+                        Text(AppL10n.t('chn_be_first'),
                             style: TextStyle(
                                 fontSize: 14,
                                 color: cs.onSurface.withValues(alpha: 0.3))),
@@ -4619,7 +4619,7 @@ class _CommentBubble extends StatelessWidget {
                 children: [
                   ListTile(
                     leading: const Icon(Icons.add_reaction_outlined),
-                    title: const Text('Реакция…'),
+                    title: Text(AppL10n.t('chn_reaction_ellipsis')),
                     onTap: () => Navigator.pop(ctx, 'react'),
                   ),
                   ListTile(
@@ -4635,7 +4635,7 @@ class _CommentBubble extends StatelessWidget {
                   if (text.trim().isNotEmpty)
                     ListTile(
                       leading: const Icon(Icons.copy),
-                      title: const Text('Копировать текст'),
+                      title: Text(AppL10n.t('chn_copy_text')),
                       onTap: () => Navigator.pop(ctx, 'copy'),
                     ),
                   if (canDelete)
@@ -4858,7 +4858,7 @@ class _ChannelInviteCard extends StatelessWidget {
               onPressed: () {
                 ChannelService.instance.removeChannelInvite(invite.channelId);
               },
-              child: Text('Нет',
+              child: Text(AppL10n.t('chn_no'),
                   style: TextStyle(
                       color: cs.onPrimaryContainer.withValues(alpha: 0.6))),
             ),
@@ -4879,7 +4879,7 @@ class _ChannelInviteCard extends StatelessWidget {
                 await ChannelService.instance.subscribe(invite.channelId, myId);
                 ChannelService.instance.removeChannelInvite(invite.channelId);
               },
-              child: const Text('Подписаться'),
+              child: Text(AppL10n.t('chn_subscribe')),
             ),
           ]),
         ),

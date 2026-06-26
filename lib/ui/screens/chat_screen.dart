@@ -3194,7 +3194,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final ip = msg.imagePath;
     if (ip == null || ip.trim().isEmpty) return;
     final resolved = ImageService.instance.resolveStoredPath(ip) ?? ip;
-    if (!File(resolved).existsSync()) return;
+    // On web the path is an OPFS/data ref, not a real file — addEmoji reads it
+    // web-safely, so only gate on existence natively.
+    if (!kIsWeb && !File(resolved).existsSync()) return;
     if (_tearingDown || !mounted) return;
     setState(() => _aiThinking = true);
     try {
@@ -3961,23 +3963,25 @@ class _ChatScreenState extends State<ChatScreen> {
           filePath: kIsWeb ? null : localPath,
         );
       }
-      await _saveAndTrack(
-        ChatMessage(
-          id: msgId,
-          peerId: targetPeerId,
-          text: caption.isNotEmpty ? caption : textFallback,
-          isOutgoing: true,
-          timestamp: DateTime.now(),
-          status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
-          imagePath: asImage ? localPath : null,
-          filePath: asImage ? null : localPath,
-          fileName: asImage ? null : fileName,
-          fileSize: bytes.length,
-          isSticker: isSticker,
-        ),
-        wasQueued: wasQueued,
+      final sentMsg = ChatMessage(
+        id: msgId,
+        peerId: targetPeerId,
+        text: caption.isNotEmpty ? caption : textFallback,
+        isOutgoing: true,
+        timestamp: DateTime.now(),
+        status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
+        imagePath: asImage ? localPath : null,
+        filePath: asImage ? null : localPath,
+        fileName: asImage ? null : fileName,
+        fileSize: bytes.length,
+        isSticker: isSticker,
       );
+      await _saveAndTrack(sentMsg, wasQueued: wasQueued);
       _scrollToBottom();
+      // Let the Emoji bot react to a picture sent on web too.
+      if (asImage && targetPeerId == kEmojiBotPeerId) {
+        unawaited(_pokeEmojiBotAfterOutgoingMedia(sentMsg));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
