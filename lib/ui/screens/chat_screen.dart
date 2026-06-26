@@ -700,7 +700,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_isDmBot || _savedMessagesLocalOnly) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Здесь повтор не применяется')),
+          SnackBar(content: Text(AppL10n.t('cs_repeat_na_here'))),
         );
       }
       return;
@@ -777,8 +777,8 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Файл сообщения не найден на устройстве'),
+            SnackBar(
+              content: Text(AppL10n.t('cs_msg_file_not_on_device')),
               backgroundColor: Colors.red,
             ),
           );
@@ -1468,7 +1468,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!webReadable && !File(pathForTranscribe).existsSync()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Файл сообщения не найден')),
+          SnackBar(content: Text(AppL10n.t('cs_msg_file_not_found'))),
         );
       }
       return;
@@ -1497,8 +1497,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!LocalTranscriptionService.instance.isSupported) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Локальная расшифровка недоступна на этой платформе'),
+          SnackBar(
+            content: Text(AppL10n.t('cs_local_transcribe_na')),
           ),
         );
       }
@@ -1770,7 +1770,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_dmHoldCameraList.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Камера недоступна')),
+            SnackBar(content: Text(AppL10n.t('cs_camera_unavailable'))),
           );
         }
         return;
@@ -2231,7 +2231,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_isDmBot) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('В чате с ботом доступен только текст')),
+          SnackBar(content: Text(AppL10n.t('cs_bot_text_only'))),
         );
       }
       return;
@@ -2260,8 +2260,8 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('📍 Геометка прикреплена к следующему сообщению'),
+        SnackBar(
+          content: Text(AppL10n.t('cs_geo_attached')),
           duration: Duration(seconds: 2),
         ),
       );
@@ -2398,7 +2398,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text('Закреплённые',
+                    child: Text(AppL10n.t('cs_pinned'),
                         style: Theme.of(ctx)
                             .textTheme
                             .titleMedium
@@ -2536,7 +2536,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!ok) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Не больше 20 закреплений в чате')),
+            SnackBar(content: Text(AppL10n.t('cs_max20_pins'))),
           );
         }
         return;
@@ -3321,11 +3321,11 @@ class _ChatScreenState extends State<ChatScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('События в чате'),
+        title: Text(AppL10n.t('cs_chat_events')),
         content: SizedBox(
           width: double.maxFinite,
           child: events.isEmpty
-              ? const Text('Пока нет отмеченных событий.')
+              ? Text(AppL10n.t('cs_no_marked_events'))
               : ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: MediaQuery.sizeOf(ctx).height * 0.5,
@@ -3381,7 +3381,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!when.isAfter(now)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Выберите время в будущем')),
+          SnackBar(content: Text(AppL10n.t('cs_pick_future_time'))),
         );
       }
       return;
@@ -3843,11 +3843,11 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Напрямую'),
+            child: Text(AppL10n.t('cs_directly')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Через Google Drive'),
+            child: Text(AppL10n.t('cs_via_gdrive')),
           ),
         ],
       ),
@@ -4472,14 +4472,14 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.photo_size_select_actual_outlined),
-                title: const Text('Отправить со сжатием'),
-                subtitle: const Text('Редактирование, просмотр в чате'),
+                title: Text(AppL10n.t('cs_send_compressed')),
+                subtitle: Text(AppL10n.t('cs_edit_view_in_chat')),
                 onTap: () => Navigator.pop(ctx, _ImageSendMode.compressed),
               ),
               ListTile(
                 leading: const Icon(Icons.attach_file_rounded),
-                title: const Text('Отправить как файл'),
-                subtitle: const Text('Оригинальное качество'),
+                title: Text(AppL10n.t('cs_send_as_file')),
+                subtitle: Text(AppL10n.t('cs_original_quality')),
                 onTap: () => Navigator.pop(ctx, _ImageSendMode.asFile),
               ),
             ],
@@ -5058,8 +5058,8 @@ class _ChatScreenState extends State<ChatScreen> {
         if (webBytes == null || webBytes.isEmpty) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Не удалось прочитать файл в браузере'),
+              SnackBar(
+                content: Text(AppL10n.t('cs_cant_read_file_browser')),
                 backgroundColor: Colors.red,
               ),
             );
@@ -5105,8 +5105,8 @@ class _ChatScreenState extends State<ChatScreen> {
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Файл недоступен: нет пути и данных'),
+              SnackBar(
+                content: Text(AppL10n.t('cs_file_unavailable_nopath')),
                 backgroundColor: Colors.red,
               ),
             );
@@ -5268,8 +5268,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить сообщение?'),
-        content: const Text('Сообщение исчезнет у собеседника.'),
+        title: Text(AppL10n.t('cs_delete_message_q')),
+        content: Text(AppL10n.t('cs_msg_disappear_peer')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -5438,8 +5438,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (outgoing.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Удалить можно только свои сообщения'),
+          SnackBar(
+            content: Text(AppL10n.t('cs_only_own_delete')),
           ),
         );
       }
@@ -5448,7 +5448,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить сообщения?'),
+        title: Text(AppL10n.t('cs_delete_messages_q')),
         content: Text(
           outgoing.length == 1
               ? 'Сообщение исчезнет у собеседника.'
@@ -5629,9 +5629,9 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(14),
-              child: Text('На какой аккаунт Google сохранить?'),
+              child: Text(AppL10n.t('cs_which_google_save')),
             ),
             for (final a in accounts)
               ListTile(
@@ -5673,7 +5673,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final pairing = await _pickDriveAccountPairing();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Загрузка на Google Drive…')),
+      SnackBar(content: Text(AppL10n.t('cs_uploading_gdrive'))),
     );
     try {
       final bytes = await _readBytesFromStoredPath(path);
@@ -5732,7 +5732,7 @@ class _ChatScreenState extends State<ChatScreen> {
           .importChatImageToCollection(stickerSourcePath);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Добавлено в стикеры')),
+        SnackBar(content: Text(AppL10n.t('cs_added_to_stickers'))),
       );
     } catch (e) {
       if (!mounted) return;
@@ -5881,7 +5881,7 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.checklist_rtl),
-              title: const Text('Выбрать'),
+              title: Text(AppL10n.t('cs_select')),
               onTap: () {
                 Navigator.pop(ctx);
                 _enterBulkSelect(msg);
@@ -5897,7 +5897,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.reply),
-              title: const Text('Ответить'),
+              title: Text(AppL10n.t('cs_reply')),
               onTap: () {
                 Navigator.pop(ctx);
                 _startReply(msg);
@@ -5953,7 +5953,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (canSaveImage)
               ListTile(
                 leading: const Icon(Icons.save_alt_outlined),
-                title: const Text('Сохранить фото в галерею'),
+                title: Text(AppL10n.t('cs_save_photo_gallery')),
                 onTap: () async {
                   Navigator.pop(ctx);
                   await _saveImageToGallery(imageSavePath);
@@ -5962,7 +5962,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (canSaveVideo)
               ListTile(
                 leading: const Icon(Icons.video_file_outlined),
-                title: const Text('Сохранить видео в галерею'),
+                title: Text(AppL10n.t('cs_save_video_gallery')),
                 onTap: () async {
                   Navigator.pop(ctx);
                   await _saveVideoToGallery(videoSavePath);
@@ -5973,7 +5973,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 (msg.filePath != null && msg.filePath!.trim().isNotEmpty))
               ListTile(
                 leading: const Icon(Icons.add_to_drive_outlined),
-                title: const Text('Сохранить на Google Drive'),
+                title: Text(AppL10n.t('cs_save_gdrive')),
                 onTap: () async {
                   Navigator.pop(ctx);
                   await _saveMessageMediaToDrive(msg);
@@ -5982,7 +5982,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (canImportSticker)
               ListTile(
                 leading: const Icon(Icons.bookmark_add_outlined),
-                title: const Text('В коллекцию стикеров'),
+                title: Text(AppL10n.t('cs_to_sticker_collection')),
                 onTap: () async {
                   Navigator.pop(ctx);
                   try {
@@ -5990,7 +5990,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         .importChatImageToCollection(stickerSourcePath);
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Добавлено в стикеры')),
+                      SnackBar(content: Text(AppL10n.t('cs_added_to_stickers'))),
                     );
                   } catch (e) {
                     if (!mounted) return;
@@ -6063,7 +6063,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
     if (packs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пак этого эмодзи пока не найден')),
+        SnackBar(content: Text(AppL10n.t('cs_emoji_pack_not_found'))),
       );
       return;
     }
@@ -6204,7 +6204,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _exportChatToDrive() async {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Экспорт истории на Google Drive…')),
+        SnackBar(content: Text(AppL10n.t('cs_export_history_gdrive'))),
       );
     }
     try {
@@ -6433,8 +6433,8 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _downloadPendingMedia(ChatMessage msg) async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Загрузка…'),
+      SnackBar(
+        content: Text(AppL10n.t('cs_loading')),
         duration: Duration(seconds: 1),
       ),
     );
@@ -6442,8 +6442,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Данные уже недоступны — попросите переслать')),
+        SnackBar(
+            content: Text(AppL10n.t('cs_data_unavailable_resend'))),
       );
     }
   }
@@ -6479,14 +6479,14 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('Фото скачано')));
+              .showSnackBar(SnackBar(content: Text(AppL10n.t('cs_photo_downloaded'))));
         }
       } else if (Platform.isAndroid || Platform.isIOS) {
         await _ensureGalAccess();
         await Gal.putImage(imagePath);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Фото сохранено в галерею')));
+              SnackBar(content: Text(AppL10n.t('cs_photo_saved_gallery'))));
         }
       } else {
         // Desktop: copy to Downloads folder
@@ -6530,14 +6530,14 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('Видео скачано')));
+              .showSnackBar(SnackBar(content: Text(AppL10n.t('cs_video_downloaded'))));
         }
       } else if (Platform.isAndroid || Platform.isIOS) {
         await _ensureGalAccess();
         await Gal.putVideo(videoPath);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Видео сохранено в галерею')),
+            SnackBar(content: Text(AppL10n.t('cs_video_saved_gallery'))),
           );
         }
       } else {
@@ -6896,36 +6896,36 @@ class _ChatScreenState extends State<ChatScreen> {
                           PopupMenuItem(
                               value: 'profile', child: Text(AppL10n.t('cm_profile'))),
                           if (!_isDmBot && !_savedMessagesLocalOnly)
-                            const PopupMenuItem(
+                            PopupMenuItem(
                               value: 'exchange_profiles',
-                              child: Text('Обменяться профилями повторно'),
+                              child: Text(AppL10n.t('cs_exchange_again')),
                             ),
                           if (!_isDmBot && !_savedMessagesLocalOnly)
-                            const PopupMenuItem(
+                            PopupMenuItem(
                               value: 'edit_contact',
-                              child: Text('Изменить контакт'),
+                              child: Text(AppL10n.t('cs_edit_contact')),
                             ),
                           if (!_isDmBot)
-                            const PopupMenuItem(
+                            PopupMenuItem(
                               value: 'peer_stickers',
-                              child: Text('Стикеры из чата'),
+                              child: Text(AppL10n.t('cs_stickers_from_chat')),
                             ),
                           if (!_isDmBot)
-                            const PopupMenuItem(
+                            PopupMenuItem(
                                 value: 'chat_cal',
-                                child: Text('Календарь чата')),
-                          const PopupMenuItem(
-                              value: 'background', child: Text('Фон чата')),
+                                child: Text(AppL10n.t('cs_chat_calendar'))),
+                          PopupMenuItem(
+                              value: 'background', child: Text(AppL10n.t('cs_chat_background'))),
                           if (hasBg)
-                            const PopupMenuItem(
-                                value: 'remove_bg', child: Text('Убрать фон')),
-                          const PopupMenuItem(
-                              value: 'export', child: Text('Экспорт в файл')),
-                          const PopupMenuItem(
+                            PopupMenuItem(
+                                value: 'remove_bg', child: Text(AppL10n.t('cs_remove_bg'))),
+                          PopupMenuItem(
+                              value: 'export', child: Text(AppL10n.t('cs_export_to_file'))),
+                          PopupMenuItem(
                               value: 'export_drive',
-                              child: Text('Экспорт на Google Drive')),
-                          const PopupMenuItem(
-                              value: 'delete', child: Text('Удалить чат')),
+                              child: Text(AppL10n.t('cs_export_gdrive'))),
+                          PopupMenuItem(
+                              value: 'delete', child: Text(AppL10n.t('cs_delete_chat'))),
                         ];
                       },
                       onSelected: (v) async {
@@ -6977,7 +6977,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             final ok = await showDialog<bool>(
                               context: context,
                               builder: (ctx) => AlertDialog(
-                                title: const Text('Удалить чат?'),
+                                title: Text(AppL10n.t('cs_delete_chat_q')),
                                 content: const Text(
                                     'Чат будет удалён окончательно.'),
                                 actions: [
@@ -7169,8 +7169,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           if (context.mounted) {
                             Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Пользователь заблокирован')),
+                              SnackBar(
+                                  content: Text(AppL10n.t('cs_user_blocked'))),
                             );
                           }
                         },
@@ -7264,7 +7264,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           builder: (_, messages, __) {
                             if (messages.isEmpty) {
                               return Center(
-                                child: Text('Нет сообщений',
+                                child: Text(AppL10n.t('cs_no_messages'),
                                     style:
                                         TextStyle(color: Colors.grey.shade600)),
                               );
@@ -7995,7 +7995,7 @@ class _DmInviteBubbleActions extends StatelessWidget {
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Запрос связки отклонен')),
+          SnackBar(content: Text(AppL10n.t('cs_link_request_declined'))),
         );
       }
       return;
@@ -8057,7 +8057,7 @@ class _DmInviteBubbleActions extends StatelessWidget {
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Устройство переведено в дочерний режим')),
+        SnackBar(content: Text(AppL10n.t('cs_device_child_mode'))),
       );
     }
   }
@@ -8100,7 +8100,7 @@ class _DmInviteBubbleActions extends StatelessWidget {
         (existing.subscriberIds.contains(myId) || existing.adminId == myId)) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Вы уже подписаны на этот канал')),
+          SnackBar(content: Text(AppL10n.t('cs_already_subscribed'))),
         );
       }
       return;
@@ -8188,7 +8188,7 @@ class _DmInviteBubbleActions extends StatelessWidget {
     );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Вы в группе')),
+      SnackBar(content: Text(AppL10n.t('cs_you_in_group'))),
     );
     await Navigator.push<void>(
       context,
@@ -8215,7 +8215,7 @@ class _DmInviteBubbleActions extends StatelessWidget {
                     : cs.primary.withValues(alpha: 0.5),
               ),
             ),
-            child: const Text('Открыть канал'),
+            child: Text(AppL10n.t('cs_open_channel')),
           ),
           const SizedBox(height: 6),
           ListenableBuilder(
@@ -8250,18 +8250,18 @@ class _DmInviteBubbleActions extends StatelessWidget {
         width: double.infinity,
         child: FilledButton(
           onPressed: () => unawaited(_joinGroup(context)),
-          child: const Text('Стать участником'),
+          child: Text(AppL10n.t('cs_join')),
         ),
       );
     }
     if (kind == 'device_link') {
       final acceptedAt = (data['acceptedAt'] as num?)?.toInt();
       if (acceptedAt != null) {
-        return const SizedBox(
+        return SizedBox(
           width: double.infinity,
           child: FilledButton(
             onPressed: null,
-            child: Text('Запрос принят'),
+            child: Text(AppL10n.t('cs_request_accepted')),
           ),
         );
       }
@@ -9658,7 +9658,7 @@ class _DocumentPreviewScreenState extends State<_DocumentPreviewScreen> {
               FilledButton.icon(
                 onPressed: _openExternal,
                 icon: const Icon(Icons.open_in_new),
-                label: const Text('Открыть во внешнем приложении'),
+                label: Text(AppL10n.t('cs_open_external')),
               ),
             ],
           ),
@@ -10691,8 +10691,8 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                                         strokeWidth: 2, color: Colors.white54),
                                   ),
                                 )
-                              : const Center(
-                                  child: Text('Файл не найден',
+                              : Center(
+                                  child: Text(AppL10n.t('cs_file_not_found'),
                                       style: TextStyle(
                                           color: Colors.white54, fontSize: 11),
                                       textAlign: TextAlign.center),
@@ -10810,8 +10810,8 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
           child: !exists
               ? Container(
                   color: Colors.black87,
-                  child: const Center(
-                    child: Text('Файл не найден',
+                  child: Center(
+                    child: Text(AppL10n.t('cs_file_not_found'),
                         style: TextStyle(color: Colors.white54, fontSize: 12),
                         textAlign: TextAlign.center),
                   ),
@@ -10915,13 +10915,13 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                               color: Colors.black.withValues(alpha: 0.5),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Row(
+                            child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(Icons.videocam_rounded,
                                       color: Colors.white, size: 13),
                                   SizedBox(width: 4),
-                                  Text('Видео',
+                                  Text(AppL10n.t('cs_video'),
                                       style: TextStyle(
                                           color: Colors.white, fontSize: 11)),
                                 ]),
@@ -11312,7 +11312,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
   Future<void> _exchangeProfilesAgain() async {
     if (!_looksLikeHex64(widget.peerId)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Профиль контакта ещё не найден')),
+        SnackBar(content: Text(AppL10n.t('cs_contact_profile_not_found'))),
       );
       return;
     }
@@ -11640,7 +11640,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       await BlockService.instance.unblock(widget.peerId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Контакт разблокирован')),
+        SnackBar(content: Text(AppL10n.t('cs_contact_unblocked'))),
       );
       return;
     }
@@ -11648,7 +11648,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
-          title: const Text('Заблокировать контакт?'),
+          title: Text(AppL10n.t('cs_block_contact_q')),
           content: const Text(
             'Вы больше не будете получать от него сообщения, истории и вызовы.',
           ),
@@ -11660,7 +11660,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Colors.orange),
               onPressed: () => Navigator.pop(c, true),
-              child: const Text('Заблокировать'),
+              child: Text(AppL10n.t('cs_block')),
             ),
           ],
         ),
@@ -11669,7 +11669,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       await BlockService.instance.block(widget.peerId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Контакт заблокирован')),
+        SnackBar(content: Text(AppL10n.t('cs_contact_blocked'))),
       );
       Navigator.of(context).pop();
     } else if (action == 'delete') {
@@ -11698,7 +11698,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       await ChatStorageService.instance.deleteContact(widget.peerId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Контакт удалён')),
+        SnackBar(content: Text(AppL10n.t('cs_contact_deleted'))),
       );
       // Pop profile screen AND chat screen underneath.
       Navigator.of(context).popUntil((r) => r.isFirst);
@@ -11848,7 +11848,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       if (!mounted) return;
       if (ack['ok'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Профиль бота обновлён')),
+          SnackBar(content: Text(AppL10n.t('cs_bot_profile_updated'))),
         );
         await _refreshOwnedRelayBotState();
         await _loadAll();
@@ -12082,40 +12082,40 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                     onSelected: (value) => _onProfileAction(value),
                     itemBuilder: (_) => [
                       if (_isOwnedRelayBot)
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'edit_bot_profile',
                           child: Row(children: [
                             Icon(Icons.edit_outlined, size: 20),
                             SizedBox(width: 12),
-                            Text('Редактировать профиль бота'),
+                            Text(AppL10n.t('cs_edit_bot_profile')),
                           ]),
                         ),
                       if (isBlocked)
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'unblock',
                           child: Row(children: [
                             Icon(Icons.lock_open,
                                 size: 20, color: Colors.green),
                             SizedBox(width: 12),
-                            Text('Разблокировать'),
+                            Text(AppL10n.t('cs_unblock')),
                           ]),
                         )
                       else
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'block',
                           child: Row(children: [
                             Icon(Icons.block, size: 20, color: Colors.orange),
                             SizedBox(width: 12),
-                            Text('Заблокировать'),
+                            Text(AppL10n.t('cs_block')),
                           ]),
                         ),
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'delete',
                         child: Row(children: [
                           Icon(Icons.delete_outline,
                               size: 20, color: Colors.red),
                           SizedBox(width: 12),
-                          Text('Удалить контакт'),
+                          Text(AppL10n.t('cs_delete_contact')),
                         ]),
                       ),
                     ],
@@ -12198,7 +12198,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _exchangeProfilesAgain,
                       icon: const Icon(Icons.sync_outlined),
-                      label: const Text('Обменяться профилями повторно'),
+                      label: Text(AppL10n.t('cs_exchange_again')),
                     ),
                   ),
 
@@ -12236,7 +12236,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                               Icon(Icons.music_note,
                                   size: 20, color: cs.primary),
                               const SizedBox(width: 8),
-                              const Text('Музыка в профиле',
+                              Text(AppL10n.t('cs_profile_music'),
                                   style: TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w600)),
@@ -12264,7 +12264,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                                 );
                               },
                               icon: const Icon(Icons.download_outlined),
-                              label: const Text('Загрузить трек'),
+                              label: Text(AppL10n.t('cs_load_track')),
                             )
                           else
                             Text(
@@ -12286,7 +12286,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.amp_stories),
-                      title: const Text('Сегодняшняя история'),
+                      title: Text(AppL10n.t('cs_todays_story')),
                       subtitle: Text('${stories.length} историй'),
                       onTap: () => Navigator.push(
                         context,
@@ -12329,17 +12329,17 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                     children: [
                       const Icon(Icons.date_range_outlined, size: 18),
                       const SizedBox(width: 8),
-                      const Text('Дата:'),
-                      const SizedBox(width: 8),
+                      Text(AppL10n.t('cs_date_label')),
+                      SizedBox(width: 8),
                       DropdownButton<int>(
                         value: _dateFilterDays,
-                        items: const [
+                        items: [
                           DropdownMenuItem(
-                              value: 0, child: Text('За все время')),
-                          DropdownMenuItem(value: 7, child: Text('7 дней')),
-                          DropdownMenuItem(value: 30, child: Text('30 дней')),
-                          DropdownMenuItem(value: 90, child: Text('90 дней')),
-                          DropdownMenuItem(value: 365, child: Text('1 год')),
+                              value: 0, child: Text(AppL10n.t('cs_all_time'))),
+                          DropdownMenuItem(value: 7, child: Text(AppL10n.t('cs_7days'))),
+                          DropdownMenuItem(value: 30, child: Text(AppL10n.t('cs_30days'))),
+                          DropdownMenuItem(value: 90, child: Text(AppL10n.t('cs_90days'))),
+                          DropdownMenuItem(value: 365, child: Text(AppL10n.t('cs_1year'))),
                         ],
                         onChanged: (v) {
                           if (v == null) return;
@@ -12354,24 +12354,24 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                       children: [
                         const Icon(Icons.filter_alt_outlined, size: 18),
                         const SizedBox(width: 8),
-                        const Text('Тип файла:'),
-                        const SizedBox(width: 8),
+                        Text(AppL10n.t('cs_file_type_label')),
+                        SizedBox(width: 8),
                         DropdownButton<String>(
                           value: _fileTypeFilter,
-                          items: const [
-                            DropdownMenuItem(value: 'all', child: Text('Все')),
+                          items: [
+                            DropdownMenuItem(value: 'all', child: Text(AppL10n.t('cs_all'))),
                             DropdownMenuItem(
-                                value: 'image', child: Text('Изображения')),
+                                value: 'image', child: Text(AppL10n.t('cs_images'))),
                             DropdownMenuItem(
-                                value: 'video', child: Text('Видео')),
+                                value: 'video', child: Text(AppL10n.t('cs_video'))),
                             DropdownMenuItem(
-                                value: 'audio', child: Text('Аудио')),
+                                value: 'audio', child: Text(AppL10n.t('cs_audio'))),
                             DropdownMenuItem(
-                                value: 'doc', child: Text('Документы')),
+                                value: 'doc', child: Text(AppL10n.t('cs_documents'))),
                             DropdownMenuItem(
-                                value: 'archive', child: Text('Архивы')),
+                                value: 'archive', child: Text(AppL10n.t('cs_archives'))),
                             DropdownMenuItem(
-                                value: 'other', child: Text('Прочее')),
+                                value: 'other', child: Text(AppL10n.t('cs_other'))),
                           ],
                           onChanged: (v) {
                             if (v == null) return;
