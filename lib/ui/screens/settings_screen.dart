@@ -46,8 +46,7 @@ import '../screens/input_bar_button_order_settings.dart';
 import '../../main.dart' show sendProfileToAllContacts;
 import '../widgets/reactions.dart';
 import '../rlink_nav_routes.dart';
-import 'intro_promo_screen.dart';
-import 'guide_tour_screen.dart';
+import 'help_center_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared top-level helpers
@@ -440,20 +439,13 @@ class SettingsCategoryCards extends StatelessWidget {
             onTap: () => _open(context, const _PrivacyPage()),
           ),
           _CategoryItem(
-            icon: Icons.play_circle_outline,
+            icon: Icons.menu_book_rounded,
             color: const Color(0xFF1DB954),
-            title: AppL10n.t('intro_guide_title'),
-            subtitle: 'Анимированный обзор + тур по интерфейсу',
-            onTap: () async {
-              final nav = Navigator.of(context);
-              await nav.push(MaterialPageRoute(
-                builder: (_) =>
-                    const IntroPromoScreen(markSeenOnFinish: false),
-              ));
-              await nav.push(MaterialPageRoute(
-                builder: (_) => const GuideTourScreen(markSeenOnFinish: false),
-              ));
-            },
+            title: AppL10n.t('help_center_title'),
+            subtitle: AppL10n.t('help_center_sub'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HelpCenterScreen()),
+            ),
           ),
           _CategoryItem(
             icon: Icons.record_voice_over_outlined,

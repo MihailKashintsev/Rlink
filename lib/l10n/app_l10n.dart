@@ -63,6 +63,58 @@ class AppL10n {
     'guide_search_s': 'Найдите людей, чаты и каналы',
     'guide_stories_t': 'Истории',
     'guide_stories_s': 'Добавляйте и смотрите истории друзей',
+    // ── Help center (split instructions) ──
+    'help_center_title': 'Как устроен Rlink',
+    'help_center_sub': 'Выберите раздел — можно начать с нужного места',
+    'help_watch_intro_t': 'Обзор возможностей',
+    'help_watch_intro_s': 'Анимированный ролик о Rlink',
+    'help_watch_tour_t': 'Тур по интерфейсу',
+    'help_watch_tour_s': 'Стрелки покажут, где что находится',
+    'help_find_t': 'Найти человека и написать',
+    'help_find_b':
+        'Откройте вкладку «Чаты» и нажмите 🔍 «Поиск» вверху.\n'
+        'Введите имя, #юзернейм или универсальный код человека.\n'
+        'Поиск людей по юзернейму и коду работает при подключении к серверу (значок связи вверху).\n'
+        'Нажмите на человека в результатах — откроется чат.\n'
+        'Напишите сообщение и нажмите кнопку отправки. Готово!',
+    'help_exchange_t': 'Обменяться профилями рядом (Bluetooth)',
+    'help_exchange_b':
+        'Откройте вкладку «Рядом».\n'
+        'Включите Bluetooth у себя и у собеседника, оба должны быть в Rlink.\n'
+        'В списке появятся устройства поблизости — нажмите на нужное.\n'
+        'Собеседник получит «Запрос на обмен профилем» — пусть подтвердит.\n'
+        'После обмена человек появится в контактах. Теперь можно переписываться даже без интернета.',
+    'help_profile_t': 'Ваш профиль и юзернейм',
+    'help_profile_b':
+        'Откройте вкладку «Я» → «Профиль».\n'
+        'Задайте имя, аватар и @юзернейм — именно по нему вас найдут.\n'
+        'Юзернейм показывается как #имя; поделитесь им с друзьями.\n'
+        'Чтобы вас находили на расстоянии, подключитесь к серверу (онлайн).',
+    'help_group_t': 'Создать группу',
+    'help_group_b':
+        'Вкладка «Чаты» → меню ⋮ вверху справа → «Новая группа».\n'
+        'Введите название группы и создайте её.\n'
+        'Откройте группу и добавьте участников из контактов.\n'
+        'Пишите — сообщения видят все участники.',
+    'help_channel_t': 'Создать канал',
+    'help_channel_b':
+        'Вкладка «Чаты» → меню ⋮ → «Новый канал».\n'
+        'Введите название и @юзернейм канала, нажмите «Создать».\n'
+        'Публикуйте посты — их видят все подписчики.\n'
+        'Поделитесь @юзернеймом или кодом канала, чтобы на него подписались.',
+    'help_google_t': 'Привязать Google-аккаунт к каналу',
+    'help_google_b':
+        'Откройте свой канал (вы должны быть владельцем) → «Настройки канала».\n'
+        'Найдите раздел «Google Drive».\n'
+        'Нажмите «Подключить аккаунт» и войдите в Google.\n'
+        'Фото и видео канала будут храниться в вашем Google Drive.\n'
+        'Подписчики получают медиа автоматически — даже большие файлы.',
+    'help_bots_t': 'Пользоваться ботами',
+    'help_bots_b':
+        'Вкладка «Чаты» → меню ⋮ → «Боты» — это каталог ботов.\n'
+        'Откройте бота и нажмите /start или кнопку команды.\n'
+        'Команды начинаются со «/» (например /help). Часто под сообщением есть кнопки.\n'
+        'Emoji-бот добавляет кастомные эмодзи; ИИ-боты отвечают на ваши вопросы.',
     'intro_bots_title': 'Боты',
     'intro_bots_sub': 'Команды и кнопки прямо в чате',
     'intro_groups_title': 'Группы',
@@ -328,6 +380,58 @@ class AppL10n {
     'guide_search_s': 'Find people, chats and channels',
     'guide_stories_t': 'Stories',
     'guide_stories_s': "Add and watch friends' stories",
+    // ── Help center (split instructions) ──
+    'help_center_title': 'How Rlink works',
+    'help_center_sub': 'Pick a topic — you can start wherever you need',
+    'help_watch_intro_t': 'Feature overview',
+    'help_watch_intro_s': 'Animated promo about Rlink',
+    'help_watch_tour_t': 'Interface tour',
+    'help_watch_tour_s': 'Arrows show where everything is',
+    'help_find_t': 'Find a person and message them',
+    'help_find_b':
+        'Open the “Chats” tab and tap 🔍 “Search” at the top.\n'
+        'Type the name, #username or universal code of the person.\n'
+        'Searching people by username/code requires a server connection (the link icon at the top).\n'
+        'Tap a person in the results — the chat opens.\n'
+        'Type a message and tap send. Done!',
+    'help_exchange_t': 'Exchange profiles nearby (Bluetooth)',
+    'help_exchange_b':
+        'Open the “Nearby” tab.\n'
+        'Turn on Bluetooth on both phones; both must be in Rlink.\n'
+        'Nearby devices appear in the list — tap the one you want.\n'
+        'They receive a “Profile exchange request” — ask them to confirm.\n'
+        'After the exchange the person is in your contacts. You can now chat even without internet.',
+    'help_profile_t': 'Your profile and username',
+    'help_profile_b':
+        'Open the “Me” tab → “Profile”.\n'
+        'Set a name, avatar and @username — that is how people find you.\n'
+        'The username shows as #name; share it with friends.\n'
+        'To be found at a distance, connect to the server (online).',
+    'help_group_t': 'Create a group',
+    'help_group_b':
+        '“Chats” tab → ⋮ menu (top right) → “New group”.\n'
+        'Enter a group name and create it.\n'
+        'Open the group and add members from your contacts.\n'
+        'Post — every member sees the messages.',
+    'help_channel_t': 'Create a channel',
+    'help_channel_b':
+        '“Chats” tab → ⋮ menu → “New channel”.\n'
+        'Enter a name and @username for the channel, tap “Create”.\n'
+        'Publish posts — all subscribers see them.\n'
+        'Share the @username or channel code so people can subscribe.',
+    'help_google_t': 'Link a Google account to a channel',
+    'help_google_b':
+        'Open your channel (you must be the owner) → “Channel settings”.\n'
+        'Find the “Google Drive” section.\n'
+        'Tap “Connect account” and sign in to Google.\n'
+        'Channel photos and videos are stored in your Google Drive.\n'
+        'Subscribers receive media automatically — even large files.',
+    'help_bots_t': 'Use bots',
+    'help_bots_b':
+        '“Chats” tab → ⋮ menu → “Bots” — the bot catalog.\n'
+        'Open a bot and tap /start or a command button.\n'
+        'Commands start with “/” (e.g. /help). There are often buttons under the message.\n'
+        'The Emoji bot adds custom emoji; AI bots answer your questions.',
     'intro_bots_title': 'Bots',
     'intro_bots_sub': 'Commands and buttons in chat',
     'intro_groups_title': 'Groups',
