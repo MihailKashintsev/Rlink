@@ -25,12 +25,16 @@ class HoldSquareVideoReviewScreen extends StatefulWidget {
   /// shown in its natural aspect ratio (picked / arbitrary videos).
   final bool square;
 
+  /// Offer a "GIF (no sound)" send for short videos → animated sticker.
+  final bool allowGif;
+
   const HoldSquareVideoReviewScreen({
     super.key,
     required this.videoPath,
     required this.allowTrim,
     this.previewOnly = false,
     this.square = true,
+    this.allowGif = false,
   });
 
   @override
@@ -268,18 +272,35 @@ class _HoldSquareVideoReviewScreenState
                       top: false,
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: _busy
-                                ? null
-                                : (widget.previewOnly
-                                    ? () => Navigator.pop(context)
-                                    : _send),
-                            child: Text(widget.previewOnly
-                                ? 'Продолжить запись'
-                                : (_busy ? 'Обработка…' : 'Отправить')),
-                          ),
+                        child: Row(
+                          children: [
+                            if (widget.allowGif &&
+                                !widget.previewOnly &&
+                                _durationSec <= 8.0)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 10),
+                                child: OutlinedButton.icon(
+                                  onPressed: _busy
+                                      ? null
+                                      : () => Navigator.pop(
+                                          context, 'gif::${widget.videoPath}'),
+                                  icon: const Icon(Icons.gif_box_rounded),
+                                  label: const Text('GIF без звука'),
+                                ),
+                              ),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: _busy
+                                    ? null
+                                    : (widget.previewOnly
+                                        ? () => Navigator.pop(context)
+                                        : _send),
+                                child: Text(widget.previewOnly
+                                    ? 'Продолжить запись'
+                                    : (_busy ? 'Обработка…' : 'Отправить')),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

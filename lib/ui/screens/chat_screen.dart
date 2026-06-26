@@ -3998,7 +3998,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Shows the video editor (preview + trim) before sending a picked video.
   /// Native returns the (possibly trimmed) path or null if cancelled.
-  Future<String?> _reviewVideoNative(String path) async {
+  Future<({String path, bool asGif})?> _reviewVideoNative(String path) async {
     if (!mounted) return null;
     final chosen = await Navigator.of(context).push<String?>(
       MaterialPageRoute(
@@ -4007,21 +4007,26 @@ class _ChatScreenState extends State<ChatScreen> {
           videoPath: path,
           allowTrim: true,
           square: false,
+          allowGif: true,
         ),
       ),
     );
-    return (chosen == null || chosen.isEmpty) ? null : chosen;
+    if (chosen == null || chosen.isEmpty) return null;
+    if (chosen.startsWith('gif::')) {
+      return (path: chosen.substring(5), asGif: true);
+    }
+    return (path: chosen, asGif: false);
   }
 
   /// Web video editor: filmstrip timeline (real frames) + preview before send.
   /// Browsers can't re-encode, so trimming is app-only; web sends the original.
   /// Returns the bytes+filename to send, or null if cancelled.
-  Future<({Uint8List bytes, String fileName})?> _reviewVideoWeb(
+  Future<({Uint8List bytes, String fileName, bool asGif})?> _reviewVideoWeb(
       Uint8List bytes, String fileName) async {
-    if (!mounted) return (bytes: bytes, fileName: fileName);
+    if (!mounted) return (bytes: bytes, fileName: fileName, asGif: false);
     final url = webBytesObjectUrl(bytes, mimeType: 'video/mp4');
     if (url == null) {
-      return (bytes: bytes, fileName: fileName); // can't preview → send original
+      return (bytes: bytes, fileName: fileName, asGif: false);
     }
     final chosen = await Navigator.of(context).push<String?>(
       MaterialPageRoute(
@@ -4030,11 +4035,12 @@ class _ChatScreenState extends State<ChatScreen> {
           videoPath: url,
           allowTrim: true,
           square: false,
+          allowGif: true,
         ),
       ),
     );
     if (chosen == null) return null; // cancelled
-    return (bytes: bytes, fileName: fileName);
+    return (bytes: bytes, fileName: fileName, asGif: chosen.startsWith('gif::'));
   }
 
   Future<void> _sendWebVideoBytes({
@@ -4050,6 +4056,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (reviewed == null) return; // cancelled
     final data = reviewed.bytes;
     final name = reviewed.fileName;
+    final asGif = reviewed.asGif;
     final mime = _mimeTypeForFileName(name, fallbackMime: 'video/mp4');
     setState(() => _isSending = true);
     _sendActivity(Activity.sendingFile);
@@ -4091,13 +4098,14 @@ class _ChatScreenState extends State<ChatScreen> {
         ChatMessage(
           id: msgId,
           peerId: targetPeerId,
-          text: '📹 Видео',
+          text: asGif ? '🎞 GIF' : '📹 Видео',
           isOutgoing: true,
           timestamp: DateTime.now(),
           status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
           videoPath: localPath,
           fileName: name,
           fileSize: data.length,
+          isSticker: asGif,
         ),
         wasQueued: wasQueued,
       );
@@ -4648,10 +4656,11 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     final reviewed = await _reviewVideoNative(picked.path);
     if (reviewed == null) return;
+    final asGif = reviewed.asGif;
     setState(() => _isSending = true);
     try {
       final path =
-          await ImageService.instance.saveVideo(reviewed, isSquare: false);
+          await ImageService.instance.saveVideo(reviewed.path, isSquare: false);
       final msgId = _uuid.v4();
       final targetPeerId = _looksLikePublicKey(_resolvedPeerId)
           ? _resolvedPeerId
@@ -4689,11 +4698,12 @@ class _ChatScreenState extends State<ChatScreen> {
           ChatMessage(
             id: msgId,
             peerId: targetPeerId,
-            text: '📹 Видео',
+            text: asGif ? '🎞 GIF' : '📹 Видео',
             isOutgoing: true,
             timestamp: DateTime.now(),
             status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
             videoPath: path,
+            isSticker: asGif,
           ),
           wasQueued: wasQueued);
       _scrollToBottom();
@@ -8680,6 +8690,8 @@ class _MessageBubble extends StatelessWidget {
                   child: _VideoMessageBubble(
                     videoPath: msg.videoPath!,
                     isOut: isOut,
+                    isGif: msg.isSticker &&
+                        !_dmVideoPathIsSquare(msg.videoPath!),
                     onPlaySquareWithQueue: playbackThread != null &&
                             playbackIndex != null &&
                             _dmVideoPathIsSquare(msg.videoPath!)
@@ -10113,11 +10125,15 @@ class _VideoMessageBubble extends StatefulWidget {
   final VoidCallback? onPlaySquareWithQueue;
   final VoidCallback? onLongPressSaveToGallery;
 
+  /// Animated sticker: a short video that auto-loops, muted, no controls.
+  final bool isGif;
+
   const _VideoMessageBubble({
     required this.videoPath,
     required this.isOut,
     this.onPlaySquareWithQueue,
     this.onLongPressSaveToGallery,
+    this.isGif = false,
   });
 
   @override
@@ -10293,9 +10309,10 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         .addListener(_onSquarePausePulse);
     VoiceService.instance.squareVideoUiResumePulse
         .addListener(_onSquareResumePulse);
-    if (_isSquare &&
-        ((kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)) ||
-            (!kIsWeb && File(widget.videoPath).existsSync()))) {
+    final mediaExists =
+        (kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)) ||
+            (!kIsWeb && File(widget.videoPath).existsSync());
+    if ((_isSquare || widget.isGif) && mediaExists) {
       _initPlayer();
     } else if (!_isSquare) {
       unawaited(_extractPoster());
@@ -10538,7 +10555,12 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
           : VideoPlayerController.file(File(candidate));
       try {
         await ctrl.initialize();
-        if (_isSquare) {
+        if (widget.isGif) {
+          // Animated sticker: silent auto-looping playback.
+          await ctrl.setLooping(true);
+          await ctrl.setVolume(0);
+          await ctrl.play();
+        } else if (_isSquare) {
           ctrl.setLooping(!_squareUsesQueue);
         } else {
           // Seek to first frame so it shows as a thumbnail; don't auto-play.
@@ -10631,7 +10653,72 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isGif) return _buildGif();
     return _isSquare ? _buildCircle() : _buildRegular(context);
+  }
+
+  /// Animated sticker: silent looping clip, no controls, small + rounded.
+  Widget _buildGif() {
+    final ctrl = _ctrl;
+    final ready = _initialized && ctrl != null;
+    final ar = ready && ctrl.value.aspectRatio > 0
+        ? ctrl.value.aspectRatio
+        : 1.0;
+    const maxSide = 190.0;
+    final w = ar >= 1 ? maxSide : maxSide * ar;
+    final h = ar >= 1 ? maxSide / ar : maxSide;
+    return GestureDetector(
+      onLongPress: widget.onLongPressSaveToGallery,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          width: w,
+          height: h,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Container(color: const Color(0xFF1A1A1A)),
+              if (ready)
+                FittedBox(
+                  fit: BoxFit.cover,
+                  clipBehavior: Clip.hardEdge,
+                  child: SizedBox(
+                    width: _videoPaintSize().width,
+                    height: _videoPaintSize().height,
+                    child: VideoPlayer(ctrl),
+                  ),
+                )
+              else
+                const Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white54),
+                  ),
+                ),
+              Positioned(
+                left: 6,
+                bottom: 6,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('GIF',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   static String _fmtVideoDur(Duration d) {
