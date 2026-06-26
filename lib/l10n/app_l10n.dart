@@ -667,6 +667,102 @@ class AppL10n {
   };
 
   static const _es = <String, String>{
+    'intro_skip': 'Saltar',
+    'intro_next': 'Siguiente',
+    'intro_start': 'Empezar a chatear',
+    'intro_guide_title': 'Cómo funciona Rlink',
+    'intro_welcome_title': 'RLINK',
+    'intro_welcome_sub': 'Conexión sin fronteras',
+    'intro_universal_title': 'Contigo en todas partes',
+    'intro_universal_sub': 'Teléfono, tablet y portátil',
+    'intro_messages_title': 'Mensajes cifrados',
+    'intro_messages_sub': 'Texto, voz y transcripción',
+    'intro_privacy_title': 'Sin número de teléfono',
+    'intro_privacy_sub': 'Anónimo y bajo tu control',
+    'intro_bots_title': 'Bots',
+    'intro_bots_sub': 'Comandos y botones en el chat',
+    'intro_groups_title': 'Grupos',
+    'intro_groups_sub': 'Chatea en compañía',
+    'intro_channels_title': 'Canales',
+    'intro_channels_sub': 'Comparte con miles de personas',
+    'intro_stories_title': 'Historias',
+    'intro_stories_sub': 'Fotos, vídeos y dibujos',
+    'intro_bluetooth_title': 'Funciona sin internet',
+    'intro_bluetooth_sub': 'Conexión cercana por Bluetooth',
+    'intro_server_title': 'A cualquier distancia',
+    'intro_server_sub': 'A través del servidor, por todo el mundo',
+    'intro_calls_title': 'Llamadas y videollamadas',
+    'intro_calls_sub': 'Voz y vídeo entre países',
+    'empty_chats_title': 'Aquí aparecerán tus chats',
+    'empty_chats_sub':
+        'Añade tu primer contacto: busca dispositivos cercanos o comparte tu perfil',
+    'empty_find_nearby': 'Buscar cerca',
+    'guide_done': '¡Entendido!',
+    'guide_intro_title': 'Dónde está cada cosa',
+    'guide_intro_sub': 'Un recorrido rápido por la interfaz',
+    'guide_chats_t': 'Chats',
+    'guide_chats_s': 'Todas tus conversaciones, grupos y guardados',
+    'guide_nearby_t': 'Cerca',
+    'guide_nearby_s': 'Encuentra gente cerca por Bluetooth',
+    'guide_ether_t': 'En el aire',
+    'guide_ether_s': 'Canales y publicaciones',
+    'guide_me_t': 'Yo',
+    'guide_me_s': 'Perfil, tema y ajustes',
+    'guide_search_t': 'Buscar',
+    'guide_search_s': 'Encuentra personas, chats y canales',
+    'guide_stories_t': 'Historias',
+    'guide_stories_s': 'Añade y mira las historias de tus amigos',
+    'help_center_title': 'Cómo funciona Rlink',
+    'help_center_sub': 'Elige un tema: puedes empezar por donde quieras',
+    'help_watch_intro_t': 'Resumen de funciones',
+    'help_watch_intro_s': 'Vídeo animado sobre Rlink',
+    'help_watch_tour_t': 'Recorrido por la interfaz',
+    'help_watch_tour_s': 'Las flechas muestran dónde está todo',
+    'help_find_t': 'Encontrar a alguien y escribirle',
+    'help_find_b':
+        'Abre la pestaña «Chats» y toca 🔍 «Buscar» arriba.\n'
+        'Escribe el nombre, #usuario o código universal de la persona.\n'
+        'Buscar personas por usuario o código requiere conexión al servidor (el icono de enlace arriba).\n'
+        'Toca a la persona en los resultados: se abre el chat.\n'
+        'Escribe un mensaje y pulsa enviar. ¡Listo!',
+    'help_exchange_t': 'Intercambiar perfiles cerca (Bluetooth)',
+    'help_exchange_b':
+        'Abre la pestaña «Cerca».\n'
+        'Activa el Bluetooth en ambos teléfonos; los dos deben tener Rlink.\n'
+        'Los dispositivos cercanos aparecen en la lista: toca el que quieras.\n'
+        'La otra persona recibe una «Solicitud de intercambio de perfil»: pídele que confirme.\n'
+        'Tras el intercambio, la persona estará en tus contactos. Ya podéis chatear incluso sin internet.',
+    'help_profile_t': 'Tu perfil y nombre de usuario',
+    'help_profile_b':
+        'Abre la pestaña «Yo» → «Perfil».\n'
+        'Pon un nombre, un avatar y un @usuario: así te encontrarán.\n'
+        'El usuario se muestra como #nombre; compártelo con tus amigos.\n'
+        'Para que te encuentren a distancia, conéctate al servidor (en línea).',
+    'help_group_t': 'Crear un grupo',
+    'help_group_b':
+        'Pestaña «Chats» → menú ⋮ (arriba a la derecha) → «Nuevo grupo».\n'
+        'Escribe un nombre para el grupo y créalo.\n'
+        'Abre el grupo y añade miembros desde tus contactos.\n'
+        'Escribe: todos los miembros ven los mensajes.',
+    'help_channel_t': 'Crear un canal',
+    'help_channel_b':
+        'Pestaña «Chats» → menú ⋮ → «Nuevo canal».\n'
+        'Escribe un nombre y un @usuario para el canal y pulsa «Crear».\n'
+        'Publica entradas: las ven todos los suscriptores.\n'
+        'Comparte el @usuario o el código del canal para que se suscriban.',
+    'help_google_t': 'Vincular una cuenta de Google a un canal',
+    'help_google_b':
+        'Abre tu canal (debes ser el propietario) → «Ajustes del canal».\n'
+        'Busca la sección «Google Drive».\n'
+        'Pulsa «Conectar cuenta» e inicia sesión en Google.\n'
+        'Las fotos y vídeos del canal se guardan en tu Google Drive.\n'
+        'Los suscriptores los reciben automáticamente, incluso archivos grandes.',
+    'help_bots_t': 'Usar bots',
+    'help_bots_b':
+        'Pestaña «Chats» → menú ⋮ → «Bots»: el catálogo de bots.\n'
+        'Abre un bot y pulsa /start o un botón de comando.\n'
+        'Los comandos empiezan por «/» (por ejemplo /help). Suele haber botones bajo el mensaje.\n'
+        'El bot de Emoji añade emojis personalizados; los bots de IA responden a tus preguntas.',
     'nav_chats': 'Chats',
     'nav_contacts': 'Contactos',
     'nav_nearby': 'Cerca',
@@ -888,6 +984,102 @@ class AppL10n {
   };
 
   static const _de = <String, String>{
+    'intro_skip': 'Überspringen',
+    'intro_next': 'Weiter',
+    'intro_start': 'Loslegen',
+    'intro_guide_title': 'So funktioniert Rlink',
+    'intro_welcome_title': 'RLINK',
+    'intro_welcome_sub': 'Verbindung ohne Grenzen',
+    'intro_universal_title': 'Überall dabei',
+    'intro_universal_sub': 'Handy, Tablet und Laptop',
+    'intro_messages_title': 'Verschlüsselte Nachrichten',
+    'intro_messages_sub': 'Text, Sprache und Transkription',
+    'intro_privacy_title': 'Ohne Telefonnummer',
+    'intro_privacy_sub': 'Anonym und unter deiner Kontrolle',
+    'intro_bots_title': 'Bots',
+    'intro_bots_sub': 'Befehle und Schaltflächen im Chat',
+    'intro_groups_title': 'Gruppen',
+    'intro_groups_sub': 'Gemeinsam chatten',
+    'intro_channels_title': 'Kanäle',
+    'intro_channels_sub': 'Mit Tausenden teilen',
+    'intro_stories_title': 'Stories',
+    'intro_stories_sub': 'Fotos, Videos und Zeichnungen',
+    'intro_bluetooth_title': 'Funktioniert ohne Internet',
+    'intro_bluetooth_sub': 'Verbindung in der Nähe über Bluetooth',
+    'intro_server_title': 'Über jede Entfernung',
+    'intro_server_sub': 'Über den Server, weltweit',
+    'intro_calls_title': 'Anrufe und Videoanrufe',
+    'intro_calls_sub': 'Sprache und Video zwischen Ländern',
+    'empty_chats_title': 'Hier erscheinen deine Chats',
+    'empty_chats_sub':
+        'Füge deinen ersten Kontakt hinzu – finde Geräte in der Nähe oder teile dein Profil',
+    'empty_find_nearby': 'In der Nähe suchen',
+    'guide_done': 'Verstanden!',
+    'guide_intro_title': 'Wo ist was',
+    'guide_intro_sub': 'Eine kurze Tour durch die Oberfläche',
+    'guide_chats_t': 'Chats',
+    'guide_chats_s': 'Alle Unterhaltungen, Gruppen und Gespeichertes',
+    'guide_nearby_t': 'In der Nähe',
+    'guide_nearby_s': 'Finde Leute in der Nähe über Bluetooth',
+    'guide_ether_t': 'Äther',
+    'guide_ether_s': 'Kanäle und Beiträge',
+    'guide_me_t': 'Ich',
+    'guide_me_s': 'Profil, Design und Einstellungen',
+    'guide_search_t': 'Suche',
+    'guide_search_s': 'Finde Leute, Chats und Kanäle',
+    'guide_stories_t': 'Stories',
+    'guide_stories_s': 'Stories von Freunden hinzufügen und ansehen',
+    'help_center_title': 'So funktioniert Rlink',
+    'help_center_sub': 'Wähle ein Thema – du kannst überall beginnen',
+    'help_watch_intro_t': 'Funktionsüberblick',
+    'help_watch_intro_s': 'Animiertes Video über Rlink',
+    'help_watch_tour_t': 'Oberflächen-Tour',
+    'help_watch_tour_s': 'Pfeile zeigen, wo alles ist',
+    'help_find_t': 'Eine Person finden und anschreiben',
+    'help_find_b':
+        'Öffne den Tab „Chats“ und tippe oben auf 🔍 „Suche“.\n'
+        'Gib den Namen, #Benutzernamen oder Universalcode der Person ein.\n'
+        'Die Suche nach Benutzername/Code erfordert eine Serververbindung (das Verbindungssymbol oben).\n'
+        'Tippe in den Ergebnissen auf die Person – der Chat öffnet sich.\n'
+        'Schreibe eine Nachricht und tippe auf Senden. Fertig!',
+    'help_exchange_t': 'Profile in der Nähe austauschen (Bluetooth)',
+    'help_exchange_b':
+        'Öffne den Tab „In der Nähe“.\n'
+        'Aktiviere Bluetooth auf beiden Geräten; beide brauchen Rlink.\n'
+        'Geräte in der Nähe erscheinen in der Liste – tippe auf das gewünschte.\n'
+        'Die andere Person erhält eine „Profilaustausch-Anfrage“ – bitte sie zu bestätigen.\n'
+        'Nach dem Austausch ist die Person in deinen Kontakten. Ihr könnt sogar ohne Internet chatten.',
+    'help_profile_t': 'Dein Profil und Benutzername',
+    'help_profile_b':
+        'Öffne den Tab „Ich“ → „Profil“.\n'
+        'Lege Name, Avatar und @Benutzernamen fest – so wirst du gefunden.\n'
+        'Der Benutzername wird als #Name angezeigt; teile ihn mit Freunden.\n'
+        'Um über Distanz gefunden zu werden, verbinde dich mit dem Server (online).',
+    'help_group_t': 'Eine Gruppe erstellen',
+    'help_group_b':
+        'Tab „Chats“ → Menü ⋮ (oben rechts) → „Neue Gruppe“.\n'
+        'Gib einen Gruppennamen ein und erstelle sie.\n'
+        'Öffne die Gruppe und füge Mitglieder aus deinen Kontakten hinzu.\n'
+        'Schreibe – alle Mitglieder sehen die Nachrichten.',
+    'help_channel_t': 'Einen Kanal erstellen',
+    'help_channel_b':
+        'Tab „Chats“ → Menü ⋮ → „Neuer Kanal“.\n'
+        'Gib einen Namen und @Benutzernamen für den Kanal ein, tippe auf „Erstellen“.\n'
+        'Veröffentliche Beiträge – alle Abonnenten sehen sie.\n'
+        'Teile den @Benutzernamen oder Kanalcode, damit man abonnieren kann.',
+    'help_google_t': 'Ein Google-Konto mit einem Kanal verbinden',
+    'help_google_b':
+        'Öffne deinen Kanal (du musst Eigentümer sein) → „Kanaleinstellungen“.\n'
+        'Finde den Abschnitt „Google Drive“.\n'
+        'Tippe auf „Konto verbinden“ und melde dich bei Google an.\n'
+        'Fotos und Videos des Kanals werden in deinem Google Drive gespeichert.\n'
+        'Abonnenten erhalten Medien automatisch – auch große Dateien.',
+    'help_bots_t': 'Bots verwenden',
+    'help_bots_b':
+        'Tab „Chats“ → Menü ⋮ → „Bots“ – der Bot-Katalog.\n'
+        'Öffne einen Bot und tippe auf /start oder eine Befehl-Schaltfläche.\n'
+        'Befehle beginnen mit „/“ (z. B. /help). Oft gibt es Schaltflächen unter der Nachricht.\n'
+        'Der Emoji-Bot fügt eigene Emojis hinzu; KI-Bots beantworten deine Fragen.',
     'nav_chats': 'Chats',
     'nav_contacts': 'Kontakte',
     'nav_nearby': 'In der Nähe',
@@ -1109,6 +1301,102 @@ class AppL10n {
   };
 
   static const _fr = <String, String>{
+    'intro_skip': 'Passer',
+    'intro_next': 'Suivant',
+    'intro_start': 'Commencer à discuter',
+    'intro_guide_title': 'Comment fonctionne Rlink',
+    'intro_welcome_title': 'RLINK',
+    'intro_welcome_sub': 'La connexion sans frontières',
+    'intro_universal_title': 'Partout avec vous',
+    'intro_universal_sub': 'Téléphone, tablette et ordinateur',
+    'intro_messages_title': 'Messages chiffrés',
+    'intro_messages_sub': 'Texte, voix et transcription',
+    'intro_privacy_title': 'Sans numéro de téléphone',
+    'intro_privacy_sub': 'Anonyme et sous votre contrôle',
+    'intro_bots_title': 'Bots',
+    'intro_bots_sub': 'Commandes et boutons dans le chat',
+    'intro_groups_title': 'Groupes',
+    'intro_groups_sub': 'Discutez à plusieurs',
+    'intro_channels_title': 'Canaux',
+    'intro_channels_sub': 'Partagez avec des milliers de gens',
+    'intro_stories_title': 'Stories',
+    'intro_stories_sub': 'Photos, vidéos et dessins',
+    'intro_bluetooth_title': 'Fonctionne sans internet',
+    'intro_bluetooth_sub': 'Connexion à proximité via Bluetooth',
+    'intro_server_title': 'À toute distance',
+    'intro_server_sub': 'Via le serveur, partout dans le monde',
+    'intro_calls_title': 'Appels et appels vidéo',
+    'intro_calls_sub': 'Voix et vidéo entre pays',
+    'empty_chats_title': 'Vos discussions apparaîtront ici',
+    'empty_chats_sub':
+        'Ajoutez votre premier contact : trouvez des appareils à proximité ou partagez votre profil',
+    'empty_find_nearby': 'Chercher à proximité',
+    'guide_done': 'Compris !',
+    'guide_intro_title': 'Où se trouve quoi',
+    'guide_intro_sub': 'Une visite rapide de l’interface',
+    'guide_chats_t': 'Discussions',
+    'guide_chats_s': 'Toutes vos conversations, groupes et messages enregistrés',
+    'guide_nearby_t': 'À proximité',
+    'guide_nearby_s': 'Trouvez des gens autour de vous via Bluetooth',
+    'guide_ether_t': 'En direct',
+    'guide_ether_s': 'Canaux et publications',
+    'guide_me_t': 'Moi',
+    'guide_me_s': 'Profil, thème et paramètres',
+    'guide_search_t': 'Recherche',
+    'guide_search_s': 'Trouvez des personnes, discussions et canaux',
+    'guide_stories_t': 'Stories',
+    'guide_stories_s': 'Ajoutez et regardez les stories de vos amis',
+    'help_center_title': 'Comment fonctionne Rlink',
+    'help_center_sub': 'Choisissez un sujet — commencez où vous voulez',
+    'help_watch_intro_t': 'Aperçu des fonctions',
+    'help_watch_intro_s': 'Vidéo animée sur Rlink',
+    'help_watch_tour_t': 'Visite de l’interface',
+    'help_watch_tour_s': 'Les flèches montrent où se trouve tout',
+    'help_find_t': 'Trouver une personne et lui écrire',
+    'help_find_b':
+        'Ouvrez l’onglet « Discussions » et touchez 🔍 « Recherche » en haut.\n'
+        'Saisissez le nom, le #pseudo ou le code universel de la personne.\n'
+        'La recherche par pseudo/code nécessite une connexion au serveur (l’icône de liaison en haut).\n'
+        'Touchez la personne dans les résultats : la discussion s’ouvre.\n'
+        'Écrivez un message et touchez envoyer. Terminé !',
+    'help_exchange_t': 'Échanger des profils à proximité (Bluetooth)',
+    'help_exchange_b':
+        'Ouvrez l’onglet « À proximité ».\n'
+        'Activez le Bluetooth sur les deux téléphones ; les deux doivent avoir Rlink.\n'
+        'Les appareils proches apparaissent dans la liste : touchez celui voulu.\n'
+        'La personne reçoit une « Demande d’échange de profil » — demandez-lui de confirmer.\n'
+        'Après l’échange, la personne est dans vos contacts. Vous pouvez discuter même sans internet.',
+    'help_profile_t': 'Votre profil et votre pseudo',
+    'help_profile_b':
+        'Ouvrez l’onglet « Moi » → « Profil ».\n'
+        'Définissez un nom, un avatar et un @pseudo : c’est ainsi qu’on vous trouve.\n'
+        'Le pseudo s’affiche en #nom ; partagez-le avec vos amis.\n'
+        'Pour être trouvé à distance, connectez-vous au serveur (en ligne).',
+    'help_group_t': 'Créer un groupe',
+    'help_group_b':
+        'Onglet « Discussions » → menu ⋮ (en haut à droite) → « Nouveau groupe ».\n'
+        'Saisissez un nom de groupe et créez-le.\n'
+        'Ouvrez le groupe et ajoutez des membres depuis vos contacts.\n'
+        'Écrivez — tous les membres voient les messages.',
+    'help_channel_t': 'Créer un canal',
+    'help_channel_b':
+        'Onglet « Discussions » → menu ⋮ → « Nouveau canal ».\n'
+        'Saisissez un nom et un @pseudo pour le canal, touchez « Créer ».\n'
+        'Publiez des posts — tous les abonnés les voient.\n'
+        'Partagez le @pseudo ou le code du canal pour qu’on s’abonne.',
+    'help_google_t': 'Lier un compte Google à un canal',
+    'help_google_b':
+        'Ouvrez votre canal (vous devez être propriétaire) → « Paramètres du canal ».\n'
+        'Trouvez la section « Google Drive ».\n'
+        'Touchez « Connecter le compte » et connectez-vous à Google.\n'
+        'Les photos et vidéos du canal sont stockées dans votre Google Drive.\n'
+        'Les abonnés reçoivent les médias automatiquement — même les gros fichiers.',
+    'help_bots_t': 'Utiliser les bots',
+    'help_bots_b':
+        'Onglet « Discussions » → menu ⋮ → « Bots » : le catalogue de bots.\n'
+        'Ouvrez un bot et touchez /start ou un bouton de commande.\n'
+        'Les commandes commencent par « / » (ex. /help). Il y a souvent des boutons sous le message.\n'
+        'Le bot Emoji ajoute des emojis personnalisés ; les bots IA répondent à vos questions.',
     'nav_chats': 'Discussions',
     'nav_contacts': 'Contacts',
     'nav_nearby': 'À proximité',
@@ -1330,6 +1618,102 @@ class AppL10n {
   };
 
   static const _uk = <String, String>{
+    'intro_skip': 'Пропустити',
+    'intro_next': 'Далі',
+    'intro_start': 'Почати спілкування',
+    'intro_guide_title': 'Як влаштований Rlink',
+    'intro_welcome_title': 'RLINK',
+    'intro_welcome_sub': 'Зв’язок без кордонів',
+    'intro_universal_title': 'Скрізь з тобою',
+    'intro_universal_sub': 'Телефон, планшет і ноутбук',
+    'intro_messages_title': 'Зашифровані повідомлення',
+    'intro_messages_sub': 'Текст, голос і розшифровка',
+    'intro_privacy_title': 'Без номера телефону',
+    'intro_privacy_sub': 'Анонімно й під твоїм контролем',
+    'intro_bots_title': 'Боти',
+    'intro_bots_sub': 'Команди та кнопки прямо в чаті',
+    'intro_groups_title': 'Групи',
+    'intro_groups_sub': 'Спілкуйтеся компанією',
+    'intro_channels_title': 'Канали',
+    'intro_channels_sub': 'Діліться з тисячами людей',
+    'intro_stories_title': 'Історії',
+    'intro_stories_sub': 'Фото, відео та малюнки',
+    'intro_bluetooth_title': 'Працює без інтернету',
+    'intro_bluetooth_sub': 'Зв’язок поруч через Bluetooth',
+    'intro_server_title': 'На будь-якій відстані',
+    'intro_server_sub': 'Через сервер по всьому світу',
+    'intro_calls_title': 'Дзвінки та відеодзвінки',
+    'intro_calls_sub': 'Голос і відео між країнами',
+    'empty_chats_title': 'Тут з’являться ваші чати',
+    'empty_chats_sub':
+        'Додайте першого співрозмовника — знайдіть пристрої поруч або поділіться профілем',
+    'empty_find_nearby': 'Знайти поруч',
+    'guide_done': 'Зрозуміло!',
+    'guide_intro_title': 'Де що знаходиться',
+    'guide_intro_sub': 'Короткий тур інтерфейсом',
+    'guide_chats_t': 'Чати',
+    'guide_chats_s': 'Усі ваші листування, групи та збережене',
+    'guide_nearby_t': 'Поруч',
+    'guide_nearby_s': 'Знайдіть людей поблизу через Bluetooth',
+    'guide_ether_t': 'Ефір',
+    'guide_ether_s': 'Канали та публікації',
+    'guide_me_t': 'Я',
+    'guide_me_s': 'Профіль, тема та налаштування',
+    'guide_search_t': 'Пошук',
+    'guide_search_s': 'Знайдіть людей, чати та канали',
+    'guide_stories_t': 'Історії',
+    'guide_stories_s': 'Додавайте й дивіться історії друзів',
+    'help_center_title': 'Як влаштований Rlink',
+    'help_center_sub': 'Оберіть розділ — можна почати з потрібного місця',
+    'help_watch_intro_t': 'Огляд можливостей',
+    'help_watch_intro_s': 'Анімований ролик про Rlink',
+    'help_watch_tour_t': 'Тур інтерфейсом',
+    'help_watch_tour_s': 'Стрілки покажуть, де що знаходиться',
+    'help_find_t': 'Знайти людину і написати',
+    'help_find_b':
+        'Відкрийте вкладку «Чати» і натисніть 🔍 «Пошук» угорі.\n'
+        'Введіть ім’я, #юзернейм або універсальний код людини.\n'
+        'Пошук людей за юзернеймом і кодом працює при підключенні до сервера (значок зв’язку вгорі).\n'
+        'Натисніть на людину в результатах — відкриється чат.\n'
+        'Напишіть повідомлення й натисніть кнопку надсилання. Готово!',
+    'help_exchange_t': 'Обмінятися профілями поруч (Bluetooth)',
+    'help_exchange_b':
+        'Відкрийте вкладку «Поруч».\n'
+        'Увімкніть Bluetooth у себе й у співрозмовника, обидва мають бути в Rlink.\n'
+        'У списку з’являться пристрої поблизу — натисніть на потрібний.\n'
+        'Співрозмовник отримає «Запит на обмін профілем» — нехай підтвердить.\n'
+        'Після обміну людина з’явиться в контактах. Тепер можна листуватися навіть без інтернету.',
+    'help_profile_t': 'Ваш профіль і юзернейм',
+    'help_profile_b':
+        'Відкрийте вкладку «Я» → «Профіль».\n'
+        'Задайте ім’я, аватар і @юзернейм — саме за ним вас знайдуть.\n'
+        'Юзернейм показується як #ім’я; поділіться ним із друзями.\n'
+        'Щоб вас знаходили на відстані, підключіться до сервера (онлайн).',
+    'help_group_t': 'Створити групу',
+    'help_group_b':
+        'Вкладка «Чати» → меню ⋮ вгорі праворуч → «Нова група».\n'
+        'Введіть назву групи та створіть її.\n'
+        'Відкрийте групу й додайте учасників із контактів.\n'
+        'Пишіть — повідомлення бачать усі учасники.',
+    'help_channel_t': 'Створити канал',
+    'help_channel_b':
+        'Вкладка «Чати» → меню ⋮ → «Новий канал».\n'
+        'Введіть назву та @юзернейм каналу, натисніть «Створити».\n'
+        'Публікуйте пости — їх бачать усі підписники.\n'
+        'Поділіться @юзернеймом або кодом каналу, щоб на нього підписалися.',
+    'help_google_t': 'Прив’язати Google-акаунт до каналу',
+    'help_google_b':
+        'Відкрийте свій канал (ви маєте бути власником) → «Налаштування каналу».\n'
+        'Знайдіть розділ «Google Drive».\n'
+        'Натисніть «Підключити акаунт» і увійдіть у Google.\n'
+        'Фото й відео каналу зберігатимуться у вашому Google Drive.\n'
+        'Підписники отримують медіа автоматично — навіть великі файли.',
+    'help_bots_t': 'Користуватися ботами',
+    'help_bots_b':
+        'Вкладка «Чати» → меню ⋮ → «Боти» — це каталог ботів.\n'
+        'Відкрийте бота й натисніть /start або кнопку команди.\n'
+        'Команди починаються з «/» (наприклад /help). Часто під повідомленням є кнопки.\n'
+        'Emoji-бот додає кастомні емодзі; ШІ-боти відповідають на ваші запитання.',
     'nav_chats': 'Чати',
     'nav_contacts': 'Контакти',
     'nav_nearby': 'Поруч',
@@ -1551,6 +1935,101 @@ class AppL10n {
   };
 
   static const _zh = <String, String>{
+    'intro_skip': '跳过',
+    'intro_next': '下一步',
+    'intro_start': '开始聊天',
+    'intro_guide_title': 'Rlink 怎么用',
+    'intro_welcome_title': 'RLINK',
+    'intro_welcome_sub': '无界连接',
+    'intro_universal_title': '随身随处',
+    'intro_universal_sub': '手机、平板和笔记本',
+    'intro_messages_title': '加密消息',
+    'intro_messages_sub': '文字、语音和转写',
+    'intro_privacy_title': '无需手机号',
+    'intro_privacy_sub': '匿名，由你掌控',
+    'intro_bots_title': '机器人',
+    'intro_bots_sub': '聊天中的命令和按钮',
+    'intro_groups_title': '群组',
+    'intro_groups_sub': '一起畅聊',
+    'intro_channels_title': '频道',
+    'intro_channels_sub': '与成千上万人分享',
+    'intro_stories_title': '故事',
+    'intro_stories_sub': '照片、视频和涂鸦',
+    'intro_bluetooth_title': '无网络也能用',
+    'intro_bluetooth_sub': '通过蓝牙近距离连接',
+    'intro_server_title': '任意距离',
+    'intro_server_sub': '通过服务器，遍及全球',
+    'intro_calls_title': '语音与视频通话',
+    'intro_calls_sub': '跨国语音和视频',
+    'empty_chats_title': '你的聊天将显示在这里',
+    'empty_chats_sub': '添加第一位联系人——查找附近设备或分享你的资料',
+    'empty_find_nearby': '查找附近',
+    'guide_done': '明白了！',
+    'guide_intro_title': '功能都在哪里',
+    'guide_intro_sub': '快速浏览界面',
+    'guide_chats_t': '聊天',
+    'guide_chats_s': '所有对话、群组和收藏',
+    'guide_nearby_t': '附近',
+    'guide_nearby_s': '通过蓝牙查找附近的人',
+    'guide_ether_t': '广播',
+    'guide_ether_s': '频道和帖子',
+    'guide_me_t': '我',
+    'guide_me_s': '个人资料、主题和设置',
+    'guide_search_t': '搜索',
+    'guide_search_s': '查找联系人、聊天和频道',
+    'guide_stories_t': '故事',
+    'guide_stories_s': '发布并观看好友的故事',
+    'help_center_title': 'Rlink 怎么用',
+    'help_center_sub': '选择一个主题——可以从任意位置开始',
+    'help_watch_intro_t': '功能概览',
+    'help_watch_intro_s': '关于 Rlink 的动画短片',
+    'help_watch_tour_t': '界面导览',
+    'help_watch_tour_s': '箭头指示各功能位置',
+    'help_find_t': '查找某人并发消息',
+    'help_find_b':
+        '打开「聊天」标签，点击顶部的 🔍「搜索」。\n'
+        '输入对方的名字、#用户名 或通用代码。\n'
+        '按用户名和代码查找他人需要连接服务器（顶部的连接图标）。\n'
+        '在结果中点击该用户——即可打开聊天。\n'
+        '输入消息并点击发送。完成！',
+    'help_exchange_t': '近距离交换资料（蓝牙）',
+    'help_exchange_b':
+        '打开「附近」标签。\n'
+        '在两台手机上都打开蓝牙，且都已安装 Rlink。\n'
+        '附近设备会出现在列表中——点击你想要的那个。\n'
+        '对方会收到「资料交换请求」——请其确认。\n'
+        '交换后，对方会出现在你的联系人中。即使没有网络也能聊天。',
+    'help_profile_t': '你的资料和用户名',
+    'help_profile_b':
+        '打开「我」标签 →「个人资料」。\n'
+        '设置名字、头像和 @用户名——别人靠它找到你。\n'
+        '用户名显示为 #名字；分享给好友吧。\n'
+        '想被远程找到，请连接服务器（在线）。',
+    'help_group_t': '创建群组',
+    'help_group_b':
+        '「聊天」标签 → 右上角 ⋮ 菜单 →「新建群组」。\n'
+        '输入群组名称并创建。\n'
+        '打开群组，从联系人中添加成员。\n'
+        '发消息——所有成员都能看到。',
+    'help_channel_t': '创建频道',
+    'help_channel_b':
+        '「聊天」标签 → ⋮ 菜单 →「新建频道」。\n'
+        '输入频道名称和 @用户名，点击「创建」。\n'
+        '发布帖子——所有订阅者都能看到。\n'
+        '分享 @用户名 或频道代码，让别人订阅。',
+    'help_google_t': '将 Google 账号绑定到频道',
+    'help_google_b':
+        '打开你的频道（你须为所有者）→「频道设置」。\n'
+        '找到「Google Drive」部分。\n'
+        '点击「连接账号」并登录 Google。\n'
+        '频道的照片和视频会保存到你的 Google Drive。\n'
+        '订阅者会自动收到媒体——即使是大文件。',
+    'help_bots_t': '使用机器人',
+    'help_bots_b':
+        '「聊天」标签 → ⋮ 菜单 →「机器人」——机器人目录。\n'
+        '打开一个机器人，点击 /start 或命令按钮。\n'
+        '命令以「/」开头（例如 /help）。消息下方通常有按钮。\n'
+        'Emoji 机器人添加自定义表情；AI 机器人回答你的问题。',
     'nav_chats': '聊天',
     'nav_contacts': '联系人',
     'nav_nearby': '附近',
