@@ -9,6 +9,22 @@
          <ExecutionAction
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
+               title = "Patch SPM macOS deployment target"
+               scriptText = "PKG=&quot;$SRCROOT/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift&quot;&#10;if [ -f &quot;$PKG&quot; ]; then&#10;  /usr/bin/sed -i &apos;&apos; &apos;s/\.macOS(&quot;[0-9.]*&quot;)/.macOS(&quot;13.0&quot;)/g&apos; &quot;$PKG&quot;&#10;fi&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "33CC10EC2044A3C60003C045"
+                     BuildableName = "Rlink.app"
+                     BlueprintName = "Runner"
+                     ReferencedContainer = "container:Runner.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
                title = "Run Prepare Flutter Framework Script"
                scriptText = "&quot;$FLUTTER_ROOT&quot;/packages/flutter_tools/bin/macos_assemble.sh prepare&#10;">
                <EnvironmentBuildable>
