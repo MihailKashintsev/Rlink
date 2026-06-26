@@ -8,12 +8,14 @@ import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../utils/web_object_url.dart';
 import '../utils/web_file_store.dart';
+import '../utils/web_video_frames.dart';
 import '../utils/web_log.dart';
 import 'crypto_service.dart';
 
@@ -644,6 +646,70 @@ class ImageService {
   /// When [isSquare] is true, the video is first center-cropped to 1:1 via
   /// a native platform channel (AVFoundation on iOS, file copy + display crop
   /// on Android), then compressed.
+  /// Converts a short video into a small **animated GIF** (for animated emoji /
+  /// stickers, like Telegram). Samples frames across the clip and encodes them
+  /// with the pure-Dart `image` package (web-safe). Returns GIF bytes or null.
+  Future<Uint8List?> videoToAnimatedGif(
+    String videoPath, {
+    int maxFrames = 16,
+    int maxSize = 128,
+    int perFrameMs = 90,
+  }) async {
+    try {
+      final frameJpegs = <Uint8List>[];
+      if (kIsWeb) {
+        String? url;
+        if (videoPath.startsWith('data:') ||
+            videoPath.startsWith('blob:') ||
+            videoPath.startsWith('http')) {
+          url = videoPath;
+        } else if (videoPath.startsWith('opfs://')) {
+          url = await webStoredFileObjectUrl(videoPath.split('#').first,
+              mimeType: 'video/mp4');
+        }
+        if (url == null) return null;
+        frameJpegs.addAll(await webVideoThumbnails(url, count: maxFrames));
+      } else {
+        double durMs = 2000;
+        try {
+          final info = await VideoCompress.getMediaInfo(videoPath);
+          if (info.duration != null && info.duration! > 0) {
+            durMs = info.duration!;
+          }
+        } catch (_) {}
+        final span = durMs.clamp(500, 8000);
+        for (var i = 0; i < maxFrames; i++) {
+          final pos = (span * (i + 0.5) / maxFrames).round();
+          final b = await VideoCompress.getByteThumbnail(videoPath,
+              quality: 60, position: pos);
+          if (b != null && b.isNotEmpty) frameJpegs.add(b);
+        }
+      }
+      if (frameJpegs.length < 2) return null;
+      img.Image? anim;
+      for (final jpeg in frameJpegs) {
+        var f = img.decodeImage(jpeg);
+        if (f == null) continue;
+        if (f.width > maxSize || f.height > maxSize) {
+          f = img.copyResize(f,
+              width: f.width >= f.height ? maxSize : null,
+              height: f.height > f.width ? maxSize : null);
+        }
+        f.frameDuration = perFrameMs;
+        if (anim == null) {
+          anim = f;
+        } else {
+          anim.addFrame(f);
+        }
+      }
+      if (anim == null || anim.numFrames < 2) return null;
+      return Uint8List.fromList(img.encodeGif(anim));
+    } catch (e) {
+      debugPrint('[ImageService] videoToAnimatedGif: $e');
+      return null;
+    }
+  }
+
   Future<String> saveVideo(
     String sourcePath, {
     bool isSquare = false,

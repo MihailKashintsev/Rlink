@@ -3204,13 +3204,17 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_tearingDown || !mounted) return;
     setState(() => _aiThinking = true);
     try {
-      final lines = isVid
-          ? await EmojiBotService.instance.handleOutgoingVideo(
-              resolvedVideoPath: resolved,
-            )
-          : await EmojiBotService.instance.handleOutgoingImage(
-              resolvedImagePath: resolved,
-            );
+      final List<String> lines;
+      if (isVid) {
+        // Build a small animated GIF from the clip → animated emoji.
+        final gif = await ImageService.instance.videoToAnimatedGif(resolved);
+        lines = await EmojiBotService.instance
+            .handleOutgoingVideo(gifBytes: gif);
+      } else {
+        lines = await EmojiBotService.instance.handleOutgoingImage(
+          resolvedImagePath: resolved,
+        );
+      }
       if (_tearingDown || !mounted) return;
       final text = lines.join('\n').trim();
       if (text.isNotEmpty) {

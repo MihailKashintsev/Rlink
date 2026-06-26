@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../models/emoji_pack.dart';
@@ -335,23 +336,36 @@ class EmojiBotService {
     }
   }
 
-  /// Видео (GIF без звука) отправлено в чат с ботом — для будущих анимированных
-  /// эмодзи/стикеров. Бот подтверждает получение (полноценная анимированная
-  /// отрисовка эмодзи в тексте — отдельная функция в разработке).
-  Future<List<String>> handleOutgoingVideo({
-    required String resolvedVideoPath,
-  }) async {
+  /// Видео (GIF без звука) → **анимированный эмодзи**: [gifBytes] — уже собранный
+  /// анимированный GIF (кадры из видео). Добавляется в текущий набор как эмодзи;
+  /// Flutter сам проигрывает анимацию GIF при рендере.
+  Future<List<String>> handleOutgoingVideo({Uint8List? gifBytes}) async {
     final s = _sessionForMe();
-    if (s.pendingShortcode != null) {
-      return [
-        'Получил видео-GIF 🎞 Для статичного эмодзи пришлите картинку (PNG/JPG) '
-            'с командой /add :${s.pendingShortcode}:. Анимированные эмодзи из видео '
-            'скоро будут поддерживаться.',
+    final sc = s.pendingShortcode;
+    final packId = s.activePackId;
+    if (sc == null || packId == null) {
+      return const [
+        'Видео получено 🎞 Чтобы сделать из него анимированный эмодзи — '
+            'сначала /add :код:, затем пришлите это видео.',
       ];
     }
-    return const [
-      'Получил видео-GIF 🎞 Анимированные эмодзи из видео скоро будут. '
-          'Пока для эмодзи используйте картинки: /add :код: → затем картинка.',
-    ];
+    if (gifBytes == null || gifBytes.isEmpty) {
+      return const [
+        'Не удалось собрать анимированный эмодзи из видео. '
+            'Попробуйте короткий ролик (до 8 секунд).',
+      ];
+    }
+    try {
+      await EmojiPackService.instance.addEmojiBytes(
+        packId: packId,
+        shortcode: sc,
+        bytes: gifBytes,
+        ext: '.gif',
+      );
+      s.pendingShortcode = null;
+      return ['Добавлен анимированный эмодзи :$sc: 🎉'];
+    } catch (e) {
+      return ['Ошибка: $e'];
+    }
   }
 }
