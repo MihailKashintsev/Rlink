@@ -47,6 +47,7 @@ import '../../main.dart' show sendProfileToAllContacts;
 import '../widgets/reactions.dart';
 import '../rlink_nav_routes.dart';
 import 'intro_promo_screen.dart';
+import 'guide_tour_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared top-level helpers
@@ -442,13 +443,17 @@ class SettingsCategoryCards extends StatelessWidget {
             icon: Icons.play_circle_outline,
             color: const Color(0xFF1DB954),
             title: AppL10n.t('intro_guide_title'),
-            subtitle: 'Анимированный обзор возможностей',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
+            subtitle: 'Анимированный обзор + тур по интерфейсу',
+            onTap: () async {
+              final nav = Navigator.of(context);
+              await nav.push(MaterialPageRoute(
                 builder: (_) =>
                     const IntroPromoScreen(markSeenOnFinish: false),
-              ),
-            ),
+              ));
+              await nav.push(MaterialPageRoute(
+                builder: (_) => const GuideTourScreen(markSeenOnFinish: false),
+              ));
+            },
           ),
           _CategoryItem(
             icon: Icons.record_voice_over_outlined,

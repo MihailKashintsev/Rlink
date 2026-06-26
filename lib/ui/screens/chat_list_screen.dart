@@ -50,6 +50,7 @@ import 'chat_inbox_filters_manage_screen.dart';
 import 'settings_screen.dart';
 import 'story_creator_screen.dart';
 import 'intro_promo_screen.dart';
+import 'guide_tour_screen.dart';
 import 'story_viewer_screen.dart';
 import '../rlink_nav_routes.dart';
 
@@ -79,15 +80,23 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   void _maybeShowIntro() {
     if (AppSettings.instance.hasSeenIntro) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || AppSettings.instance.hasSeenIntro) return;
-      Navigator.of(context).push(
+      // First launch: the feature promo, then the "where is what" guide.
+      await Navigator.of(context).push(
         PageRouteBuilder(
           opaque: true,
           transitionDuration: const Duration(milliseconds: 350),
-          pageBuilder: (_, __, ___) => const IntroPromoScreen(),
+          pageBuilder: (_, __, ___) =>
+              const IntroPromoScreen(markSeenOnFinish: false),
           transitionsBuilder: (_, anim, __, child) =>
               FadeTransition(opacity: anim, child: child),
+        ),
+      );
+      if (!mounted || AppSettings.instance.hasSeenIntro) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const GuideTourScreen(markSeenOnFinish: true),
         ),
       );
     });
