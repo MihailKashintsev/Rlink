@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 
 import '../../main.dart';
@@ -1122,6 +1123,36 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
   final GlobalKey _miniPlayerListAnchor =
       GlobalKey(debugLabel: 'miniPlayerListAnchor');
   bool _miniPlayerAnchorCallbackPending = false;
+  // Collapse the stories+filters header while scrolling the list down.
+  bool _headerCollapsed = false;
+
+  /// Wraps the stories/filter header so it smoothly collapses out of view when
+  /// the list is scrolled down and returns when scrolling up.
+  Widget _collapsingHeader(List<Widget> children) {
+    return ClipRect(
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: _headerCollapsed
+            ? const SizedBox(width: double.infinity, height: 0)
+            : Column(mainAxisSize: MainAxisSize.min, children: children),
+      ),
+    );
+  }
+
+  bool _onListScroll(UserScrollNotification n) {
+    final atTop = n.metrics.pixels <= 24;
+    if (n.direction == ScrollDirection.reverse && !_headerCollapsed && !atTop) {
+      setState(() => _headerCollapsed = true);
+    } else if (n.direction == ScrollDirection.forward && _headerCollapsed) {
+      setState(() => _headerCollapsed = false);
+    } else if (atTop && _headerCollapsed) {
+      setState(() => _headerCollapsed = false);
+    }
+    return false;
+  }
+
   List<_ChatItem> _items = [];
   StreamSubscription<IncomingMessage>? _sub;
   Timer? _loadDebounce;
@@ -1923,8 +1954,10 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         return col;
       }
       final col = Column(children: [
-        _StoriesStrip(chatItems: _storiesSource()),
-        _buildFilterBar(context),
+        _collapsingHeader([
+          _StoriesStrip(chatItems: _storiesSource()),
+          _buildFilterBar(context),
+        ]),
         _buildPendingBanners(context),
         SizedBox(height: 0, key: _miniPlayerListAnchor),
         Expanded(
@@ -1965,7 +1998,10 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         )),
       ]);
       _layoutMiniPlayerAnchor();
-      return col;
+      return NotificationListener<UserScrollNotification>(
+        onNotification: _onListScroll,
+        child: col,
+      );
     }
 
     final forSearch =
