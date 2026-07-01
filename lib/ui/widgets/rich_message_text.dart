@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/app_l10n.dart';
 import '../../services/app_settings.dart';
+import 'animated_emoji_text.dart';
 import '../../services/emoji_pack_service.dart';
 import '../../services/runtime_platform.dart';
 import '../../utils/card_luhn.dart';
@@ -568,6 +569,10 @@ class RichMessageText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Emoji-only messages render as large, gently animated "live" emoji.
+    if (isEmojiOnlyMessage(text)) {
+      return AnimatedEmojiText(text: text);
+    }
     if (!parseCustomEmoji) return _buildInner(context);
     return ValueListenableBuilder<int>(
       valueListenable: EmojiPackService.instance.version,
