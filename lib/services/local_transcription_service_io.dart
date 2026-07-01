@@ -90,11 +90,26 @@ class LocalTranscriptionServiceIO {
     }
   }
 
+  static const _audioChannel = MethodChannel('com.rendergames.rlink/audio');
+
   static Future<String> transcribeCpp(String audioPath, String language) async {
     if (!WhisperFfi.instance.isLoaded) {
       throw StateError('Whisper FFI not loaded');
     }
-    final text = WhisperFfi.instance.transcribe(audioPath, language: language);
+    // whisper.cpp reads a PCM16 WAV; the app records m4a/aac. On Android decode
+    // it to WAV first (the native bridge down-mixes + resamples to 16 kHz mono).
+    var wavPath = audioPath;
+    if (Platform.isAndroid && !audioPath.toLowerCase().endsWith('.wav')) {
+      final dst = '$audioPath.whisper.wav';
+      try {
+        final r = await _audioChannel.invokeMethod<String>(
+            'toWav', {'src': audioPath, 'dst': dst});
+        if (r != null && File(r).existsSync()) wavPath = r;
+      } catch (e) {
+        throw StateError('Не удалось декодировать аудио для расшифровки: $e');
+      }
+    }
+    final text = WhisperFfi.instance.transcribe(wavPath, language: language);
     if (text.trim().isEmpty) throw StateError('Речь не распознана');
     return text.trim();
   }

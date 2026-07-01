@@ -13,7 +13,15 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.media.MediaCodec
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.util.Log
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import androidx.core.content.ContextCompat
 import android.os.Build
 import android.os.ParcelUuid
@@ -168,6 +176,30 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     } catch (e: Exception) {
                         result.error("ICON", e.message, null)
+                    }
+                } else {
+                    result.notImplemented()
+                }
+            }
+
+        // Audio → WAV (for on-device Whisper): decode the recorded m4a/aac to a
+        // PCM16 WAV; the native whisper bridge down-mixes + resamples to 16 kHz.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.rendergames.rlink/audio")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "toWav") {
+                    val src = call.argument<String>("src")
+                    val dst = call.argument<String>("dst")
+                    if (src == null || dst == null) {
+                        result.error("ARG", "missing src/dst", null)
+                    } else {
+                        Thread {
+                            try {
+                                decodeAudioToWav(src, dst)
+                                runOnUiThread { result.success(dst) }
+                            } catch (e: Exception) {
+                                runOnUiThread { result.error("DECODE", e.message, null) }
+                            }
+                        }.start()
                     }
                 } else {
                     result.notImplemented()
@@ -519,6 +551,83 @@ class MainActivity : FlutterActivity() {
                 isAdvertising = true // уже работает
                 runOnUiThread { eventSink?.success(mapOf("type" to "advertising_started")) }
             }
+        }
+    }
+
+    // ── Audio decode (m4a/aac → PCM16 WAV) for on-device Whisper ────────────
+    private fun decodeAudioToWav(srcPath: String, dstPath: String) {
+        val extractor = MediaExtractor()
+        extractor.setDataSource(srcPath)
+        var trackIndex = -1
+        var format: MediaFormat? = null
+        for (i in 0 until extractor.trackCount) {
+            val f = extractor.getTrackFormat(i)
+            if (f.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true) {
+                trackIndex = i; format = f; break
+            }
+        }
+        if (trackIndex < 0 || format == null) throw IllegalStateException("no audio track")
+        extractor.selectTrack(trackIndex)
+        val mime = format.getString(MediaFormat.KEY_MIME)!!
+        val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+        val channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+        val codec = MediaCodec.createDecoderByType(mime)
+        codec.configure(format, null, null, 0)
+        codec.start()
+        val pcm = ByteArrayOutputStream()
+        val info = MediaCodec.BufferInfo()
+        var sawInputEOS = false
+        var sawOutputEOS = false
+        while (!sawOutputEOS) {
+            if (!sawInputEOS) {
+                val inIdx = codec.dequeueInputBuffer(10000)
+                if (inIdx >= 0) {
+                    val ib = codec.getInputBuffer(inIdx)!!
+                    val sz = extractor.readSampleData(ib, 0)
+                    if (sz < 0) {
+                        codec.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        sawInputEOS = true
+                    } else {
+                        codec.queueInputBuffer(inIdx, 0, sz, extractor.sampleTime, 0)
+                        extractor.advance()
+                    }
+                }
+            }
+            val outIdx = codec.dequeueOutputBuffer(info, 10000)
+            if (outIdx >= 0) {
+                val ob = codec.getOutputBuffer(outIdx)!!
+                val chunk = ByteArray(info.size)
+                ob.get(chunk)
+                ob.clear()
+                if (info.size > 0) pcm.write(chunk)
+                codec.releaseOutputBuffer(outIdx, false)
+                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) sawOutputEOS = true
+            }
+        }
+        codec.stop(); codec.release(); extractor.release()
+        writeWav(dstPath, pcm.toByteArray(), sampleRate, channels)
+    }
+
+    private fun writeWav(path: String, pcm: ByteArray, sampleRate: Int, channels: Int) {
+        val byteRate = sampleRate * channels * 2
+        val dataLen = pcm.size
+        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+        header.put("RIFF".toByteArray())
+        header.putInt(36 + dataLen)
+        header.put("WAVE".toByteArray())
+        header.put("fmt ".toByteArray())
+        header.putInt(16)
+        header.putShort(1)                       // PCM
+        header.putShort(channels.toShort())
+        header.putInt(sampleRate)
+        header.putInt(byteRate)
+        header.putShort((channels * 2).toShort()) // block align
+        header.putShort(16)                       // bits
+        header.put("data".toByteArray())
+        header.putInt(dataLen)
+        FileOutputStream(File(path)).use { out ->
+            out.write(header.array())
+            out.write(pcm)
         }
     }
 }
