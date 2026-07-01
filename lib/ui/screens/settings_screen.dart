@@ -991,7 +991,9 @@ class _AppearancePageState extends State<_AppearancePage> {
                     final selected = settings.appPalette == i;
                     return GestureDetector(
                       onTap: () => settings.setAppPalette(i),
-                      child: AnimatedContainer(
+                      child: Tooltip(
+                        message: p.name,
+                        child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         width: 54,
                         height: 54,
@@ -1018,6 +1020,7 @@ class _AppearancePageState extends State<_AppearancePage> {
                             ? const Icon(Icons.check,
                                 color: Colors.white, size: 22)
                             : null,
+                      ),
                       ),
                     );
                   }),
@@ -1065,6 +1068,17 @@ class _AppearancePageState extends State<_AppearancePage> {
 
           // ── Оформление ───────────────────────────────────────────
           const _SectionHeader('Оформление'),
+          SwitchListTile(
+            secondary: Icon(Icons.auto_awesome_mosaic_rounded,
+                color: cs.primary),
+            title: const Text('Новый дизайн'),
+            subtitle: Text(
+                'Обновлённый стиль в духе заставки: скругления, свечение, '
+                'плавные переходы. Выключи — вернётся прежний вид.',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            value: settings.newDesign,
+            onChanged: (v) => settings.setNewDesign(v),
+          ),
           SwitchListTile(
             secondary: Icon(Icons.wallpaper_rounded, color: cs.primary),
             title: const Text('Фон в чатах'),

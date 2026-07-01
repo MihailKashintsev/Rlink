@@ -4132,10 +4132,15 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
           ),
         );
       },
-      themeMode: settings.themeMode,
-      theme: _buildTheme(paletteFor(settings.appPalette).seed, Brightness.light),
-      darkTheme:
-          _buildTheme(paletteFor(settings.appPalette).seed, Brightness.dark),
+      themeMode: paletteFor(settings.appPalette).dark == null
+          ? settings.themeMode
+          : (paletteFor(settings.appPalette).dark!
+              ? ThemeMode.dark
+              : ThemeMode.light),
+      theme: _buildTheme(
+          paletteFor(settings.appPalette), Brightness.light, settings.newDesign),
+      darkTheme: _buildTheme(
+          paletteFor(settings.appPalette), Brightness.dark, settings.newDesign),
       locale: settings.resolvedLocale,
       supportedLocales: const [
         Locale('ru'),
@@ -4159,9 +4164,27 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
     );
   }
 
-  ThemeData _buildTheme(Color accent, Brightness brightness) {
-    final isDark = brightness == Brightness.dark;
+  ThemeData _buildTheme(
+      AppPalette palette, Brightness fallbackBrightness, bool newDesign) {
+    final accent = palette.accentColor;
+    final isDark = palette.dark ?? (fallbackBrightness == Brightness.dark);
+    final brightness = isDark ? Brightness.dark : Brightness.light;
+    final Color? paletteBg = palette.background;
     final base = isDark ? ThemeData.dark() : ThemeData.light();
+    // Surfaces derived from a pinned palette background (else the standard look).
+    final Color scaffoldBg =
+        paletteBg ?? (isDark ? Colors.black : Colors.white);
+    final Color surfaceBg = paletteBg == null
+        ? (isDark ? const Color(0xFF121212) : Colors.white)
+        : (isDark
+            ? _lighten(paletteBg, 0.04)
+            : _darken(paletteBg, 0.03));
+    final Color surfaceHigh = paletteBg == null
+        ? (isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F0F0))
+        : (isDark ? _lighten(paletteBg, 0.09) : _darken(paletteBg, 0.07));
+    final Color onSurface = isDark ? Colors.white : const Color(0xFF161616);
+    // New-design shape language: soft, generous radii + accent-tinted depth.
+    final double r = newDesign ? 20 : 12;
 
     TextTheme scaled = GoogleFonts.googleSansTextTheme(base.textTheme);
 
@@ -4196,29 +4219,41 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       labelSmall: addEmoji(scaled.labelSmall),
     );
 
+    final onAccent =
+        accent.computeLuminance() > 0.55 ? const Color(0xFF0A0A0A) : Colors.white;
     final cs = ColorScheme.fromSeed(
       seedColor: accent,
       brightness: brightness,
     ).copyWith(
-      surface: isDark ? const Color(0xFF121212) : Colors.white,
-      surfaceContainerHigh:
-          isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F0F0),
+      surface: surfaceBg,
+      surfaceContainerHigh: surfaceHigh,
+      surfaceContainerHighest: surfaceHigh,
+      onSurface: onSurface,
+      onSurfaceVariant: isDark ? Colors.white70 : Colors.black54,
+      primary: accent,
+      onPrimary: onAccent,
+      secondary: accent,
     );
+
+    // App-bar/nav background: blend into the palette bg when one is pinned.
+    final Color barBg = paletteBg == null
+        ? (isDark ? const Color(0xFF121212) : Colors.white)
+        : scaffoldBg;
+    final RoundedRectangleBorder roundShape =
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(r));
 
     return ThemeData(
       brightness: brightness,
       // Plain themed background everywhere; the wallpaper is applied only inside
       // chats (AppBackground), gated by the chatBackground setting.
-      scaffoldBackgroundColor: isDark ? Colors.black : Colors.white,
+      scaffoldBackgroundColor: scaffoldBg,
       colorScheme: cs,
-      pageTransitionsTheme: const PageTransitionsTheme(
+      pageTransitionsTheme: PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.fuchsia: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+          for (final p in TargetPlatform.values)
+            p: newDesign
+                ? const ZoomPageTransitionsBuilder()
+                : const FadeUpwardsPageTransitionsBuilder(),
         },
       ),
       iconTheme: IconThemeData(color: cs.onSurface),
@@ -4226,12 +4261,70 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       listTileTheme: ListTileThemeData(
         iconColor: cs.onSurfaceVariant,
         textColor: cs.onSurface,
+        shape: newDesign ? roundShape : null,
+      ),
+      cardTheme: CardThemeData(
+        color: surfaceBg,
+        elevation: newDesign ? 0 : 1,
+        shadowColor: accent.withValues(alpha: 0.25),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(newDesign ? 22 : 12)),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surfaceBg,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(newDesign ? 26 : 16)),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: surfaceBg,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(
+                top: Radius.circular(newDesign ? 28 : 20))),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: surfaceHigh,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(newDesign ? 16 : 10),
+            borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(newDesign ? 16 : 10),
+            borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(newDesign ? 16 : 10),
+            borderSide: BorderSide(color: accent, width: 1.6)),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(newDesign ? 16 : 10)),
+          backgroundColor: accent,
+          foregroundColor: onAccent,
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(newDesign ? 16 : 10)),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: accent,
+        foregroundColor: onAccent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(newDesign ? 20 : 16)),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: cs.surface,
+        backgroundColor: barBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        indicatorColor: accent.withValues(alpha: 0.15),
+        indicatorColor: accent.withValues(alpha: newDesign ? 0.22 : 0.15),
+        indicatorShape: newDesign
+            ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+            : null,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return IconThemeData(color: cs.primary, size: 24);
@@ -4239,33 +4332,48 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
           return IconThemeData(color: cs.onSurfaceVariant, size: 24);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          final base = scaled.labelMedium ?? const TextStyle(fontSize: 12);
+          final b = scaled.labelMedium ?? const TextStyle(fontSize: 12);
           if (states.contains(WidgetState.selected)) {
-            return base.copyWith(
-                color: cs.primary, fontWeight: FontWeight.w600);
+            return b.copyWith(color: cs.primary, fontWeight: FontWeight.w600);
           }
-          return base.copyWith(color: cs.onSurfaceVariant);
+          return b.copyWith(color: cs.onSurfaceVariant);
         }),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+        backgroundColor: barBg,
         elevation: 0,
-        scrolledUnderElevation: 1,
+        scrolledUnderElevation: newDesign ? 0 : 1,
         surfaceTintColor: Colors.transparent,
-        foregroundColor: isDark ? Colors.white : Colors.black87,
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
-        actionsIconTheme:
-            IconThemeData(color: isDark ? Colors.white : Colors.black87),
+        foregroundColor: onSurface,
+        iconTheme: IconThemeData(color: onSurface),
+        actionsIconTheme: IconThemeData(color: onSurface),
+        titleTextStyle: (scaled.titleLarge ?? const TextStyle()).copyWith(
+          color: onSurface,
+          fontWeight: FontWeight.w700,
+          fontSize: 20,
+        ),
       ),
       tabBarTheme: TabBarThemeData(
         indicatorColor: accent,
         labelColor: accent,
-        unselectedLabelColor: Colors.grey,
+        unselectedLabelColor: cs.onSurfaceVariant,
       ),
       textTheme: scaled,
       useMaterial3: true,
     );
   }
+}
+
+// Lighten/darken a color by [amount] (0..1) — for deriving surfaces from a
+// pinned palette background.
+Color _lighten(Color c, double amount) {
+  final h = HSLColor.fromColor(c);
+  return h.withLightness((h.lightness + amount).clamp(0.0, 1.0)).toColor();
+}
+
+Color _darken(Color c, double amount) {
+  final h = HSLColor.fromColor(c);
+  return h.withLightness((h.lightness - amount).clamp(0.0, 1.0)).toColor();
 }
 
 class _SplashScreen extends StatelessWidget {
