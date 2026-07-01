@@ -39,6 +39,8 @@ import '../../services/voice_service.dart';
 import '../../services/embedded_video_pause_bus.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/bubble_actions.dart';
+import '../widgets/message_actions_overlay.dart';
 import '../widgets/mesh_radar_widget.dart';
 import '../widgets/status_emoji_view.dart';
 import '../widgets/missing_local_media.dart';
@@ -2860,6 +2862,64 @@ class _PostCard extends StatefulWidget {
 }
 
 class _PostCardState extends State<_PostCard> {
+  final GlobalKey _postKey = GlobalKey();
+
+  Future<void> _showPostActions(BuildContext context) async {
+    final post = widget.post;
+    final actions = <MessageMenuAction>[
+      MessageMenuAction(
+        icon: Icons.forward,
+        label: AppL10n.t('cm_forward'),
+        onTap: () async {
+          final msg = _channelPostToForwardMessage(post, widget.channelId);
+          final authorNick = widget.nickFor(post.authorId);
+          final label = widget.channelName.isNotEmpty
+              ? '${widget.channelName} · $authorNick'
+              : 'Канал · $authorNick';
+          await _pickForwardChannelContent(
+            context,
+            forwardMessage: msg,
+            forwardAuthorId: post.authorId,
+            originalAuthorNick: label,
+            channelId: widget.channelId,
+          );
+        },
+      ),
+      MessageMenuAction(
+        icon: Icons.share_outlined,
+        label: AppL10n.t('cm_export'),
+        onTap: () => unawaited(shareChannelPostExternally(context, post)),
+      ),
+      if (post.text.trim().isNotEmpty)
+        MessageMenuAction(
+          icon: Icons.copy,
+          label: AppL10n.t('chn_copy_text'),
+          onTap: () async {
+            await Clipboard.setData(ClipboardData(text: post.text));
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(AppL10n.t('cm_text_copied'))),
+              );
+            }
+          },
+        ),
+      if (widget.onDelete != null)
+        MessageMenuAction(
+          icon: Icons.delete_outline,
+          label: AppL10n.t('chn_delete_post'),
+          destructive: true,
+          onTap: () => widget.onDelete?.call(),
+        ),
+    ];
+    await showBubbleActions(
+      context: context,
+      boundaryKey: _postKey,
+      actions: actions,
+      onReact: (e) => unawaited(_togglePostReaction(context, e)),
+      onMoreReactions: () => unawaited(_openReactionPicker(context)),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -2902,75 +2962,10 @@ class _PostCardState extends State<_PostCard> {
         ? widget.channelName
         : widget.nickFor(post.authorId);
 
-    return GestureDetector(
-      onLongPress: () async {
-        final action = await showModalBottomSheet<String>(
-          context: context,
-          builder: (ctx) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.emoji_emotions_outlined),
-                  title: Text(AppL10n.t('chn_reaction_ellipsis')),
-                  onTap: () => Navigator.pop(ctx, 'react'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.forward),
-                  title: Text(AppL10n.t('cm_forward')),
-                  onTap: () => Navigator.pop(ctx, 'fwd'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.share_outlined),
-                  title: Text(AppL10n.t('cm_export')),
-                  onTap: () => Navigator.pop(ctx, 'share'),
-                ),
-                if (post.text.trim().isNotEmpty)
-                  ListTile(
-                    leading: const Icon(Icons.copy),
-                    title: Text(AppL10n.t('chn_copy_text')),
-                    onTap: () => Navigator.pop(ctx, 'copy'),
-                  ),
-                if (widget.onDelete != null)
-                  ListTile(
-                    leading: Icon(Icons.delete_outline, color: cs.error),
-                    title:
-                        Text(AppL10n.t('chn_delete_post'), style: TextStyle(color: cs.error)),
-                    onTap: () => Navigator.pop(ctx, 'del_post'),
-                  ),
-              ],
-            ),
-          ),
-        );
-        if (!context.mounted) return;
-        if (action == 'react') {
-          await _openReactionPicker(context);
-        } else if (action == 'fwd') {
-          final msg = _channelPostToForwardMessage(post, widget.channelId);
-          final authorNick = widget.nickFor(post.authorId);
-          final label = widget.channelName.isNotEmpty
-              ? '${widget.channelName} · $authorNick'
-              : 'Канал · $authorNick';
-          await _pickForwardChannelContent(
-            context,
-            forwardMessage: msg,
-            forwardAuthorId: post.authorId,
-            originalAuthorNick: label,
-            channelId: widget.channelId,
-          );
-        } else if (action == 'share') {
-          await shareChannelPostExternally(context, post);
-        } else if (action == 'copy') {
-          await Clipboard.setData(ClipboardData(text: post.text));
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppL10n.t('cm_text_copied'))),
-            );
-          }
-        } else if (action == 'del_post') {
-          widget.onDelete?.call();
-        }
-      },
+    return RepaintBoundary(
+      key: _postKey,
+      child: GestureDetector(
+      onLongPress: () => _showPostActions(context),
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         color: cs.surfaceContainerHigh,
@@ -3195,7 +3190,7 @@ class _PostCardState extends State<_PostCard> {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
