@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -414,6 +415,14 @@ class SettingsCategoryCards extends StatelessWidget {
             subtitle: 'Звуки, рингтон, вибрация',
             onTap: () => _open(context, const _NotificationsPage()),
           ),
+          if (kIsWeb)
+            _CategoryItem(
+              icon: Icons.verified_user_outlined,
+              color: const Color(0xFF00BCD4),
+              title: 'Разрешения',
+              subtitle: 'Микрофон, камера, уведомления',
+              onTap: () => _open(context, const _PermissionsPage()),
+            ),
         ]),
         const SizedBox(height: 8),
         _CategoryGroup(isDark: isDark, items: [
@@ -1454,6 +1463,181 @@ Future<void> _syncCurrentWebPushSubscription() async {
     publicKey: publicKey,
     nick: profile?.nickname ?? '',
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Sub-screen: Permissions (web) — request mic/camera/notifications once.
+// ─────────────────────────────────────────────────────────────────────
+
+class _PermissionsPage extends StatefulWidget {
+  const _PermissionsPage();
+
+  @override
+  State<_PermissionsPage> createState() => _PermissionsPageState();
+}
+
+class _PermissionsPageState extends State<_PermissionsPage> {
+  String _mic = 'unknown';
+  String _cam = 'unknown';
+  String _notif = 'default';
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final mic = await webMediaPermissionStatus('microphone');
+    final cam = await webMediaPermissionStatus('camera');
+    final cap = await webNotificationCapability();
+    if (!mounted) return;
+    setState(() {
+      _mic = mic;
+      _cam = cam;
+      _notif = (cap['permission'] as String?) ?? 'default';
+    });
+  }
+
+  Future<void> _requestMedia({required bool audio, required bool video}) async {
+    setState(() => _busy = true);
+    final r = await requestWebMediaPermission(audio: audio, video: video);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (audio) _mic = r == 'granted' ? 'granted' : (r == 'denied' ? 'denied' : _mic);
+      if (video) _cam = r == 'granted' ? 'granted' : (r == 'denied' ? 'denied' : _cam);
+    });
+    if (r == 'denied') {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Доступ запрещён. Разрешите его для сайта в настройках браузера.')));
+    }
+    await _refresh();
+  }
+
+  Future<void> _requestNotifications() async {
+    setState(() => _busy = true);
+    await requestWebNotificationPermission();
+    await _syncCurrentWebPushSubscription();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    await _refresh();
+  }
+
+  Widget _statusChip(String status) {
+    final granted = status == 'granted';
+    final denied = status == 'denied';
+    final label = granted ? 'Разрешено' : (denied ? 'Запрещено' : 'Не задано');
+    final color = granted ? Colors.green : (denied ? Colors.red : Colors.orange);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  Widget _tile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String status,
+    required VoidCallback onRequest,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(icon, size: 30, color: cs.primary),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Flexible(
+                        child: Text(title,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 16))),
+                    const SizedBox(width: 8),
+                    _statusChip(status),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text(subtitle,
+                      style: TextStyle(
+                          color: cs.onSurfaceVariant, fontSize: 13)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonal(
+              onPressed: (_busy || status == 'granted') ? null : onRequest,
+              child: Text(status == 'granted' ? 'Готово' : 'Разрешить'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return _subScaffold(
+      context: context,
+      title: 'Разрешения',
+      body: ListView(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Text(
+              'Разрешите доступ один раз — браузер запомнит выбор для этого '
+              'сайта и больше спрашивать не будет.',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+          ),
+          _tile(
+            icon: Icons.mic_rounded,
+            title: 'Микрофон',
+            subtitle: 'Голосовые сообщения и звонки',
+            status: _mic,
+            onRequest: () => _requestMedia(audio: true, video: false),
+          ),
+          _tile(
+            icon: Icons.videocam_rounded,
+            title: 'Камера',
+            subtitle: 'Видеозвонки',
+            status: _cam,
+            onRequest: () => _requestMedia(audio: false, video: true),
+          ),
+          _tile(
+            icon: Icons.notifications_active_rounded,
+            title: 'Уведомления',
+            subtitle: 'Пуши, даже когда приложение закрыто',
+            status: _notif,
+            onRequest: _requestNotifications,
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'На iPhone уведомления в фоне работают только если добавить Rlink '
+              'на экран «Домой» (как приложение) и один раз нажать «Разрешить».',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _NotificationsPageState extends State<_NotificationsPage> {

@@ -26,3 +26,12 @@ Future<void> syncWebPushSubscription({
       publicKey: publicKey,
       nick: nick,
     );
+
+Future<String> requestWebMediaPermission({
+  required bool audio,
+  required bool video,
+}) =>
+    impl.requestWebMediaPermission(audio: audio, video: video);
+
+Future<String> webMediaPermissionStatus(String name) =>
+    impl.webMediaPermissionStatus(name);

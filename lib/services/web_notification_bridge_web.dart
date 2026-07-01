@@ -168,6 +168,48 @@ Future<void> showWebNotification({
   } catch (_) {}
 }
 
+/// Triggers the browser mic/camera permission prompt via getUserMedia, then
+/// immediately stops the tracks (we only wanted the grant). Returns
+/// 'granted' | 'denied' | 'error' | 'unsupported'.
+Future<String> requestWebMediaPermission({
+  required bool audio,
+  required bool video,
+}) async {
+  try {
+    final md = html.window.navigator.mediaDevices;
+    if (md == null) return 'unsupported';
+    final stream = await md.getUserMedia({'audio': audio, 'video': video});
+    for (final t in stream.getTracks()) {
+      try {
+        t.stop();
+      } catch (_) {}
+    }
+    return 'granted';
+  } catch (e) {
+    final s = e.toString().toLowerCase();
+    if (s.contains('notallowed') ||
+        s.contains('denied') ||
+        s.contains('permission')) {
+      return 'denied';
+    }
+    return 'error';
+  }
+}
+
+/// Current permission state without prompting. 'granted'|'denied'|'prompt'|
+/// 'unknown' ('unknown' e.g. on iOS Safari which lacks permissions.query for
+/// camera/microphone).
+Future<String> webMediaPermissionStatus(String name) async {
+  try {
+    final perms = html.window.navigator.permissions;
+    if (perms == null) return 'unknown';
+    final status = await perms.query({'name': name});
+    return status.state ?? 'unknown';
+  } catch (_) {
+    return 'unknown';
+  }
+}
+
 Future<void> syncWebPushSubscription({
   required String relayServerUrl,
   required String publicKey,

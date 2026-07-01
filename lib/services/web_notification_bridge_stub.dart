@@ -26,3 +26,11 @@ Future<void> syncWebPushSubscription({
   required String publicKey,
   required String nick,
 }) async {}
+
+Future<String> requestWebMediaPermission({
+  required bool audio,
+  required bool video,
+}) async =>
+    'unsupported';
+
+Future<String> webMediaPermissionStatus(String name) async => 'unknown';
