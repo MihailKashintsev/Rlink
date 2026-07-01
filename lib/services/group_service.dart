@@ -12,6 +12,8 @@ import '../models/group.dart';
 import '../models/message_poll.dart';
 import '../utils/reaction_emoji_key.dart';
 import '../utils/reaction_limit.dart';
+import 'crypto_service.dart';
+import 'gossip_router.dart';
 import 'image_service.dart';
 import 'web_identity_portable.dart';
 
@@ -368,6 +370,21 @@ class GroupService {
     }
   }
 
+  /// Broadcast a group's metadata to all members so moderator promotions,
+  /// profile edits and member changes propagate across devices.
+  void broadcastGroupMeta(Group group) {
+    unawaited(GossipRouter.instance.sendGroupUpdate(
+      groupId: group.id,
+      name: group.name,
+      creatorId: group.creatorId,
+      updaterId: CryptoService.instance.publicKeyHex,
+      memberIds: group.memberIds,
+      moderatorIds: group.moderatorIds,
+      avatarColor: group.avatarColor,
+      avatarEmoji: group.avatarEmoji,
+    ));
+  }
+
   /// Promote or demote [userId] as moderator of [groupId].
   Future<Group?> setModerator(String groupId, String userId, bool isMod) async {
     final group = await getGroup(groupId);
@@ -380,6 +397,7 @@ class GroupService {
     }
     final updated = group.copyWith(moderatorIds: mods);
     await updateGroup(updated);
+    broadcastGroupMeta(updated);
     return updated;
   }
 
@@ -389,6 +407,7 @@ class GroupService {
     if (group.memberIds.contains(memberId)) return;
     final updated = group.copyWith(memberIds: [...group.memberIds, memberId]);
     await updateGroup(updated);
+    broadcastGroupMeta(updated);
   }
 
   Future<void> saveGroupFromInvite(Group group) async {
@@ -413,7 +432,10 @@ class GroupService {
     if (group == null) return;
     final members = group.memberIds.where((m) => m != userId).toList();
     final mods = group.moderatorIds.where((m) => m != userId).toList();
-    await updateGroup(group.copyWith(memberIds: members, moderatorIds: mods));
+    final updated = group.copyWith(memberIds: members, moderatorIds: mods);
+    await updateGroup(updated);
+    // Tell everyone (incl. the removed member) about the new roster.
+    broadcastGroupMeta(updated);
   }
 
   static const _groupMediaColumns = {'image_path', 'video_path', 'voice_path'};

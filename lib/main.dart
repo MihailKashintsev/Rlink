@@ -2624,6 +2624,49 @@ Future<void> initServices() async {
       if (groupId == null || accepterId == null) return;
       GroupService.instance.addMember(groupId, accepterId);
     };
+    // Live group metadata (name/members/moderators/avatar) — keeps every
+    // member's copy in sync and notifies you when you're made a moderator.
+    GossipRouter.instance.onGroupUpdate = (payload) {
+      final groupId = payload['groupId'] as String?;
+      if (groupId == null) return;
+      unawaited(() async {
+        final existing = await GroupService.instance.getGroup(groupId);
+        if (existing == null) return; // not a group I'm in
+        final myId = CryptoService.instance.publicKeyHex;
+        final memberIds =
+            (payload['memberIds'] as List<dynamic>?)?.cast<String>() ??
+                existing.memberIds;
+        final mods =
+            (payload['moderatorIds'] as List<dynamic>?)?.cast<String>() ??
+                existing.moderatorIds;
+        // I was kicked → leave locally.
+        if (myId.isNotEmpty &&
+            existing.memberIds.contains(myId) &&
+            !memberIds.contains(myId)) {
+          await GroupService.instance.leaveGroup(groupId);
+          return;
+        }
+        final wasMod = existing.moderatorIds.contains(myId);
+        final nowMod = mods.contains(myId);
+        final updated = existing.copyWith(
+          name: payload['name'] as String?,
+          memberIds: memberIds,
+          moderatorIds: mods,
+          avatarColor: payload['avatarColor'] as int?,
+          avatarEmoji: payload['avatarEmoji'] as String?,
+        );
+        await GroupService.instance.updateGroup(updated); // no re-broadcast
+        if (!wasMod && nowMod && myId.isNotEmpty) {
+          InAppNotificationService.instance.show(
+            title: 'Модератор группы',
+            body: 'Вас назначили модератором «${updated.name}»',
+            payload: 'group:$groupId',
+            color: updated.avatarColor,
+            emoji: updated.avatarEmoji.isNotEmpty ? updated.avatarEmoji : '👑',
+          );
+        }
+      }());
+    };
     GossipRouter.instance.onVerifyRequest = (payload) {
       final channelId = payload['channelId'] as String?;
       final channelName = payload['channelName'] as String?;

@@ -2101,6 +2101,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   avatarImagePath: pickedImagePath,
                 );
                 await GroupService.instance.updateGroup(updated);
+                GroupService.instance.broadcastGroupMeta(updated);
                 if (mounted) setState(() => _group = updated);
               },
               child: Text(AppL10n.t('common_save')),

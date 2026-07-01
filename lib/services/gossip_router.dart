@@ -387,6 +387,7 @@ class GossipRouter {
   void Function(Map<String, dynamic> payload)? onGroupInvite;
   void Function(Map<String, dynamic> payload)? onGroupAccept;
   void Function(Map<String, dynamic> payload)? onGroupHistoryReq;
+  void Function(Map<String, dynamic> payload)? onGroupUpdate;
 
   /// Закрепление в личном чате: { mid, a, from, r? }
   Future<void> Function(Map<String, dynamic> payload)? onDmPin;
@@ -2175,6 +2176,10 @@ class GossipRouter {
         onGroupHistoryReq?.call(packet.payload);
         return;
       }
+      if (packet.type == 'group_update') {
+        onGroupUpdate?.call(packet.payload);
+        return;
+      }
       if (packet.type == 'poll_vote') {
         onPollVote?.call(packet.payload);
         return;
@@ -2798,6 +2803,38 @@ class GossipRouter {
         'groupId': groupId,
         'requesterId': requesterId,
         'sinceTs': sinceTs,
+      },
+    );
+    await _forward(packet);
+  }
+
+  /// Broadcast a group's current metadata (name, members, moderators, avatar)
+  /// to all members so promotions / edits / member changes propagate. Members
+  /// filter by groupId on receipt (same broadcast model as group_message).
+  Future<void> sendGroupUpdate({
+    required String groupId,
+    required String name,
+    required String creatorId,
+    required String updaterId,
+    required List<String> memberIds,
+    required List<String> moderatorIds,
+    int? avatarColor,
+    String? avatarEmoji,
+  }) async {
+    final packet = GossipPacket(
+      id: const Uuid().v4(),
+      type: 'group_update',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: {
+        'groupId': groupId,
+        'name': name,
+        'creatorId': creatorId,
+        'updaterId': updaterId,
+        'memberIds': memberIds,
+        'moderatorIds': moderatorIds,
+        if (avatarColor != null) 'avatarColor': avatarColor,
+        if (avatarEmoji != null) 'avatarEmoji': avatarEmoji,
       },
     );
     await _forward(packet);
