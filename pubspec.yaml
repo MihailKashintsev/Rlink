@@ -160,6 +160,7 @@ flutter:
     - assets/branding/rlink_mark.png
     - assets/branding/rlink_icon_ai.png
     - assets/branding/logo.svg
+    - assets/animated_emoji/
     - assets/models/ggml-tiny.bin
     - assets/sticker_packs/default/
     - assets/backgrounds/black.png

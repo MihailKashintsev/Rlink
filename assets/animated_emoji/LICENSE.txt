@@ -1,0 +1,6 @@
+Animated emoji in this folder are from Google "Noto Animated Emoji"
+(https://googlefonts.github.io/noto-emoji-animation/), resized/optimized for Rlink.
+Licensed under the Apache License 2.0 (tools/images) and SIL Open Font License 1.1.
+© Google. Free for commercial use with attribution.
+Regenerate: curl the 512.gif from fonts.gstatic.com/s/e/notoemoji/latest/<code>/512.gif,
+then: gifsicle -O3 --lossy=140 --resize-fit 88x88 --colors 72 in.gif -o out.gif
