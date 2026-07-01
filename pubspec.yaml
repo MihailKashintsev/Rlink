@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  flutter_svg: ^2.0.10
 
   # BLE
   flutter_blue_plus: ^1.32.12
@@ -158,6 +159,7 @@ flutter:
   assets:
     - assets/branding/rlink_mark.png
     - assets/branding/rlink_icon_ai.png
+    - assets/branding/logo.svg
     - assets/models/ggml-tiny.bin
     - assets/sticker_packs/default/
     - assets/backgrounds/black.png

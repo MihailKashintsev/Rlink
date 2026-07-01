@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'l10n/app_l10n.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -4382,44 +4383,18 @@ class _SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final mark = Image.asset(
-      'assets/branding/rlink_mark.png',
-      width: 72,
-      height: 72,
-      filterQuality: FilterQuality.high,
+    final accent = Theme.of(context).colorScheme.primary;
+    final mark = SvgPicture.asset(
+      'assets/branding/logo.svg',
+      width: 84,
+      height: 84,
+      colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
     );
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          dark
-              ? ColorFiltered(
-                  colorFilter: const ColorFilter.matrix(<double>[
-                    0.42,
-                    0,
-                    0,
-                    0,
-                    28,
-                    0,
-                    0.42,
-                    0,
-                    0,
-                    28,
-                    0,
-                    0,
-                    0.42,
-                    0,
-                    28,
-                    0,
-                    0,
-                    0,
-                    1,
-                    0,
-                  ]),
-                  child: mark,
-                )
-              : mark,
+          mark,
           const SizedBox(height: 16),
           Text(
             'Rlink',
