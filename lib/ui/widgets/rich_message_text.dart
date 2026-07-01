@@ -243,6 +243,15 @@ List<_Hit> _collectCustomEmojiHits(String s, List<_Hit> blocked) {
   return out;
 }
 
+List<_Hit> _collectNotoEmojiHits(String s, List<_Hit> blocked) {
+  final out = <_Hit>[];
+  for (final (st, en, code) in notoEmojiRanges(s)) {
+    if (blocked.any((h) => !(en <= h.start || st >= h.end))) continue;
+    out.add(_Hit(st, en, 'nemoji', code));
+  }
+  return out;
+}
+
 List<InlineSpan> _spansForPlain(
   String s,
   TextStyle baseStyle,
@@ -255,6 +264,11 @@ List<InlineSpan> _spansForPlain(
 }) {
   if (s.isEmpty) return [];
   final hits = _collectInteractiveHits(s);
+  // Standard unicode emoji with a bundled Noto animation → inline animated GIF.
+  for (final eh in _collectNotoEmojiHits(s, hits)) {
+    hits.add(eh);
+  }
+  hits.sort((a, b) => a.start.compareTo(b.start));
   if (onSlashCommandTap != null) {
     for (final sh in _collectSlashCommandHits(s, hits)) {
       hits.add(sh);
@@ -340,6 +354,21 @@ List<InlineSpan> _spansForPlain(
               fontWeight: FontWeight.w600,
             ),
           ),
+        ),
+      ));
+    } else if (h.kind == 'nemoji') {
+      final fs = baseStyle.fontSize ?? 16;
+      final side = fs * 1.32;
+      spans.add(WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: Image.asset(
+          'assets/animated_emoji/${h.raw}.gif',
+          width: side,
+          height: side,
+          gaplessPlayback: true,
+          cacheWidth: (side * 2).round(),
+          errorBuilder: (_, __, ___) =>
+              Text(s.substring(h.start, h.end), style: baseStyle),
         ),
       ));
     } else if (h.kind == 'cemoji') {
@@ -569,10 +598,6 @@ class RichMessageText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Emoji-only messages render as large, gently animated "live" emoji.
-    if (isEmojiOnlyMessage(text)) {
-      return AnimatedEmojiText(text: text);
-    }
     if (!parseCustomEmoji) return _buildInner(context);
     return ValueListenableBuilder<int>(
       valueListenable: EmojiPackService.instance.version,
