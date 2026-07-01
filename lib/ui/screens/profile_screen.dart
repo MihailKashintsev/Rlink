@@ -29,6 +29,7 @@ import '../../main.dart'
         sendProfileToAllContacts;
 import '../widgets/avatar_widget.dart';
 import '../widgets/desktop_image_picker.dart';
+import '../widgets/profile_photo_actions.dart';
 import '../widgets/status_emoji_view.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -138,6 +139,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
       maxSize: 1200,
     );
     setState(() => _bannerImagePath = path);
+  }
+
+  /// Меню смены аватарки по нажатию на карандаш: выбрать фото / эмодзи / убрать.
+  Future<void> _showAvatarPhotoMenu() async {
+    final hasPhoto = (_selectedImagePath ??
+                ProfileService.instance.profile?.avatarImagePath)
+            ?.isNotEmpty ==
+        true;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Выбрать фото'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final ok = await pickAndSaveProfileAvatar(context);
+                if (ok && mounted) {
+                  setState(() => _selectedImagePath =
+                      ProfileService.instance.profile?.avatarImagePath);
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.emoji_emotions_outlined),
+              title: const Text('Эмодзи'),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _showEmojiPicker = true;
+                  _showStatusEmojiPicker = false;
+                });
+              },
+            ),
+            if (hasPhoto)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Убрать фото',
+                    style: TextStyle(color: Colors.red)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await deleteProfileAvatar();
+                  if (mounted) setState(() => _selectedImagePath = null);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _pickProfileMusic() async {
@@ -447,15 +500,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   if (_editing) ...[
-                    // Кнопка смены эмодзи
+                    // Карандаш: меню смены аватарки (фото / эмодзи / убрать).
                     Positioned(
                       right: 0,
                       bottom: 0,
                       child: GestureDetector(
-                        onTap: () => setState(() {
-                          _showEmojiPicker = !_showEmojiPicker;
-                          _showStatusEmojiPicker = false;
-                        }),
+                        onTap: _showAvatarPhotoMenu,
                         child: Container(
                           width: 28,
                           height: 28,

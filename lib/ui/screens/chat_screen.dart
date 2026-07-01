@@ -7437,12 +7437,21 @@ class _ChatScreenState extends State<ChatScreen> {
                                                         );
                                                       },
                                                       onPointerMove: (e) {
+                                                        // Touch fingers jitter far
+                                                        // more than a mouse; a tight
+                                                        // slop canceled the long-press
+                                                        // on Android before it fired.
+                                                        final slop = e.kind ==
+                                                                PointerDeviceKind
+                                                                    .mouse
+                                                            ? 16.0
+                                                            : 32.0;
                                                         if (_msgLongPressPos !=
                                                                 null &&
                                                             (e.position -
                                                                         _msgLongPressPos!)
                                                                     .distance >
-                                                                16) {
+                                                                slop) {
                                                           _msgLongPressTimer
                                                               ?.cancel();
                                                           _msgLongPressTimer =
