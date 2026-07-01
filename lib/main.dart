@@ -79,6 +79,7 @@ import 'app_route_observer.dart';
 import 'ui/app_palettes.dart';
 import 'ui/screens/chat_list_screen.dart';
 import 'ui/widgets/audio_queue_mini_player.dart';
+import 'ui/widgets/aurora_background.dart';
 import 'ui/widgets/square_video_queue_pip.dart';
 import 'ui/widgets/link_sync_overlay.dart';
 import 'ui/widgets/in_app_notification_overlay.dart';
@@ -4107,7 +4108,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (child != null) child,
+              if (child != null) AuroraBackground(child: child),
               const SquareVideoQueuePip(),
               const LinkSyncOverlay(),
               const InAppNotificationOverlay(),
@@ -4244,9 +4245,9 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
 
     return ThemeData(
       brightness: brightness,
-      // Plain themed background everywhere; the wallpaper is applied only inside
-      // chats (AppBackground), gated by the chatBackground setting.
-      scaffoldBackgroundColor: scaffoldBg,
+      // New design: transparent scaffolds let the app-wide AuroraBackground show
+      // through; old design keeps the flat themed background.
+      scaffoldBackgroundColor: newDesign ? Colors.transparent : scaffoldBg,
       colorScheme: cs,
       pageTransitionsTheme: PageTransitionsTheme(
         builders: {

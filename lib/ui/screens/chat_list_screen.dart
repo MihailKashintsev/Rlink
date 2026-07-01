@@ -438,14 +438,16 @@ class _ChatListScreenState extends State<ChatListScreen>
     final childLinked = settings.isLinkedChildDevice;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8),
+      backgroundColor: settings.newDesign
+          ? Colors.transparent
+          : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
       appBar: AppBar(
         automaticallyImplyLeading: false,
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        backgroundColor:
-            isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2),
+        backgroundColor: settings.newDesign
+            ? Theme.of(context).colorScheme.surface
+            : (isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2)),
         title: _searchActive
             ? TextField(
                 controller: _searchController,

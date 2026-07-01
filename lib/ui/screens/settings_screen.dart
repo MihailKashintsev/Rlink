@@ -60,14 +60,18 @@ Scaffold _subScaffold({
   required Widget body,
 }) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
+  final nd = AppSettings.instance.newDesign;
   return Scaffold(
-    backgroundColor: isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8),
+    backgroundColor: nd
+        ? Colors.transparent
+        : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
     appBar: AppBar(
       title: Text(title),
       elevation: 0,
       scrolledUnderElevation: 0.5,
-      backgroundColor:
-          isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2),
+      backgroundColor: nd
+          ? Theme.of(context).colorScheme.surface
+          : (isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2)),
     ),
     body: body,
   );
@@ -118,14 +122,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8),
+      backgroundColor: AppSettings.instance.newDesign
+          ? Colors.transparent
+          : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
       appBar: AppBar(
         title: Text(AppL10n.t('settings')),
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        backgroundColor:
-            isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2),
+        backgroundColor: AppSettings.instance.newDesign
+            ? Theme.of(context).colorScheme.surface
+            : (isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2)),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
@@ -173,14 +179,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8),
+      backgroundColor: AppSettings.instance.newDesign
+          ? Colors.transparent
+          : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
       appBar: AppBar(
         title: Text(AppL10n.t('settings')),
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        backgroundColor:
-            isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2),
+        backgroundColor: AppSettings.instance.newDesign
+            ? Theme.of(context).colorScheme.surface
+            : (isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2)),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
