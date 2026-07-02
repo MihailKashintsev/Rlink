@@ -84,6 +84,8 @@ class LibBotService {
       '/newbot <ник> — новый бот (см. кнопки под полем ввода)\n'
       '/cancel — отменить ожидание публичного ключа\n'
       '/guide — короткий чеклист создания бота\n'
+      '/notehelp — как самому развернуть и зарегистрировать бота\n'
+      '/verify @ник [текст] — заявка на галочку (верификацию)\n'
       '/commands — это сообщение\n\n'
       'После /newbot на ПК: python -m rlink_bot onboard <код из Lib> --file bot_keys.json\n\n'
       'Документация по всему Rlink: Настройки → Документация.';
@@ -93,7 +95,8 @@ class LibBotService {
     ('Команды', '/commands'),
     ('Мои боты', '/mybots'),
     ('Новый бот', '/newbot my_bot'),
-    ('Удалить бота', '/delbot @'),
+    ('Как развернуть', '/notehelp'),
+    ('Галочка', '/verify'),
     ('Памятка', '/guide'),
   ];
 
@@ -124,6 +127,42 @@ class LibBotService {
     '5) python -m rlink_bot run --file rlink_bot_config.json — держать процесс онлайн',
     '',
     'Подробно: Настройки → «Документация» (вкладки Русский / English).',
+  ];
+
+  /// Полная инструкция «развернуть бота у себя» (/notehelp).
+  static const _deployGuideLines = <String>[
+    'Как самому создать, развернуть и зарегистрировать бота Rlink',
+    '',
+    'Бот — это ваш процесс на вашем ПК или сервере. Relay только доставляет '
+        'сообщения (E2E). Пока процесс запущен — бот отвечает; офлайн — собеседник '
+        'видит заглушку «Бот не в сети…».',
+    '',
+    '① Правила без кода (проще всего):',
+    '   Экран «Боты» → «Создать своего бота». Соберёте ответы, приложение выдаст '
+        'готовый Python-файл и зарегистрирует бота в один тап.',
+    '',
+    '② Свой код (полный контроль):',
+    '   1) Возьмите пакет rlink_bot из репозитория Rlink (папка tools/rlink_bot):',
+    '      cd tools/rlink_bot && python -m pip install -e .',
+    '   2) Ключи бота:',
+    '      python -m rlink_bot keys init --file bot_keys.json',
+    '      python -m rlink_bot keys show-pub --file bot_keys.json   (64 hex)',
+    '   3) Регистрация ника: здесь /newbot ваш_ник, затем вставьте 64 hex.',
+    '   4) Привязка (создаст rlink_bot_config.json):',
+    '      python -m rlink_bot onboard <код из Lib> --file bot_keys.json',
+    '   5) Логика ответов: возьмите tools/rlink_bot/example_echo_bot.py как шаблон,',
+    '      функция handle(sender, text) — ваши ответы. Кнопки: [btn:Метка|/cmd].',
+    '   6) Запуск/держать онлайн:',
+    '      python -m rlink_bot run --file rlink_bot_config.json',
+    '',
+    '③ Держать бота онлайн на сервере:',
+    '   systemd-юнит / screen / tmux / docker — любой способ, чтобы процесс не падал.',
+    '',
+    '④ Галочка (верификация):',
+    '   Когда бот готов — отправьте заявку: /verify @ваш_ник [комментарий].',
+    '   Админ увидит заявку в панели и выдаст галочку.',
+    '',
+    'Полная документация: Настройки → «Документация».',
   ];
 
   /// Сброс сценария «ждём ключ» (например при выходе из чата).
@@ -207,6 +246,14 @@ class LibBotService {
 
     if (lower == '/guide' || lower.startsWith('/guide ')) {
       return _withMenuButtons(List<String>.from(_guideLines));
+    }
+
+    if (lower == '/notehelp' || lower.startsWith('/notehelp ')) {
+      return _withMenuButtons(List<String>.from(_deployGuideLines));
+    }
+
+    if (lower == '/verify' || lower.startsWith('/verify ')) {
+      return _verifyRequestLines(t);
     }
 
     if (lower == '/mybots' || lower.startsWith('/mybots ')) {
@@ -512,6 +559,72 @@ class LibBotService {
       if ((b['handle'] as String?)?.toLowerCase() == handleNorm) return b;
     }
     return null;
+  }
+
+  /// /verify [@ник] [комментарий] — заявка владельца на галочку.
+  Future<List<String>> _verifyRequestLines(String raw) async {
+    if (!await _ensureRelayConnected()) {
+      return const [
+        'Relay не подключён.',
+        'Проверьте интернет и URL relay в настройках, затем повторите /verify.',
+      ];
+    }
+    final parts = raw.trim().split(RegExp(r'\s+'));
+    if (parts.length < 2) {
+      final (bots, err) = await _loadMyBots();
+      final lines = <String>[
+        'Заявка на галочку (верификацию бота).',
+        '',
+        'Когда бот готов и стабильно онлайн, отправьте заявку — админ увидит её '
+            'в панели и выдаст галочку.',
+        '',
+        'Использование: /verify @ваш_ник [комментарий]',
+      ];
+      if (err == null && bots.isNotEmpty) {
+        lines
+          ..add('')
+          ..add('Ваши боты:');
+        for (final b in bots) {
+          final h = b['handle'] as String? ?? '';
+          if (h.isEmpty) continue;
+          final v = b['verified'] == true ? ' ✓' : '';
+          lines.add('• @$h$v');
+        }
+      }
+      return _withMenuButtons(lines);
+    }
+    final handleNorm = _parseHandleArg(parts[1]);
+    if (handleNorm == null || handleNorm.isEmpty) {
+      return const ['Укажите ник бота: /verify @ваш_ник'];
+    }
+    final note = parts.length > 2 ? parts.sublist(2).join(' ').trim() : '';
+    final (bots, err) = await _loadMyBots();
+    if (err != null) return [err];
+    final row = _findOwnedBotByHandle(bots, handleNorm);
+    if (row == null) {
+      return [
+        'Бот @$handleNorm не найден среди ваших ботов на этом relay.',
+        'Список ваших ботов: /mybots',
+      ];
+    }
+    if (row['verified'] == true) {
+      return ['@$handleNorm уже верифицирован ✓'];
+    }
+    final botId = (row['botId'] as String?)?.toLowerCase() ?? '';
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(botId)) {
+      return const ['Некорректный идентификатор бота.'];
+    }
+    final ack = await RelayService.instance
+        .sendBotVerifyRequest(botId: botId, note: note);
+    if (ack['ok'] == true) {
+      return [
+        'Заявка на галочку для @$handleNorm отправлена ✓',
+        if (note.isNotEmpty) 'Комментарий: $note',
+        '',
+        'Админ увидит её в панели и примет решение.',
+      ];
+    }
+    return [_ownerPatchErr(ack)];
   }
 
   Future<List<String>> _myBotsLines() async {

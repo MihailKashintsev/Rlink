@@ -1359,6 +1359,7 @@ Future<void> _handleBotOwnerPatchAsync(
       obj.containsKey('avatarUrl') ||
       obj.containsKey('bannerUrl') ||
       obj['revoke'] == true ||
+      obj['verifyRequest'] == true ||
       obj['clearAvatar'] == true ||
       obj['clearBanner'] == true;
   if (!hasChange) {
@@ -1449,6 +1450,19 @@ Future<void> _handleBotOwnerPatchAsync(
       return;
     }
     row['bannerUrl'] = bu;
+    changed = true;
+  }
+
+  // Заявка владельца на верификацию («галочку»). Фиксируем как флаг + запись
+  // активности — админ видит её в панели и решает выдать галочку.
+  if (obj['verifyRequest'] == true) {
+    final note = _jsonString(obj['verifyNote']).trim();
+    final trimmedNote = note.length > 200 ? note.substring(0, 200) : note;
+    row['verifyRequested'] = true;
+    row['verifyRequestedAt'] = nowMs;
+    if (trimmedNote.isNotEmpty) row['verifyNote'] = trimmedNote;
+    _recordBotActivity(botId, 'verify_request',
+        peerId: owner, detail: trimmedNote, persist: false);
     changed = true;
   }
 
@@ -2062,6 +2076,9 @@ void _handleAdminBotList(_User user, Map<String, dynamic> msg) {
       'blocked': blocked,
       'verified': verified,
       'revoked': revoked,
+      'verifyRequested': m['verifyRequested'] == true,
+      'verifyRequestedAt': m['verifyRequestedAt'] ?? 0,
+      'verifyNote': _jsonString(m['verifyNote']),
       'activity': activity,
     });
   }
@@ -2100,6 +2117,8 @@ void _handleAdminBotUpdate(_User user, Map<String, dynamic> msg) {
   var changed = false;
   if (msg.containsKey('verified')) {
     row['verified'] = msg['verified'] == true;
+    // Выдача/снятие галочки закрывает заявку владельца.
+    if (row.containsKey('verifyRequested')) row['verifyRequested'] = false;
     changed = true;
   }
   if (msg.containsKey('blocked')) {

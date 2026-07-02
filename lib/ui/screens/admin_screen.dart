@@ -956,6 +956,9 @@ class _RelayAdminBot {
   final bool blocked;
   final bool revoked;
   final bool online;
+  final bool verifyRequested;
+  final String verifyNote;
+  final int verifyRequestedAt;
   final int createdAt;
   final int updatedAt;
   final int lastSeenAt;
@@ -979,6 +982,9 @@ class _RelayAdminBot {
     required this.blocked,
     required this.revoked,
     required this.online,
+    this.verifyRequested = false,
+    this.verifyNote = '',
+    this.verifyRequestedAt = 0,
     required this.createdAt,
     required this.updatedAt,
     required this.lastSeenAt,
@@ -1051,6 +1057,9 @@ class _RelayAdminBot {
       blocked: j['blocked'] == true,
       revoked: j['revoked'] == true,
       online: j['online'] == true,
+      verifyRequested: j['verifyRequested'] == true,
+      verifyNote: j['verifyNote'] as String? ?? '',
+      verifyRequestedAt: (j['verifyRequestedAt'] as num?)?.toInt() ?? 0,
       createdAt: (j['createdAt'] as num?)?.toInt() ?? 0,
       updatedAt: (j['updatedAt'] as num?)?.toInt() ?? 0,
       lastSeenAt: (j['lastSeenAt'] as num?)?.toInt() ?? 0,
@@ -1113,6 +1122,8 @@ class _RelayBotActivity {
         return 'владелец отозвал';
       case 'admin_update':
         return 'админ изменил статус';
+      case 'verify_request':
+        return 'запросил галочку';
       case 'claim':
         return 'зарегистрирован';
       default:
@@ -1241,10 +1252,50 @@ class _RelayBotAdminTile extends StatelessWidget {
               children: [
                 if (bot.online) _chip('ONLINE', Colors.green),
                 if (bot.verified) _chip('VERIFIED', Colors.blue),
+                if (bot.verifyRequested && !bot.verified)
+                  _chip('ЗАПРОС ГАЛОЧКИ', Colors.amber.shade800),
                 if (bot.blocked) _chip('BLOCKED', Colors.red),
                 if (bot.revoked) _chip('REVOKED', Colors.red.shade900),
               ],
             ),
+            if (bot.verifyRequested && !bot.verified) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.verified_outlined,
+                            size: 16, color: Colors.amber.shade800),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Заявка на верификацию'
+                          '${bot.verifyRequestedAt > 0 ? ' · ${_RelayAdminBot._formatDateTime(bot.verifyRequestedAt)}' : ''}',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.amber.shade900),
+                        ),
+                      ],
+                    ),
+                    if (bot.verifyNote.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(bot.verifyNote.trim(),
+                          style:
+                              TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             if (bot.activity.isNotEmpty) ...[
               const SizedBox(height: 8),
               Theme(

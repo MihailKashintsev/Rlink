@@ -8,6 +8,7 @@ import '../../services/bot_blueprint_store.dart';
 import '../../services/chat_storage_service.dart';
 import '../rlink_nav_routes.dart';
 import 'bot_builder_screen.dart';
+import 'bot_developer_guide_screen.dart';
 import 'chat_screen.dart';
 
 class BotCatalogScreen extends StatefulWidget {
@@ -51,6 +52,7 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
           _buildCreateCard(context),
+          _buildDevGuideTile(context),
           if (_myBots.isNotEmpty) ...[
             _sectionLabel('Мои боты (черновики)'),
             ..._myBots.map(_buildMyBotTile),
@@ -146,6 +148,29 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
               const Icon(Icons.chevron_right),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDevGuideTile(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: cs.secondaryContainer,
+          child: Icon(Icons.menu_book_outlined, color: cs.onSecondaryContainer),
+        ),
+        title: const Text('Справка для разработчиков'),
+        subtitle: const Text(
+          'Как создать, развернуть и зарегистрировать своего бота + заявка на галочку',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const BotDeveloperGuideScreen()),
         ),
       ),
     );

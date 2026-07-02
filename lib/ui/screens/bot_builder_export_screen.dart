@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../models/bot_blueprint.dart';
 import '../../services/bot_code_generator.dart';
 import '../../services/lib_bot_service.dart';
+import '../../services/relay_service.dart';
 import '../../utils/web_file_store.dart';
 
 /// «Выдаёт код»: готовый Python-файл бота + пошаговое подключение.
@@ -24,6 +25,8 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
   bool _registering = false;
   BuilderBotRegisterResult? _result;
   bool _showCode = false;
+  bool _verifyBusy = false;
+  bool _verifySent = false;
 
   BotBlueprint get bp => widget.blueprint;
 
@@ -81,6 +84,33 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
         ..clearSnackBars()
         ..showSnackBar(SnackBar(content: Text(res.error)));
     }
+  }
+
+  Future<void> _requestVerify() async {
+    final botId = _pubCtrl.text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^0-9a-f]'), '');
+    if (botId.length != 64) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(
+            content: Text('Сначала зарегистрируйте бота (шаг 3).')));
+      return;
+    }
+    setState(() => _verifyBusy = true);
+    final res = await RelayService.instance
+        .sendBotVerifyRequest(botId: botId, note: bp.description);
+    if (!mounted) return;
+    setState(() {
+      _verifyBusy = false;
+      _verifySent = res['ok'] == true;
+    });
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+          content: Text(res['ok'] == true
+              ? 'Заявка на галочку отправлена ✓'
+              : 'Не удалось: ${res['error'] ?? 'ошибка'}')));
   }
 
   @override
@@ -203,6 +233,21 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
               tone: cs.primary,
               text: 'Готово! @$handle зарегистрирован. '
                   'Код заявки для onboard: ${_result!.claimForOnboard}',
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _verifyBusy || _verifySent ? null : _requestVerify,
+              icon: _verifyBusy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : Icon(_verifySent
+                      ? Icons.verified
+                      : Icons.verified_outlined),
+              label: Text(_verifySent
+                  ? 'Заявка на галочку отправлена'
+                  : 'Отправить заявку на галочку'),
             ),
           ],
           const SizedBox(height: 22),

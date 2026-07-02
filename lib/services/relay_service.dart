@@ -1470,6 +1470,8 @@ class RelayService with WidgetsBindingObserver {
       'clearAvatar',
       'clearBanner',
       'revoke',
+      'verifyRequest',
+      'verifyNote',
     };
     final ch = changes ?? const <String, dynamic>{};
     if (ch.isEmpty) {
@@ -1527,6 +1529,19 @@ class RelayService with WidgetsBindingObserver {
       debugPrint('[RLINK][Relay] bot_owner_patch failed: $e');
       return {'ok': false, 'error': e.toString()};
     }
+  }
+
+  /// Владелец бота: заявка на верификацию («галочку»). Подписывается ключом
+  /// аккаунта-владельца (через bot_owner_patch), relay фиксирует заявку —
+  /// админ видит её в панели и выдаёт галочку.
+  Future<Map<String, dynamic>> sendBotVerifyRequest({
+    required String botId,
+    String note = '',
+  }) async {
+    final changes = <String, dynamic>{'verifyRequest': true};
+    final n = note.trim();
+    if (n.isNotEmpty) changes['verifyNote'] = n.length > 200 ? n.substring(0, 200) : n;
+    return sendBotOwnerPatch(botId: botId, changes: changes);
   }
 
   /// Админ: список relay-ботов (поиск по q, includeRevoked=true/false).
