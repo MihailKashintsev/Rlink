@@ -26,7 +26,7 @@ Future<bool> pickAndSaveProfileAvatar(BuildContext context) async {
     );
     final bytes = r?.files.single.bytes;
     if (bytes == null) return false;
-    final dataUrl = _webAvatarDataUrl(bytes);
+    final dataUrl = webAvatarDataUrl(bytes);
     if (dataUrl == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -59,7 +59,9 @@ Future<void> deleteProfileAvatar() async {
   unawaited(broadcastMyAvatar());
 }
 
-String? _webAvatarDataUrl(Uint8List input) {
+/// Downscale + JPEG-encode picked avatar bytes into a data-URL (web-safe
+/// avatar storage). Public: reused by the group avatar picker.
+String? webAvatarDataUrl(Uint8List input) {
   try {
     final decoded = img.decodeImage(input);
     if (decoded == null) return null;

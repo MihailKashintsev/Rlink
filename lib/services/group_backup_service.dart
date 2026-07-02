@@ -129,7 +129,10 @@ class GroupBackupService {
       }
 
       final prefs = await SharedPreferences.getInstance();
-      final pairing = GoogleDriveChannelBackup.channelAccountPairing(group.id);
+      // Для групп по-канальный аккаунт обычно не задан — берём активный.
+      final pairing =
+          GoogleDriveChannelBackup.channelAccountPairing(group.id) ??
+              GoogleDriveChannelBackup.activeRelayPairing;
       final folder = 'group_${group.id}';
 
       final fileId = await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(

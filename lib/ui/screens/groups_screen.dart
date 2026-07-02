@@ -41,6 +41,7 @@ import '../../utils/external_message_share.dart';
 import '../../utils/web_file_store.dart';
 import '../../utils/web_object_url.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/profile_photo_actions.dart';
 import '../widgets/reactions.dart';
 import '../widgets/rich_message_text.dart';
 import '../widgets/poll_message_card.dart';
@@ -2091,23 +2092,43 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   final picked = await ImagePicker()
                       .pickImage(source: ImageSource.gallery);
                   if (picked == null) return;
-                  final saved = await ImageService.instance.compressAndSave(
-                    picked.path,
-                    isAvatar: true,
-                  );
+                  // Web: путей нет — храним data-URL (как аватар профиля).
+                  String? saved;
+                  if (kIsWeb) {
+                    saved = webAvatarDataUrl(await picked.readAsBytes());
+                  } else {
+                    saved = await ImageService.instance.compressAndSave(
+                      picked.path,
+                      isAvatar: true,
+                    );
+                  }
+                  if (saved == null) return;
                   setDialogState(() => pickedImagePath = saved);
                 },
-                child: CircleAvatar(
-                  radius: 36,
-                  backgroundImage: pickedImagePath != null &&
-                          File(pickedImagePath!).existsSync()
-                      ? FileImage(File(pickedImagePath!))
-                      : null,
-                  child: pickedImagePath == null ||
-                          !File(pickedImagePath!).existsSync()
-                      ? const Icon(Icons.add_a_photo, size: 28)
-                      : null,
-                ),
+                child: Builder(builder: (_) {
+                  ImageProvider? provider;
+                  final pth = pickedImagePath;
+                  if (pth != null && pth.isNotEmpty) {
+                    if (pth.startsWith('data:')) {
+                      final comma = pth.indexOf(',');
+                      if (comma > 0) {
+                        try {
+                          provider =
+                              MemoryImage(base64Decode(pth.substring(comma + 1)));
+                        } catch (_) {}
+                      }
+                    } else if (!kIsWeb && File(pth).existsSync()) {
+                      provider = FileImage(File(pth));
+                    }
+                  }
+                  return CircleAvatar(
+                    radius: 36,
+                    backgroundImage: provider,
+                    child: provider == null
+                        ? const Icon(Icons.add_a_photo, size: 28)
+                        : null,
+                  );
+                }),
               ),
               const SizedBox(height: 12),
               TextField(

@@ -12,6 +12,8 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/web_file_store.dart';
+
 /// Состояние аккаунта Google Drive для экрана настроек (квота из [about.get]).
 class GoogleDriveSyncStatus {
   final String? email;
@@ -327,6 +329,58 @@ class GoogleDriveChannelBackup {
         await p.remove('drive_relay_active');
       }
     } catch (_) {}
+    await _mirrorAccountsToOpfs();
+  }
+
+  /// Web: localStorage (SharedPreferences) браузер может вычистить — дублируем
+  /// привязку аккаунтов в OPFS и восстанавливаем оттуда, чтобы Google-аккаунт
+  /// «не слетал» (ни в настройках, ни в каналах).
+  static const _opfsBackupName = 'drive_accounts_backup.json';
+  static const _opfsBackupPath = 'opfs://rlink/drive_accounts_backup.json';
+
+  static Future<void> _mirrorAccountsToOpfs() async {
+    if (!kIsWeb) return;
+    try {
+      final payload = jsonEncode({
+        'accounts': _accounts,
+        'active': _activePairing,
+        'channelAccounts': _channelAccounts,
+      });
+      await writeWebStoredFile(
+        fileName: _opfsBackupName,
+        bytes: Uint8List.fromList(utf8.encode(payload)),
+        mimeType: 'application/json',
+      );
+    } catch (e) {
+      debugPrint('[RLINK][Drive] OPFS mirror failed: $e');
+    }
+  }
+
+  static Future<void> _restoreAccountsFromOpfs() async {
+    if (!kIsWeb) return;
+    try {
+      final bytes = await readWebStoredFile(_opfsBackupPath);
+      if (bytes == null || bytes.isEmpty) return;
+      final m = jsonDecode(utf8.decode(bytes));
+      if (m is! Map) return;
+      final list = m['accounts'];
+      if (list is List && _accounts.isEmpty) {
+        _accounts.addAll(list.map((e) => (e as Map).map(
+            (k, v) => MapEntry(k.toString(), v?.toString() ?? ''))));
+      }
+      _activePairing ??= m['active'] as String?;
+      final ch = m['channelAccounts'];
+      if (ch is Map && _channelAccounts.isEmpty) {
+        _channelAccounts
+            .addAll(ch.map((k, v) => MapEntry(k.toString(), v.toString())));
+      }
+      if (_accounts.isNotEmpty) {
+        debugPrint('[RLINK][Drive] accounts restored from OPFS '
+            '(${_accounts.length})');
+      }
+    } catch (e) {
+      debugPrint('[RLINK][Drive] OPFS restore failed: $e');
+    }
   }
 
   static Future<void> restoreRelayAccount() async {
@@ -350,8 +404,12 @@ class GoogleDriveChannelBackup {
       }
       _activePairing = p.getString('drive_relay_active') ??
           (_accounts.isNotEmpty ? _accounts.first['pairing'] : null);
-      if (_accounts.isNotEmpty) await _persistAccounts();
       await _restoreChannelAccounts();
+      // localStorage пуст (браузер вычистил) → поднимаем привязку из OPFS.
+      if (_accounts.isEmpty) await _restoreAccountsFromOpfs();
+      _activePairing ??=
+          _accounts.isNotEmpty ? _accounts.first['pairing'] : null;
+      if (_accounts.isNotEmpty) await _persistAccounts();
     } catch (_) {}
   }
 
@@ -393,6 +451,7 @@ class GoogleDriveChannelBackup {
       final p = await SharedPreferences.getInstance();
       await p.setString('drive_channel_accounts', jsonEncode(_channelAccounts));
     } catch (_) {}
+    await _mirrorAccountsToOpfs();
   }
 
   static Future<void> _restoreChannelAccounts() async {
