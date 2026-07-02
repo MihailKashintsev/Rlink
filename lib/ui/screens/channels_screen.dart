@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
+import '../design/rlink_design.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -620,15 +621,18 @@ class _ChannelTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final myId = CryptoService.instance.publicKeyHex;
     final isAdmin = channel.adminId == myId;
-    return ListTile(
-      leading: AvatarWidget(
-        key: ValueKey('ch_tile_${channel.id}_${channel.avatarImagePath ?? ''}'),
-        initials: channel.name.isNotEmpty ? channel.name[0].toUpperCase() : '?',
-        color: channel.avatarColor,
-        emoji: channel.avatarEmoji,
-        imagePath: channel.avatarImagePath,
-        size: 48,
-      ),
+    final avatar = AvatarWidget(
+      key: ValueKey('ch_tile_${channel.id}_${channel.avatarImagePath ?? ''}'),
+      initials: channel.name.isNotEmpty ? channel.name[0].toUpperCase() : '?',
+      color: channel.avatarColor,
+      emoji: channel.avatarEmoji,
+      imagePath: channel.avatarImagePath,
+      size: RlinkDesign.on ? 44 : 48,
+    );
+    final tile = ListTile(
+      leading: RlinkDesign.on
+          ? RlinkDesign.gradientRing(cs: cs, child: avatar)
+          : avatar,
       title: Row(children: [
         Flexible(
           child: Text(channel.name,
@@ -673,6 +677,14 @@ class _ChannelTile extends StatelessWidget {
         ],
       ),
       onTap: onTap,
+    );
+    if (!RlinkDesign.on) return tile;
+    // Новый дизайн: плитка канала как «плавающая» карточка на аврора-фоне.
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      clipBehavior: Clip.antiAlias,
+      decoration: RlinkDesign.floatCard(cs, radius: 18),
+      child: tile,
     );
   }
 }
@@ -2966,14 +2978,17 @@ class _PostCardState extends State<_PostCard> {
       key: _postKey,
       child: GestureDetector(
       onLongPress: () => _showPostActions(context),
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        color: cs.surfaceContainerHigh,
-        elevation: 0,
+      child: Container(
+        margin: RlinkDesign.on
+            ? const EdgeInsets.symmetric(horizontal: 14, vertical: 7)
+            : const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+        decoration: RlinkDesign.on
+            ? RlinkDesign.floatCard(cs)
+            : BoxDecoration(
+                color: cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(18),
+              ),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -2983,8 +2998,10 @@ class _PostCardState extends State<_PostCard> {
               Row(children: [
                 Text(senderLabel,
                     style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                        fontSize: RlinkDesign.on ? 15 : 14,
+                        fontWeight:
+                            RlinkDesign.on ? FontWeight.w800 : FontWeight.w700,
+                        letterSpacing: RlinkDesign.on ? 0.2 : 0,
                         color: cs.primary)),
                 const Spacer(),
                 Text(

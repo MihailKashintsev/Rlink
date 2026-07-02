@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/app_settings.dart';
+import '../design/rlink_design.dart';
 import '../../services/media_upload_queue.dart';
 import '../../services/voice_service.dart';
 import 'avatar_widget.dart';
@@ -674,12 +675,28 @@ class ComposerInputBarState extends State<ComposerInputBar> {
                     duration: const Duration(milliseconds: 200),
                     width: 44,
                     height: 44,
-                    decoration: BoxDecoration(
-                      color: (widget.isSending || widget.isRecording)
-                          ? cs.onSurface.withValues(alpha: 0.3)
-                          : cs.primary,
-                      shape: BoxShape.circle,
-                    ),
+                    decoration: (widget.isSending || widget.isRecording)
+                        ? BoxDecoration(
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                            shape: BoxShape.circle,
+                          )
+                        : RlinkDesign.on
+                            ? BoxDecoration(
+                                gradient: RlinkDesign.accentGradient(cs),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: RlinkDesign.accent(cs)
+                                        .withValues(alpha: 0.45),
+                                    blurRadius: 14,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              )
+                            : BoxDecoration(
+                                color: cs.primary,
+                                shape: BoxShape.circle,
+                              ),
                     child: widget.isSending
                         ? Padding(
                             padding: const EdgeInsets.all(10),

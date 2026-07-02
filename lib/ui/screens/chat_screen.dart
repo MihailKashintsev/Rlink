@@ -14,6 +14,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
+import '../design/rlink_design.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, HapticFeedback, rootBundle;
@@ -8574,10 +8575,16 @@ class _MessageBubble extends StatelessWidget {
         ),
         decoration: isSticker
             ? null
-            : BoxDecoration(
-                color: isOut ? cs.primary : cs.surfaceContainerHigh,
-                borderRadius: settings.bubbleRadius(isMe: isOut),
-              ),
+            : RlinkDesign.on
+                ? (isOut
+                    ? RlinkDesign.bubbleOut(
+                        cs, settings.bubbleRadius(isMe: true))
+                    : RlinkDesign.bubbleIn(
+                        cs, settings.bubbleRadius(isMe: false)))
+                : BoxDecoration(
+                    color: isOut ? cs.primary : cs.surfaceContainerHigh,
+                    borderRadius: settings.bubbleRadius(isMe: isOut),
+                  ),
         child: Column(
           crossAxisAlignment:
               isOut ? CrossAxisAlignment.end : CrossAxisAlignment.start,

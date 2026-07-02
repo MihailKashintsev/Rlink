@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
+import '../design/rlink_design.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
@@ -2822,13 +2823,21 @@ class _GroupBubble extends StatelessWidget {
           constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.75,
           ),
-          decoration: BoxDecoration(
-            color: msg.isOutgoing ? cs.primary : cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(18).copyWith(
+          decoration: () {
+            final radius = BorderRadius.circular(18).copyWith(
               bottomRight: msg.isOutgoing ? const Radius.circular(4) : null,
               bottomLeft: msg.isOutgoing ? null : const Radius.circular(4),
-            ),
-          ),
+            );
+            if (RlinkDesign.on) {
+              return msg.isOutgoing
+                  ? RlinkDesign.bubbleOut(cs, radius)
+                  : RlinkDesign.bubbleIn(cs, radius);
+            }
+            return BoxDecoration(
+              color: msg.isOutgoing ? cs.primary : cs.surfaceContainerHigh,
+              borderRadius: radius,
+            );
+          }(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
