@@ -1937,8 +1937,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
     showModalBottomSheet(
       context: context,
+      // Длинный список контактов должен листаться (не влезал и не скроллился).
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
-        child: Column(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Padding(
@@ -1946,6 +1951,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               child: Text('Пригласить в группу',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
             ...contacts
                 .where((c) => !group.memberIds.contains(c.publicKeyHex))
                 .map((c) => ListTile(
@@ -1994,8 +2003,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                         }
                       },
                     )),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
           ],
+          ),
         ),
       ),
     );
@@ -2023,6 +2036,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
     );
     if (confirm != true || !mounted) return;
+    // Сообщаем участникам новый состав (без меня) ДО локального удаления —
+    // создатель при выходе так же теряет права, группа исчезает из его чатов.
+    final without = _group.copyWith(
+      memberIds: _group.memberIds.where((m) => m != _myId).toList(),
+      moderatorIds: _group.moderatorIds.where((m) => m != _myId).toList(),
+    );
+    GroupService.instance.broadcastGroupMeta(without);
     await GroupService.instance.leaveGroup(_group.id);
     if (mounted) Navigator.pop(context);
   }

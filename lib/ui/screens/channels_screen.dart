@@ -2355,6 +2355,50 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     }
   }
 
+  /// «Отписаться» из меню ⋮. Для админа — сложение полномочий: канал теряет
+  /// его как админа/модератора и исчезает из вкладки чатов.
+  Future<void> _unsubscribeViaMenu() async {
+    if (!_isAdmin) {
+      await _toggleSubscribe();
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Отписаться от канала?'),
+        content: const Text(
+            'Вы сложите полномочия администратора. Канал исчезнет из ваших '
+            'чатов, но останется у подписчиков.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(AppL10n.t('common_cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Отписаться'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final ch = await ChannelService.instance.getChannel(_channel.id);
+    if (ch != null) {
+      await ChannelService.instance.updateChannel(ch.copyWith(
+        adminId: '',
+        moderatorIds: ch.moderatorIds.where((m) => m != _myId).toList(),
+        linkAdminIds: ch.linkAdminIds.where((m) => m != _myId).toList(),
+      ));
+    }
+    unawaited(GossipRouter.instance.broadcastChannelSubscribe(
+      channelId: _channel.id,
+      userId: _myId,
+      unsubscribe: true,
+    ));
+    await ChannelService.instance.unsubscribe(_channel.id, _myId);
+    if (mounted) Navigator.pop(context);
+  }
+
   void _inviteSubscriber() {
     final contacts = ChatStorageService.instance.contactsNotifier.value;
     if (contacts.isEmpty) {
@@ -2375,8 +2419,13 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     }
     showModalBottomSheet(
       context: context,
+      // Длинный список контактов должен листаться.
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
-        child: Column(
+        child: ConstrainedBox(
+          constraints:
+              BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
@@ -2384,6 +2433,10 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               child: Text(AppL10n.t('chn_invite_to_channel'),
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
             ...available.map((c) => ListTile(
                   leading: AvatarWidget(
                     initials: c.nickname.isNotEmpty
@@ -2437,8 +2490,12 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                     }
                   },
                 )),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
           ],
+          ),
         ),
       ),
     );
@@ -2593,20 +2650,14 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               ));
             },
           ),
-          // Subscribe / Unsubscribe for non-admins
-          if (!_isAdmin)
+          // «Подписаться» — быстрая кнопка только для неподписанных;
+          // «Отписаться» переехала в меню ⋮.
+          if (!_isAdmin && !_isSubscribed)
             TextButton.icon(
               onPressed: _toggleSubscribe,
-              icon: Icon(
-                _isSubscribed
-                    ? Icons.notifications_off_outlined
-                    : Icons.notifications_outlined,
-                size: 18,
-              ),
-              label: Text(
-                _isSubscribed ? 'Отписаться' : 'Подписаться',
-                style: const TextStyle(fontSize: 13),
-              ),
+              icon: const Icon(Icons.notifications_outlined, size: 18),
+              label:
+                  const Text('Подписаться', style: TextStyle(fontSize: 13)),
             ),
           if (_isAdmin)
             IconButton(
@@ -2614,29 +2665,47 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               tooltip: 'Пригласить',
               onPressed: _inviteSubscriber,
             ),
-          if (!_isAdmin && _isModerator)
+          if (_isAdmin || _isModerator || _isSubscribed)
             PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'edit') _editChannel();
                 if (v == 'subscribers') _manageSubscribers();
+                if (v == 'unsub') unawaited(_unsubscribeViaMenu());
               },
               itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: 'edit',
-                  child: Row(children: [
-                    const Icon(Icons.edit_outlined, size: 18),
-                    const SizedBox(width: 8),
-                    Text(AppL10n.t('common_edit')),
-                  ]),
-                ),
-                PopupMenuItem(
-                  value: 'subscribers',
-                  child: Row(children: [
-                    Icon(Icons.people_outline, size: 18),
-                    SizedBox(width: 8),
-                    Text(AppL10n.t('cm_subscribers')),
-                  ]),
-                ),
+                if (!_isAdmin && _isModerator) ...[
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(children: [
+                      const Icon(Icons.edit_outlined, size: 18),
+                      const SizedBox(width: 8),
+                      Text(AppL10n.t('common_edit')),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'subscribers',
+                    child: Row(children: [
+                      const Icon(Icons.people_outline, size: 18),
+                      const SizedBox(width: 8),
+                      Text(AppL10n.t('cm_subscribers')),
+                    ]),
+                  ),
+                ],
+                if (_isAdmin || _isSubscribed)
+                  PopupMenuItem(
+                    value: 'unsub',
+                    child: Row(children: [
+                      const Icon(Icons.logout_rounded,
+                          size: 18, color: Colors.red),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isAdmin
+                            ? 'Отписаться (сложить полномочия)'
+                            : 'Отписаться',
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ]),
+                  ),
               ],
             ),
         ],
