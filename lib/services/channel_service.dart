@@ -1694,6 +1694,16 @@ class ChannelService {
     };
   }
 
+  /// Публичные обёртки для других бэкап-сервисов (группы): читают/восстанавливают
+  /// медиа по тем же колонкам image_path/video_path/voice_path/file_path.
+  Future<Map<String, dynamic>> readRowMediaDataForBackup(
+          Map<String, dynamic> row) =>
+      _readRowMediaData(row);
+
+  Future<Map<String, String>> restoreRowMediaFilesForBackup(
+          Map<String, dynamic> entry) =>
+      _restoreRowMediaFiles(entry);
+
   /// Читает медиафайлы поста/комментария и возвращает base64-данные для включения в снимок.
   Future<Map<String, dynamic>> _readRowMediaData(
       Map<String, dynamic> row) async {

@@ -12,6 +12,12 @@ class Group {
   final String avatarEmoji;
   final String? avatarImagePath;
   final int createdAt; // ms since epoch
+  // История в Google Drive (как у каналов): публикуется создателем/модератором,
+  // новые участники подтягивают её по публичным ссылкам.
+  final bool driveBackupEnabled;
+  final int driveBackupRev;
+  final String? driveHistoryUrl;
+  final String? driveKeysUrl;
 
   const Group({
     required this.id,
@@ -23,6 +29,10 @@ class Group {
     this.avatarEmoji = '👥',
     this.avatarImagePath,
     required this.createdAt,
+    this.driveBackupEnabled = false,
+    this.driveBackupRev = 0,
+    this.driveHistoryUrl,
+    this.driveKeysUrl,
   });
 
   /// Returns true if [userId] is an admin (creator) or moderator.
@@ -39,6 +49,10 @@ class Group {
         'emoji': avatarEmoji,
         if (avatarImagePath != null) 'img': avatarImagePath,
         'ts': createdAt,
+        if (driveBackupEnabled) 'drv': true,
+        if (driveBackupRev > 0) 'drvRev': driveBackupRev,
+        if (driveHistoryUrl != null) 'drvUrl': driveHistoryUrl,
+        if (driveKeysUrl != null) 'drvKeys': driveKeysUrl,
       };
 
   factory Group.fromJson(Map<String, dynamic> j) => Group(
@@ -52,6 +66,10 @@ class Group {
         avatarEmoji: j['emoji'] as String? ?? '👥',
         avatarImagePath: j['img'] as String?,
         createdAt: j['ts'] as int? ?? 0,
+        driveBackupEnabled: j['drv'] == true,
+        driveBackupRev: (j['drvRev'] as num?)?.toInt() ?? 0,
+        driveHistoryUrl: j['drvUrl'] as String?,
+        driveKeysUrl: j['drvKeys'] as String?,
       );
 
   String encode() => jsonEncode(toJson());
@@ -71,6 +89,10 @@ class Group {
     int? avatarColor,
     String? avatarEmoji,
     String? avatarImagePath,
+    bool? driveBackupEnabled,
+    int? driveBackupRev,
+    String? driveHistoryUrl,
+    String? driveKeysUrl,
   }) =>
       Group(
         id: id,
@@ -82,6 +104,10 @@ class Group {
         avatarEmoji: avatarEmoji ?? this.avatarEmoji,
         avatarImagePath: avatarImagePath ?? this.avatarImagePath,
         createdAt: createdAt,
+        driveBackupEnabled: driveBackupEnabled ?? this.driveBackupEnabled,
+        driveBackupRev: driveBackupRev ?? this.driveBackupRev,
+        driveHistoryUrl: driveHistoryUrl ?? this.driveHistoryUrl,
+        driveKeysUrl: driveKeysUrl ?? this.driveKeysUrl,
       );
 }
 

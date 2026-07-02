@@ -42,6 +42,7 @@ import 'services/ble_service.dart';
 import 'services/browser_cache_service.dart';
 import 'services/block_service.dart';
 import 'services/chat_storage_service.dart';
+import 'services/group_backup_service.dart';
 import 'services/group_service.dart';
 import 'services/crypto_service.dart';
 import 'services/gossip_router.dart';
@@ -2622,7 +2623,16 @@ Future<void> initServices() async {
       final groupId = payload['groupId'] as String?;
       final accepterId = payload['accepterId'] as String?;
       if (groupId == null || accepterId == null) return;
-      GroupService.instance.addMember(groupId, accepterId);
+      unawaited(() async {
+        await GroupService.instance.addMember(groupId, accepterId);
+        // История в Drive включена → перепубликовать: keys.json должен получить
+        // завёрнутый ключ нового участника, иначе он не расшифрует историю.
+        final g = await GroupService.instance.getGroup(groupId);
+        final myId = CryptoService.instance.publicKeyHex;
+        if (g != null && g.driveBackupEnabled && g.canModerate(myId)) {
+          unawaited(GroupBackupService.instance.publishBackup(g));
+        }
+      }());
     };
     // Live group metadata (name/members/moderators/avatar) — keeps every
     // member's copy in sync and notifies you when you're made a moderator.
@@ -2654,8 +2664,15 @@ Future<void> initServices() async {
           moderatorIds: mods,
           avatarColor: payload['avatarColor'] as int?,
           avatarEmoji: payload['avatarEmoji'] as String?,
+          driveBackupEnabled:
+              payload['drv'] == true ? true : existing.driveBackupEnabled,
+          driveBackupRev: (payload['drvRev'] as num?)?.toInt(),
+          driveHistoryUrl: payload['drvUrl'] as String?,
+          driveKeysUrl: payload['drvKeys'] as String?,
         );
         await GroupService.instance.updateGroup(updated); // no re-broadcast
+        // История в Drive: если опубликован новый rev — фоново подтянуть.
+        unawaited(GroupBackupService.instance.maybeBackgroundPull(updated));
         if (!wasMod && nowMod && myId.isNotEmpty) {
           InAppNotificationService.instance.show(
             title: 'Модератор группы',

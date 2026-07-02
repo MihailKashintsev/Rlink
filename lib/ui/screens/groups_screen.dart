@@ -24,6 +24,7 @@ import '../../services/crypto_service.dart';
 import '../widgets/animated_transitions.dart';
 import '../../services/broadcast_outbox_service.dart';
 import '../../services/gossip_router.dart';
+import '../../services/group_backup_service.dart';
 import '../../services/group_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/chat_storage_service.dart';
@@ -317,6 +318,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     GroupService.instance.version.addListener(_load);
     _scrollController.addListener(_onScrollFab);
     _requestHistoryDelta();
+    // История из Google Drive: фоновая подтяжка, если опубликован новый rev
+    // (новые участники получают всю прошлую историю).
+    unawaited(GroupBackupService.instance.maybeBackgroundPull(_group));
     NotificationService.instance.currentRoute.value = 'group:${_group.id}';
     _controller.addListener(_onComposeChanged);
   }
@@ -2024,6 +2028,29 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   // ── Edit group profile ──────────────────────────────────────
 
+  /// Публикация истории группы в Google Drive (создатель/модератор): снапшот
+  /// шифруется групповым ключом, ссылки разлетаются участникам через
+  /// group_update — новые участники подтянут всю историю фоном.
+  Future<void> _publishHistoryToDrive() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(
+        content: Text('Публикация истории в Google Drive…'),
+        duration: Duration(seconds: 30)));
+    final updated = await GroupBackupService.instance.publishBackup(_group);
+    if (!mounted) return;
+    messenger.hideCurrentSnackBar();
+    if (updated != null) {
+      setState(() => _group = updated);
+      messenger.showSnackBar(SnackBar(
+          content: Text(
+              'История опубликована (rev ${updated.driveBackupRev}). Новые участники получат её автоматически.')));
+    } else {
+      messenger.showSnackBar(const SnackBar(
+          content: Text(
+              'Не удалось опубликовать. Проверьте привязку Google Drive в Настройках.')));
+    }
+  }
+
   void _editGroup() {
     final nameCtrl = TextEditingController(text: _group.name);
     final emojiCtrl = TextEditingController(text: _group.avatarEmoji);
@@ -2484,6 +2511,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               if (v == 'edit') _editGroup();
               if (v == 'mods') _manageModerators();
               if (v == 'members') _manageMembers();
+              if (v == 'drive') unawaited(_publishHistoryToDrive());
               if (v == 'leave') _leaveGroup();
             },
             itemBuilder: (_) => [
@@ -2503,6 +2531,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     Icon(Icons.manage_accounts_outlined, size: 18),
                     SizedBox(width: 8),
                     Text('Модераторы'),
+                  ]),
+                ),
+              if (_isCreator || _group.canModerate(_myId))
+                PopupMenuItem(
+                  value: 'drive',
+                  child: Row(children: [
+                    const Icon(Icons.cloud_upload_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Text(_group.driveBackupEnabled
+                        ? 'Обновить историю в Drive'
+                        : 'История в Google Drive'),
                   ]),
                 ),
               if (_isCreator || _group.canModerate(_myId))

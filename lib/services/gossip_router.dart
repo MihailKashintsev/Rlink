@@ -2820,6 +2820,10 @@ class GossipRouter {
     required List<String> moderatorIds,
     int? avatarColor,
     String? avatarEmoji,
+    bool driveBackupEnabled = false,
+    int driveBackupRev = 0,
+    String? driveHistoryUrl,
+    String? driveKeysUrl,
   }) async {
     final packet = GossipPacket(
       id: const Uuid().v4(),
@@ -2835,6 +2839,12 @@ class GossipRouter {
         'moderatorIds': moderatorIds,
         if (avatarColor != null) 'avatarColor': avatarColor,
         if (avatarEmoji != null) 'avatarEmoji': avatarEmoji,
+        if (driveBackupEnabled) 'drv': true,
+        if (driveBackupRev > 0) 'drvRev': driveBackupRev,
+        if (driveHistoryUrl != null && driveHistoryUrl.isNotEmpty)
+          'drvUrl': driveHistoryUrl,
+        if (driveKeysUrl != null && driveKeysUrl.isNotEmpty)
+          'drvKeys': driveKeysUrl,
       },
     );
     await _forward(packet);

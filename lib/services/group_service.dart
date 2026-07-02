@@ -12,6 +12,7 @@ import '../models/group.dart';
 import '../models/message_poll.dart';
 import '../utils/reaction_emoji_key.dart';
 import '../utils/reaction_limit.dart';
+import 'channel_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
 import 'image_service.dart';
@@ -84,7 +85,7 @@ class GroupService {
     final path = await _dbPath('groups.db');
     _db = await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: (db, v) async {
         await db.execute('''
           CREATE TABLE groups (
@@ -96,7 +97,11 @@ class GroupService {
             avatar_color INTEGER DEFAULT 0xFF5C6BC0,
             avatar_emoji TEXT DEFAULT '👥',
             avatar_img_path TEXT,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            drive_enabled INTEGER DEFAULT 0,
+            drive_rev INTEGER DEFAULT 0,
+            drive_url TEXT,
+            drive_keys_url TEXT
           )
         ''');
         await db.execute('''
@@ -129,6 +134,18 @@ class GroupService {
         ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 8) {
+          for (final col in [
+            "ALTER TABLE groups ADD COLUMN drive_enabled INTEGER DEFAULT 0",
+            "ALTER TABLE groups ADD COLUMN drive_rev INTEGER DEFAULT 0",
+            "ALTER TABLE groups ADD COLUMN drive_url TEXT",
+            "ALTER TABLE groups ADD COLUMN drive_keys_url TEXT",
+          ]) {
+            try {
+              await db.execute(col);
+            } catch (_) {}
+          }
+        }
         if (oldVersion < 2) {
           await db.execute(
               "ALTER TABLE groups ADD COLUMN moderators TEXT DEFAULT ''");
@@ -237,6 +254,10 @@ class GroupService {
               avatarEmoji: r['avatar_emoji'] as String? ?? '👥',
               avatarImagePath: r['avatar_img_path'] as String?,
               createdAt: r['created_at'] as int,
+              driveBackupEnabled: (r['drive_enabled'] as int? ?? 0) != 0,
+              driveBackupRev: r['drive_rev'] as int? ?? 0,
+              driveHistoryUrl: r['drive_url'] as String?,
+              driveKeysUrl: r['drive_keys_url'] as String?,
             ))
         .toList();
   }
@@ -347,6 +368,10 @@ class GroupService {
       avatarEmoji: r['avatar_emoji'] as String? ?? '👥',
       avatarImagePath: r['avatar_img_path'] as String?,
       createdAt: r['created_at'] as int,
+      driveBackupEnabled: (r['drive_enabled'] as int? ?? 0) != 0,
+      driveBackupRev: r['drive_rev'] as int? ?? 0,
+      driveHistoryUrl: r['drive_url'] as String?,
+      driveKeysUrl: r['drive_keys_url'] as String?,
     );
   }
 
@@ -360,6 +385,10 @@ class GroupService {
         'avatar_color': group.avatarColor,
         'avatar_emoji': group.avatarEmoji,
         'avatar_img_path': group.avatarImagePath,
+        'drive_enabled': group.driveBackupEnabled ? 1 : 0,
+        'drive_rev': group.driveBackupRev,
+        'drive_url': group.driveHistoryUrl,
+        'drive_keys_url': group.driveKeysUrl,
       },
       where: 'id = ?',
       whereArgs: [group.id],
@@ -382,6 +411,10 @@ class GroupService {
       moderatorIds: group.moderatorIds,
       avatarColor: group.avatarColor,
       avatarEmoji: group.avatarEmoji,
+      driveBackupEnabled: group.driveBackupEnabled,
+      driveBackupRev: group.driveBackupRev,
+      driveHistoryUrl: group.driveHistoryUrl,
+      driveKeysUrl: group.driveKeysUrl,
     ));
   }
 
@@ -424,6 +457,76 @@ class GroupService {
       'created_at': group.createdAt,
     });
     _bump();
+  }
+
+  // ── История группы: снапшот для Google Drive ────────────────────
+
+  /// Полный снимок истории группы (сообщения + медиа base64, веб-безопасно) —
+  /// то же устройство, что у каналов (buildChannelBackupSnapshot).
+  Future<Map<String, dynamic>> buildGroupBackupSnapshot(String groupId) async {
+    await _ensureDbReady();
+    final rows = await _db!.query(
+      'group_messages',
+      where: 'group_id = ?',
+      whereArgs: [groupId],
+      orderBy: 'timestamp ASC',
+    );
+    final messages = <Map<String, dynamic>>[];
+    for (final r in rows) {
+      final m = Map<String, dynamic>.from(r);
+      final media =
+          await ChannelService.instance.readRowMediaDataForBackup(m);
+      messages.add({...m, ...media});
+    }
+    return {
+      'v': 1,
+      'type': 'rlink_group_backup',
+      'groupId': groupId,
+      'exportedAt': DateTime.now().millisecondsSinceEpoch,
+      'messages': messages,
+    };
+  }
+
+  /// Вливает снимок истории в локальную БД (merge: существующие id не трогаем,
+  /// в отличие от каналов ничего не удаляем — у участников могут быть свои
+  /// сообщения, которых нет у публикующего). Возвращает число добавленных.
+  Future<int> importGroupBackupSnapshot(
+      String groupId, Map<String, dynamic> json) async {
+    await _ensureDbReady();
+    final list = json['messages'] as List<dynamic>?;
+    if (list == null || list.isEmpty) return 0;
+    final myId = CryptoService.instance.publicKeyHex;
+
+    // Медиа восстанавливаем ДО транзакции (IO вне TX).
+    final restored = <String, Map<String, String>>{};
+    for (final item in list) {
+      final m = Map<String, dynamic>.from(item as Map);
+      final id = m['id'] as String?;
+      if (id == null) continue;
+      restored[id] =
+          await ChannelService.instance.restoreRowMediaFilesForBackup(m);
+    }
+
+    var added = 0;
+    await _db!.transaction((txn) async {
+      for (final item in list) {
+        final m = Map<String, dynamic>.from(item as Map);
+        final id = m['id'] as String?;
+        if (id == null || m['group_id'] != groupId) continue;
+        final exists = await txn.query('group_messages',
+            columns: ['id'], where: 'id = ?', whereArgs: [id], limit: 1);
+        if (exists.isNotEmpty) continue;
+        if (restored.containsKey(id)) m.addAll(restored[id]!);
+        m.removeWhere((k, _) => k.startsWith('_'));
+        // is_outgoing — с точки зрения ЭТОГО устройства.
+        m['is_outgoing'] = (m['sender_id'] == myId) ? 1 : 0;
+        await txn.insert('group_messages', m,
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+        added++;
+      }
+    });
+    if (added > 0) _bump();
+    return added;
   }
 
   /// Remove a member (kick). Used by creator/moderator.
