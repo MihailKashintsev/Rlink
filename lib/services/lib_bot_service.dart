@@ -112,6 +112,11 @@ class LibBotService {
   static const _guideLines = <String>[
     'Чеклист: создать бота',
     '',
+    'Проще всего — No-code конструктор: экран «Боты» → «Создать своего бота». '
+        'Соберёте правила без кода, приложение выдаст готовый Python-файл и '
+        'зарегистрирует бота в один тап (шаги 3 ниже сделает за вас).',
+    '',
+    'Вручную (свой код):',
     '1) На ПК: python -m rlink_bot keys init --file bot_keys.json',
     '2) На ПК: python -m rlink_bot keys show-pub --file bot_keys.json',
     '3) Здесь: /newbot ваш_ник, затем вставить 64 hex ключа',
@@ -754,4 +759,124 @@ class LibBotService {
       }
     }
   }
+
+  /// Регистрация бота из no-code конструктора: то же, что `/newbot`, но
+  /// структурированный результат (без парсинга текста чата). Возвращает
+  /// claimCode/claimId для шага `python -m rlink_bot onboard <код>`.
+  Future<BuilderBotRegisterResult> registerBuilderBot({
+    required String handle,
+    required String displayName,
+    required String botPubHex,
+    String description = '',
+  }) async {
+    final h =
+        handle.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    if (h.length < 2 || h.length > 32) {
+      return const BuilderBotRegisterResult(
+          error: 'Ник: 2–32 символа (a-z, 0-9, _).');
+    }
+    if (_reservedRelayBotHandles.contains(h)) {
+      return BuilderBotRegisterResult(
+          error: 'Ник @$h зарезервирован, выберите другой.');
+    }
+    final pub = botPubHex.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(pub)) {
+      return const BuilderBotRegisterResult(
+          error: 'Нужен ключ бота — 64 hex (из keys init / show-pub).');
+    }
+    if (!await _ensureRelayConnected()) {
+      return const BuilderBotRegisterResult(
+          error: 'Relay не подключён. Проверьте интернет и попробуйте снова.');
+    }
+    final owner = CryptoService.instance.publicKeyHex.toLowerCase();
+    if (owner.isEmpty) {
+      return const BuilderBotRegisterResult(error: 'Ключи аккаунта не готовы.');
+    }
+    if (pub == owner) {
+      return const BuilderBotRegisterResult(
+          error: 'Ключ бота должен отличаться от вашего личного ключа.');
+    }
+
+    final completer = Completer<Map<String, dynamic>>();
+    void listener(Map<String, dynamic> m) {
+      if (!completer.isCompleted) {
+        completer.complete(Map<String, dynamic>.from(m));
+      }
+    }
+
+    RelayService.instance.onBotRegisterAck = listener;
+    try {
+      final payloadObj = <String, dynamic>{
+        'v': 1,
+        'owner': owner,
+        'handle': h,
+        'displayName': displayName.trim().isEmpty ? '@$h' : displayName.trim(),
+        'botPublicKey': pub,
+        'description': description,
+        'ts': DateTime.now().millisecondsSinceEpoch,
+      };
+      final payloadJson = jsonEncode(payloadObj);
+      final sig = await CryptoService.instance.signUtf8Message(payloadJson);
+      final sent = await RelayService.instance.sendBotRegisterStart(
+        payloadJson: payloadJson,
+        signatureHex: sig,
+      );
+      if (!sent) {
+        return const BuilderBotRegisterResult(
+            error: 'Запрос на relay не отправлен (нет соединения).');
+      }
+      final ack = await completer.future.timeout(
+        const Duration(seconds: 45),
+        onTimeout: () => <String, dynamic>{'ok': false, 'error': 'timeout'},
+      );
+      if (ack['ok'] != true) {
+        final err = ack['error']?.toString() ?? 'unknown';
+        final msg = switch (err) {
+          'handle_taken' => 'Ник @$h уже занят — выберите другой.',
+          'bad_handle' =>
+            'Ник не принят (зарезервирован или недопустимые символы).',
+          'bad_signature' => 'Ошибка подписи — попробуйте ещё раз.',
+          'claim_code_alloc' =>
+            'Не удалось выделить код заявки — попробуйте снова.',
+          'timeout' =>
+            'Relay не ответил за 45 с. Возможно, на сервере не задеплоена версия с поддержкой ботов.',
+          _ => 'Relay отклонил регистрацию: $err',
+        };
+        return BuilderBotRegisterResult(error: msg);
+      }
+      final claimId = ack['claimId'] as String? ?? '';
+      final claimCode = (ack['claimCode'] as String?)?.trim() ?? '';
+      if (claimId.length != 32) {
+        return const BuilderBotRegisterResult(
+            error: 'Некорректный ответ relay (claimId).');
+      }
+      return BuilderBotRegisterResult(
+          ok: true, claimCode: claimCode, claimId: claimId);
+    } catch (e, st) {
+      debugPrint('[LibBot] registerBuilderBot: $e\n$st');
+      return BuilderBotRegisterResult(error: 'Ошибка: $e');
+    } finally {
+      if (RelayService.instance.onBotRegisterAck == listener) {
+        RelayService.instance.onBotRegisterAck = null;
+      }
+    }
+  }
+}
+
+/// Результат [LibBotService.registerBuilderBot].
+class BuilderBotRegisterResult {
+  final bool ok;
+  final String claimCode;
+  final String claimId;
+  final String error;
+
+  const BuilderBotRegisterResult({
+    this.ok = false,
+    this.claimCode = '',
+    this.claimId = '',
+    this.error = '',
+  });
+
+  /// Значение для `onboard` — короткий claimCode, если есть, иначе claimId.
+  String get claimForOnboard => claimCode.isNotEmpty ? claimCode : claimId;
 }

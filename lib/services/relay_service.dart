@@ -162,6 +162,11 @@ class RelayService with WidgetsBindingObserver {
   /// Ответ relay на `bot_register_start` (Lib / регистрация бота).
   void Function(Map<String, dynamic> msg)? onBotRegisterAck;
 
+  /// Relay сообщил, что бот-получатель офлайн (его процесс не подключён).
+  /// Сообщение поставлено в очередь; верхний слой показывает заглушку
+  /// «Бот не в сети…» локально в чате с этим ботом.
+  void Function(String botPeerId)? onBotOffline;
+
   final Map<String, Completer<Map<String, dynamic>>> _botOwnerAckCompleters =
       {};
   final Map<String, Completer<Map<String, dynamic>>> _adminBotAckCompleters =
@@ -1179,6 +1184,17 @@ class RelayService with WidgetsBindingObserver {
 
         case 'packet':
           _handleIncomingPacket(msg);
+          break;
+
+        case 'bot_offline':
+          final botId = (msg['bot'] as String?)?.toLowerCase().trim() ?? '';
+          if (botId.isNotEmpty) {
+            try {
+              onBotOffline?.call(botId);
+            } catch (e) {
+              debugPrint('[RLINK][Relay] onBotOffline handler failed: $e');
+            }
+          }
           break;
 
         case 'search_result':

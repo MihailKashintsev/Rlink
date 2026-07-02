@@ -2181,6 +2181,16 @@ void _handlePacket(_User sender, Map<String, dynamic> msg) {
       'to': to,
       'status': 'queued_offline',
     }));
+    if (recipientIsBot) {
+      // Гибридная модель: бот работает на ПК/сервере владельца. Сообщение
+      // поставлено в очередь и будет доставлено, когда процесс подключится, а
+      // отправителю показываем локальную заглушку «Бот не в сети…».
+      sender.ws.sink.add(jsonEncode({
+        'type': 'bot_offline',
+        'bot': to,
+        'relayMsgId': relayMsgId,
+      }));
+    }
     return;
   }
   try {

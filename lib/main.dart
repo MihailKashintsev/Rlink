@@ -2769,6 +2769,7 @@ Future<void> initServices() async {
     RelayService.instance.onBlobReceived = _onBlobReceived;
     PendingMediaService.instance.setProcessor(_processBlobDirect);
     RelayService.instance.onPeerOnline = _onRelayPeerOnline;
+    RelayService.instance.onBotOffline = _onBotOffline;
     RelayService.instance.onAccountSyncBlob =
         (sealed) => unawaited(AccountSyncService.applySealedFromRelay(sealed));
     RelayService.instance.onChannelDirectorySnapshot = (entries) => unawaited(
@@ -3219,6 +3220,44 @@ Future<void> _republishOwnChannelsToRelay() async {
   } finally {
     _relayChannelRepublishInFlight = false;
   }
+}
+
+/// Дебаунс заглушки «бот не в сети» — не чаще одной на бота в минуту.
+final Map<String, int> _botOfflineStubMs = <String, int>{};
+
+/// Relay сообщил, что бот-получатель офлайн. Сообщение пользователя поставлено
+/// в очередь и будет доставлено, когда процесс бота подключится; здесь мы
+/// показываем локальную заглушку в чате с этим ботом (гибридная модель).
+void _onBotOffline(String botId) {
+  final id = botId.toLowerCase().trim();
+  if (id.isEmpty) return;
+  final now = DateTime.now().millisecondsSinceEpoch;
+  final last = _botOfflineStubMs[id] ?? 0;
+  if (now - last < 60000) return; // не спамим
+  _botOfflineStubMs[id] = now;
+
+  const stub = 'Бот не в сети, подождите ответа или обратитесь к разработчику.';
+  final ts = DateTime.now();
+  unawaited(() async {
+    try {
+      await ChatStorageService.instance.saveMessage(ChatMessage(
+        id: 'botoffline_${now}_$id',
+        peerId: id,
+        text: stub,
+        isOutgoing: false,
+        timestamp: ts,
+        status: MessageStatus.delivered,
+      ));
+      incomingMessageController.add(IncomingMessage(
+        fromId: id,
+        text: stub,
+        timestamp: ts,
+        msgId: 'botoffline_$now',
+      ));
+    } catch (e) {
+      debugPrint('[RLINK] bot_offline stub failed: $e');
+    }
+  }());
 }
 
 /// When a relay peer comes online, send our profile + avatar + banner.
