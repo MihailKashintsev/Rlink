@@ -786,6 +786,10 @@ class _AnimatedNavBar extends StatelessWidget {
       selectedIndex: selectedIndex,
       onDestinationSelected: onDestinationSelected,
       animationDuration: const Duration(milliseconds: 520),
+      height: glass ? 62 : null,
+      labelBehavior: glass
+          ? NavigationDestinationLabelBehavior.onlyShowSelected
+          : null,
       backgroundColor: glass ? Colors.transparent : null,
       elevation: glass ? 0 : null,
       surfaceTintColor: glass ? Colors.transparent : null,
@@ -835,17 +839,49 @@ class _AnimatedNavBar extends StatelessWidget {
       ],
     );
     if (!glass) return bar;
-    return RlinkDesign.frosted(
-      context: context,
-      blur: 22,
-      fill: 0.42,
-      border: Border(
-        top: BorderSide(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
-          width: 0.6,
+    final cs = theme.colorScheme;
+    final radius = BorderRadius.circular(28);
+    // Floating rounded "pill" nav detached from the screen edges (Telegram-ish).
+    // The scaffold is transparent, so the margins around it show the aurora.
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        child: DecoratedBox(
+          // Shadow sits OUTSIDE the clip so it isn't cut off.
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            boxShadow: [
+              BoxShadow(
+                color: RlinkDesign.accent(cs).withValues(alpha: 0.16),
+                blurRadius: 26,
+                offset: const Offset(0, 10),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.16),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: RlinkDesign.frosted(
+            context: context,
+            blur: 26,
+            fill: 0.5,
+            borderRadius: radius,
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+              width: 0.8,
+            ),
+            // Strip the nav's own bottom inset — SafeArea already handled it.
+            child: MediaQuery.removePadding(
+              context: context,
+              removeBottom: true,
+              child: bar,
+            ),
+          ),
         ),
       ),
-      child: bar,
     );
   }
 }
@@ -1155,32 +1191,57 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
   final GlobalKey _miniPlayerListAnchor =
       GlobalKey(debugLabel: 'miniPlayerListAnchor');
   bool _miniPlayerAnchorCallbackPending = false;
-  // Collapse the stories+filters header while scrolling the list down.
-  bool _headerCollapsed = false;
+  // Collapse the stories + filters header while scrolling the list down.
+  // Each element collapses independently (staggered) for a smooth, non-jumpy feel.
+  bool _storiesCollapsed = false;
+  bool _filtersCollapsed = false;
 
-  /// Wraps the stories/filter header so it smoothly collapses out of view when
-  /// the list is scrolled down and returns when scrolling up.
-  Widget _collapsingHeader(List<Widget> children) {
+  void _setHeaderCollapsed(bool v) {
+    if (v) {
+      if (!_storiesCollapsed) setState(() => _storiesCollapsed = true);
+      Future.delayed(const Duration(milliseconds: 80), () {
+        if (mounted && _storiesCollapsed && !_filtersCollapsed) {
+          setState(() => _filtersCollapsed = true);
+        }
+      });
+    } else {
+      if (_filtersCollapsed) setState(() => _filtersCollapsed = false);
+      Future.delayed(const Duration(milliseconds: 80), () {
+        if (mounted && !_filtersCollapsed && _storiesCollapsed) {
+          setState(() => _storiesCollapsed = false);
+        }
+      });
+    }
+  }
+
+  /// Collapses a single header element smoothly: animates its height-factor to
+  /// zero while fading, so it slides out of view without a hard clip/jump.
+  Widget _collapsible({required bool collapsed, required Widget child}) {
     return ClipRect(
-      child: AnimatedSize(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
+      child: AnimatedAlign(
         alignment: Alignment.topCenter,
-        child: _headerCollapsed
-            ? const SizedBox(width: double.infinity, height: 0)
-            : Column(mainAxisSize: MainAxisSize.min, children: children),
+        heightFactor: collapsed ? 0.0 : 1.0,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        child: AnimatedOpacity(
+          opacity: collapsed ? 0.0 : 1.0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          child: child,
+        ),
       ),
     );
   }
 
   bool _onListScroll(UserScrollNotification n) {
     final atTop = n.metrics.pixels <= 24;
-    if (n.direction == ScrollDirection.reverse && !_headerCollapsed && !atTop) {
-      setState(() => _headerCollapsed = true);
-    } else if (n.direction == ScrollDirection.forward && _headerCollapsed) {
-      setState(() => _headerCollapsed = false);
-    } else if (atTop && _headerCollapsed) {
-      setState(() => _headerCollapsed = false);
+    final collapsed = _storiesCollapsed || _filtersCollapsed;
+    if (n.direction == ScrollDirection.reverse && !collapsed && !atTop) {
+      _setHeaderCollapsed(true);
+    } else if (n.direction == ScrollDirection.forward && collapsed) {
+      _setHeaderCollapsed(false);
+    } else if (atTop && collapsed) {
+      _setHeaderCollapsed(false);
     }
     return false;
   }
@@ -1986,10 +2047,14 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         return col;
       }
       final col = Column(children: [
-        _collapsingHeader([
-          _StoriesStrip(chatItems: _storiesSource()),
-          _buildFilterBar(context),
-        ]),
+        _collapsible(
+          collapsed: _storiesCollapsed,
+          child: _StoriesStrip(chatItems: _storiesSource()),
+        ),
+        _collapsible(
+          collapsed: _filtersCollapsed,
+          child: _buildFilterBar(context),
+        ),
         _buildPendingBanners(context),
         SizedBox(height: 0, key: _miniPlayerListAnchor),
         Expanded(
