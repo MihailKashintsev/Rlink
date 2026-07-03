@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../../services/app_settings.dart';
@@ -76,6 +78,55 @@ class RlinkDesign {
             color: accent(cs).withValues(alpha: 0.10),
             blurRadius: 18,
             offset: const Offset(0, 6),
+          ),
+        ],
+      );
+
+  /// Матовое стекло: размытие фона + полупрозрачная заливка + волосяная
+  /// обводка. Хром (аппбар, нав-бар) на нём «плавает» над авророй — как в интро.
+  /// [fill] — непрозрачность заливки, [blur] — сигма размытия.
+  static Widget frosted({
+    required BuildContext context,
+    Widget? child,
+    double blur = 20,
+    double fill = 0.52,
+    BorderRadius borderRadius = BorderRadius.zero,
+    Border? border,
+    List<BoxShadow>? shadows,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: cs.surface.withValues(alpha: fill),
+            borderRadius: borderRadius,
+            border: border,
+            boxShadow: shadows,
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  /// Полупрозрачная «стеклянная» карточка (для плиток на авроре): заливка
+  /// поверхности с прозрачностью + hairline акцента + мягкое свечение.
+  static BoxDecoration glassCard(ColorScheme cs, {double radius = 22}) =>
+      BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: accent(cs).withValues(alpha: 0.16),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accent(cs).withValues(alpha: 0.10),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
           ),
         ],
       );

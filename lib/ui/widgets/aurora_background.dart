@@ -61,34 +61,54 @@ class _AuroraBackgroundState extends State<AuroraBackground>
 
     final palette = paletteFor(s.appPalette);
     final isDark = palette.dark ?? (theme.brightness == Brightness.dark);
-    // Solid base from the palette so transparent scaffolds sit on it.
-    final base = palette.background ?? (isDark ? Colors.black : Colors.white);
+    final rawBase = palette.background ?? (isDark ? Colors.black : Colors.white);
+    final accent = palette.accentColor;
     final g = palette.gradient;
     final c1 = g.isNotEmpty ? g[0] : theme.colorScheme.primary;
     final c2 = g.length > 1 ? g[1] : theme.colorScheme.primary;
-    final glow = widget.intensity * (isDark ? 1.0 : 0.7);
+    final c3 = accent;
+    // Tint the flat base toward the accent so it never reads as plain black/white.
+    final base = Color.lerp(rawBase, accent, isDark ? 0.055 : 0.025) ?? rawBase;
+    final glow = widget.intensity * (isDark ? 1.0 : 0.72);
 
     return AnimatedBuilder(
       animation: _c,
       builder: (context, _) {
         final t = _c.value * 2 * math.pi;
-        final a1 = Alignment(0.55 * math.cos(t), -0.4 + 0.35 * math.sin(t * 0.8));
+        final a1 = Alignment(0.55 * math.cos(t), -0.5 + 0.35 * math.sin(t * 0.8));
         final a2 =
-            Alignment(-0.6 * math.cos(t * 0.7), 0.45 - 0.3 * math.sin(t));
+            Alignment(-0.6 * math.cos(t * 0.7), 0.5 - 0.3 * math.sin(t));
+        // Third, larger blob drifts on a slower orbit for depth.
+        final a3 = Alignment(
+            0.15 * math.sin(t * 0.5), 0.15 + 0.5 * math.cos(t * 0.45));
         return Stack(
           fit: StackFit.expand,
           children: [
             ColoredBox(color: base),
+            // Large, very soft accent wash for overall depth.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: a3,
+                  radius: 1.6,
+                  colors: [
+                    c3.withValues(alpha: 0.20 * glow),
+                    c3.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0.0, 0.75],
+                ),
+              ),
+            ),
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   center: a1,
-                  radius: 1.15,
+                  radius: 1.1,
                   colors: [
-                    c1.withValues(alpha: 0.30 * glow),
+                    c1.withValues(alpha: 0.42 * glow),
                     c1.withValues(alpha: 0.0),
                   ],
-                  stops: const [0.0, 0.62],
+                  stops: const [0.0, 0.6],
                 ),
               ),
             ),
@@ -96,12 +116,25 @@ class _AuroraBackgroundState extends State<AuroraBackground>
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   center: a2,
-                  radius: 1.25,
+                  radius: 1.2,
                   colors: [
-                    c2.withValues(alpha: 0.24 * glow),
+                    c2.withValues(alpha: 0.34 * glow),
                     c2.withValues(alpha: 0.0),
                   ],
-                  stops: const [0.0, 0.64],
+                  stops: const [0.0, 0.62],
+                ),
+              ),
+            ),
+            // Brand wash across the top — echoes the intro's header gradient.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.center,
+                  colors: [
+                    accent.withValues(alpha: 0.10 * glow),
+                    accent.withValues(alpha: 0.0),
+                  ],
                 ),
               ),
             ),
@@ -112,11 +145,11 @@ class _AuroraBackgroundState extends State<AuroraBackground>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    base.withValues(alpha: 0.35),
+                    base.withValues(alpha: 0.28),
                     base.withValues(alpha: 0.0),
-                    base.withValues(alpha: 0.45),
+                    base.withValues(alpha: 0.5),
                   ],
-                  stops: const [0.0, 0.4, 1.0],
+                  stops: const [0.0, 0.42, 1.0],
                 ),
               ),
             ),

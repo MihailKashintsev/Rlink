@@ -54,6 +54,7 @@ import 'intro_promo_screen.dart';
 import 'guide_tour_screen.dart';
 import 'story_viewer_screen.dart';
 import '../rlink_nav_routes.dart';
+import '../design/rlink_design.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -438,6 +439,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final channelsEnabled = settings.channelsEnabled;
     final childLinked = settings.isLinkedChildDevice;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: settings.newDesign
           ? Colors.transparent
@@ -445,10 +447,23 @@ class _ChatListScreenState extends State<ChatListScreen>
       appBar: AppBar(
         automaticallyImplyLeading: false,
         elevation: 0,
-        scrolledUnderElevation: 0.5,
+        scrolledUnderElevation: settings.newDesign ? 0 : 0.5,
         backgroundColor: settings.newDesign
-            ? Theme.of(context).colorScheme.surface
+            ? Colors.transparent
             : (isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2)),
+        flexibleSpace: settings.newDesign
+            ? RlinkDesign.frosted(
+                context: context,
+                blur: 22,
+                fill: 0.42,
+                border: Border(
+                  bottom: BorderSide(
+                    color: cs.outlineVariant.withValues(alpha: 0.4),
+                    width: 0.6,
+                  ),
+                ),
+              )
+            : null,
         title: _searchActive
             ? TextField(
                 controller: _searchController,
@@ -766,11 +781,15 @@ class _AnimatedNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return NavigationBar(
+    final glass = RlinkDesign.on;
+    final bar = NavigationBar(
       selectedIndex: selectedIndex,
       onDestinationSelected: onDestinationSelected,
       animationDuration: const Duration(milliseconds: 520),
-      indicatorColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+      backgroundColor: glass ? Colors.transparent : null,
+      elevation: glass ? 0 : null,
+      surfaceTintColor: glass ? Colors.transparent : null,
+      indicatorColor: theme.colorScheme.primary.withValues(alpha: 0.18),
       indicatorShape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
       ),
@@ -814,6 +833,19 @@ class _AnimatedNavBar extends StatelessWidget {
           label: AppL10n.t('nav_me'),
         ),
       ],
+    );
+    if (!glass) return bar;
+    return RlinkDesign.frosted(
+      context: context,
+      blur: 22,
+      fill: 0.42,
+      border: Border(
+        top: BorderSide(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+          width: 0.6,
+        ),
+      ),
+      child: bar,
     );
   }
 }
