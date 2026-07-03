@@ -2345,14 +2345,17 @@ class GossipRouter {
     bool? driveBackup,
     int? driveBackupRev,
     bool? allowModeratorsManageDriveAccount,
+    String? recipientId,
   }) async {
-    // Скрытые каналы не рассылаются широковещательно — только прямые invite.
-    if (isPublic == false) return;
+    // Скрытые каналы не рассылаются широковещательно — только прямые invite и
+    // адресные пакеты (recipientId) вроде назначения модератора.
+    if (isPublic == false && recipientId == null) return;
     final packet = GossipPacket(
       id: const Uuid().v4(),
       type: 'channel_meta',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
+      recipientId: recipientId,
       payload: {
         'channelId': channelId,
         'name': name,

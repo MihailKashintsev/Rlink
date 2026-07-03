@@ -528,7 +528,10 @@ class ChannelComment {
 extension ChannelGossipBroadcast on Channel {
   /// Полный `channel_meta` для текущего состояния канала (публичные — в эфир)
   /// и снимок на relay для обнаружения без онлайн-админа.
-  Future<void> broadcastGossipMeta() async {
+  /// Рассылает метаданные канала. Если задан [recipientId] — это АДРЕСНЫЙ пакет
+  /// конкретному пользователю (доставляется через relay-mailbox даже офлайн и
+  /// работает для скрытых каналов) — используется при назначении модератора.
+  Future<void> broadcastGossipMeta({String? recipientId}) async {
     await GossipRouter.instance.broadcastChannelMeta(
       channelId: id,
       name: name,
@@ -551,7 +554,11 @@ extension ChannelGossipBroadcast on Channel {
       driveBackup: driveBackupEnabled,
       driveBackupRev: driveBackupRev,
       allowModeratorsManageDriveAccount: allowModeratorsManageDriveAccount,
+      recipientId: recipientId,
     );
-    await ChannelDirectoryRelay.publishIfAdmin(this);
+    // Публикация в публичный каталог — только при общей рассылке (не адресной).
+    if (recipientId == null) {
+      await ChannelDirectoryRelay.publishIfAdmin(this);
+    }
   }
 }

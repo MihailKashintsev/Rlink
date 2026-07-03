@@ -649,6 +649,13 @@ class _ChannelAdminSettingsScreenState
                               setState(() => _channel = updated);
                               setModal(() {});
                               unawaited(updated.broadcastGossipMeta());
+                              // Адресная доставка новому модератору — доходит
+                              // через relay даже офлайн и для скрытых каналов,
+                              // чтобы он реально получил роль (и доступ к меню).
+                              if (val) {
+                                unawaited(updated.broadcastGossipMeta(
+                                    recipientId: uid));
+                              }
                             }
                           },
                         );

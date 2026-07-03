@@ -1954,7 +1954,28 @@ Future<void> initServices() async {
 
     // ── Channel/Group packet handlers ──────────────────────────────
     GossipRouter.instance.onChannelMeta = (payload) {
-      unawaited(ChannelService.instance.applyChannelMetaFromPayload(payload));
+      unawaited(() async {
+        final channelId = payload['channelId'] as String?;
+        final myId = CryptoService.instance.publicKeyHex;
+        final before = channelId != null
+            ? await ChannelService.instance.getChannel(channelId)
+            : null;
+        final wasMod = before?.moderatorIds.contains(myId) ?? false;
+        await ChannelService.instance.applyChannelMetaFromPayload(payload);
+        final after = channelId != null
+            ? await ChannelService.instance.getChannel(channelId)
+            : null;
+        final nowMod = after?.moderatorIds.contains(myId) ?? false;
+        if (!wasMod && nowMod && myId.isNotEmpty && after != null) {
+          InAppNotificationService.instance.show(
+            title: 'Модератор канала',
+            body: 'Вас назначили модератором «${after.name}»',
+            payload: 'channel:$channelId',
+            color: after.avatarColor,
+            emoji: after.avatarEmoji.isNotEmpty ? after.avatarEmoji : '👑',
+          );
+        }
+      }());
     };
     GossipRouter.instance.onChannelBackupKey =
         (p) => ChannelBackupService.instance.onKeyPacket(p);
