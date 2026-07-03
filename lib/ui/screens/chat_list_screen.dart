@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 
 import '../../main.dart';
@@ -781,104 +780,187 @@ class _AnimatedNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final glass = RlinkDesign.on;
-    final bar = NavigationBar(
-      selectedIndex: selectedIndex,
-      onDestinationSelected: onDestinationSelected,
-      animationDuration: const Duration(milliseconds: 520),
-      height: glass ? 62 : null,
-      labelBehavior: glass
-          ? NavigationDestinationLabelBehavior.onlyShowSelected
-          : null,
-      backgroundColor: glass ? Colors.transparent : null,
-      elevation: glass ? 0 : null,
-      surfaceTintColor: glass ? Colors.transparent : null,
-      indicatorColor: theme.colorScheme.primary.withValues(alpha: 0.18),
-      indicatorShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
-      destinations: [
-        NavigationDestination(
-          icon: const Icon(Icons.chat_bubble_outline),
-          selectedIcon: const Icon(Icons.chat_bubble),
-          label: AppL10n.t('nav_chats'),
-        ),
-        NavigationDestination(
-          icon: ValueListenableBuilder<int>(
-            valueListenable: BleService.instance.peersCount,
-            builder: (_, count, __) => count > 0 &&
-                    AppSettings.instance.connectionMode != 1
-                ? Badge(label: Text('$count'), child: const Icon(Icons.radar))
-                : const Icon(Icons.radar_outlined),
+    if (!RlinkDesign.on) {
+      // Old design: classic Material NavigationBar with labels.
+      return NavigationBar(
+        selectedIndex: selectedIndex,
+        onDestinationSelected: onDestinationSelected,
+        animationDuration: const Duration(milliseconds: 520),
+        indicatorColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+        indicatorShape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        destinations: [
+          NavigationDestination(
+            icon: const Icon(Icons.chat_bubble_outline),
+            selectedIcon: const Icon(Icons.chat_bubble),
+            label: AppL10n.t('nav_chats'),
           ),
-          selectedIcon: ValueListenableBuilder<int>(
-            valueListenable: BleService.instance.peersCount,
-            builder: (_, count, __) => count > 0 &&
-                    AppSettings.instance.connectionMode != 1
-                ? Badge(label: Text('$count'), child: const Icon(Icons.radar))
-                : const Icon(Icons.radar),
+          NavigationDestination(
+            icon: const Icon(Icons.radar_outlined),
+            selectedIcon: const Icon(Icons.radar),
+            label: AppL10n.t('nav_nearby'),
           ),
-          label: AppL10n.t('nav_nearby'),
-        ),
-        NavigationDestination(
-          icon: ValueListenableBuilder<int>(
-            valueListenable: EtherService.instance.unreadCount,
-            builder: (_, count, __) => count > 0
-                ? Badge(
-                    label: Text('$count'), child: const Icon(Icons.cell_tower))
-                : const Icon(Icons.cell_tower),
+          NavigationDestination(
+            icon: const Icon(Icons.cell_tower),
+            selectedIcon: const Icon(Icons.cell_tower),
+            label: AppL10n.t('nav_ether'),
           ),
-          selectedIcon: const Icon(Icons.cell_tower),
-          label: AppL10n.t('nav_ether'),
-        ),
-        NavigationDestination(
-          icon: const _MeTabNavIcon(selected: false),
-          selectedIcon: const _MeTabNavIcon(selected: true),
-          label: AppL10n.t('nav_me'),
-        ),
-      ],
-    );
-    if (!glass) return bar;
+          NavigationDestination(
+            icon: const _MeTabNavIcon(selected: false),
+            selectedIcon: const _MeTabNavIcon(selected: true),
+            label: AppL10n.t('nav_me'),
+          ),
+        ],
+      );
+    }
+
     final cs = theme.colorScheme;
-    final radius = BorderRadius.circular(28);
-    // Floating rounded "pill" nav detached from the screen edges (Telegram-ish).
-    // The scaffold is transparent, so the margins around it show the aurora.
+    final pillRadius = BorderRadius.circular(30);
+    // Floating pill: 3 icon-only tabs; "Я" pulled out into its own circle.
+    final pill = _withShadow(
+      cs,
+      pillRadius,
+      RlinkDesign.frosted(
+        context: context,
+        blur: 26,
+        fill: 0.52,
+        borderRadius: pillRadius,
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.5),
+          width: 0.8,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _navIcon(context,
+                  index: 0,
+                  icon: Icons.chat_bubble_outline,
+                  selectedIcon: Icons.chat_bubble),
+              _navIcon(context,
+                  index: 1,
+                  icon: Icons.radar_outlined,
+                  selectedIcon: Icons.radar,
+                  badge: BleService.instance.peersCount,
+                  badgeGate: () => AppSettings.instance.connectionMode != 1),
+              _navIcon(context,
+                  index: 2,
+                  icon: Icons.cell_tower,
+                  selectedIcon: Icons.cell_tower,
+                  badge: EtherService.instance.unreadCount),
+            ],
+          ),
+        ),
+      ),
+    );
+
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-        child: DecoratedBox(
-          // Shadow sits OUTSIDE the clip so it isn't cut off.
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            boxShadow: [
-              BoxShadow(
-                color: RlinkDesign.accent(cs).withValues(alpha: 0.16),
-                blurRadius: 26,
-                offset: const Offset(0, 10),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.16),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
+        child: Row(
+          children: [
+            Expanded(child: pill),
+            const SizedBox(width: 10),
+            _meCircle(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _withShadow(ColorScheme cs, BorderRadius radius, Widget child) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: RlinkDesign.accent(cs).withValues(alpha: 0.16),
+            blurRadius: 26,
+            offset: const Offset(0, 10),
           ),
-          child: RlinkDesign.frosted(
-            context: context,
-            blur: 26,
-            fill: 0.5,
-            borderRadius: radius,
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-              width: 0.8,
-            ),
-            // Strip the nav's own bottom inset — SafeArea already handled it.
-            child: MediaQuery.removePadding(
-              context: context,
-              removeBottom: true,
-              child: bar,
-            ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _navIcon(
+    BuildContext context, {
+    required int index,
+    required IconData icon,
+    required IconData selectedIcon,
+    ValueNotifier<int>? badge,
+    bool Function()? badgeGate,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final selected = selectedIndex == index;
+    final iconWidget = AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: selected
+            ? cs.primary.withValues(alpha: 0.20)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Icon(
+        selected ? selectedIcon : icon,
+        size: 24,
+        color: selected ? cs.primary : cs.onSurfaceVariant,
+      ),
+    );
+    Widget content = iconWidget;
+    if (badge != null) {
+      content = ValueListenableBuilder<int>(
+        valueListenable: badge,
+        builder: (_, count, child) {
+          final show = count > 0 && (badgeGate?.call() ?? true);
+          return show
+              ? Badge(label: Text('$count'), child: child)
+              : child!;
+        },
+        child: iconWidget,
+      );
+    }
+    return InkWell(
+      onTap: () => onDestinationSelected(index),
+      borderRadius: BorderRadius.circular(16),
+      child: content,
+    );
+  }
+
+  Widget _meCircle(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final selected = selectedIndex == 3;
+    final circleRadius = BorderRadius.circular(30);
+    return _withShadow(
+      cs,
+      circleRadius,
+      InkWell(
+        onTap: () => onDestinationSelected(3),
+        borderRadius: circleRadius,
+        child: RlinkDesign.frosted(
+          context: context,
+          blur: 26,
+          fill: 0.52,
+          borderRadius: circleRadius,
+          border: Border.all(
+            color: selected
+                ? cs.primary.withValues(alpha: 0.9)
+                : cs.outlineVariant.withValues(alpha: 0.5),
+            width: selected ? 2 : 0.8,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(9),
+            child: _MeTabNavIcon(selected: selected),
           ),
         ),
       ),
@@ -1191,59 +1273,37 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
   final GlobalKey _miniPlayerListAnchor =
       GlobalKey(debugLabel: 'miniPlayerListAnchor');
   bool _miniPlayerAnchorCallbackPending = false;
-  // Collapse the stories + filters header while scrolling the list down.
-  // Each element collapses independently (staggered) for a smooth, non-jumpy feel.
-  bool _storiesCollapsed = false;
-  bool _filtersCollapsed = false;
 
-  void _setHeaderCollapsed(bool v) {
-    if (v) {
-      if (!_storiesCollapsed) setState(() => _storiesCollapsed = true);
-      Future.delayed(const Duration(milliseconds: 80), () {
-        if (mounted && _storiesCollapsed && !_filtersCollapsed) {
-          setState(() => _filtersCollapsed = true);
-        }
-      });
-    } else {
-      if (_filtersCollapsed) setState(() => _filtersCollapsed = false);
-      Future.delayed(const Duration(milliseconds: 80), () {
-        if (mounted && !_filtersCollapsed && _storiesCollapsed) {
-          setState(() => _storiesCollapsed = false);
-        }
-      });
-    }
-  }
-
-  /// Collapses a single header element smoothly: animates its height-factor to
-  /// zero while fading, so it slides out of view without a hard clip/jump.
-  Widget _collapsible({required bool collapsed, required Widget child}) {
+  /// Filters shrink & fade out first (done by p≈0.5).
+  Widget _collapsedFilters(double p, Widget child) {
+    final f = (1 - p / 0.5).clamp(0.0, 1.0);
+    if (f >= 0.999) return child;
     return ClipRect(
-      child: AnimatedAlign(
+      child: Align(
         alignment: Alignment.topCenter,
-        heightFactor: collapsed ? 0.0 : 1.0,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-        child: AnimatedOpacity(
-          opacity: collapsed ? 0.0 : 1.0,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          child: child,
-        ),
+        heightFactor: f,
+        child: Opacity(opacity: f, child: child),
       ),
     );
   }
 
-  bool _onListScroll(UserScrollNotification n) {
-    final atTop = n.metrics.pixels <= 24;
-    final collapsed = _storiesCollapsed || _filtersCollapsed;
-    if (n.direction == ScrollDirection.reverse && !collapsed && !atTop) {
-      _setHeaderCollapsed(true);
-    } else if (n.direction == ScrollDirection.forward && collapsed) {
-      _setHeaderCollapsed(false);
-    } else if (atTop && collapsed) {
-      _setHeaderCollapsed(false);
-    }
-    return false;
+  /// Stories shrink into smaller avatar "balls": scale down + clip the labels
+  /// away as the header collapses. Proportional to scroll offset [p] (0..1).
+  Widget _collapsedStories(double p, Widget child) {
+    if (p <= 0.001) return child;
+    final scale = 1.0 - 0.42 * p; // 1.0 → 0.58
+    final hf = 1.0 - 0.5 * p; // 1.0 → 0.5  (clips the labels)
+    return ClipRect(
+      child: Align(
+        alignment: Alignment.topCenter,
+        heightFactor: hf,
+        child: Transform.scale(
+          scale: scale,
+          alignment: Alignment.topCenter,
+          child: child,
+        ),
+      ),
+    );
   }
 
   List<_ChatItem> _items = [];
@@ -1261,9 +1321,24 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
   VoidCallback? _botDirListener;
   late final VoidCallback _inboxListener;
 
+  // Offset-driven header collapse: 0 = expanded, 1 = fully collapsed. Driven by
+  // the list scroll position (not scroll direction) so it tracks the finger
+  // smoothly instead of needing a sharp flick.
+  final ScrollController _listController = ScrollController();
+  final ValueNotifier<double> _collapse = ValueNotifier<double>(0);
+  static const double _collapseDistance = 132;
+
+  void _onScrollOffset() {
+    if (!_listController.hasClients) return;
+    final o = _listController.offset;
+    final p = (o / _collapseDistance).clamp(0.0, 1.0);
+    if ((p - _collapse.value).abs() > 0.001) _collapse.value = p;
+  }
+
   @override
   void initState() {
     super.initState();
+    _listController.addListener(_onScrollOffset);
     _inboxListener = () {
       if (mounted) setState(() {});
     };
@@ -1308,6 +1383,9 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
 
   @override
   void dispose() {
+    _listController.removeListener(_onScrollOffset);
+    _listController.dispose();
+    _collapse.dispose();
     _loadDebounce?.cancel();
     _sub?.cancel();
     if (_groupListener != null) {
@@ -2046,19 +2124,26 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         _layoutMiniPlayerAnchor();
         return col;
       }
+      final storiesStrip = _StoriesStrip(chatItems: _storiesSource());
+      final filterBar = _buildFilterBar(context);
       final col = Column(children: [
-        _collapsible(
-          collapsed: _storiesCollapsed,
-          child: _StoriesStrip(chatItems: _storiesSource()),
-        ),
-        _collapsible(
-          collapsed: _filtersCollapsed,
-          child: _buildFilterBar(context),
+        // Offset-driven collapsing header: rebuilds only this subtree per scroll
+        // frame (via _collapse notifier), so it tracks the finger smoothly.
+        ValueListenableBuilder<double>(
+          valueListenable: _collapse,
+          builder: (context, p, __) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _collapsedStories(p, storiesStrip),
+              _collapsedFilters(p, filterBar),
+            ],
+          ),
         ),
         _buildPendingBanners(context),
         SizedBox(height: 0, key: _miniPlayerListAnchor),
         Expanded(
             child: ListView.separated(
+          controller: _listController,
           key: const PageStorageKey<String>('chat_inbox_list'),
           cacheExtent: 720,
           itemCount: visible.length,
@@ -2095,10 +2180,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         )),
       ]);
       _layoutMiniPlayerAnchor();
-      return NotificationListener<UserScrollNotification>(
-        onNotification: _onListScroll,
-        child: col,
-      );
+      return col;
     }
 
     final forSearch =

@@ -393,22 +393,29 @@ class _CategoryGroup extends StatelessWidget {
 }
 
 /// Те же карточки категорий, что на корне [SettingsScreen] — для вкладки «Я» и единообразия.
-class SettingsCategoryCards extends StatelessWidget {
+class SettingsCategoryCards extends StatefulWidget {
   const SettingsCategoryCards({super.key});
+
+  @override
+  State<SettingsCategoryCards> createState() => _SettingsCategoryCardsState();
+}
+
+class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   void _open(BuildContext context, Widget page) {
     Navigator.push(context, rlinkPushRoute(page));
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _CategoryGroup(isDark: isDark, items: [
+  List<List<_CategoryItem>> _groups(BuildContext context) => [
+        [
           _CategoryItem(
             icon: Icons.palette_outlined,
             color: const Color(0xFF9C27B0),
@@ -428,12 +435,11 @@ class SettingsCategoryCards extends StatelessWidget {
               icon: Icons.verified_user_outlined,
               color: const Color(0xFF00BCD4),
               title: 'Разрешения',
-              subtitle: 'Микрофон, камера, уведомления',
+              subtitle: 'Микрофон, камера, уведомления, фоновые пуши',
               onTap: () => _open(context, const _PermissionsPage()),
             ),
-        ]),
-        const SizedBox(height: 8),
-        _CategoryGroup(isDark: isDark, items: [
+        ],
+        [
           _CategoryItem(
             icon: Icons.chat_bubble_outline,
             color: const Color(0xFF2196F3),
@@ -478,9 +484,8 @@ class SettingsCategoryCards extends StatelessWidget {
             subtitle: 'Движок и модель',
             onTap: () => _open(context, const _TranscriptionPage()),
           ),
-        ]),
-        const SizedBox(height: 8),
-        _CategoryGroup(isDark: isDark, items: [
+        ],
+        [
           _CategoryItem(
             icon: Icons.wifi_tethering_rounded,
             color: const Color(0xFF009688),
@@ -503,9 +508,8 @@ class SettingsCategoryCards extends StatelessWidget {
               subtitle: 'Добавить Rlink на главный экран',
               onTap: () => _open(context, const _WebInstallPage()),
             ),
-        ]),
-        const SizedBox(height: 8),
-        _CategoryGroup(isDark: isDark, items: [
+        ],
+        [
           _CategoryItem(
             icon: Icons.storage_outlined,
             color: const Color(0xFF795548),
@@ -530,7 +534,83 @@ class SettingsCategoryCards extends StatelessWidget {
             ].join(' • '),
             onTap: () => _open(context, const AboutScreen()),
           ),
-        ]),
+        ],
+      ];
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    final groups = _groups(context);
+    final q = _query.trim().toLowerCase();
+
+    final searchField = Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) => setState(() => _query = v),
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Поиск в настройках',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: q.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _query = '');
+                  },
+                ),
+          isDense: true,
+          filled: true,
+          fillColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+
+    if (q.isNotEmpty) {
+      final matches = <_CategoryItem>[
+        for (final g in groups)
+          for (final it in g)
+            if (it.title.toLowerCase().contains(q) ||
+                it.subtitle.toLowerCase().contains(q))
+              it,
+      ];
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          searchField,
+          if (matches.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 28),
+              child: Center(
+                child: Text('Ничего не найдено',
+                    style: TextStyle(color: cs.onSurfaceVariant)),
+              ),
+            )
+          else
+            _CategoryGroup(isDark: isDark, items: matches),
+        ],
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        searchField,
+        for (var i = 0; i < groups.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          _CategoryGroup(isDark: isDark, items: groups[i]),
+        ],
       ],
     );
   }
