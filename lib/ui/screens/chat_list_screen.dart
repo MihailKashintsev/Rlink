@@ -453,8 +453,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         flexibleSpace: settings.newDesign
             ? RlinkDesign.frosted(
                 context: context,
-                blur: 22,
-                fill: 0.42,
+                blur: 10,
+                fill: 0.6,
                 border: Border(
                   bottom: BorderSide(
                     color: cs.outlineVariant.withValues(alpha: 0.4),
@@ -822,8 +822,8 @@ class _AnimatedNavBar extends StatelessWidget {
       pillRadius,
       RlinkDesign.frosted(
         context: context,
-        blur: 26,
-        fill: 0.52,
+        blur: 12,
+        fill: 0.62,
         borderRadius: pillRadius,
         border: Border.all(
           color: cs.outlineVariant.withValues(alpha: 0.5),
@@ -949,8 +949,8 @@ class _AnimatedNavBar extends StatelessWidget {
         borderRadius: circleRadius,
         child: RlinkDesign.frosted(
           context: context,
-          blur: 26,
-          fill: 0.52,
+          blur: 12,
+          fill: 0.62,
           borderRadius: circleRadius,
           border: Border.all(
             color: selected
@@ -1328,6 +1328,10 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
   final ValueNotifier<double> _collapse = ValueNotifier<double>(0);
   static const double _collapseDistance = 132;
 
+  // Entrance stagger plays once; after the first frame, scrolled-in rows render
+  // statically (no per-row opacity tween) so scrolling stays smooth on phones.
+  bool _entranceAnimated = false;
+
   void _onScrollOffset() {
     if (!_listController.hasClients) return;
     final o = _listController.offset;
@@ -1339,6 +1343,13 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
   void initState() {
     super.initState();
     _listController.addListener(_onScrollOffset);
+    // After the first frame the initial rows have animated in; disable the
+    // per-row entrance tween so later (recycled) rows don't re-animate on scroll.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 650), () {
+        if (mounted) _entranceAnimated = true;
+      });
+    });
     _inboxListener = () {
       if (mounted) setState(() {});
     };
@@ -2159,22 +2170,28 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
             final key = _chatItemInboxKey(item);
             final pinned =
                 inbox.pinOrder.contains(key) && !item.isSavedMessages;
+            final row = _TelegramChatRow(
+              item: item,
+              onTap: () => _navigate(context, item),
+              onLongPress: () => _showChatItemActions(context, item),
+              showPinned: pinned,
+              timeLabel: item.isSavedMessages && !item.savedHasMessages
+                  ? ''
+                  : _fmtTime(item.lastTime),
+            );
             return RepaintBoundary(
               key: ValueKey<String>('chat_row_$key'),
-              child: StaggeredListItem(
-                index: i,
-                duration: const Duration(milliseconds: 280),
-                maxDelay: const Duration(milliseconds: 220),
-                child: _TelegramChatRow(
-                  item: item,
-                  onTap: () => _navigate(context, item),
-                  onLongPress: () => _showChatItemActions(context, item),
-                  showPinned: pinned,
-                  timeLabel: item.isSavedMessages && !item.savedHasMessages
-                      ? ''
-                      : _fmtTime(item.lastTime),
-                ),
-              ),
+              // Entrance stagger only on the FIRST paint of the list — otherwise
+              // every row re-plays the opacity/slide tween as it scrolls back
+              // into view (recycled by ListView.builder), which janks on phones.
+              child: _entranceAnimated
+                  ? row
+                  : StaggeredListItem(
+                      index: i,
+                      duration: const Duration(milliseconds: 280),
+                      maxDelay: const Duration(milliseconds: 220),
+                      child: row,
+                    ),
             );
           },
         )),

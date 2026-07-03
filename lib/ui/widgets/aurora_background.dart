@@ -20,22 +20,31 @@ class AuroraBackground extends StatefulWidget {
 }
 
 class _AuroraBackgroundState extends State<AuroraBackground>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 22),
   );
+  bool _appActive = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _maybeAnimate();
     AppSettings.instance.addListener(_maybeAnimate);
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Stop the full-screen glow repaint while the app/tab is hidden.
+    _appActive = state == AppLifecycleState.resumed;
+    _maybeAnimate();
+  }
+
   void _maybeAnimate() {
     final s = AppSettings.instance;
-    final on = s.newDesign && s.animationLevel > 0.05;
+    final on = _appActive && s.newDesign && s.animationLevel > 0.05;
     if (on && !_c.isAnimating) {
       _c.repeat();
     } else if (!on && _c.isAnimating) {
@@ -46,6 +55,7 @@ class _AuroraBackgroundState extends State<AuroraBackground>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     AppSettings.instance.removeListener(_maybeAnimate);
     _c.dispose();
     super.dispose();
@@ -73,7 +83,10 @@ class _AuroraBackgroundState extends State<AuroraBackground>
 
     return AnimatedBuilder(
       animation: _c,
-      builder: (context, _) {
+      // Isolate the app content in its own layer so the animated glow behind it
+      // doesn't force the whole UI (list, glass chrome) to repaint every frame.
+      child: RepaintBoundary(child: widget.child),
+      builder: (context, child) {
         final t = _c.value * 2 * math.pi;
         final a1 = Alignment(0.55 * math.cos(t), -0.5 + 0.35 * math.sin(t * 0.8));
         final a2 =
@@ -153,7 +166,7 @@ class _AuroraBackgroundState extends State<AuroraBackground>
                 ),
               ),
             ),
-            widget.child,
+            child!,
           ],
         );
       },
