@@ -1503,6 +1503,8 @@ class _PermissionsPageState extends State<_PermissionsPage> {
   String _cam = 'unknown';
   String _notif = 'default';
   bool _busy = false;
+  String _pushStatus = ''; // '', 'on', 'off'
+  bool _pushBusy = false;
 
   @override
   void initState() {
@@ -1541,11 +1543,99 @@ class _PermissionsPageState extends State<_PermissionsPage> {
 
   Future<void> _requestNotifications() async {
     setState(() => _busy = true);
-    await requestWebNotificationPermission();
-    await _syncCurrentWebPushSubscription();
+    final res = await _enableBackgroundPush();
     if (!mounted) return;
     setState(() => _busy = false);
     await _refresh();
+    _showPushResult(res);
+  }
+
+  /// Reads current identity/relay and force-enables background push. Returns the
+  /// bridge result map `{ok, reason, detail?}`.
+  Future<Map<String, Object?>> _enableBackgroundPush() async {
+    if (!RuntimePlatform.isWeb) {
+      await requestWebNotificationPermission();
+      return {'ok': true, 'reason': 'native'};
+    }
+    if (!RelayService.instance.isConnected) {
+      try {
+        await RelayService.instance.connect();
+      } catch (_) {}
+    }
+    final publicKey = CryptoService.instance.publicKeyHex;
+    if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(publicKey.trim())) {
+      return {'ok': false, 'reason': 'no_keys'};
+    }
+    final res = await enableWebPush(
+      relayServerUrl:
+          RelayService.instance.serverUrl ?? RelayService.defaultServerUrl,
+      publicKey: publicKey,
+      nick: ProfileService.instance.profile?.nickname ?? '',
+    );
+    if (mounted) {
+      setState(() => _pushStatus = res['ok'] == true ? 'on' : 'off');
+    }
+    return res;
+  }
+
+  Future<void> _testPush() async {
+    setState(() => _pushBusy = true);
+    final publicKey = CryptoService.instance.publicKeyHex;
+    final res = await testWebPush(
+      relayServerUrl:
+          RelayService.instance.serverUrl ?? RelayService.defaultServerUrl,
+      publicKey: publicKey,
+    );
+    if (!mounted) return;
+    setState(() => _pushBusy = false);
+    final ok = res['ok'] == true;
+    final sent = (res['sent'] as num?)?.toInt() ?? 0;
+    _snack(ok
+        ? 'Тестовый пуш отправлен ($sent). Сверните приложение — должно прийти уведомление.'
+        : 'Не удалось отправить тест: ${_pushReasonText(res['reason']?.toString())}');
+  }
+
+  void _showPushResult(Map<String, Object?> res) {
+    if (res['ok'] == true) {
+      _snack('Фоновые уведомления включены ✓');
+    } else {
+      _snack('Не включилось: ${_pushReasonText(res['reason']?.toString())}');
+    }
+  }
+
+  String _pushReasonText(String? reason) {
+    switch (reason) {
+      case 'denied':
+        return 'уведомления запрещены — разрешите их для сайта в настройках браузера';
+      case 'not_granted':
+        return 'разрешение не выдано — нажмите «Разрешить» в запросе браузера';
+      case 'no_push_api':
+      case 'no_service_worker':
+        return 'этот браузер не поддерживает фоновые пуши';
+      case 'no_subscription':
+      case 'no_keys':
+        return 'не удалось создать подписку (на iPhone добавьте Rlink на экран «Домой»)';
+      case 'no_vapid':
+        return 'relay не отдал ключ пушей';
+      case 'no_subscription_on_relay':
+        return 'сначала включите фоновые уведомления';
+      case 'bad_args':
+        return 'нет связи с relay или профиля';
+      default:
+        if (reason != null && reason.startsWith('relay_')) {
+          return 'relay отклонил подписку (${reason.substring(6)})';
+        }
+        if (reason != null && reason.startsWith('http_')) {
+          return 'relay недоступен (${reason.substring(5)})';
+        }
+        return reason ?? 'неизвестная ошибка';
+    }
+  }
+
+  void _snack(String s) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(s)));
   }
 
   Widget _statusChip(String status) {
@@ -1611,6 +1701,69 @@ class _PermissionsPageState extends State<_PermissionsPage> {
     );
   }
 
+  Widget _backgroundPushCard(ColorScheme cs) {
+    if (!RuntimePlatform.isWeb) return const SizedBox.shrink();
+    final on = _pushStatus == 'on';
+    final off = _pushStatus == 'off';
+    final (statusText, statusColor) = on
+        ? ('включены', Colors.green)
+        : (off ? ('выключены', Colors.orange) : ('не проверено', cs.onSurfaceVariant));
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.podcasts_rounded, size: 22, color: cs.primary),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('Фоновые пуши',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 15)),
+                ),
+                Text(statusText,
+                    style: TextStyle(
+                        color: statusColor, fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Уведомления приходят, даже когда Rlink закрыт. Включите, затем '
+              'нажмите «Проверить».',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: _busy ? null : _requestNotifications,
+                  icon: const Icon(Icons.notifications_active_outlined,
+                      size: 18),
+                  label: const Text('Включить'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _pushBusy ? null : _testPush,
+                  icon: _pushBusy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.send_outlined, size: 18),
+                  label: const Text('Проверить'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -1648,11 +1801,14 @@ class _PermissionsPageState extends State<_PermissionsPage> {
             status: _notif,
             onRequest: _requestNotifications,
           ),
+          _backgroundPushCard(cs),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
               'На iPhone уведомления в фоне работают только если добавить Rlink '
-              'на экран «Домой» (как приложение) и один раз нажать «Разрешить».',
+              'на экран «Домой» (как приложение) и один раз нажать «Разрешить». '
+              'После включения нажмите «Проверить» и сверните приложение — '
+              'должно прийти тестовое уведомление.',
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
             ),
           ),

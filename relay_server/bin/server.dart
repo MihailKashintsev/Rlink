@@ -2658,6 +2658,65 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
           status: 400);
     }
   }
+  if (request.url.path == 'push/test' && request.method == 'POST') {
+    if (!_webPushConfigured) {
+      return _jsonResponse({'ok': false, 'error': 'push_not_configured'},
+          status: 503);
+    }
+    try {
+      final raw = await request.readAsString();
+      final decoded = jsonDecode(raw);
+      final publicKey = (decoded is Map
+              ? (decoded['publicKey'] as String?)
+              : null)
+          ?.trim()
+          .toLowerCase() ??
+          '';
+      if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(publicKey)) {
+        return _jsonResponse({'ok': false, 'error': 'bad_request'},
+            status: 400);
+      }
+      final subs = _pushSubscriptions[publicKey];
+      if (subs == null || subs.isEmpty) {
+        return _jsonResponse(
+            {'ok': false, 'error': 'no_subscription', 'sent': 0});
+      }
+      var sent = 0;
+      final toRemove = <String>{};
+      final client = HttpClient();
+      try {
+        for (final sub in subs) {
+          final endpoint = (sub['endpoint'] as String?)?.trim() ?? '';
+          if (endpoint.isEmpty) continue;
+          try {
+            // Payloadless push (Web Push rejects unencrypted payloads → 400).
+            final req = await client.postUrl(Uri.parse(endpoint));
+            req.headers.set('TTL', '60');
+            req.headers.set('Authorization', _vapidAuthHeader(endpoint));
+            req.headers.set('Urgency', 'high');
+            final resp = await req.close();
+            if (resp.statusCode == 404 || resp.statusCode == 410) {
+              toRemove.add(endpoint);
+            } else if (resp.statusCode >= 200 && resp.statusCode < 300) {
+              sent++;
+            }
+          } catch (_) {}
+        }
+      } finally {
+        client.close(force: true);
+      }
+      if (toRemove.isNotEmpty) {
+        subs.removeWhere(
+            (s) => toRemove.contains((s['endpoint'] as String?) ?? ''));
+        if (subs.isEmpty) _pushSubscriptions.remove(publicKey);
+        _persistPushSubscriptions();
+      }
+      return _jsonResponse({'ok': sent > 0, 'sent': sent});
+    } catch (_) {
+      return _jsonResponse({'ok': false, 'error': 'invalid_payload'},
+          status: 400);
+    }
+  }
   if (request.url.path == 'health') {
     final peers = _users.values
         .map((u) => {

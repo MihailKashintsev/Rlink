@@ -27,6 +27,19 @@ Future<void> syncWebPushSubscription({
   required String nick,
 }) async {}
 
+Future<Map<String, Object?>> enableWebPush({
+  required String relayServerUrl,
+  required String publicKey,
+  required String nick,
+}) async =>
+    {'ok': false, 'reason': 'unsupported'};
+
+Future<Map<String, Object?>> testWebPush({
+  required String relayServerUrl,
+  required String publicKey,
+}) async =>
+    {'ok': false, 'reason': 'unsupported'};
+
 Future<String> requestWebMediaPermission({
   required bool audio,
   required bool video,

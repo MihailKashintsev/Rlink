@@ -75,7 +75,7 @@
 
     // Bump on every deploy that changes Dart code — busts the cached bootstrap
     // AND main.dart.js (see web/flutter_bootstrap.js).
-    window.__rlinkBuildV = '20260625-65';
+    window.__rlinkBuildV = '20260625-66';
     function _rlinkLoadFlutter() {
       const script = document.createElement('script');
       script.src = 'flutter_bootstrap.js?v=' + window.__rlinkBuildV;
@@ -183,6 +183,95 @@
         }
       } catch (_) {} finally {
         if (window.__rlinkPushSync) window.__rlinkPushSync.inFlight = false;
+      }
+    };
+
+    // User-initiated enable: forceful (ignores the debounce/failed guards that
+    // the background sync uses) and RETURNS a result {ok, reason, detail} so the
+    // UI can explain why it did / didn't work. This is the reliable path on iOS
+    // PWA where the background auto-sync can bail before permission is granted.
+    window.rlinkEnablePush = async function(relayUrl, publicKey, nick) {
+      try {
+        if (!('serviceWorker' in navigator)) return { ok: false, reason: 'no_service_worker' };
+        if (!('PushManager' in window)) return { ok: false, reason: 'no_push_api' };
+        if (!('Notification' in window)) return { ok: false, reason: 'no_notifications' };
+        const relayBase = _rlinkHttpBase(relayUrl);
+        const me = (publicKey || '').trim().toLowerCase();
+        if (!relayBase || !/^[0-9a-f]{64}$/.test(me)) return { ok: false, reason: 'bad_args' };
+
+        if (Notification.permission === 'default') {
+          try { await Notification.requestPermission(); } catch (_) {}
+        }
+        if (Notification.permission !== 'granted') {
+          return { ok: false, reason: Notification.permission === 'denied' ? 'denied' : 'not_granted' };
+        }
+
+        const keyResp = await fetch(`${relayBase}/push/public_key`, { method: 'GET' });
+        if (!keyResp.ok) return { ok: false, reason: 'no_vapid' };
+        const keyJson = await keyResp.json();
+        const vapid = (keyJson && keyJson.publicKey) ? String(keyJson.publicKey).trim() : '';
+        if (!vapid) return { ok: false, reason: 'no_vapid' };
+
+        const reg = await navigator.serviceWorker.register('push_sw.js');
+        try { await navigator.serviceWorker.ready; } catch (_) {}
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: _rlinkB64ToU8(vapid),
+          });
+        }
+        if (!sub) return { ok: false, reason: 'no_subscription' };
+        const p256 = sub.getKey('p256dh');
+        const auth = sub.getKey('auth');
+        if (!p256 || !auth) return { ok: false, reason: 'no_keys' };
+
+        const resp = await fetch(`${relayBase}/push/subscribe`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            publicKey: me,
+            nick: nick || '',
+            subscription: {
+              endpoint: sub.endpoint,
+              keys: {
+                p256dh: _rlinkU8ToB64Url(new Uint8Array(p256)),
+                auth: _rlinkU8ToB64Url(new Uint8Array(auth)),
+              },
+            },
+          }),
+        });
+        if (!resp.ok) return { ok: false, reason: 'relay_' + resp.status };
+        // Success — clear the failure guard and prime the debounce so the
+        // background sync won't immediately re-run and thrash.
+        try {
+          const syncKey = `${relayBase}|${me}`;
+          localStorage.removeItem(`rlink_push_failed_${syncKey}`);
+          window.__rlinkPushSync = { key: syncKey, at: Date.now(), failedAt: 0, inFlight: false };
+        } catch (_) {}
+        return { ok: true, endpoint: sub.endpoint };
+      } catch (e) {
+        return { ok: false, reason: 'error', detail: String(e && e.message ? e.message : e) };
+      }
+    };
+
+    // Ask the relay to push to MY OWN subscription — lets the user verify
+    // background delivery (close the app, a notification should arrive).
+    window.rlinkTestPush = async function(relayUrl, publicKey) {
+      try {
+        const relayBase = _rlinkHttpBase(relayUrl);
+        const me = (publicKey || '').trim().toLowerCase();
+        if (!relayBase || !/^[0-9a-f]{64}$/.test(me)) return { ok: false, reason: 'bad_args' };
+        const resp = await fetch(`${relayBase}/push/test`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ publicKey: me }),
+        });
+        let j = {};
+        try { j = await resp.json(); } catch (_) {}
+        return { ok: resp.ok && j && j.ok !== false, reason: (j && j.error) || (resp.ok ? '' : 'http_' + resp.status), sent: (j && j.sent) || 0 };
+      } catch (e) {
+        return { ok: false, reason: 'error', detail: String(e && e.message ? e.message : e) };
       }
     };
   </script>

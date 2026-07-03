@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 
+import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js' as js;
 
@@ -222,4 +223,78 @@ Future<void> syncWebPushSubscription({
       nick,
     ]);
   } catch (_) {}
+}
+
+Map<String, Object?> _jsObjToMap(dynamic v) {
+  final out = <String, Object?>{};
+  try {
+    if (v is js.JsObject) {
+      for (final k in const ['ok', 'reason', 'detail', 'endpoint', 'sent']) {
+        if (v.hasProperty(k)) out[k] = v[k];
+      }
+    }
+  } catch (_) {}
+  if (out.isEmpty) return {'ok': false, 'reason': 'bad_result'};
+  return out;
+}
+
+/// Awaits a JS Promise (resolving to a plain object) using the `then`/`catch`
+/// pattern — matches the project's existing dart:js interop (no dart:js_util).
+Future<Map<String, Object?>> _awaitJsResult(dynamic promise) {
+  if (promise is! js.JsObject) {
+    return Future.value(_jsObjToMap(promise));
+  }
+  final completer = Completer<Map<String, Object?>>();
+  try {
+    promise.callMethod('then', [
+      (dynamic v) {
+        if (!completer.isCompleted) completer.complete(_jsObjToMap(v));
+      },
+    ]);
+    promise.callMethod('catch', [
+      (dynamic e) {
+        if (!completer.isCompleted) {
+          completer.complete(
+              {'ok': false, 'reason': 'error', 'detail': e?.toString()});
+        }
+      },
+    ]);
+  } catch (_) {
+    return Future.value({'ok': false, 'reason': 'bridge_error'});
+  }
+  return completer.future.timeout(
+    const Duration(seconds: 40),
+    onTimeout: () => {'ok': false, 'reason': 'timeout'},
+  );
+}
+
+Future<Map<String, Object?>> enableWebPush({
+  required String relayServerUrl,
+  required String publicKey,
+  required String nick,
+}) async {
+  try {
+    final res = js.context.callMethod(
+      'rlinkEnablePush',
+      [relayServerUrl, publicKey, nick],
+    );
+    return await _awaitJsResult(res);
+  } catch (e) {
+    return {'ok': false, 'reason': 'bridge_error', 'detail': e.toString()};
+  }
+}
+
+Future<Map<String, Object?>> testWebPush({
+  required String relayServerUrl,
+  required String publicKey,
+}) async {
+  try {
+    final res = js.context.callMethod(
+      'rlinkTestPush',
+      [relayServerUrl, publicKey],
+    );
+    return await _awaitJsResult(res);
+  } catch (e) {
+    return {'ok': false, 'reason': 'bridge_error', 'detail': e.toString()};
+  }
 }
