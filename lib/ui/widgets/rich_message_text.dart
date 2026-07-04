@@ -790,6 +790,17 @@ class RichMessageText extends StatelessWidget {
           alignment: PlaceholderAlignment.baseline,
           baseline: TextBaseline.alphabetic,
           child: GestureDetector(
+            // Тап — быстро скопировать код (боты шлют коды/ID); долгое нажатие —
+            // меню кода.
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: t));
+              final m = ScaffoldMessenger.maybeOf(context);
+              m?.clearSnackBars();
+              m?.showSnackBar(SnackBar(
+                content: Text(AppL10n.t('link_code_snackbar_copied')),
+                duration: const Duration(seconds: 1),
+              ));
+            },
             onLongPress: () => _showCodeSheet(context, t, isOut),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -800,7 +811,7 @@ class RichMessageText extends StatelessWidget {
                     : cs.surfaceContainerHighest.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: SelectableText(
+              child: Text(
                 t,
                 style: baseStyle.copyWith(
                   fontFamily: 'monospace',

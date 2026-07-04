@@ -357,6 +357,89 @@ class ComposerInputBarState extends State<ComposerInputBar> {
     }
   }
 
+  bool get _hasSelection {
+    final s = widget.controller.selection;
+    return s.isValid && !s.isCollapsed;
+  }
+
+  /// Панель форматирования выделения — показывается прямо над полем ввода, когда
+  /// есть выделение. Работает в любом браузере (в т.ч. iOS Safari, где нативное
+  /// меню выделения перекрывает наше contextMenuBuilder).
+  Widget _buildFormatBar(ColorScheme cs) {
+    Widget btn(String label, String p, String s, {TextStyle? style}) {
+      return InkWell(
+        onTap: () => _wrapSelection(p, s),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 40,
+          height: 34,
+          alignment: Alignment.center,
+          child: Text(label,
+              style: style ??
+                  TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface)),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          btn('Ж', '**', '**',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: cs.onSurface)),
+          btn('К', '_', '_',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface)),
+          btn('S', '~~', '~~',
+              style: TextStyle(
+                  fontSize: 15,
+                  decoration: TextDecoration.lineThrough,
+                  color: cs.onSurface)),
+          btn('U', '__', '__',
+              style: TextStyle(
+                  fontSize: 15,
+                  decoration: TextDecoration.underline,
+                  color: cs.onSurface)),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Скрытый',
+            icon: Icon(Icons.visibility_off_outlined,
+                size: 20, color: cs.onSurface),
+            onPressed: () => _wrapSelection('||', '||'),
+          ),
+          const Spacer(),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Перевести',
+            icon: Icon(Icons.translate, size: 20, color: cs.primary),
+            onPressed: () {
+              final sel = widget.controller.selection;
+              if (sel.isValid && !sel.isCollapsed) {
+                showTranslateResult(
+                    context, sel.textInside(widget.controller.text));
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   void _wrapSelection(String prefix, String suffix) {
     final sel = widget.controller.selection;
     if (!sel.isValid || sel.isCollapsed) return;
@@ -438,6 +521,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_hasSelection && !widget.aiTextOnlyComposer) _buildFormatBar(cs),
             if (_mentionQuery != null && _filteredMentions.isNotEmpty)
               _buildMentionList(cs),
             Row(children: [

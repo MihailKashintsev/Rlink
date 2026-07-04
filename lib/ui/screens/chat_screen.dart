@@ -127,6 +127,7 @@ import '../widgets/chat_emoji_insert_sheet.dart';
 import 'emoji_hub_screen.dart';
 import 'emoji_pack_detail_screen.dart';
 import 'stickers_hub_screen.dart';
+import 'text_selection_view_screen.dart';
 import '../widgets/app_background.dart';
 import '../widgets/composer_input_bar.dart';
 import '../widgets/message_actions_overlay.dart';
@@ -5951,6 +5952,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(AppL10n.t('cm_msg_copied'))),
                 );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.text_fields_rounded),
+              title: const Text('Выделить текст'),
+              subtitle: const Text('Скопировать или перевести часть'),
+              onTap: () {
+                Navigator.pop(ctx);
+                final plain = _plainTextForClipboard(msg);
+                if (plain.trim().isEmpty) return;
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => TextSelectionViewScreen(text: plain),
+                ));
               },
             ),
             ListTile(
