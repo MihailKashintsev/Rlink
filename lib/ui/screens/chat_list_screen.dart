@@ -457,8 +457,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         flexibleSpace: settings.newDesign
             ? RlinkDesign.frosted(
                 context: context,
-                blur: 10,
-                fill: 0.6,
+                blur: 18,
+                fill: 0.42,
                 border: Border(
                   bottom: BorderSide(
                     color: cs.outlineVariant.withValues(alpha: 0.4),
