@@ -55,6 +55,7 @@ import '../widgets/poll_message_card.dart';
 import 'image_editor_screen.dart';
 import 'square_video_recorder_screen.dart';
 import 'channel_profile_screen.dart';
+import 'text_selection_view_screen.dart';
 import 'channel_profile_edit_dialog.dart';
 import 'chat_screen.dart' show ChatScreen, DmForwardDraft;
 import '../mention_nav.dart';
@@ -2984,6 +2985,16 @@ class _PostCardState extends State<_PostCard> {
             }
           },
         ),
+      if (post.text.trim().isNotEmpty)
+        MessageMenuAction(
+          icon: Icons.text_fields_rounded,
+          label: 'Выделить текст',
+          onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => TextSelectionViewScreen(text: post.text),
+            ));
+          },
+        ),
       if (widget.onDelete != null)
         MessageMenuAction(
           icon: Icons.delete_outline,
@@ -4719,6 +4730,12 @@ class _CommentBubble extends StatelessWidget {
                       title: Text(AppL10n.t('chn_copy_text')),
                       onTap: () => Navigator.pop(ctx, 'copy'),
                     ),
+                  if (text.trim().isNotEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.text_fields_rounded),
+                      title: const Text('Выделить текст'),
+                      onTap: () => Navigator.pop(ctx, 'selecttext'),
+                    ),
                   if (canDelete)
                     ListTile(
                       leading: Icon(Icons.delete_outline, color: cs.error),
@@ -4753,6 +4770,12 @@ class _CommentBubble extends StatelessWidget {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(AppL10n.t('cm_text_copied'))),
               );
+            }
+          } else if (action == 'selecttext') {
+            if (text.trim().isNotEmpty && context.mounted) {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => TextSelectionViewScreen(text: text),
+              ));
             }
           } else if (action == 'del') {
             onDelete();

@@ -57,6 +57,7 @@ import '../widgets/forward_target_sheet.dart';
 import '../widgets/media_gallery_send_sheet.dart';
 import '../widgets/chat_emoji_insert_sheet.dart';
 import 'square_video_recorder_screen.dart';
+import 'text_selection_view_screen.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
@@ -2466,6 +2467,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               onTap: () => Navigator.pop(ctx, 'copy'),
             ),
             ListTile(
+              leading: const Icon(Icons.text_fields_rounded),
+              title: const Text('Выделить текст'),
+              onTap: () => Navigator.pop(ctx, 'selecttext'),
+            ),
+            ListTile(
               leading: const Icon(Icons.forward),
               title: Text(AppL10n.t('cm_forward')),
               onTap: () => Navigator.pop(ctx, 'fwd'),
@@ -2505,6 +2511,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppL10n.t('cm_msg_copied'))),
       );
+    } else if (action == 'selecttext') {
+      final plain = _plainTextForClipboardGroup(m);
+      if (plain.trim().isEmpty || !mounted) return;
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => TextSelectionViewScreen(text: plain),
+      ));
     } else if (action == 'fwd') {
       await _forwardGroupMessageToDm(m);
     } else if (action == 'share') {

@@ -15,6 +15,7 @@ import '../../services/runtime_platform.dart';
 import '../../utils/card_luhn.dart';
 import '../../utils/channel_mentions.dart';
 import '../../utils/code_language_guess.dart';
+import '../screens/text_selection_view_screen.dart';
 
 /// Телефон E.164-подобный: + и 10–15 цифр.
 bool _phoneDigitOk(String raw) {
@@ -530,6 +531,16 @@ void _showCodeSheet(BuildContext context, String code, bool isOut) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(AppL10n.t('link_code_snackbar_copied'))),
               );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.text_fields_rounded),
+            title: const Text('Выделить текст'),
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => TextSelectionViewScreen(text: code),
+              ));
             },
           ),
         ],
