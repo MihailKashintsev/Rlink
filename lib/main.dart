@@ -581,6 +581,14 @@ class IncomingMessage {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // На web по умолчанию при выделении текста вылезает НАТИВНОЕ меню браузера,
+  // перекрывая наш contextMenuBuilder. Отключаем его — тогда везде показывается
+  // единое меню Rlink (копировать/вырезать/перевести/форматировать).
+  if (kIsWeb) {
+    try {
+      BrowserContextMenu.disableContextMenu();
+    } catch (_) {}
+  }
   // window_manager должен быть инициализирован до любого вызова setPreventClose/show/etc,
   // иначе на macOS WindowManager.mainWindow getter падает с assertionFailure.
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {

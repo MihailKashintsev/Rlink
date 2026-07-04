@@ -2717,6 +2717,54 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
           status: 400);
     }
   }
+  if (request.url.path == 'translate') {
+    // Прокси Google Translate (gtx). Нужен, потому что браузер блокирует прямой
+    // запрос клиента к googleapis (CORS). Сервер ходит сам и отдаёт результат.
+    final tl = (request.url.queryParameters['tl'] ?? 'en').trim();
+    final q = request.url.queryParameters['q'] ?? '';
+    if (q.isEmpty || q.length > 5000) {
+      return _jsonResponse({'ok': false, 'error': 'bad_request'}, status: 400);
+    }
+    try {
+      final uri = Uri.https('translate.googleapis.com', '/translate_a/single', {
+        'client': 'gtx',
+        'sl': 'auto',
+        'tl': tl.isEmpty ? 'en' : tl,
+        'dt': 't',
+        'q': q,
+      });
+      final client = HttpClient();
+      try {
+        final req = await client.getUrl(uri);
+        req.headers.set('User-Agent', 'Mozilla/5.0 (compatible; RlinkRelay)');
+        final resp = await req.close();
+        if (resp.statusCode != 200) {
+          return _jsonResponse(
+              {'ok': false, 'error': 'upstream_${resp.statusCode}'},
+              status: 502);
+        }
+        final body = await resp.transform(utf8.decoder).join();
+        final data = jsonDecode(body);
+        final sb = StringBuffer();
+        if (data is List && data.isNotEmpty && data[0] is List) {
+          for (final seg in (data[0] as List)) {
+            if (seg is List && seg.isNotEmpty && seg[0] is String) {
+              sb.write(seg[0] as String);
+            }
+          }
+        }
+        final out = sb.toString();
+        if (out.isEmpty) {
+          return _jsonResponse({'ok': false, 'error': 'empty'});
+        }
+        return _jsonResponse({'ok': true, 'text': out});
+      } finally {
+        client.close(force: true);
+      }
+    } catch (e) {
+      return _jsonResponse({'ok': false, 'error': 'proxy_failed'}, status: 502);
+    }
+  }
   if (request.url.path == 'health') {
     final peers = _users.values
         .map((u) => {

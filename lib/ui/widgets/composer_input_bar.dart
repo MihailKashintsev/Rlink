@@ -10,6 +10,7 @@ import '../../services/voice_service.dart';
 import 'avatar_widget.dart';
 import 'status_emoji_view.dart';
 import 'telegram_media_record_button.dart';
+import 'translate_action.dart';
 
 /// A person suggested in the @-mention picker. [id] is the public-key hex that
 /// gets inserted into the text as the `&hex` mention token.
@@ -383,7 +384,14 @@ class ComposerInputBarState extends State<ComposerInputBar> {
         editableState.hideToolbar();
       }
 
+      final selectedText = sel.textInside(widget.controller.text);
       items.addAll([
+        ContextMenuButtonItem(
+            label: 'Перевести',
+            onPressed: () {
+              editableState.hideToolbar();
+              showTranslateResult(context, selectedText);
+            }),
         ContextMenuButtonItem(
             label: 'Жирный', onPressed: () => fmt('**', '**')),
         ContextMenuButtonItem(label: 'Курсив', onPressed: () => fmt('_', '_')),

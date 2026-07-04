@@ -25,6 +25,9 @@ class AppL10n {
     return _data.containsKey(systemLang) ? systemLang : 'ru';
   }
 
+  /// Текущий язык интерфейса (цель перевода по умолчанию).
+  static String get currentLang => _lang;
+
   static String t(String key) =>
       _data[_lang]?[key] ?? _data['ru']![key] ?? key;
 
