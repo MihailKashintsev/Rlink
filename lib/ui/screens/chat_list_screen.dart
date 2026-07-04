@@ -440,6 +440,10 @@ class _ChatListScreenState extends State<ChatListScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
+      // Floating pill: let the content fill the full height and scroll UNDER the
+      // nav (no reserved dead band below the pill). Only for the new design —
+      // the old opaque NavigationBar must keep reserving its slot.
+      extendBody: settings.newDesign,
       backgroundColor: settings.newDesign
           ? Colors.transparent
           : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
@@ -1067,7 +1071,14 @@ class _MeTab extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     if (settings.isLinkedChildDevice) {
       return ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        padding: EdgeInsets.fromLTRB(
+          8,
+          12,
+          8,
+          AppSettings.instance.newDesign
+              ? MediaQuery.paddingOf(context).bottom + 84
+              : 12,
+        ),
         children: [
           Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -2184,7 +2195,14 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
           key: const PageStorageKey<String>('chat_inbox_list'),
           cacheExtent: 720,
           itemCount: visible.length,
-          padding: const EdgeInsets.only(top: 2, bottom: 8),
+          // Bottom clearance so the last chats scroll clear of the floating nav
+          // pill (extendBody makes the list fill behind it in the new design).
+          padding: EdgeInsets.only(
+            top: 2,
+            bottom: AppSettings.instance.newDesign
+                ? MediaQuery.paddingOf(context).bottom + 78
+                : 8,
+          ),
           separatorBuilder: (_, __) => Divider(
             height: 1,
             indent: 68,
