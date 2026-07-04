@@ -815,39 +815,45 @@ class _AnimatedNavBar extends StatelessWidget {
     }
 
     final cs = theme.colorScheme;
-    final pillRadius = BorderRadius.circular(30);
-    // Floating pill: 3 icon-only tabs; "Я" pulled out into its own circle.
-    // See-through: no substrate/blur — the whole interface shows through the
-    // pill; only the rounded outline defines the shape.
-    final pill = DecoratedBox(
-      decoration: BoxDecoration(
+    final pillRadius = BorderRadius.circular(26);
+    // Floating pill: slightly translucent frosted panel (blur) that the interface
+    // shows through, holding 3 icon+label tabs. "Я" is a separate frosted circle.
+    final pill = _floatShadow(
+      pillRadius,
+      RlinkDesign.frosted(
+        context: context,
+        blur: 14,
+        fill: 0.4,
         borderRadius: pillRadius,
         border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.75),
-          width: 1.2,
+          color: cs.outlineVariant.withValues(alpha: 0.5),
+          width: 0.8,
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _navIcon(context,
-                index: 0,
-                icon: Icons.chat_bubble_outline,
-                selectedIcon: Icons.chat_bubble),
-            _navIcon(context,
-                index: 1,
-                icon: Icons.radar_outlined,
-                selectedIcon: Icons.radar,
-                badge: BleService.instance.peersCount,
-                badgeGate: () => AppSettings.instance.connectionMode != 1),
-            _navIcon(context,
-                index: 2,
-                icon: Icons.cell_tower,
-                selectedIcon: Icons.cell_tower,
-                badge: EtherService.instance.unreadCount),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _navItem(context,
+                  index: 0,
+                  icon: Icons.chat_bubble_outline,
+                  selectedIcon: Icons.chat_bubble,
+                  label: AppL10n.t('nav_chats')),
+              _navItem(context,
+                  index: 1,
+                  icon: Icons.radar_outlined,
+                  selectedIcon: Icons.radar,
+                  label: AppL10n.t('nav_nearby'),
+                  badge: BleService.instance.peersCount,
+                  badgeGate: () => AppSettings.instance.connectionMode != 1),
+              _navItem(context,
+                  index: 2,
+                  icon: Icons.cell_tower,
+                  selectedIcon: Icons.cell_tower,
+                  label: AppL10n.t('nav_ether'),
+                  badge: EtherService.instance.unreadCount),
+            ],
+          ),
         ),
       ),
     );
@@ -855,47 +861,59 @@ class _AnimatedNavBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(child: pill),
-            const SizedBox(width: 10),
-            _meCircle(context),
+            const SizedBox(width: 8),
+            _meItem(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _navIcon(
+  Widget _floatShadow(BorderRadius radius, Widget child) => DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: child,
+      );
+
+  Widget _navItem(
     BuildContext context, {
     required int index,
     required IconData icon,
     required IconData selectedIcon,
+    required String label,
     ValueNotifier<int>? badge,
     bool Function()? badgeGate,
   }) {
     final cs = Theme.of(context).colorScheme;
     final selected = selectedIndex == index;
-    final iconWidget = AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+    final tint = selected ? cs.primary : cs.onSurfaceVariant;
+    Widget iconWidget = AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
       curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
       decoration: BoxDecoration(
         color: selected
-            ? cs.primary.withValues(alpha: 0.20)
+            ? cs.primary.withValues(alpha: 0.18)
             : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Icon(
-        selected ? selectedIcon : icon,
-        size: 24,
-        color: selected ? cs.primary : cs.onSurfaceVariant,
-      ),
+      child: Icon(selected ? selectedIcon : icon, size: 22, color: tint),
     );
-    Widget content = iconWidget;
     if (badge != null) {
-      content = ValueListenableBuilder<int>(
+      iconWidget = ValueListenableBuilder<int>(
         valueListenable: badge,
         builder: (_, count, child) {
           final show = count > 0 && (badgeGate?.call() ?? true);
@@ -909,31 +927,68 @@ class _AnimatedNavBar extends StatelessWidget {
     return InkWell(
       onTap: () => onDestinationSelected(index),
       borderRadius: BorderRadius.circular(16),
-      child: content,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          iconWidget,
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.0,
+              color: tint,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _meCircle(BuildContext context) {
+  Widget _meItem(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final selected = selectedIndex == 3;
-    final circleRadius = BorderRadius.circular(30);
+    final circleRadius = BorderRadius.circular(26);
     return InkWell(
       onTap: () => onDestinationSelected(3),
       borderRadius: circleRadius,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: circleRadius,
-          border: Border.all(
-            color: selected
-                ? cs.primary.withValues(alpha: 0.9)
-                : cs.outlineVariant.withValues(alpha: 0.75),
-            width: selected ? 2 : 1.2,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _floatShadow(
+            circleRadius,
+            RlinkDesign.frosted(
+              context: context,
+              blur: 14,
+              fill: 0.4,
+              borderRadius: circleRadius,
+              border: Border.all(
+                color: selected
+                    ? cs.primary.withValues(alpha: 0.9)
+                    : cs.outlineVariant.withValues(alpha: 0.5),
+                width: selected ? 2 : 0.8,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(7),
+                child: _MeTabNavIcon(selected: selected),
+              ),
+            ),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(9),
-          child: _MeTabNavIcon(selected: selected),
-        ),
+          const SizedBox(height: 2),
+          Text(
+            AppL10n.t('nav_me'),
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.0,
+              color: selected ? cs.primary : cs.onSurfaceVariant,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ],
       ),
     );
   }
