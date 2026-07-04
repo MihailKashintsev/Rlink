@@ -2049,6 +2049,14 @@ Future<void> initServices() async {
       final myKey = CryptoService.instance.publicKeyHex;
       if (authorId != myKey) {
         final ch = await ChannelService.instance.getChannel(channelId);
+        // Если я — админ канала с включённым Drive-бэкапом, а пост пришёл от
+        // другого (модератора) через gossip — переопубликуем снимок с задержкой
+        // (чтобы медиа-чанки успели собраться). Именно это делает пост модератора
+        // с ФОТО реально доставленным всем подписчикам (gossip для больших
+        // картинок ненадёжен, а Drive-история — надёжна).
+        if (ch != null && ch.adminId == myKey && ch.driveBackupEnabled) {
+          _scheduleAdminChannelBackupRepublish(channelId);
+        }
         // Уведомляем только подписчиков (это их канал).
         if (ch != null &&
             (ch.subscriberIds.contains(myKey) ||
@@ -3245,6 +3253,20 @@ Future<void> _republishOwnChannelsToRelay() async {
 
 /// Дебаунс заглушки «бот не в сети» — не чаще одной на бота в минуту.
 final Map<String, int> _botOfflineStubMs = <String, int>{};
+
+/// Дебаунс переопубликации Drive-снимка канала админом при получении поста от
+/// модератора — задержка даёт медиа-чанкам собраться перед бэкапом.
+final Map<String, Timer> _adminChannelBackupDebounce = <String, Timer>{};
+
+void _scheduleAdminChannelBackupRepublish(String channelId) {
+  _adminChannelBackupDebounce[channelId]?.cancel();
+  _adminChannelBackupDebounce[channelId] =
+      Timer(const Duration(seconds: 12), () {
+    _adminChannelBackupDebounce.remove(channelId);
+    unawaited(ChannelBackupService.instance
+        .publishBackupIfAdminDriveEnabled(channelId));
+  });
+}
 
 /// Relay сообщил, что бот-получатель офлайн. Сообщение пользователя поставлено
 /// в очередь и будет доставлено, когда процесс бота подключится; здесь мы

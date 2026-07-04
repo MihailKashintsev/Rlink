@@ -817,40 +817,37 @@ class _AnimatedNavBar extends StatelessWidget {
     final cs = theme.colorScheme;
     final pillRadius = BorderRadius.circular(30);
     // Floating pill: 3 icon-only tabs; "Я" pulled out into its own circle.
-    final pill = _withShadow(
-      cs,
-      pillRadius,
-      RlinkDesign.frosted(
-        context: context,
-        blur: 12,
-        fill: 0.62,
+    // See-through: no substrate/blur — the whole interface shows through the
+    // pill; only the rounded outline defines the shape.
+    final pill = DecoratedBox(
+      decoration: BoxDecoration(
         borderRadius: pillRadius,
         border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.5),
-          width: 0.8,
+          color: cs.outlineVariant.withValues(alpha: 0.75),
+          width: 1.2,
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _navIcon(context,
-                  index: 0,
-                  icon: Icons.chat_bubble_outline,
-                  selectedIcon: Icons.chat_bubble),
-              _navIcon(context,
-                  index: 1,
-                  icon: Icons.radar_outlined,
-                  selectedIcon: Icons.radar,
-                  badge: BleService.instance.peersCount,
-                  badgeGate: () => AppSettings.instance.connectionMode != 1),
-              _navIcon(context,
-                  index: 2,
-                  icon: Icons.cell_tower,
-                  selectedIcon: Icons.cell_tower,
-                  badge: EtherService.instance.unreadCount),
-            ],
-          ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _navIcon(context,
+                index: 0,
+                icon: Icons.chat_bubble_outline,
+                selectedIcon: Icons.chat_bubble),
+            _navIcon(context,
+                index: 1,
+                icon: Icons.radar_outlined,
+                selectedIcon: Icons.radar,
+                badge: BleService.instance.peersCount,
+                badgeGate: () => AppSettings.instance.connectionMode != 1),
+            _navIcon(context,
+                index: 2,
+                icon: Icons.cell_tower,
+                selectedIcon: Icons.cell_tower,
+                badge: EtherService.instance.unreadCount),
+          ],
         ),
       ),
     );
@@ -867,27 +864,6 @@ class _AnimatedNavBar extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _withShadow(ColorScheme cs, BorderRadius radius, Widget child) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow: [
-          BoxShadow(
-            color: RlinkDesign.accent(cs).withValues(alpha: 0.16),
-            blurRadius: 26,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.16),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: child,
     );
   }
 
@@ -941,27 +917,22 @@ class _AnimatedNavBar extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final selected = selectedIndex == 3;
     final circleRadius = BorderRadius.circular(30);
-    return _withShadow(
-      cs,
-      circleRadius,
-      InkWell(
-        onTap: () => onDestinationSelected(3),
-        borderRadius: circleRadius,
-        child: RlinkDesign.frosted(
-          context: context,
-          blur: 12,
-          fill: 0.62,
+    return InkWell(
+      onTap: () => onDestinationSelected(3),
+      borderRadius: circleRadius,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
           borderRadius: circleRadius,
           border: Border.all(
             color: selected
                 ? cs.primary.withValues(alpha: 0.9)
-                : cs.outlineVariant.withValues(alpha: 0.5),
-            width: selected ? 2 : 0.8,
+                : cs.outlineVariant.withValues(alpha: 0.75),
+            width: selected ? 2 : 1.2,
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(9),
-            child: _MeTabNavIcon(selected: selected),
-          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(9),
+          child: _MeTabNavIcon(selected: selected),
         ),
       ),
     );
