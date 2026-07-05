@@ -23,6 +23,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyNotifSound = 'notif_sound';
   static const _keyNotifVibration = 'notif_vibration';
   static const _keyChatBgPrefix = 'chat_bg_';
+  static const _keyAutoDeletePrefix = 'autodel_';
   static const _keyLocale = 'locale'; // 'system','ru','en','es','de','fr'
   static const _keyFontSize = 'font_size'; // 0=small,1=medium,2=large
   static const _keySendOnEnter = 'send_on_enter';
@@ -153,6 +154,9 @@ class AppSettings extends ChangeNotifier {
   bool _notifSound = true;
   bool _notifVibration = true;
   final Map<String, String> _chatBgMap = {};
+  // Per-chat disappearing messages: peerId → seconds (0/absent = off). Local
+  // auto-delete on THIS device — reduces plaintext at rest (esp. on web).
+  final Map<String, int> _autoDeleteMap = {};
   String _locale = 'system';
   int _fontSize = 1; // 0=small, 1=medium, 2=large
   bool _sendOnEnter = false; // false = send button, true = Enter sends
@@ -388,6 +392,10 @@ class AppSettings extends ChangeNotifier {
         final peerId = key.substring(_keyChatBgPrefix.length);
         final path = _prefs.getString(key);
         if (path != null) _chatBgMap[peerId] = path;
+      } else if (key.startsWith(_keyAutoDeletePrefix)) {
+        final peerId = key.substring(_keyAutoDeletePrefix.length);
+        final v = _prefs.getInt(key);
+        if (v != null && v > 0) _autoDeleteMap[peerId] = v;
       }
     }
     _locale = _prefs.getString(_keyLocale) ?? 'system';
@@ -837,6 +845,21 @@ class AppSettings extends ChangeNotifier {
   Future<void> setNotifVibration(bool value) async {
     _notifVibration = value;
     await _runPrefsWrite((p) => p.setBool(_keyNotifVibration, value));
+    _notifySettingsChanged();
+  }
+
+  /// Таймер исчезающих сообщений для чата (сек). 0 = выключено.
+  int autoDeleteForPeer(String peerId) => _autoDeleteMap[peerId] ?? 0;
+
+  Future<void> setAutoDeleteForPeer(String peerId, int seconds) async {
+    if (seconds <= 0) {
+      _autoDeleteMap.remove(peerId);
+      await _runPrefsWrite((p) => p.remove('$_keyAutoDeletePrefix$peerId'));
+    } else {
+      _autoDeleteMap[peerId] = seconds;
+      await _runPrefsWrite(
+          (p) => p.setInt('$_keyAutoDeletePrefix$peerId', seconds));
+    }
     _notifySettingsChanged();
   }
 

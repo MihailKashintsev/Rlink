@@ -1042,6 +1042,18 @@ class ChatStorageService {
     });
   }
 
+  /// Исчезающие сообщения: удаляет сообщения чата старше [cutoffMs].
+  /// Возвращает число удалённых.
+  Future<int> deleteMessagesOlderThan(String peerId, int cutoffMs) async {
+    final pid = normalizeDmPeerId(peerId);
+    final n = await _db?.delete('messages',
+            where: 'peer_id = ? AND timestamp < ?',
+            whereArgs: [pid, cutoffMs]) ??
+        0;
+    if (n > 0) _messagesNotifiers.remove(pid);
+    return n;
+  }
+
   Future<void> deleteChat(String peerId) async {
     final pid = normalizeDmPeerId(peerId);
     await _db?.delete('dm_chat_pins', where: 'peer_id = ?', whereArgs: [pid]);

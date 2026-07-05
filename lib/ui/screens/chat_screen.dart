@@ -1042,6 +1042,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!_tearingDown && mounted) setState(() {});
       }
 
+      await _sweepDisappearingMessages();
       await ChatStorageService.instance.loadMessages(_resolvedPeerId);
       if (!_tearingDown && mounted) {
         _recomputePinHighlight(ChatStorageService.instance
@@ -5774,6 +5775,66 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _sweepDisappearingMessages() async {
+    final secs = AppSettings.instance.autoDeleteForPeer(_resolvedPeerId);
+    if (secs <= 0) return;
+    final cutoff = DateTime.now().millisecondsSinceEpoch - secs * 1000;
+    await ChatStorageService.instance
+        .deleteMessagesOlderThan(_resolvedPeerId, cutoff);
+  }
+
+  Future<void> _showDisappearingPicker() async {
+    const opts = [
+      (0, 'Выключено'),
+      (3600, '1 час'),
+      (86400, '1 день'),
+      (604800, '1 неделя'),
+      (2592000, '1 месяц'),
+    ];
+    final cur = AppSettings.instance.autoDeleteForPeer(_resolvedPeerId);
+    final chosen = await showModalBottomSheet<int>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Text('Исчезающие сообщения',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                'Сообщения старше выбранного срока удаляются с этого устройства '
+                'при открытии чата. Меньше следов на устройстве.',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+              ),
+            ),
+            for (final o in opts)
+              ListTile(
+                title: Text(o.$2),
+                trailing: cur == o.$1 ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(ctx, o.$1),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    await AppSettings.instance.setAutoDeleteForPeer(_resolvedPeerId, chosen);
+    await _sweepDisappearingMessages();
+    if (!mounted) return;
+    await ChatStorageService.instance.loadMessages(_resolvedPeerId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(chosen == 0
+            ? 'Исчезающие сообщения выключены'
+            : 'Исчезающие сообщения включены')));
+  }
+
   Future<void> _onLongPressMessage(ChatMessage msg) async {
     // Debounce: the manual long-press timer and GestureDetector.onLongPress can
     // both fire — don't open two menus.
@@ -6955,6 +7016,11 @@ class _ChatScreenState extends State<ChatScreen> {
                               value: 'safety',
                               child: Text('Код безопасности'),
                             ),
+                          if (!_savedMessagesLocalOnly)
+                            const PopupMenuItem(
+                              value: 'disappearing',
+                              child: Text('Исчезающие сообщения'),
+                            ),
                           if (!_isDmBot)
                             PopupMenuItem(
                               value: 'peer_stickers',
@@ -6982,6 +7048,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         switch (v) {
                           case 'profile':
                             _openPeerProfile();
+                            break;
+                          case 'disappearing':
+                            await _showDisappearingPicker();
                             break;
                           case 'safety':
                             final c = await ChatStorageService.instance
