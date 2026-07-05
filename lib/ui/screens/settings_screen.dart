@@ -16,6 +16,7 @@ import '../../l10n/app_l10n.dart';
 import '../../models/contact.dart';
 import '../../models/user_profile.dart';
 import '../../services/app_settings.dart';
+import '../../services/app_lock_service.dart';
 import '../../services/app_icon_service.dart';
 import '../../services/google_drive_channel_backup.dart';
 import '../../services/transcription_engine.dart';
@@ -2328,10 +2329,156 @@ class _PrivacyPageState extends State<_PrivacyPage> {
             current: settings.onlineStatusMode,
             onChanged: (mode) => settings.setOnlineStatusMode(mode),
           ),
+          _SectionHeader('Блокировка'),
+          SwitchListTile(
+            secondary: Icon(Icons.lock_outline,
+                color: AppLockService.instance.isEnabled
+                    ? cs.primary
+                    : Theme.of(context).hintColor),
+            title: const Text('Блокировка приложения'),
+            subtitle: Text('Код-пароль при запуске и возврате из фона',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            value: AppLockService.instance.isEnabled,
+            onChanged: (v) async {
+              if (v) {
+                await _enableOrSetPasscode();
+              } else {
+                await AppLockService.instance.disable();
+                if (mounted) setState(() {});
+              }
+            },
+          ),
+          if (AppLockService.instance.isEnabled) ...[
+            ListTile(
+              leading: const Icon(Icons.timer_outlined),
+              title: const Text('Автоблокировка'),
+              subtitle:
+                  Text(_lockTimeoutLabel(AppLockService.instance.timeoutSeconds)),
+              onTap: _pickLockTimeout,
+            ),
+            ListTile(
+              leading: const Icon(Icons.password_outlined),
+              title: const Text('Изменить код'),
+              onTap: _enableOrSetPasscode,
+            ),
+          ],
         ],
       ),
     );
   }
+
+  Future<void> _enableOrSetPasscode() async {
+    final code = await _promptNewPasscode();
+    if (code == null) return;
+    await AppLockService.instance
+        .setPasscode(code, timeoutSeconds: AppLockService.instance.timeoutSeconds);
+    if (mounted) setState(() {});
+  }
+
+  Future<String?> _promptNewPasscode() {
+    final c1 = TextEditingController();
+    final c2 = TextEditingController();
+    String? err;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('Код-пароль'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: c1,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                decoration:
+                    const InputDecoration(labelText: 'Новый код (4–6 цифр)'),
+              ),
+              TextField(
+                controller: c2,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                decoration: const InputDecoration(labelText: 'Повторите код'),
+              ),
+              if (err != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(err!,
+                      style: TextStyle(
+                          color: Theme.of(ctx).colorScheme.error)),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Отмена')),
+            FilledButton(
+              onPressed: () {
+                final a = c1.text.trim();
+                final b = c2.text.trim();
+                if (a.length < 4) {
+                  setS(() => err = 'Минимум 4 цифры');
+                  return;
+                }
+                if (a != b) {
+                  setS(() => err = 'Коды не совпадают');
+                  return;
+                }
+                Navigator.pop(ctx, a);
+              },
+              child: const Text('Готово'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickLockTimeout() async {
+    const opts = [
+      (0, 'Сразу'),
+      (60, 'Через 1 минуту'),
+      (300, 'Через 5 минут'),
+      (900, 'Через 15 минут'),
+    ];
+    final chosen = await showModalBottomSheet<int>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final o in opts)
+              ListTile(
+                title: Text(o.$2),
+                trailing: AppLockService.instance.timeoutSeconds == o.$1
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.pop(ctx, o.$1),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen != null) {
+      await AppLockService.instance.setTimeout(chosen);
+      if (mounted) setState(() {});
+    }
+  }
+
+  String _lockTimeoutLabel(int s) => s == 0
+      ? 'Сразу'
+      : s < 3600
+          ? 'Через ${s ~/ 60} мин'
+          : 'Через ${s ~/ 3600} ч';
 }
 
 // ─────────────────────────────────────────────────────────────────────

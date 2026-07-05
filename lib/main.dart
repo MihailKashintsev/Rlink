@@ -30,6 +30,7 @@ import 'models/group.dart';
 import 'models/user_profile.dart';
 import 'models/shared_collab.dart';
 import 'services/app_settings.dart';
+import 'services/app_lock_service.dart';
 import 'services/motion_controller.dart';
 import 'services/google_drive_channel_backup.dart';
 import 'services/chat_inbox_service.dart';
@@ -79,6 +80,7 @@ import 'services/web_identity_portable.dart';
 import 'services/web_notification_bridge.dart';
 import 'app_route_observer.dart';
 import 'ui/app_palettes.dart';
+import 'ui/screens/app_lock_screen.dart';
 import 'ui/screens/chat_list_screen.dart';
 import 'ui/widgets/audio_queue_mini_player.dart';
 import 'ui/widgets/aurora_background.dart';
@@ -618,6 +620,9 @@ Future<void> main() async {
     if (RuntimePlatform.isAndroid) pending.add(GoogleFonts.notoColorEmoji());
     await GoogleFonts.pendingFonts(pending);
   } catch (_) {}
+  // Set the app-lock state before the first frame so no content flashes before
+  // the passcode screen appears.
+  await AppLockService.instance.init();
   runApp(const ProviderScope(child: RlinkApp()));
 }
 
@@ -4202,11 +4207,14 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden) {
       NotificationService.instance.isInBackground.value = true;
+      AppLockService.instance.onBackground();
     } else if (state == AppLifecycleState.detached) {
       NotificationService.instance.isInBackground.value = true;
+      AppLockService.instance.onBackground();
       unawaited(_notifyPeersOffline());
     } else if (state == AppLifecycleState.resumed) {
       NotificationService.instance.isInBackground.value = false;
+      AppLockService.instance.onResume();
       _notifyPeersOnline();
     }
   }
@@ -4280,6 +4288,8 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
                   );
                 },
               ),
+              // Topmost: the passcode lock covers everything when locked.
+              const AppLockOverlay(),
             ],
           ),
         );
