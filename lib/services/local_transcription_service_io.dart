@@ -26,36 +26,21 @@ class LocalTranscriptionServiceIO {
     final cached = _cppModelPaths[size];
     if (cached != null && File(cached).existsSync()) return cached;
 
+    // Начиная с 1.0.0 модели не входят в комплект — они скачиваются по запросу
+    // (в первой настройке или в Настройках → Расшифровка) и лежат в
+    // <documents>/whisper_models/. Если уже скачано — возвращаем реальный путь.
+    final downloaded = await ModelDownloadService.instance.resolvedPath(size);
+    if (downloaded != null) {
+      _cppModelPaths[size] = downloaded;
+      return downloaded;
+    }
+
+    // Ещё не скачано — вернём целевой (несуществующий) путь, чтобы ensureModel
+    // выбросил понятную ошибку с подсказкой скачать модель.
     final dir = await getApplicationDocumentsDirectory();
     final modelDir = p.join(dir.path, 'whisper_models');
     await Directory(modelDir).create(recursive: true);
-    final modelPath = p.join(modelDir, size.fileName);
-
-    if (!File(modelPath).existsSync()) {
-      if (size.isBundled) {
-        // tiny идёт в комплекте — распаковываем из assets при первом запуске.
-        try {
-          final data = await rootBundle.load('assets/models/${size.fileName}');
-          await File(modelPath).writeAsBytes(
-            data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-            flush: true,
-          );
-        } catch (_) {
-          // Падаем с явной ошибкой в ensureModel().
-        }
-      } else {
-        // base/small скачиваются заранее через настройки.
-        final downloaded =
-            await ModelDownloadService.instance.resolvedPath(size);
-        if (downloaded != null) {
-          _cppModelPaths[size] = downloaded;
-          return downloaded;
-        }
-      }
-    }
-
-    _cppModelPaths[size] = modelPath;
-    return modelPath;
+    return p.join(modelDir, size.fileName);
   }
 
   static Future<void> ensureModel({
@@ -71,11 +56,8 @@ class LocalTranscriptionServiceIO {
     final modelPath = await resolveModelPath(size: size);
     if (!File(modelPath).existsSync()) {
       throw StateError(
-        size.isBundled
-            ? 'Локальная модель Whisper не установлена. '
-                'Добавьте assets/models/${size.fileName}.'
-            : 'Модель «${size.displayName}» не скачана. '
-                'Скачайте её в Настройках → Расшифровка.',
+        'Модель «${size.displayName}» ещё не скачана. '
+        'Скачайте её в первой настройке или в Настройках → Расшифровка.',
       );
     }
     WhisperFfi.instance.load();

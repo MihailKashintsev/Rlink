@@ -44,9 +44,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-        }
+        // No fixed abiFilters here so `flutter build apk --split-per-abi` can emit
+        // one right-sized APK per CPU (arm64-v8a for modern phones, armeabi-v7a for
+        // older 32-bit). A universal build still includes all ABIs.
         manifestPlaceholders["applicationName"] = "com.rendergames.rlink.RlinkApplication"
     }
 

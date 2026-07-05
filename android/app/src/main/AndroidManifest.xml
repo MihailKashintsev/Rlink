@@ -131,7 +131,7 @@
             android:name=".LauncherIconMono"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_mono"
+            android:icon="@mipmap/ic_launcher"
             android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -142,7 +142,7 @@
             android:name=".LauncherIconAi"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_ai"
+            android:icon="@mipmap/ic_launcher"
             android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

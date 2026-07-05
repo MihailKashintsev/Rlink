@@ -52,6 +52,7 @@ import 'chat_inbox_filters_manage_screen.dart';
 import 'settings_screen.dart';
 import 'story_creator_screen.dart';
 import 'intro_promo_screen.dart';
+import 'first_run_setup_screen.dart';
 import 'guide_tour_screen.dart';
 import 'story_viewer_screen.dart';
 import '../rlink_nav_routes.dart';
@@ -92,7 +93,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (AppSettings.instance.hasSeenIntro) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || AppSettings.instance.hasSeenIntro) return;
-      // First launch: the feature promo, then the "where is what" guide.
+      // First launch: quick setup (language/theme/model) so the promo already
+      // renders in the chosen language/theme, then the feature promo, then the
+      // "where is what" guide.
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const FirstRunSetupScreen()),
+      );
+      if (!mounted || AppSettings.instance.hasSeenIntro) return;
       await Navigator.of(context).push(
         PageRouteBuilder(
           opaque: true,

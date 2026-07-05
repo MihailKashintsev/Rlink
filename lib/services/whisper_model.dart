@@ -1,7 +1,9 @@
 /// Размеры локальной модели Whisper (ggml) для расшифровки аудио.
 ///
-/// `tiny` поставляется в комплекте приложения (assets/models/ggml-tiny.bin),
-/// `base` и `small` скачиваются по запросу через [ModelDownloadService].
+/// Начиная с 1.0.0 ни одна модель не входит в комплект приложения — все
+/// (`tiny`/`base`/`small`) скачиваются по запросу через [ModelDownloadService]
+/// (при первой настройке или в Настройках → Расшифровка). Это уменьшает размер
+/// установочного пакета примерно на 74 МБ.
 /// Платформенно-нейтральный файл (без dart:io) — импортируется и на вебе.
 enum WhisperModelSize {
   tiny,
@@ -38,8 +40,10 @@ enum WhisperModelSize {
   String get downloadUrl =>
       'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$fileName';
 
-  /// tiny идёт в комплекте — её не нужно скачивать.
-  bool get isBundled => this == WhisperModelSize.tiny;
+  /// Раньше tiny входила в комплект; теперь все модели скачиваются по запросу,
+  /// поэтому bundled-моделей больше нет. Оставлено для обратной совместимости
+  /// вызовов, которые различали встроенную и скачиваемую модель.
+  bool get isBundled => false;
 
   static WhisperModelSize fromIndex(int? i) {
     if (i == null || i < 0 || i >= WhisperModelSize.values.length) {
