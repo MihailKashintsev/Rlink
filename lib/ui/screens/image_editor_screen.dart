@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -25,7 +26,15 @@ class ImageEditorScreen extends StatefulWidget {
 
 // ── Models ───────────────────────────────────────────────────────────────────
 
-enum _Mode { draw, text, rotate, crop }
+enum _Mode { draw, text, blur, rotate, crop }
+
+/// Мазок кисти-блюра / прямоугольник блюра — маска, внутри которой картинка
+/// заменяется на размытую версию (редакция скриншотов).
+class _BlurStroke {
+  final List<Offset> pts;
+  final double width;
+  const _BlurStroke({required this.pts, required this.width});
+}
 
 class _Stroke {
   final List<Offset> pts;
@@ -47,6 +56,18 @@ class _TextItem {
   _TextItem({required this.text, required this.pos, required this.color, required this.size});
 }
 
+/// Снимок для undo: и рисунок, и блюр-маска.
+class _EditSnapshot {
+  final List<_Stroke> strokes;
+  final List<_BlurStroke> blurStrokes;
+  final List<Rect> blurRects;
+  const _EditSnapshot({
+    required this.strokes,
+    required this.blurStrokes,
+    required this.blurRects,
+  });
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 
 class _ImageEditorScreenState extends State<ImageEditorScreen> {
@@ -55,11 +76,21 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
 
   // Draw
   final List<_Stroke> _strokes = [];
-  final List<List<_Stroke>> _undoHistory = [];
+  final List<_EditSnapshot> _undoHistory = [];
   List<Offset> _currentPts = [];
   Color _penColor = Colors.white;
   double _penWidth = 5.0;
   bool _eraser = false;
+
+  // Blur (redaction) — mask over which the image is replaced by a blurred copy.
+  final List<_BlurStroke> _blurStrokes = [];
+  final List<Rect> _blurRects = [];
+  List<Offset> _currentBlur = [];
+  Rect? _currentBlurRect;
+  Offset? _blurRectStart;
+  bool _blurRectMode = false; // false = brush, true = rectangle
+  double _blurSigma = 12.0;
+  ui.Image? _uiImage; // decoded source, for the blur painter
 
   // Text
   final List<_TextItem> _texts = [];
@@ -125,10 +156,40 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     return bd?.buffer.asUint8List();
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _decodeSource();
+  }
+
+  Future<void> _decodeSource() async {
+    try {
+      Uint8List bytes;
+      if (widget.imagePath.startsWith('data:')) {
+        final b64 =
+            widget.imagePath.substring(widget.imagePath.indexOf(',') + 1);
+        bytes = base64Decode(b64);
+      } else {
+        bytes = await File(widget.imagePath).readAsBytes();
+      }
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      if (mounted) setState(() => _uiImage = frame.image);
+    } catch (e) {
+      debugPrint('[ImageEditor] source decode failed: $e');
+    }
+  }
+
+  _EditSnapshot _snap() => _EditSnapshot(
+        strokes: List.from(_strokes),
+        blurStrokes: List.from(_blurStrokes),
+        blurRects: List.from(_blurRects),
+      );
+
   // ── Draw gestures ──────────────────────────────────────────────────────────
 
   void _panStart(DragStartDetails d) {
-    _undoHistory.add(List.from(_strokes));
+    _undoHistory.add(_snap());
     setState(() => _currentPts = [d.localPosition]);
   }
 
@@ -147,12 +208,68 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     });
   }
 
+  // ── Blur gestures (brush / rectangle) ───────────────────────────────────────
+
+  void _blurStart(DragStartDetails d) {
+    _undoHistory.add(_snap());
+    setState(() {
+      if (_blurRectMode) {
+        _blurRectStart = d.localPosition;
+        _currentBlurRect = Rect.fromPoints(d.localPosition, d.localPosition);
+      } else {
+        _currentBlur = [d.localPosition];
+      }
+    });
+  }
+
+  void _blurUpdate(DragUpdateDetails d) {
+    setState(() {
+      if (_blurRectMode) {
+        if (_blurRectStart != null) {
+          _currentBlurRect = Rect.fromPoints(_blurRectStart!, d.localPosition);
+        }
+      } else {
+        _currentBlur.add(d.localPosition);
+      }
+    });
+  }
+
+  void _blurEnd(DragEndDetails _) {
+    setState(() {
+      if (_blurRectMode) {
+        final r = _currentBlurRect;
+        if (r != null && r.width > 4 && r.height > 4) {
+          _blurRects.add(r);
+        } else {
+          _undoHistory.removeLast(); // nothing committed
+        }
+        _currentBlurRect = null;
+        _blurRectStart = null;
+      } else {
+        if (_currentBlur.isNotEmpty) {
+          _blurStrokes.add(
+              _BlurStroke(pts: List.from(_currentBlur), width: _penWidth * 3.5));
+        } else {
+          _undoHistory.removeLast();
+        }
+        _currentBlur = [];
+      }
+    });
+  }
+
   void _undo() {
     if (_undoHistory.isEmpty) return;
+    final s = _undoHistory.removeLast();
     setState(() {
       _strokes
         ..clear()
-        ..addAll(_undoHistory.removeLast());
+        ..addAll(s.strokes);
+      _blurStrokes
+        ..clear()
+        ..addAll(s.blurStrokes);
+      _blurRects
+        ..clear()
+        ..addAll(s.blurRects);
     });
   }
 
@@ -256,9 +373,15 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           child: Center(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onPanStart: _mode == _Mode.draw ? _panStart : null,
-              onPanUpdate: _mode == _Mode.draw ? _panUpdate : null,
-              onPanEnd: _mode == _Mode.draw ? _panEnd : null,
+              onPanStart: _mode == _Mode.draw
+                  ? _panStart
+                  : (_mode == _Mode.blur ? _blurStart : null),
+              onPanUpdate: _mode == _Mode.draw
+                  ? _panUpdate
+                  : (_mode == _Mode.blur ? _blurUpdate : null),
+              onPanEnd: _mode == _Mode.draw
+                  ? _panEnd
+                  : (_mode == _Mode.blur ? _blurEnd : null),
               onTapUp: _mode == _Mode.text
                   ? (d) => _addText(d.localPosition)
                   : null,
@@ -285,6 +408,24 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                               fit: BoxFit.contain,
                             ),
                     ),
+                    // Blur (redaction) layer — draws a blurred copy of the image
+                    // masked to the blur strokes/rects. Under the colored strokes.
+                    if (_uiImage != null)
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _BlurPainter(
+                            image: _uiImage!,
+                            rotateTurns: _rotateTurns,
+                            flipH: _flipH,
+                            strokes: _blurStrokes,
+                            currentStroke: _currentBlur,
+                            brushWidth: _penWidth * 3.5,
+                            rects: _blurRects,
+                            currentRect: _currentBlurRect,
+                            sigma: _blurSigma,
+                          ),
+                        ),
+                      ),
                     // Drawing layer
                     Positioned.fill(
                       child: CustomPaint(
@@ -384,6 +525,15 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         );
       case _Mode.text:
         return _TextHint(crop: _cropNorm);
+      case _Mode.blur:
+        return _BlurToolbar(
+          rectMode: _blurRectMode,
+          width: _penWidth,
+          sigma: _blurSigma,
+          onRectMode: (v) => setState(() => _blurRectMode = v),
+          onWidthChange: (v) => setState(() => _penWidth = v),
+          onSigmaChange: (v) => setState(() => _blurSigma = v),
+        );
       case _Mode.rotate:
         return _RotateToolbar(
           onLeft: () => setState(() => _rotateTurns = (_rotateTurns - 1) % 4),
@@ -409,8 +559,14 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   }
 
   Widget _buildModeBar() {
-    const labels = ['Рисунок', 'Текст', 'Поворот', 'Кадр'];
-    const icons = [Icons.brush, Icons.title, Icons.rotate_90_degrees_ccw, Icons.crop];
+    const labels = ['Рисунок', 'Текст', 'Блюр', 'Поворот', 'Кадр'];
+    const icons = [
+      Icons.brush,
+      Icons.title,
+      Icons.blur_on,
+      Icons.rotate_90_degrees_ccw,
+      Icons.crop
+    ];
     return Container(
       height: 54,
       color: Colors.black,
@@ -501,7 +657,196 @@ class _DrawPainter extends CustomPainter {
   bool shouldRepaint(_DrawPainter o) => true;
 }
 
+// ── Blur (redaction) painter ──────────────────────────────────────────────────
+//
+// Draws a blurred copy of the source image, masked to the blur strokes/rects, at
+// the same screen position as the displayed (rotated/flipped, contain) image. It
+// paints into the widget tree, so RepaintBoundary.toImage captures it reliably —
+// important for redaction (a blur that doesn't export = a leak).
+class _BlurPainter extends CustomPainter {
+  final ui.Image image;
+  final int rotateTurns;
+  final bool flipH;
+  final List<_BlurStroke> strokes;
+  final List<Offset> currentStroke;
+  final double brushWidth;
+  final List<Rect> rects;
+  final Rect? currentRect;
+  final double sigma;
+
+  const _BlurPainter({
+    required this.image,
+    required this.rotateTurns,
+    required this.flipH,
+    required this.strokes,
+    required this.currentStroke,
+    required this.brushWidth,
+    required this.rects,
+    required this.currentRect,
+    required this.sigma,
+  });
+
+  bool get _hasMask =>
+      strokes.isNotEmpty ||
+      currentStroke.isNotEmpty ||
+      rects.isNotEmpty ||
+      currentRect != null;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (!_hasMask) return;
+    canvas.saveLayer(Offset.zero & size, Paint());
+
+    // 1) Blurred image, transformed to match the displayed image.
+    canvas.save();
+    canvas.translate(size.width / 2, size.height / 2);
+    canvas.rotate(rotateTurns * math.pi / 2);
+    canvas.scale(flipH ? -1.0 : 1.0, 1.0);
+    canvas.translate(-size.width / 2, -size.height / 2);
+    final dst = _containRect(
+        Size(image.width.toDouble(), image.height.toDouble()), size);
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      dst,
+      Paint()
+        ..filterQuality = FilterQuality.medium
+        ..imageFilter = ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+    );
+    canvas.restore();
+
+    // 2) Keep the blurred pixels only inside the mask (screen coords).
+    final maskStroke = Paint()
+      ..blendMode = BlendMode.dstIn
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = const Color(0xFFFFFFFF);
+    final maskFill = Paint()
+      ..blendMode = BlendMode.dstIn
+      ..color = const Color(0xFFFFFFFF);
+
+    void drawStroke(List<Offset> pts, double w) {
+      if (pts.isEmpty) return;
+      if (pts.length == 1) {
+        canvas.drawCircle(pts.first, w / 2, maskFill);
+        return;
+      }
+      maskStroke.strokeWidth = w;
+      final path = Path()..moveTo(pts.first.dx, pts.first.dy);
+      for (var i = 1; i < pts.length; i++) {
+        path.lineTo(pts[i].dx, pts[i].dy);
+      }
+      canvas.drawPath(path, maskStroke);
+    }
+
+    for (final s in strokes) {
+      drawStroke(s.pts, s.width);
+    }
+    drawStroke(currentStroke, brushWidth);
+    for (final r in rects) {
+      canvas.drawRect(r, maskFill);
+    }
+    if (currentRect != null) canvas.drawRect(currentRect!, maskFill);
+
+    canvas.restore();
+  }
+
+  static Rect _containRect(Size img, Size box) {
+    final imgAspect = img.width / img.height;
+    final boxAspect = box.width / box.height;
+    double w, h;
+    if (imgAspect > boxAspect) {
+      w = box.width;
+      h = w / imgAspect;
+    } else {
+      h = box.height;
+      w = h * imgAspect;
+    }
+    return Rect.fromCenter(
+        center: Offset(box.width / 2, box.height / 2), width: w, height: h);
+  }
+
+  @override
+  bool shouldRepaint(_BlurPainter o) => true;
+}
+
 // ── Toolbars ──────────────────────────────────────────────────────────────────
+
+class _BlurToolbar extends StatelessWidget {
+  final bool rectMode;
+  final double width;
+  final double sigma;
+  final ValueChanged<bool> onRectMode;
+  final ValueChanged<double> onWidthChange;
+  final ValueChanged<double> onSigmaChange;
+
+  const _BlurToolbar({
+    required this.rectMode,
+    required this.width,
+    required this.sigma,
+    required this.onRectMode,
+    required this.onWidthChange,
+    required this.onSigmaChange,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget seg(IconData ic, String label, bool selected, VoidCallback onTap) =>
+        Expanded(
+          child: GestureDetector(
+            onTap: onTap,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                color: selected ? Colors.white24 : Colors.white10,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Icon(ic, color: Colors.white, size: 20),
+                Text(label,
+                    style: const TextStyle(color: Colors.white, fontSize: 11)),
+              ]),
+            ),
+          ),
+        );
+    return Container(
+      color: Colors.black,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(children: [
+            seg(Icons.brush, 'Кисть', !rectMode, () => onRectMode(false)),
+            seg(Icons.crop_square, 'Область', rectMode, () => onRectMode(true)),
+          ]),
+          Row(children: [
+            const Text('Сила',
+                style: TextStyle(color: Colors.white70, fontSize: 12)),
+            Expanded(
+              child: Slider(
+                  value: sigma, min: 4, max: 28, onChanged: onSigmaChange),
+            ),
+            if (!rectMode) ...[
+              const Text('Кисть',
+                  style: TextStyle(color: Colors.white70, fontSize: 12)),
+              Expanded(
+                child: Slider(
+                    value: width, min: 3, max: 30, onChanged: onWidthChange),
+              ),
+            ],
+          ]),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Text('Проведите по тому, что нужно скрыть',
+                style: TextStyle(color: Colors.white38, fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _DrawToolbar extends StatelessWidget {
   final List<Color> colors;
