@@ -17,6 +17,7 @@ import '../../models/contact.dart';
 import '../../models/user_profile.dart';
 import '../../services/app_settings.dart';
 import '../../services/app_lock_service.dart';
+import 'device_security_screen.dart';
 import '../../services/app_icon_service.dart';
 import '../../services/google_drive_channel_backup.dart';
 import '../../services/transcription_engine.dart';
@@ -2301,6 +2302,15 @@ class _PrivacyPageState extends State<_PrivacyPage> {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
           _SectionHeader(AppL10n.t('settings_privacy')),
+          ListTile(
+            leading: Icon(Icons.shield_outlined, color: cs.primary),
+            title: const Text('Безопасность устройства'),
+            subtitle: Text('Как защищены данные на этом устройстве',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const DeviceSecurityScreen())),
+          ),
           SwitchListTile(
             secondary: Icon(Icons.done_all_rounded,
                 color: settings.showReadReceipts

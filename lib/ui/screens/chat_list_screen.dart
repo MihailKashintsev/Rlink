@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -42,6 +43,7 @@ import '../../utils/message_preview_formatter.dart'
 import 'channels_screen.dart';
 import 'bot_catalog_screen.dart';
 import 'chat_screen.dart';
+import 'device_security_screen.dart';
 import 'ether_screen.dart';
 import 'groups_screen.dart';
 import 'location_map_screen.dart';
@@ -77,6 +79,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     registerUpdateBannerListener();
     ChatStorageService.instance.loadContacts();
     _maybeShowIntro();
+    // One-time web at-rest risk notice — only once the intro is already done, so
+    // it doesn't collide with the first-run intro/guide flow.
+    if (kIsWeb && AppSettings.instance.hasSeenIntro) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) showWebSecurityNoticeOnce(context);
+      });
+    }
   }
 
   void _maybeShowIntro() {
