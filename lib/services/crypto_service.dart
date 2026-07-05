@@ -300,17 +300,115 @@ class CryptoService {
 
     final ephemeralPubKey = await ephemeralKeyPair.extractPublicKey();
 
+    final epkB64 = base64.encode(ephemeralPubKey.bytes);
+    final nonceB64 = base64.encode(nonce);
+    final ctB64 = base64.encode(secretBox.cipherText);
+    final macB64 = base64.encode(secretBox.mac.bytes);
+
+    // Authenticate the sender: sign the envelope with our Ed25519 identity key.
+    // Without this the `from` field is an unverified claim and a malicious relay
+    // could inject/spoof messages. Verified on receipt (verifyEncryptedEnvelope).
+    final signature = await signUtf8Message(_envelopeSigningInput(
+      senderPublicKey: publicKeyHex,
+      ephemeralPublicKey: epkB64,
+      nonce: nonceB64,
+      cipherText: ctB64,
+      mac: macB64,
+    ));
+
     debugPrint(
         '[RLINK][Crypto] Encrypted message: ct=${secretBox.cipherText.length}b');
 
     return EncryptedMessage(
       senderPublicKey: publicKeyHex,
-      ephemeralPublicKey: base64.encode(ephemeralPubKey.bytes),
-      nonce: base64.encode(nonce),
-      cipherText: base64.encode(secretBox.cipherText),
-      mac: base64.encode(secretBox.mac.bytes),
-      signature: '',
+      ephemeralPublicKey: epkB64,
+      nonce: nonceB64,
+      cipherText: ctB64,
+      mac: macB64,
+      signature: signature,
     );
+  }
+
+  /// Canonical byte-string signed over the encrypted envelope. Identical on the
+  /// sign (encrypt) and verify (receive) sides.
+  static String _envelopeSigningInput({
+    required String senderPublicKey,
+    required String ephemeralPublicKey,
+    required String nonce,
+    required String cipherText,
+    required String mac,
+  }) =>
+      'rlink.msg.v1|$senderPublicKey|$ephemeralPublicKey|$nonce|$cipherText|$mac';
+
+  /// Verifies the Ed25519 signature over an [EncryptedMessage] against its
+  /// claimed sender. Returns false for missing/invalid signatures — the DM
+  /// inbound path drops anything that fails, closing sender-spoofing/injection.
+  Future<bool> verifyEncryptedEnvelope(EncryptedMessage msg) async {
+    if (msg.signature.isEmpty || msg.senderPublicKey.isEmpty) return false;
+    try {
+      final input = _envelopeSigningInput(
+        senderPublicKey: msg.senderPublicKey,
+        ephemeralPublicKey: msg.ephemeralPublicKey,
+        nonce: msg.nonce,
+        cipherText: msg.cipherText,
+        mac: msg.mac,
+      );
+      final sigBytes = _hexToBytes(msg.signature);
+      final pubBytes = _hexToBytes(msg.senderPublicKey);
+      if (sigBytes.isEmpty || pubBytes.length != 32) return false;
+      return await _ed25519.verify(
+        utf8.encode(input),
+        signature: Signature(
+          sigBytes,
+          publicKey: SimplePublicKey(pubBytes, type: KeyPairType.ed25519),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[Crypto] verifyEncryptedEnvelope error: $e');
+      return false;
+    }
+  }
+
+  /// Safety number (like Signal's) — a stable 60-digit code both sides compute
+  /// identically from the two identity (Ed25519) public keys. If two people read
+  /// the same number aloud / scan the same QR, no relay has substituted keys.
+  /// Deterministic regardless of who is "local": keys are ordered by hex.
+  static Future<String> computeSafetyNumber(
+      String keyHexA, String keyHexB) async {
+    final a = _hexToBytes(keyHexA.trim().toLowerCase());
+    final b = _hexToBytes(keyHexB.trim().toLowerCase());
+    if (a.length != 32 || b.length != 32) return '';
+    final ordered = keyHexA.toLowerCase().compareTo(keyHexB.toLowerCase()) <= 0
+        ? <int>[...a, ...b]
+        : <int>[...b, ...a];
+    final input = <int>[...utf8.encode('rlink.safetynum.v1'), ...ordered];
+    final digest = (await Sha512().hash(input)).bytes; // 64 bytes
+    final sb = StringBuffer();
+    for (var g = 0; g < 12; g++) {
+      var v = 0;
+      for (var i = 0; i < 5; i++) {
+        v = (v * 256 + digest[g * 5 + i]) % 100000;
+      }
+      if (g > 0) sb.write(' ');
+      sb.write(v.toString().padLeft(5, '0'));
+    }
+    return sb.toString();
+  }
+
+  /// Safety number between me and [remoteEd25519Hex].
+  Future<String> safetyNumberWith(String remoteEd25519Hex) =>
+      computeSafetyNumber(publicKeyHex, remoteEd25519Hex);
+
+  static List<int> _hexToBytes(String hex) {
+    final h = hex.trim();
+    if (h.isEmpty || h.length.isOdd) return const [];
+    final out = <int>[];
+    for (var i = 0; i < h.length; i += 2) {
+      final b = int.tryParse(h.substring(i, i + 2), radix: 16);
+      if (b == null) return const [];
+      out.add(b);
+    }
+    return out;
   }
 
   static const List<int> _mediaMagic = [0x52, 0x4C, 0x4D, 0x31]; // RLM1

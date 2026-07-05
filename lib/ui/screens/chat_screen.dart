@@ -128,6 +128,7 @@ import 'emoji_hub_screen.dart';
 import 'emoji_pack_detail_screen.dart';
 import 'stickers_hub_screen.dart';
 import 'text_selection_view_screen.dart';
+import 'safety_number_screen.dart';
 import '../widgets/app_background.dart';
 import '../widgets/composer_input_bar.dart';
 import '../widgets/message_actions_overlay.dart';
@@ -6949,6 +6950,11 @@ class _ChatScreenState extends State<ChatScreen> {
                               value: 'edit_contact',
                               child: Text(AppL10n.t('cs_edit_contact')),
                             ),
+                          if (!_isDmBot && !_savedMessagesLocalOnly)
+                            const PopupMenuItem(
+                              value: 'safety',
+                              child: Text('Код безопасности'),
+                            ),
                           if (!_isDmBot)
                             PopupMenuItem(
                               value: 'peer_stickers',
@@ -6976,6 +6982,25 @@ class _ChatScreenState extends State<ChatScreen> {
                         switch (v) {
                           case 'profile':
                             _openPeerProfile();
+                            break;
+                          case 'safety':
+                            final c = await ChatStorageService.instance
+                                .getContact(_resolvedPeerId);
+                            final x = RelayService.instance
+                                    .getPeerX25519Key(_resolvedPeerId) ??
+                                c?.x25519Key ??
+                                '';
+                            if (!context.mounted) break;
+                            await Navigator.push<void>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SafetyNumberScreen(
+                                  peerId: _resolvedPeerId,
+                                  peerName: widget.peerNickname,
+                                  peerX25519Key: x.trim(),
+                                ),
+                              ),
+                            );
                             break;
                           case 'exchange_profiles':
                             await _exchangeProfilesAgain();

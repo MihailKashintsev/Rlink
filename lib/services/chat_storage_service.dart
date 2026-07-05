@@ -11,6 +11,7 @@ import '../utils/reaction_emoji_key.dart';
 import '../utils/reaction_limit.dart';
 import '../utils/message_preview_formatter.dart';
 import '../models/contact.dart';
+import 'contact_trust_service.dart';
 import 'image_service.dart';
 
 Future<void> _backfillDmReadCursors(Database db) async {
@@ -663,6 +664,11 @@ class ChatStorageService {
   /// Persist X25519 key for a contact (for E2E encryption across restarts)
   Future<void> updateContactX25519Key(String id, String x25519Key) async {
     final key = normalizeDmPeerId(id);
+    // Flag a changed encryption key on an already-verified contact (possible
+    // MITM) — onKeyObserved compares against the user-verified key.
+    if (x25519Key.isNotEmpty) {
+      unawaited(ContactTrustService.instance.onKeyObserved(key, x25519Key));
+    }
     await _db?.update(
       'contacts',
       {'x25519_key': x25519Key},

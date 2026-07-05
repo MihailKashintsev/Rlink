@@ -1385,6 +1385,31 @@ class GossipRouter {
     Map<String, dynamic> payload = const <String, dynamic>{},
   }) async {
     final rid8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : null;
+    // E2E-encrypt the signaling. The SDP carries the DTLS fingerprints that
+    // authenticate the media handshake — if it travels in plaintext the relay
+    // can swap them and MITM the call. We need the recipient's X25519 key to
+    // encrypt; without it we abort rather than fall back to plaintext.
+    if (recipientX25519KeyBase64.trim().isEmpty) {
+      debugPrint(
+          '[RLINK][Gossip] call_sig: no recipient X25519 key — refusing to send plaintext signaling');
+      return;
+    }
+    final inner = <String, dynamic>{
+      'from': fromId,
+      'cid': callId,
+      'st': signalType,
+      if (payload.isNotEmpty) 'd': payload,
+    };
+    EncryptedMessage encrypted;
+    try {
+      encrypted = await CryptoService.instance.encryptMessage(
+        plaintext: jsonEncode(inner),
+        recipientX25519KeyBase64: recipientX25519KeyBase64,
+      );
+    } catch (e) {
+      debugPrint('[RLINK][Gossip] call_sig encrypt failed: $e');
+      return;
+    }
     final packet = GossipPacket(
       id: _uuid.v4(),
       type: 'call_sig',
@@ -1392,11 +1417,8 @@ class GossipRouter {
       timestamp: DateTime.now().millisecondsSinceEpoch,
       recipientId: recipientId,
       payload: <String, dynamic>{
-        'from': fromId,
-        'cid': callId,
-        'st': signalType,
+        ...encrypted.toJson(),
         if (rid8 != null) 'r': rid8,
-        if (payload.isNotEmpty) 'd': payload,
       },
     );
     _markSeen(packet.id);
@@ -1654,6 +1676,17 @@ class GossipRouter {
             encrypted.mac.isEmpty) {
           debugPrint(
               '[RLINK][Gossip] Dropping malformed msg packet (missing fields)');
+          return;
+        }
+        // Authenticate the sender before accepting: reject any DM whose Ed25519
+        // signature over the envelope doesn't verify against the claimed sender.
+        // Closes relay/peer message injection & spoofing (hard cutover — no
+        // accept-unsigned fallback).
+        if (!await CryptoService.instance.verifyEncryptedEnvelope(encrypted)) {
+          final sp = encrypted.senderPublicKey;
+          debugPrint(
+              '[RLINK][Gossip] Dropping msg with bad/missing signature from '
+              '${sp.substring(0, sp.length.clamp(0, 8))}');
           return;
         }
         final handler = onMessageReceived;
@@ -2032,20 +2065,25 @@ class GossipRouter {
         if (!_matchesRid8(myPublicKey, rid8)) {
           return;
         }
-        Map<String, dynamic> callMap;
         final encrypted = EncryptedMessage.fromJson(packet.payload);
-        if (encrypted.ephemeralPublicKey.isNotEmpty &&
-            encrypted.nonce.isNotEmpty &&
-            encrypted.cipherText.isNotEmpty &&
-            encrypted.mac.isNotEmpty) {
-          final plain = await CryptoService.instance.decryptMessage(encrypted);
-          if (plain == null || plain.isEmpty) return;
-          final decoded = jsonDecode(plain);
-          if (decoded is! Map) return;
-          callMap = Map<String, dynamic>.from(decoded);
-        } else {
-          callMap = packet.payload;
+        // Require encrypted + signed signaling — no plaintext fallback (would let
+        // the relay MITM DTLS fingerprints) and no unauthenticated caller.
+        if (encrypted.ephemeralPublicKey.isEmpty ||
+            encrypted.nonce.isEmpty ||
+            encrypted.cipherText.isEmpty ||
+            encrypted.mac.isEmpty) {
+          debugPrint('[RLINK][Gossip] Dropping plaintext/malformed call_sig');
+          return;
         }
+        if (!await CryptoService.instance.verifyEncryptedEnvelope(encrypted)) {
+          debugPrint('[RLINK][Gossip] Dropping call_sig with bad signature');
+          return;
+        }
+        final plain = await CryptoService.instance.decryptMessage(encrypted);
+        if (plain == null || plain.isEmpty) return;
+        final decoded = jsonDecode(plain);
+        if (decoded is! Map) return;
+        final callMap = Map<String, dynamic>.from(decoded);
         final from = callMap['from'] as String?;
         final callId = callMap['cid'] as String?;
         final signalType = callMap['st'] as String?;
