@@ -1,16 +1,27 @@
 name: Release
 
+# Builds signed Android (AAB + APK), macOS and Windows on a v*.*.* tag and
+# publishes them as ONE release to the PUBLIC repo MihailKashintsev/Rlink-releases
+# (the private source repo Rlink never gets release artifacts).
+#
+# The desktop in-app updater (lib/services/update_service.dart) reads that public
+# repo by default and matches assets ending in _macos.zip / _windows.zip, so it
+# needs NO token baked into the binary — we intentionally do not pass GITHUB_PAT.
+#
+# Requires secrets on THIS repo: KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_PASSWORD,
+# KEY_ALIAS (Android signing) and RELEASES_PAT (contents:write on Rlink-releases).
+
 on:
   push:
     tags:
       - 'v*.*.*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-android:
-    name: Build Android AAB (RuStore)
+    name: Build Android (AAB + APK)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,20 +44,34 @@ jobs:
           keyAlias=${{ secrets.KEY_ALIAS }}
           storeFile=keystore.jks
           EOF
+      # ubuntu-latest has ~7 GB RAM; the project's android/gradle.properties asks
+      # for -Xmx8G which OOMs the Gradle daemon (exit 143). Override just in the
+      # runner workspace — the repo file is untouched.
+      - name: Tune Gradle memory for CI runner
+        run: |
+          cat > android/gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:ReservedCodeCacheSize=384m -XX:+HeapDumpOnOutOfMemoryError
+          android.useAndroidX=true
+          org.gradle.daemon=false
+          org.gradle.parallel=false
+          org.gradle.workers.max=2
+          EOF
       - run: flutter pub get
-      - name: Build AAB
+      - name: Build AAB (RuStore)
         run: flutter build appbundle --release
-      - name: Build APK
+      - name: Build APK (site)
         run: flutter build apk --release
       - name: Rename
         run: |
           V="${{ github.ref_name }}"
           cp build/app/outputs/bundle/release/app-release.aab   rlink_${V}_rustore.aab
-          cp build/app/outputs/flutter-apk/app-release.apk      rlink_${V}_android.apk
+          cp build/app/outputs/flutter-apk/app-release.apk      Rlink-${V}.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: rlink_*
+          path: |
+            rlink_*_rustore.aab
+            Rlink-*.apk
 
   build-windows:
     name: Build Windows
@@ -59,19 +84,17 @@ jobs:
           channel: 'stable'
           cache: true
       - run: flutter pub get
+      # No GITHUB_* dart-defines: the updater defaults to the public Rlink-releases
+      # repo and reads it anonymously, so no write-capable token is baked in.
       - name: Build
-        run: |
-          flutter build windows --release `
-            --dart-define=GITHUB_PAT=${{ secrets.RELEASES_PAT }} `
-            --dart-define=GITHUB_OWNER=${{ github.repository_owner }} `
-            --dart-define=GITHUB_REPO=${{ github.event.repository.name }}
+        run: flutter build windows --release
       - name: ZIP
         shell: pwsh
         run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "rlink_${{ github.ref_name }}_windows.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: rlink_*.zip
+          path: rlink_*_windows.zip
 
   build-macos:
     name: Build macOS
@@ -85,11 +108,7 @@ jobs:
           cache: true
       - run: flutter pub get
       - name: Build
-        run: |
-          flutter build macos --release \
-            --dart-define=GITHUB_PAT=${{ secrets.RELEASES_PAT }} \
-            --dart-define=GITHUB_OWNER=${{ github.repository_owner }} \
-            --dart-define=GITHUB_REPO=${{ github.event.repository.name }}
+        run: flutter build macos --release
       - name: ZIP
         run: |
           cd build/macos/Build/Products/Release
@@ -97,22 +116,30 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: macos
-          path: rlink_*.zip
+          path: rlink_*_macos.zip
 
-  create-release:
-    name: Create Release
+  publish:
+    name: Publish to Rlink-releases
     needs: [build-android, build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
+          repository: MihailKashintsev/Rlink-releases
+          tag_name: ${{ github.ref_name }}
           name: "Rlink ${{ github.ref_name }}"
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: artifacts/*
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASES_PAT }}
+          body: |
+            Rlink ${{ github.ref_name }}
+
+            • Android APK: `Rlink-${{ github.ref_name }}.apk` (установи, разрешив «неизвестные источники»)
+            • macOS: `rlink_${{ github.ref_name }}_macos.zip`
+            • Windows: `rlink_${{ github.ref_name }}_windows.zip`
+            • RuStore AAB: `rlink_${{ github.ref_name }}_rustore.aab`

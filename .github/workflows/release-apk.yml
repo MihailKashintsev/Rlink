@@ -15,10 +15,11 @@ name: Release APK (public)
 #   - Fine-grained PAT: Repository access → Only select repositories →
 #     Rlink-releases; Permissions → Contents: Read and write.
 
+# NOTE: superseded by release.yml, which builds a SIGNED APK (+ AAB, macOS,
+# Windows) and publishes them to Rlink-releases on every v*.*.* tag. This
+# workflow is kept for manual, APK-only rebuilds but no longer runs on tags
+# (it produced a DEBUG-signed APK because it never loads the keystore).
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       tag:
