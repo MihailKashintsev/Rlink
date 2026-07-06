@@ -304,8 +304,11 @@ Future<void> _broadcastProfileMusic(
     if (RelayService.instance.isConnected) {
       final ts = DateTime.now().millisecondsSinceEpoch;
       final msgId = 'profile_music_${myPublicKey.substring(0, 16)}_$ts';
+      var sent = 0;
       for (final c in contacts) {
         if (isDmBotPeerId(c.publicKeyHex)) continue;
+        // Online-only, to avoid a spurious relay push for offline contacts.
+        if (!RelayService.instance.isPeerOnline(c.publicKeyHex)) continue;
         try {
           final sealed = await _sealServiceMediaForPeer(
             compressed,
@@ -319,10 +322,10 @@ Future<void> _broadcastProfileMusic(
             msgId: msgId,
             compressedData: sealed,
           );
+          sent++;
         } catch (_) {}
       }
-      debugPrint(
-          '[RLINK][Music] Relay profile music → ${contacts.length} contacts');
+      debugPrint('[RLINK][Music] Relay profile music → $sent online contacts');
     }
     if (AppSettings.instance.connectionMode != 1) {
       for (final c in contacts) {
@@ -3153,14 +3156,22 @@ Future<void> sendProfileToAllContacts() async {
   final myKey = CryptoService.instance.publicKeyHex;
   if (myProfile == null || myKey.isEmpty) return;
 
-  // 1) Relay unicast (fast path for online contacts).
+  // 1) Relay unicast — ONLY to online contacts. Sending a profile packet to an
+  // offline contact sits in the relay mailbox, and since the relay can't see the
+  // E2E-encrypted packet type it fires a web push — so an offline contact would
+  // get a spurious "notification" just because we reconnected. Offline contacts
+  // receive our profile when they next come online, via _onRelayPeerOnline →
+  // _sendFullProfileToPeer (delivered while they're online, so no push).
   if (RelayService.instance.isConnected) {
     final contacts = await ChatStorageService.instance.getContacts();
+    var sent = 0;
     for (final c in contacts) {
       if (isDmBotPeerId(c.publicKeyHex)) continue;
+      if (!RelayService.instance.isPeerOnline(c.publicKeyHex)) continue;
       unawaited(_sendFullProfileToPeer(c.publicKeyHex));
+      sent++;
     }
-    debugPrint('[RLINK][Profile] Relay-pushed to ${contacts.length} contacts');
+    debugPrint('[RLINK][Profile] Relay-pushed to $sent online contacts');
   }
 
   // 2) Gossip broadcast (BLE / WiFi-Direct mesh).
@@ -3343,8 +3354,13 @@ Future<void> _broadcastAvatar(String myPublicKey, String imagePath) async {
         final ts = DateTime.now().millisecondsSinceEpoch;
         final blobMsgId = 'avatar_${myPublicKey.substring(0, 16)}_$ts';
         final contacts = await ChatStorageService.instance.getContacts();
+        var sent = 0;
         for (final c in contacts) {
           if (isDmBotPeerId(c.publicKeyHex)) continue;
+          // Online-only: an avatar blob mailboxed for an offline contact would
+          // trigger a spurious relay web push. They get it on reconnect via
+          // _onRelayPeerOnline → _sendFullProfileToPeer.
+          if (!RelayService.instance.isPeerOnline(c.publicKeyHex)) continue;
           try {
             final sealed = await _sealServiceMediaForPeer(
               compressed,
@@ -3359,10 +3375,10 @@ Future<void> _broadcastAvatar(String myPublicKey, String imagePath) async {
               compressedData: sealed,
               isSquare: true,
             );
+            sent++;
           } catch (_) {}
         }
-        debugPrint(
-            '[RLINK][Avatar] Sent relay blob to ${contacts.length} contacts');
+        debugPrint('[RLINK][Avatar] Sent relay blob to $sent online contacts');
       } catch (e) {
         debugPrint('[RLINK][Avatar] Relay blob failed: $e');
       }
@@ -3425,10 +3441,13 @@ Future<void> _broadcastBanner(String myPublicKey, String bannerPath) async {
       // Уникальный msgId — обход дедупа приёмника.
       final ts = DateTime.now().millisecondsSinceEpoch;
       final msgId = 'banner_${myPublicKey.substring(0, 16)}_$ts';
-      // Relay: send to all online contacts
+      // Relay: send only to ONLINE contacts (a blob mailboxed for an offline
+      // contact triggers a spurious web push; they get it on reconnect via
+      // _onRelayPeerOnline).
       final contacts = await ChatStorageService.instance.getContacts();
       for (final c in contacts) {
         if (isDmBotPeerId(c.publicKeyHex)) continue;
+        if (!RelayService.instance.isPeerOnline(c.publicKeyHex)) continue;
         try {
           final sealed = await _sealServiceMediaForPeer(
             compressed,
