@@ -1957,13 +1957,18 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       _sendProgress = 0.0;
     });
     try {
+      // Compress on web (the editor exports a large PNG; native does this via
+      // compressAndSave). Keeps the post under the 4 MB Drive-snapshot embed cap
+      // so it survives history re-pulls, and cuts the gossip chunk count so
+      // other subscribers actually receive it.
+      final bytes = await ImageService.instance.compressBytesForWeb(rawBytes);
       final postId = _uuid.v4();
       final stored = await writeWebStoredFile(
         fileName: '${postId}_post.jpg',
-        bytes: rawBytes,
+        bytes: bytes,
         mimeType: 'image/jpeg',
       );
-      final chunks = ImageService.instance.splitToBase64Chunks(rawBytes);
+      final chunks = ImageService.instance.splitToBase64Chunks(bytes);
       await GossipRouter.instance.sendImgMeta(
         msgId: postId,
         totalChunks: chunks.length,

@@ -202,6 +202,50 @@ class ImageService {
     return compressAndSave(sourcePath);
   }
 
+  /// Web-safe compression of in-memory image bytes (no dart:io, no plugin —
+  /// flutter_image_compress has no web implementation). Downscales the longest
+  /// side to [maxSide] and re-encodes as JPEG via the pure-Dart `image` package.
+  ///
+  /// Needed because the web photo editor exports a full-resolution PNG (at
+  /// pixelRatio 2.5), which on a large desktop browser is several MB. Left raw,
+  /// a channel post image (a) exceeds the 4 MB snapshot-embed cap so the Google
+  /// Drive backup drops it (image vanishes on the next history pull) and (b)
+  /// splits into tens of thousands of 90-byte gossip chunks that never fully
+  /// reach other subscribers. Returns the original bytes if decode/encode fails
+  /// or if compression doesn't actually shrink them.
+  Future<Uint8List> compressBytesForWeb(
+    Uint8List src, {
+    int maxSide = 1600,
+    int quality = 82,
+  }) async {
+    try {
+      // Never re-encode GIFs — encodeJpg would flatten them to a single static
+      // frame and drop the animation.
+      if (src.length >= 4 &&
+          src[0] == 0x47 &&
+          src[1] == 0x49 &&
+          src[2] == 0x46 &&
+          src[3] == 0x38) {
+        return src;
+      }
+      final decoded = img.decodeImage(src);
+      if (decoded == null) return src;
+      var out = decoded;
+      final longest =
+          decoded.width >= decoded.height ? decoded.width : decoded.height;
+      if (longest > maxSide) {
+        out = decoded.width >= decoded.height
+            ? img.copyResize(decoded, width: maxSide)
+            : img.copyResize(decoded, height: maxSide);
+      }
+      final jpg = img.encodeJpg(out, quality: quality);
+      return jpg.length < src.length ? Uint8List.fromList(jpg) : src;
+    } catch (e) {
+      debugPrint('[ImageService] compressBytesForWeb failed: $e');
+      return src;
+    }
+  }
+
   /// Сохраняет аватар контакта по его publicKeyHex (перезаписывает).
   Future<String> saveContactAvatar(String publicKeyHex, Uint8List data) async {
     final key = publicKeyHex.length >= 16

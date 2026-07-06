@@ -17,6 +17,7 @@ import '../../utils/rlink_deep_link.dart';
 import '../../utils/web_file_store.dart';
 import '../widgets/avatar_widget.dart';
 import 'channel_admin_settings_screen.dart';
+import 'channel_profile_edit_dialog.dart';
 
 /// Профиль канала (баннер, аватар, описание) — доступен подписчикам.
 class ChannelProfileScreen extends StatefulWidget {
@@ -262,6 +263,11 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
     final isMod = ch.moderatorIds.contains(myId);
     final canOpenGeneralSettings =
         isAdmin || (isMod && ch.allowModeratorsManageDriveAccount);
+    // A plain moderator (no owner/Drive rights) still manages the channel:
+    // editing info + deleting posts, but not deleting the channel or touching
+    // the Drive account. Give them a discoverable gear that opens the edit
+    // dialog (post deletion already works from the feed via canPost).
+    final canManageAsModerator = isMod && !canOpenGeneralSettings;
     final subscribed = ch.subscriberIds.contains(myId) || isAdmin;
     final bannerRaw = ch.bannerImagePath;
     final bannerResolved =
@@ -306,22 +312,40 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                   );
                 },
               ),
-              if (canOpenGeneralSettings)
+              if (canOpenGeneralSettings || canManageAsModerator)
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
-                  tooltip: 'Настройки канала',
+                  tooltip: canOpenGeneralSettings
+                      ? 'Настройки канала'
+                      : 'Управление каналом',
                   onPressed: () {
-                    Navigator.push<void>(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => ChannelAdminSettingsScreen(
-                          channelId: ch.id,
-                          allowModeratorDriveManagement: isMod &&
-                              !isAdmin &&
-                              ch.allowModeratorsManageDriveAccount,
+                    if (canOpenGeneralSettings) {
+                      Navigator.push<void>(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => ChannelAdminSettingsScreen(
+                            channelId: ch.id,
+                            allowModeratorDriveManagement: isMod &&
+                                !isAdmin &&
+                                ch.allowModeratorsManageDriveAccount,
+                          ),
                         ),
-                      ),
-                    ).then((_) => _load());
+                      ).then((_) => _load());
+                    } else {
+                      // Plain moderator: manage channel info (no policy toggles,
+                      // no channel deletion, no Drive/admin controls).
+                      // The dialog persists + broadcasts visuals itself; the
+                      // callback only refreshes this screen.
+                      showChannelProfileEditDialog(
+                        context,
+                        channel: ch,
+                        showPolicyToggles: false,
+                        myId: myId,
+                        onChannelUpdated: (_) {
+                          if (mounted) _load();
+                        },
+                      );
+                    }
                   },
                 ),
             ],
