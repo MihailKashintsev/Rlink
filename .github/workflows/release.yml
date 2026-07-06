@@ -84,6 +84,28 @@ jobs:
           channel: 'stable'
           cache: true
       - run: flutter pub get
+      # flutter_webrtc's third_party/CMakeLists.txt extracts libwebrtc.zip into a
+      # path that runs THROUGH the flutter/ephemeral/.plugin_symlinks/flutter_webrtc
+      # symlink, which CMake >=3.28 refuses ("Cannot extract through symlink"). Pre-
+      # extract libwebrtc into the REAL pub-cache dir so the CMake guard finds it
+      # already present and skips the failing extract.
+      - name: Pre-extract libwebrtc (avoid symlink extract failure)
+        shell: pwsh
+        run: |
+          $base = if ($env:PUB_CACHE) { $env:PUB_CACHE } else { "$env:LOCALAPPDATA\Pub\Cache" }
+          $plugin = Get-ChildItem "$base\hosted\pub.dev" -Directory -Filter "flutter_webrtc-*" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $plugin) { Write-Error "flutter_webrtc not found in pub cache ($base)"; exit 1 }
+          $tp = Join-Path $plugin.FullName "third_party"
+          $url = Select-String -Path (Join-Path $tp "CMakeLists.txt") -Pattern 'DOWNLOAD_URL "([^"]+)"' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1
+          if (-not $url) { $url = "https://github.com/flutter-webrtc/flutter-webrtc/releases/download/v1.4.0/libwebrtc.zip" }
+          Write-Host "libwebrtc url: $url  ->  $tp"
+          if (-not (Test-Path (Join-Path $tp "libwebrtc"))) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $tp "downloads") | Out-Null
+            $zip = Join-Path $tp "downloads\libwebrtc.zip"
+            Invoke-WebRequest -Uri $url -OutFile $zip
+            Expand-Archive -Path $zip -DestinationPath $tp -Force
+          }
+          Get-ChildItem $tp | Select-Object Name
       # No GITHUB_* dart-defines: the updater defaults to the public Rlink-releases
       # repo and reads it anonymously, so no write-capable token is baked in.
       - name: Build
