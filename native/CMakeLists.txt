@@ -50,9 +50,15 @@ else()
 endif()
 
 if(WIN32)
+    # whisper.cpp + ggml are compiled straight INTO whisper_bridge.dll, so their
+    # API macros must be dllEXPORT while building. Defining only *_SHARED makes
+    # GGML_API/WHISPER_API dllimport, and "defining a dllimport function" is a
+    # hard error (C2491) in ggml.c. Add *_BUILD so they resolve to dllexport.
     target_compile_definitions(whisper_bridge PRIVATE
         WHISPER_SHARED
         GGML_SHARED
+        WHISPER_BUILD
+        GGML_BUILD
     )
 endif()
 

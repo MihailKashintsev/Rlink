@@ -75,7 +75,10 @@ jobs:
 
   build-windows:
     name: Build Windows
-    runs-on: windows-latest
+    # Pin to the stable VS2022 image: windows-latest moved to a preview MSVC
+    # (14.51) that hard-errors on <experimental/coroutine> used by several
+    # plugins (audioplayers/gal/permission_handler/flutter_local_notifications).
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -108,7 +111,11 @@ jobs:
           Get-ChildItem $tp | Select-Object Name
       # No GITHUB_* dart-defines: the updater defaults to the public Rlink-releases
       # repo and reads it anonymously, so no write-capable token is baked in.
+      # CL env var injects the define into every cl.exe call so plugins that pull
+      # <experimental/coroutine> (audioplayers/gal/permission_handler/…) don't hard-error.
       - name: Build
+        env:
+          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
         run: flutter build windows --release
       - name: ZIP
         shell: pwsh
@@ -143,6 +150,10 @@ jobs:
   publish:
     name: Publish to Rlink-releases
     needs: [build-android, build-windows, build-macos]
+    # Publish as long as Android succeeded; don't let a flaky Windows toolchain
+    # hold the whole release hostage. macOS/Windows are included only if their
+    # jobs produced artifacts.
+    if: ${{ always() && needs.build-android.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
