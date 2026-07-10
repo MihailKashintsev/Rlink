@@ -586,6 +586,16 @@ class IncomingMessage {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Старт не должен умирать в чёрный экран: логируем ошибки фреймворка и
+  // необработанные async-ошибки и НЕ даём им прервать запуск приложения.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('[RLINK] FlutterError: ${details.exception}');
+  };
+  WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+    debugPrint('[RLINK] Uncaught async error: $error');
+    return true; // обработано — не роняем приложение
+  };
   // На web по умолчанию при выделении текста вылезает НАТИВНОЕ меню браузера,
   // перекрывая наш contextMenuBuilder. Отключаем его — тогда везде показывается
   // единое меню Rlink (копировать/вырезать/перевести/форматировать).
@@ -618,14 +628,24 @@ Future<void> main() async {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
   // UI: Google Sans; на Android — ещё Noto Color Emoji (ближе к «яблочному» виду).
-  try {
-    final pending = <dynamic>[GoogleFonts.googleSans()];
-    if (RuntimePlatform.isAndroid) pending.add(GoogleFonts.notoColorEmoji());
-    await GoogleFonts.pendingFonts(pending);
-  } catch (_) {}
+  // ВАЖНО: google_fonts тянет шрифты из сети (fonts.gstatic.com) в рантайме.
+  // Раньше это await'илось ДО runApp — и на сети, где Google режется/тормозит
+  // (частый кейс в РФ и у модераторов сторов), приложение навсегда зависало на
+  // нативном сплэше и «не запускалось». Теперь грузим в фоне с таймаутом: UI
+  // стартует сразу с системным шрифтом и переключается, когда шрифт подъедет.
+  unawaited(() async {
+    try {
+      final pending = <dynamic>[GoogleFonts.googleSans()];
+      if (RuntimePlatform.isAndroid) pending.add(GoogleFonts.notoColorEmoji());
+      await GoogleFonts.pendingFonts(pending)
+          .timeout(const Duration(seconds: 6));
+    } catch (_) {}
+  }());
   // Set the app-lock state before the first frame so no content flashes before
-  // the passcode screen appears.
-  await AppLockService.instance.init();
+  // the passcode screen appears. Guard it so a storage hiccup can't abort launch.
+  try {
+    await AppLockService.instance.init();
+  } catch (_) {}
   runApp(const ProviderScope(child: RlinkApp()));
 }
 
@@ -4184,15 +4204,19 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       if (RuntimePlatform.isDesktop) {
         await DesktopTrayService.instance.init();
       }
-      if (RuntimePlatform.isWeb) {
+      // Весь UI завязан на _ready ниже, поэтому инициализация ОБЯЗАНА завершиться
+      // даже если какой-то шаг завис (плохая/заблокированная сеть) или бросил
+      // исключение. Ограничиваем таймаутом + catch, иначе застрянем на сплэше
+      // («приложение не запускается»).
+      try {
         await initServices().timeout(
-          const Duration(seconds: 25),
+          const Duration(seconds: 20),
           onTimeout: () {
-            debugPrint('[RLINK][Init] Web startup timed out; continuing UI');
+            debugPrint('[RLINK][Init] startup timed out; showing UI anyway');
           },
         );
-      } else {
-        await initServices();
+      } catch (e, st) {
+        debugPrint('[RLINK][Init] startup failed: $e\n$st');
       }
       if (mounted) {
         setState(() {
