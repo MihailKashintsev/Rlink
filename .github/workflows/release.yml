@@ -127,7 +127,10 @@ jobs:
 
   build-macos:
     name: Build macOS
-    runs-on: macos-latest
+    # Pin the stable Xcode 15 / Swift 5.10 image: macos-latest moved to Xcode 16
+    # (Swift 6) whose stricter type checking rejects swift-transformers 1.1.9
+    # (a WhisperKit SPM dep) — Config.swift ObjectKey/Dictionary init errors.
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
