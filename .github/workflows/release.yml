@@ -208,5 +208,8 @@ jobs:
             if [ -f "artifacts/$f" ]; then $SCP "artifacts/$f" "$HOST:$DIR/$f"; else echo "skip missing $f"; fi
           done
           $SCP manifest.json "$HOST:$DIR/manifest.json"
-          $SSH $HOST "chmod -R 755 $DIR && ls -lah $DIR"
+          # Keep ONLY the current version on the relay: delete every older build
+          # so updates don't pile up and eat disk. GitHub Rlink-releases still
+          # keeps the full version history.
+          $SSH $HOST "cd $DIR && for f in Rlink-*.apk rlink_*_windows.zip rlink_*_macos.zip rlink_*_linux.tar.gz; do [ -e \"\$f\" ] || continue; case \"\$f\" in Rlink-${V}.apk|rlink_${V}_windows.zip|rlink_${V}_macos.zip|rlink_${V}_linux.tar.gz) : ;; *) rm -f \"\$f\" && echo \"removed old \$f\" ;; esac; done && chmod -R 755 $DIR && ls -lah $DIR"
           echo "relay update published: $V"
