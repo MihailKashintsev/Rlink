@@ -4177,7 +4177,8 @@ Future<void> _processBlobAssemble({
 }
 
 Future<void> _checkUpdate() async {
-  // Mobile (RuStore / App Store) builds never self-check for updates.
+  // Все нативные ОС проверяют обновления на нашем сервере (relay). На web
+  // isUpdateSupported == false — PWA обновляется сама при перезагрузке.
   if (!isUpdateSupported) return;
   await Future.delayed(const Duration(seconds: 5));
   final update = await UpdateService.instance.checkForUpdate();

@@ -35,6 +35,9 @@
     <!-- Скачивание файлов -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Установка обновления (скачанный APK через системный установщик) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Фон: relay + BLE после сворачивания / снятия с недавних -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />

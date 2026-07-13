@@ -23,6 +23,7 @@ import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import android.os.Build
 import android.os.ParcelUuid
 import android.os.PowerManager
@@ -267,6 +268,40 @@ class MainActivity : FlutterActivity() {
 
         // Native square video cropping
         VideoCropPlugin.register(flutterEngine.dartExecutor.binaryMessenger)
+
+        // In-app updater: install a downloaded APK via the system installer.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+                "com.rendergames.rlink/updates")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "installApk") {
+                    val path = call.argument<String>("path")
+                    if (path == null) {
+                        result.error("ARG", "missing path", null)
+                    } else {
+                        try {
+                            installApk(path)
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("INSTALL", e.message, null)
+                        }
+                    }
+                } else {
+                    result.notImplemented()
+                }
+            }
+    }
+
+    /// Открывает системный установщик для скачанного APK (обновление).
+    private fun installApk(path: String) {
+        val file = File(path)
+        val uri = FileProvider.getUriForFile(
+            this, "$packageName.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+        }
+        startActivity(intent)
     }
 
     private fun startProximityMonitoring() {

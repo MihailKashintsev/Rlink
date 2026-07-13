@@ -1,49 +1,44 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const _kGithubPat = String.fromEnvironment('GITHUB_PAT', defaultValue: '');
-const _kGithubOwner = String.fromEnvironment('GITHUB_OWNER', defaultValue: '');
-const _kGithubRepo = String.fromEnvironment('GITHUB_REPO', defaultValue: '');
+/// Обновления берём со СВОЕГО сервера (relay), а не с GitHub — в РФ GitHub
+/// часто режется/тормозит. Relay отдаёт манифест + сами бинарники:
+///   https://185.244.172.90.nip.io/updates/manifest.json
+/// Манифест: { version, notes, assets: { android|windows|macos|linux|ios } }.
+const _kUpdateManifestUrl =
+    'https://185.244.172.90.nip.io/updates/manifest.json';
 
-/// Публичные релизы (теги вида v0.0.9): https://github.com/MihailKashintsev/Rlink-releases/releases
-const _kDefaultReleaseOwner = 'MihailKashintsev';
-const _kDefaultReleaseRepo = 'Rlink-releases';
-
-/// Уведомление UI о доступном обновлении (после фоновой проверки GitHub).
+/// Уведомление UI о доступном обновлении (после фоновой проверки).
 final ValueNotifier<UpdateInfo?> pendingUpdateNotifier =
     ValueNotifier<UpdateInfo?>(null);
 
-Map<String, String> _githubApiHeaders() {
-  final h = <String, String>{
-    'Accept': 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-  };
-  if (_kGithubPat.isNotEmpty) {
-    h['Authorization'] = 'Bearer $_kGithubPat';
-  }
-  return h;
-}
-
-/// Само-обновление поддерживается ТОЛЬКО на десктопе (ассеты с GitHub).
-/// Мобильные сборки (Android/iOS) обновляются исключительно через магазин
-/// (RuStore / App Store) — правила RuStore запрещают предлагать установку/
-/// обновление в обход магазина, поэтому встроенную проверку обновлений на
-/// мобильных мы не выполняем.
+/// Проверка обновлений доступна на всех нативных ОС (не web).
+/// Установка различается: десктоп заменяет себя и перезапускается; Android
+/// скачивает APK и запускает системный установщик; iOS установить сам не может
+/// (песочница) — только открывает страницу загрузки, если она задана.
 bool get isUpdateSupported =>
     !kIsWeb &&
-    (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+    (Platform.isWindows ||
+        Platform.isMacOS ||
+        Platform.isLinux ||
+        Platform.isAndroid ||
+        Platform.isIOS);
 
 class UpdateInfo {
   final String version;
   final String body;
   final String downloadUrl;
   final String assetName;
-  /// true = открыть [downloadUrl] в браузере (страница установки); false = скачать ассет с GitHub (десктоп).
+
+  /// true = открыть [downloadUrl] в браузере (страница установки, iOS);
+  /// false = скачать ассет и установить (десктоп/Android).
   final bool openExternalDownloadPage;
 
   const UpdateInfo({
@@ -59,19 +54,14 @@ class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
 
+  static const _installChannel = MethodChannel('com.rendergames.rlink/updates');
+
   final _dio = Dio(BaseOptions(
-    baseUrl: 'https://api.github.com',
-    headers: _githubApiHeaders(),
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(minutes: 5),
   ));
 
   ValueNotifier<double?> downloadProgress = ValueNotifier(null);
-
-  String get _owner =>
-      _kGithubOwner.isNotEmpty ? _kGithubOwner : _kDefaultReleaseOwner;
-  String get _repo =>
-      _kGithubRepo.isNotEmpty ? _kGithubRepo : _kDefaultReleaseRepo;
 
   Future<UpdateInfo?> checkForUpdate() async {
     if (!isUpdateSupported) return null;
@@ -79,52 +69,45 @@ class UpdateService {
       final info = await PackageInfo.fromPlatform();
       final current = _normalizeVersionTag(info.version);
 
-      final response = await _dio.get(
-        '/repos/$_owner/$_repo/releases',
-        queryParameters: const {'per_page': '40'},
+      final response = await _dio.getUri(
+        Uri.parse(_kUpdateManifestUrl),
+        options: Options(responseType: ResponseType.plain),
       );
-      final list = response.data as List<dynamic>;
-      Map<String, dynamic>? bestRelease;
-      String? bestTag;
+      final data = response.data;
+      final Map<String, dynamic> manifest = data is String
+          ? jsonDecode(data) as Map<String, dynamic>
+          : Map<String, dynamic>.from(data as Map);
 
-      for (final raw in list) {
-        final m = raw as Map<String, dynamic>;
-        if (m['draft'] == true) continue;
-        if (m['prerelease'] == true) continue;
-        final tag = m['tag_name'] as String?;
-        if (tag == null) continue;
-        final norm = _normalizeVersionTag(tag);
-        if (!_isNewer(norm, current)) continue;
-        if (bestTag == null || _isNewer(norm, bestTag)) {
-          bestTag = norm;
-          bestRelease = m;
-        }
-      }
-      if (bestRelease == null || bestTag == null) return null;
+      final rawVersion = manifest['version'] as String? ?? '';
+      final latest = _normalizeVersionTag(rawVersion);
+      if (!_isNewer(latest, current)) return null;
 
-      final displayTag = bestRelease['tag_name'] as String? ?? bestTag;
+      final assets = manifest['assets'];
+      final url = _assetUrlForPlatform(
+          assets is Map ? Map<String, dynamic>.from(assets) : null);
+      // iOS не может установить сам: показываем баннер только если задана
+      // страница загрузки (assets.ios). Иначе не тревожим.
+      if (url == null || url.isEmpty) return null;
 
-      final assets = bestRelease['assets'] as List<dynamic>?;
-      if (assets == null) return null;
-      final asset = _findAssetForPlatform(assets);
-      if (asset == null) return null;
       return UpdateInfo(
-        version: displayTag,
-        body: bestRelease['body'] as String? ?? '',
-        downloadUrl: asset['url'] as String,
-        assetName: asset['name'] as String,
+        version: rawVersion.isNotEmpty ? rawVersion : latest,
+        body: manifest['notes'] as String? ?? '',
+        downloadUrl: url,
+        assetName: _fileNameFromUrl(url),
+        openExternalDownloadPage: Platform.isIOS,
       );
-    } on DioException catch (e) {
-      debugPrint('[UpdateService] ${e.message}');
+    } catch (e) {
+      debugPrint('[UpdateService] check failed: $e');
       return null;
     }
   }
 
-  /// Открывает страницу загрузки в браузере (мобильные) или скачивает архив (десктоп).
   Future<void> downloadAndInstall(UpdateInfo info) async {
     if (!isUpdateSupported) return;
 
-    if (info.openExternalDownloadPage) {
+    // iOS (и любой openExternalDownloadPage): установить из приложения нельзя —
+    // открываем страницу загрузки в браузере.
+    if (info.openExternalDownloadPage || Platform.isIOS) {
       final uri = Uri.parse(info.downloadUrl);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -145,12 +128,24 @@ class UpdateService {
         },
       );
       downloadProgress.value = 1.0;
-      if (Platform.isWindows) await _installWindows(filePath);
-      if (Platform.isMacOS) await _installMacOS(filePath);
-      if (Platform.isLinux) await _installLinux(filePath);
+      if (Platform.isWindows) {
+        await _installWindows(filePath);
+      } else if (Platform.isMacOS) {
+        await _installMacOS(filePath);
+      } else if (Platform.isLinux) {
+        await _installLinux(filePath);
+      } else if (Platform.isAndroid) {
+        await _installAndroid(filePath);
+      }
     } finally {
       downloadProgress.value = null;
     }
+  }
+
+  /// Android: отдаём APK нативному коду, который открывает системный установщик
+  /// (PackageInstaller). Приложение НЕ выходит — установщик работает поверх.
+  Future<void> _installAndroid(String apkPath) async {
+    await _installChannel.invokeMethod('installApk', {'path': apkPath});
   }
 
   Future<void> _installWindows(String zipPath) async {
@@ -191,18 +186,27 @@ class UpdateService {
     exit(0);
   }
 
-  Map<String, dynamic>? _findAssetForPlatform(List<dynamic> assets) {
-    final suffix = Platform.isWindows
-        ? '_windows.zip'
+  String? _assetUrlForPlatform(Map<String, dynamic>? assets) {
+    if (assets == null) return null;
+    final key = Platform.isWindows
+        ? 'windows'
         : Platform.isMacOS
-            ? '_macos.zip'
-            : '_linux.tar.gz';
-    for (final a in assets) {
-      if ((a['name'] as String).endsWith(suffix)) {
-        return a as Map<String, dynamic>;
-      }
-    }
-    return null;
+            ? 'macos'
+            : Platform.isLinux
+                ? 'linux'
+                : Platform.isAndroid
+                    ? 'android'
+                    : Platform.isIOS
+                        ? 'ios'
+                        : null;
+    if (key == null) return null;
+    return assets[key] as String?;
+  }
+
+  String _fileNameFromUrl(String url) {
+    final path = Uri.tryParse(url)?.path ?? url;
+    final name = path.split('/').last;
+    return name.isEmpty ? 'rlink_update' : name;
   }
 
   /// Приводит `v0.1.2` / `0.1.2` к виду `v0.1.2` для сравнения.

@@ -176,3 +176,37 @@ jobs:
             • macOS: `rlink_${{ github.ref_name }}_macos.zip`
             • Windows: `rlink_${{ github.ref_name }}_windows.zip`
             • RuStore AAB: `rlink_${{ github.ref_name }}_rustore.aab`
+
+      # Mirror the update to our OWN server (relay) so the in-app auto-updater
+      # doesn't depend on GitHub (throttled/blocked in RU). Uploads the binaries
+      # + regenerates the manifest the app polls. No-ops if the secret is absent.
+      - name: Publish update to relay (own server)
+        env:
+          RELAY_SSH_KEY: ${{ secrets.RELAY_SSH_KEY }}
+          V: ${{ github.ref_name }}
+        run: |
+          if [ -z "$RELAY_SSH_KEY" ]; then
+            echo "RELAY_SSH_KEY not set — skipping relay publish"; exit 0
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$RELAY_SSH_KEY" > ~/.ssh/relay && chmod 600 ~/.ssh/relay
+          SSH="ssh -i $HOME/.ssh/relay -o StrictHostKeyChecking=no -o ConnectTimeout=25"
+          SCP="scp -i $HOME/.ssh/relay -o StrictHostKeyChecking=no -o ConnectTimeout=25"
+          HOST=root@185.244.172.90
+          DIR=/var/www/rlink-updates
+          B=https://185.244.172.90.nip.io/updates
+          jq -n --arg v "$V" --arg b "$B" '{
+            version:$v, notes:("Обновление "+$v), publishedAt:(now|todate),
+            assets:{
+              android:($b+"/Rlink-"+$v+".apk"),
+              windows:($b+"/rlink_"+$v+"_windows.zip"),
+              macos:($b+"/rlink_"+$v+"_macos.zip"),
+              linux:"", web:$v
+            }}' > manifest.json
+          $SSH $HOST "mkdir -p $DIR"
+          for f in "Rlink-${V}.apk" "rlink_${V}_windows.zip" "rlink_${V}_macos.zip"; do
+            if [ -f "artifacts/$f" ]; then $SCP "artifacts/$f" "$HOST:$DIR/$f"; else echo "skip missing $f"; fi
+          done
+          $SCP manifest.json "$HOST:$DIR/manifest.json"
+          $SSH $HOST "chmod -R 755 $DIR && ls -lah $DIR"
+          echo "relay update published: $V"
