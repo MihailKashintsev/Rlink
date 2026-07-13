@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rlink — Как скачать</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+
+body {
+  font-family: 'Nunito', sans-serif;
+  background: #fff;
+  color: #111;
+  -webkit-font-smoothing: antialiased;
+}
+
+.w { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+
+/* HERO */
+.page-hero {
+  padding: 80px 0 56px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.eyebrow {
+  font-size: 11px; font-weight: 700;
+  color: #7c3aed; letter-spacing: .14em;
+  text-transform: uppercase; margin-bottom: 12px;
+}
+h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(32px, 6vw, 52px);
+  font-weight: 800; letter-spacing: -1.5px;
+  color: #0f0f0f; line-height: 1.05;
+  margin-bottom: 14px;
+}
+h1 .acc { color: #7c3aed; }
+.hero-sub {
+  font-size: 15px; color: #6b7280;
+  line-height: 1.65; max-width: 520px;
+}
+.hero-ver {
+  display: inline-block; margin-top: 14px;
+  background: #f5f3ff; border: 1px solid #ede9fe;
+  border-radius: 40px; padding: 4px 14px;
+  font-size: 12px; font-weight: 800; color: #7c3aed;
+}
+
+/* PLATFORM TABS */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin: 40px 0 32px;
+  flex-wrap: wrap;
+}
+.tab {
+  display: flex; align-items: center; gap: 7px;
+  padding: 8px 16px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 40px;
+  font-size: 13px; font-weight: 700;
+  color: #6b7280;
+  cursor: pointer;
+  background: #fff;
+  transition: all .18s;
+  font-family: 'Nunito', sans-serif;
+}
+.tab svg { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
+.tab.active, .tab:hover {
+  border-color: #7c3aed;
+  color: #7c3aed;
+  background: #f5f3ff;
+}
+
+/* INSTRUCTION PANELS */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* Steps */
+.steps { display: flex; flex-direction: column; gap: 0; margin-bottom: 32px; }
+
+.step {
+  display: flex;
+  gap: 20px;
+  position: relative;
+  padding-bottom: 32px;
+}
+.step:last-child { padding-bottom: 0; }
+
+/* vertical line */
+.step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 19px; top: 40px;
+  width: 1px;
+  bottom: 0;
+  background: #e5e7eb;
+}
+
+.step-num {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: #f5f3ff;
+  border: 1.5px solid #ede9fe;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-size: 15px; font-weight: 800;
+  color: #7c3aed;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.step-body { flex: 1; padding-top: 8px; }
+.step-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px; font-weight: 700;
+  color: #0f0f0f; margin-bottom: 6px;
+}
+.step-desc {
+  font-size: 14px; color: #6b7280;
+  line-height: 1.65; margin-bottom: 12px;
+}
+
+/* download button inside step */
+.step-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #7c3aed; color: #fff;
+  border-radius: 10px; padding: 11px 20px;
+  font-family: 'Syne', sans-serif;
+  font-size: 13px; font-weight: 700;
+  text-decoration: none; letter-spacing: .02em;
+  transition: background .18s, transform .14s;
+}
+.step-btn:hover { background: #6d28d9; transform: translateY(-1px); }
+.step-btn svg { width: 15px; height: 15px; fill: #fff; }
+
+/* secondary link */
+.step-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 700;
+  color: #7c3aed; text-decoration: none;
+  border-bottom: 1px solid #ede9fe;
+  transition: border-color .18s;
+}
+.step-link:hover { border-color: #7c3aed; }
+
+/* info box */
+.info-box {
+  background: #f8f7ff;
+  border: 1px solid #ede9fe;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13px; font-weight: 600;
+  color: #5b21b6;
+  line-height: 1.6;
+  margin-top: 12px;
+  display: flex; gap: 10px;
+}
+.info-box svg { width: 16px; height: 16px; fill: #7c3aed; flex-shrink: 0; margin-top: 1px; }
+
+/* warning box */
+.warn-box {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13px; font-weight: 600;
+  color: #92400e;
+  line-height: 1.6;
+  margin-top: 12px;
+  display: flex; gap: 10px;
+}
+.warn-box svg { width: 16px; height: 16px; fill: #f59e0b; flex-shrink: 0; margin-top: 1px; }
+
+/* code snippet */
+.code {
+  background: #1e1b2e;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-family: monospace;
+  font-size: 12.5px;
+  color: #c4b5fd;
+  margin-top: 10px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+/* FAQ */
+.faq { margin-top: 48px; border-top: 1px solid #f0f0f0; padding-top: 40px; }
+.faq-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px; font-weight: 800;
+  color: #0f0f0f; margin-bottom: 20px;
+}
+.faq-item {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 16px 0;
+}
+.faq-q {
+  font-family: 'Syne', sans-serif;
+  font-size: 14px; font-weight: 700;
+  color: #0f0f0f; margin-bottom: 8px;
+}
+.faq-a {
+  font-size: 13px; color: #6b7280;
+  line-height: 1.65; font-weight: 600;
+}
+
+.footnote {
+  text-align: center;
+  padding: 40px 0 24px;
+  font-size: 12px; color: #d1d5db;
+  font-weight: 600; letter-spacing: .04em;
+}
+
+@media(max-width:480px){
+  .page-hero { padding: 60px 0 40px; }
+  .step-num { width: 34px; height: 34px; font-size: 13px; }
+  .step:not(:last-child)::before { left: 16px; top: 34px; }
+}
+</style>
+</head>
+<body>
+
+<div class="w">
+
+  <!-- HERO -->
+  <div class="page-hero">
+    <div class="eyebrow">Инструкция</div>
+    <h1>Как скачать <span class="acc">Rlink</span></h1>
+    <p class="hero-sub">Выбери свою платформу — пошаговая инструкция по установке займёт меньше минуты.</p>
+    <div class="hero-ver">Актуальная версия: <span data-rl-ver>…</span></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('android')">
+      <svg viewBox="0 0 24 24"><path d="M6 18c0 .55.45 1 1 1h1v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h2v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h1c.55 0 1-.45 1-1V8H6v10zM3.5 8C2.67 8 2 8.67 2 9.5v7c0 .83.67 1.5 1.5 1.5S5 17.33 5 16.5v-7C5 8.67 4.33 8 3.5 8zm17 0c-.83 0-1.5.67-1.5 1.5v7c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-4.97-5.84l1.3-1.3c.2-.2.2-.51 0-.71-.2-.2-.51-.2-.71 0l-1.48 1.48A5.84 5.84 0 0012 1.5c-.69 0-1.35.12-1.96.33L8.56.35c-.2-.2-.51-.2-.71 0-.2.2-.2.51 0 .71l1.3 1.3A5.9 5.9 0 006 7h12a5.9 5.9 0 00-2.47-4.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z"/></svg>
+      Android
+    </button>
+    <button class="tab" onclick="switchTab('macos')">
+      <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+      macOS
+    </button>
+    <button class="tab" onclick="switchTab('windows')">
+      <svg viewBox="0 0 24 24"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.549H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+      Windows
+    </button>
+    <button class="tab" onclick="switchTab('linux')">
+      <svg viewBox="0 0 24 24"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376-.17-.2-.25-.535-.338-.926-.085-.4-.178-.86-.453-1.293-.34-.426-.7-.696-.888-.424-.305-.736-.9-1.002-1.423l-.202.406-.108.216c-.283.395-.636.624-1.015.756-.549.19-1.14.19-1.648.19-.506 0-.971-.015-1.352.17a.803.803 0 00-.3.25c-.058.08-.11.173-.155.478-.042.33.01.63.122.88.224.486.665.73 1.095.815.43.087.827.036 1.07-.063.24-.1.325-.215.343-.327.018-.13-.035-.26-.11-.36.058-.16.04-.337-.02-.5-.05-.165-.147-.307-.251-.44-.059-.158-.08-.339-.036-.525.04-.187.15-.373.37-.529.415-.288.74-.322 1.041-.266.304.053.596.185.852.243.27.058.527.036.71-.055.185-.09.294-.24.284-.45-.015-.208-.165-.45-.513-.674-.342-.22-.843-.41-1.408-.508-.152.002-.305.01-.46.012-.26-.006-.47.04-.664.082-.36.084-.633.112-.79.04-.33-.16-.578-.645-.547-1.025a.5.5 0 01.017-.093c.076-.276.252-.466.47-.553.214-.089.47-.084.73-.012.266.07.545.196.835.307.29.11.59.2.896.233.306.03.622-.007.91-.144.29-.135.554-.367.742-.712.39-.695.363-1.747.38-2.64.02-.894.098-1.73.66-2.47.551-.724 1.493-1.355 2.897-1.55.097.002.158-.048.142-.14C20.19 6.03 18.7 4.97 17 4.97c-.82 0-1.527.272-2.028.713-.5.44-.775 1.046-.775 1.646 0 .302.07.605.22.881.148.274.374.52.67.696.117-.24.12-.545.095-.79-.026-.245-.082-.432-.082-.432s.108.047.235.178c.126.13.27.362.35.677.079.32.094.7.014 1.068-.075.358-.24.72-.536.986-.295.264-.727.444-1.362.444-.476 0-1.024-.123-1.51-.32-.486-.197-.91-.468-1.21-.764-.297-.294-.47-.617-.544-.9a1.738 1.738 0 01-.023-.26c0-.405.111-.793.296-1.113.37-.647 1.025-1.065 1.718-1.197l.018-.005c.126-.029.234-.048.33-.063.195-.03.34-.052.463-.107a.66.66 0 00.29-.26c.064-.12.085-.275.068-.438a1.167 1.167 0 00-.18-.48 1.565 1.565 0 00-.36-.36c-.135-.097-.28-.16-.388-.188A1.02 1.02 0 0012.504 0z"/></svg>
+      Linux
+    </button>
+  </div>
+
+  <!-- ANDROID -->
+  <div class="panel active" id="panel-android">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Скачай APK-файл</div>
+          <div class="step-desc">Нажми кнопку ниже — файл <code data-rl-file="android">Rlink-….apk</code> начнёт скачиваться на твой Android.</div>
+          <a class="step-btn" data-rl="android" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" download>
+            <svg viewBox="0 0 24 24"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-6 2h12v2H6v-2z"/></svg>
+            Скачать Rlink для Android
+          </a>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Разреши установку из неизвестных источников</div>
+          <div class="step-desc">Android по умолчанию блокирует установку APK не из Play Store. Когда появится предупреждение — нажми <strong>«Настройки»</strong> и включи <strong>«Разрешить установку»</strong> для браузера или файлового менеджера.</div>
+          <div class="warn-box">
+            <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+            На MIUI (Xiaomi): Настройки → Конфиденциальность → Установка неизвестных приложений
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Открой скачанный файл</div>
+          <div class="step-desc">Перейди в папку <strong>Загрузки</strong> и нажми на файл <code data-rl-file="android">Rlink-….apk</code>. Подтверди установку.</div>
+          <div class="info-box">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+            Приложение занимает около 150 МБ. Установка займёт несколько секунд.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">Включи Bluetooth и запускай</div>
+          <div class="step-desc">Открой Rlink, разреши доступ к Bluetooth и геолокации (нужно для BLE). Готово — найди кого-то поблизости и начни общаться!</div>
+          <div class="info-box">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+            Дальше приложение обновляется само: когда выйдет новая версия, Rlink предложит обновиться в один тап.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MACOS -->
+  <div class="panel" id="panel-macos">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Скачай архив для macOS</div>
+          <div class="step-desc">Подходит только для Mac с чипом Apple Silicon (M1, M2, M3). Intel Mac пока не поддерживается.</div>
+          <a class="step-btn" data-rl="macos" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" download>
+            <svg viewBox="0 0 24 24"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-6 2h12v2H6v-2z"/></svg>
+            Скачать Rlink для macOS
+          </a>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Распакуй архив</div>
+          <div class="step-desc">Дважды кликни на скачанный <code data-rl-file="macos">Rlink-…_macos.zip</code> — он распакуется автоматически. Перетащи приложение <strong>Rlink.app</strong> в папку <strong>Программы (Applications)</strong>.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Обойди Gatekeeper</div>
+          <div class="step-desc">При первом запуске macOS покажет предупреждение «Приложение не может быть открыто». Это нормально для неподписанных приложений.</div>
+          <div class="warn-box">
+            <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+            Кликни правой кнопкой на Rlink.app → «Открыть» → «Открыть» ещё раз в диалоге. После первого раза предупреждение больше не появится.
+          </div>
+          <div class="code">sudo xattr -cr /Applications/Rlink.app</div>
+          <div class="step-desc" style="margin-top:8px">Или запусти команду выше в Терминале, если правый клик не помогает.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">Разреши Bluetooth</div>
+          <div class="step-desc">При первом запуске macOS запросит доступ к Bluetooth — нажми «Разрешить». Готово!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WINDOWS -->
+  <div class="panel" id="panel-windows">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Скачай архив для Windows</div>
+          <div class="step-desc">Портативная сборка для Windows 10/11 (x64). Устанавливать ничего не нужно — просто распакуй и запусти.</div>
+          <a class="step-btn" data-rl="windows" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" download>
+            <svg viewBox="0 0 24 24"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-6 2h12v2H6v-2z"/></svg>
+            Скачать Rlink для Windows
+          </a>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Распакуй архив</div>
+          <div class="step-desc">Кликни правой кнопкой на <code data-rl-file="windows">Rlink-…_windows.zip</code> → <strong>«Извлечь всё»</strong>. Помести папку в удобное место (например, в <strong>Документы</strong>).</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Запусти Rlink.exe</div>
+          <div class="step-desc">Открой распакованную папку и запусти <strong>rlink.exe</strong>. Windows SmartScreen может показать предупреждение — это нормально для приложений без подписи.</div>
+          <div class="warn-box">
+            <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+            Если появится «Система Windows защитила ваш компьютер» — нажми <strong>«Подробнее» → «Выполнить в любом случае»</strong>.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">Включи Bluetooth и запускай</div>
+          <div class="step-desc">Убедись, что на ПК включён Bluetooth, и начинай общаться с теми, кто рядом.</div>
+          <div class="info-box">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+            Обновления встроены: новая версия скачается и заменит приложение сама, по кнопке.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LINUX -->
+  <div class="panel" id="panel-linux">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Linux — скоро</div>
+          <div class="step-desc">Версия для Linux (.AppImage и .deb) находится в разработке.</div>
+          <a class="step-link" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" target="_blank">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:#7c3aed"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+            Страница релизов GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAQ -->
+  <div class="faq">
+    <div class="faq-title">Частые вопросы</div>
+    <div class="faq-item">
+      <div class="faq-q">Нужен ли интернет для работы Rlink?</div>
+      <div class="faq-a">Нет. Rlink работает полностью без интернета — через Bluetooth Low Energy и WiFi Direct. Сервера нет, всё P2P.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">На каком расстоянии работает связь?</div>
+      <div class="faq-a">Bluetooth Low Energy — до 30 метров, WiFi Direct — до 100+ метров. При наличии нескольких устройств сообщения передаются транзитом через mesh-сеть (до 7 промежуточных узлов).</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Безопасны ли мои сообщения?</div>
+      <div class="faq-a">Да. Rlink использует сквозное шифрование E2EE с эфемерными ключами X25519 и шифрованием ChaCha20-Poly1305. Никакие данные не проходят через сервер.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Нужна ли регистрация или номер телефона?</div>
+      <div class="faq-a">Нет. Rlink не требует ни регистрации, ни аккаунта, ни номера телефона. Просто установи и пользуйся.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Почему Android предупреждает об установке?</div>
+      <div class="faq-a">Rlink распространяется как APK-файл напрямую, минуя Play Store. Android предупреждает обо всех таких приложениях. Это нормально — просто разреши установку из неизвестных источников в настройках.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Приложение бесплатное?</div>
+      <div class="faq-a">Да, полностью бесплатно. Нет рекламы, нет подписки, нет скрытых платежей.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footnote">Rlink <span data-rl-ver>…</span> · © 2026 RENDERGAMES</div>
+
+<script>
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('panel-' + id).classList.add('active');
+}
+
+/* ═══ АКТУАЛЬНЫЕ ССЫЛКИ + ВЕРСИЯ (тянет манифест с нашего сервера) ═══ */
+(function () {
+  var MANIFEST = 'https://185.244.172.90.nip.io/updates/manifest.json';
+  function fname(u){ try { return decodeURIComponent(String(u).split('/').pop()); } catch(e){ return ''; } }
+  fetch(MANIFEST, { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (m) {
+      var v = m.version || '';
+      var a = m.assets || {};
+      document.querySelectorAll('[data-rl-ver]').forEach(function (el) { if (v) el.textContent = v; });
+      ['android','macos','windows','linux'].forEach(function (p) {
+        var url = a[p];
+        document.querySelectorAll('[data-rl="' + p + '"]').forEach(function (el) {
+          if (url) { el.setAttribute('href', url); el.classList.remove('disabled'); }
+        });
+        document.querySelectorAll('[data-rl-file="' + p + '"]').forEach(function (el) {
+          if (url) el.textContent = fname(url);
+        });
+      });
+    })
+    .catch(function () { /* манифест недоступен — остаются ссылки на страницу последнего релиза GitHub */ });
+})();
+</script>
+
+</body>
+</html>
