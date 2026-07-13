@@ -201,14 +201,15 @@ jobs:
           HOST=root@185.244.172.90
           DIR=/var/www/rlink-updates
           B=https://185.244.172.90.nip.io/updates
-          jq -n --arg v "$V" --arg b "$B" '{
+          # Only list a platform if its artifact actually built — otherwise the
+          # site/updater would point at a file that was never uploaded.
+          au=""; [ -f "artifacts/Rlink-${V}.apk" ]        && au="$B/Rlink-${V}.apk"
+          wu=""; [ -f "artifacts/rlink_${V}_windows.zip" ] && wu="$B/rlink_${V}_windows.zip"
+          mu=""; [ -f "artifacts/rlink_${V}_macos.zip" ]   && mu="$B/rlink_${V}_macos.zip"
+          jq -n --arg v "$V" --arg au "$au" --arg wu "$wu" --arg mu "$mu" '{
             version:$v, notes:("Обновление "+$v), publishedAt:(now|todate),
-            assets:{
-              android:($b+"/Rlink-"+$v+".apk"),
-              windows:($b+"/rlink_"+$v+"_windows.zip"),
-              macos:($b+"/rlink_"+$v+"_macos.zip"),
-              linux:"", web:$v
-            }}' > manifest.json
+            assets:{android:$au, windows:$wu, macos:$mu, linux:"", web:$v}
+          }' > manifest.json
           $SSH $HOST "mkdir -p $DIR"
           for f in "Rlink-${V}.apk" "rlink_${V}_windows.zip" "rlink_${V}_macos.zip"; do
             if [ -f "artifacts/$f" ]; then $SCP "artifacts/$f" "$HOST:$DIR/$f"; else echo "skip missing $f"; fi
