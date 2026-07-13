@@ -1,0 +1,494 @@
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+#rlink-dl *, #rlink-dl *::before, #rlink-dl *::after{box-sizing:border-box;margin:0;padding:0}
+
+#rlink-dl #rl-dl{
+  font-family: 'Syne', sans-serif;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  padding: 96px 24px;
+}
+#rlink-dl #rl-dl::before, #rlink-dl #rl-dl::after{
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 120px;
+  z-index: 3;
+  pointer-events: none;
+}
+#rlink-dl #rl-dl::before{
+  top: 0;
+  background: linear-gradient(to bottom, #ffffff, transparent);
+}
+#rlink-dl #rl-dl::after{
+  bottom: 0;
+  background: linear-gradient(to top, #ffffff, transparent);
+}
+
+#rlink-dl /* ── BLOBS ── */
+.blob-stage{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  contain: paint;
+}
+#rlink-dl .blob{
+  position: absolute;
+  border-radius: 50%;
+  transform: translateZ(0);
+  filter: blur(70px);
+  opacity:0.48;
+
+}
+#rlink-dl .blob-1{
+  width: 480px; height: 480px;
+  background: radial-gradient(circle, #c4b5fd, #7c3aed);
+  top: -140px; right: -60px;
+  animation: b1 16s ease-in-out infinite;
+}
+#rlink-dl .blob-2{
+  width: 380px; height: 380px;
+  background: radial-gradient(circle, #fbcfe8, #ec4899);
+  bottom: -80px; left: -80px;
+  animation: b2 13s ease-in-out infinite;
+}
+#rlink-dl .blob-3{
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, #bfdbfe, #3b82f6);
+  top: 40%; left: 10%;
+  animation: b3 19s ease-in-out infinite;
+}
+#rlink-dl .blob-4{
+  width: 240px; height: 240px;
+  background: radial-gradient(circle, #6ee7b7, #10b981);
+  top: 20%; right: 25%;
+  animation: b4 11s ease-in-out infinite;
+}
+#rlink-dl .blob-5{
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, #fed7aa, #f97316);
+  bottom: 20%; right: 5%;
+  animation: b5 15s ease-in-out infinite;
+}
+
+@keyframes b1 {
+  0%,100%{transform:translate(0,0) scale(1);border-radius:60% 40% 70% 30%/50% 60% 40% 60%}
+  33%{transform:translate(-60px,80px) scale(1.08);border-radius:40% 60% 30% 70%/60% 40% 60% 40%}
+  66%{transform:translate(-20px,40px) scale(0.95);border-radius:70% 30% 50% 50%/40% 70% 30% 60%}
+}
+@keyframes b2 {
+  0%,100%{transform:translate(0,0) scale(1);border-radius:50% 50% 40% 60%}
+  40%{transform:translate(70px,-60px) scale(1.1);border-radius:30% 70% 60% 40%}
+  70%{transform:translate(30px,-20px) scale(0.92);border-radius:60% 40% 50% 50%}
+}
+@keyframes b3 {
+  0%,100%{transform:translate(0,0) scale(1)}
+  50%{transform:translate(80px,-60px) scale(1.15)}
+}
+@keyframes b4 {
+  0%,100%{transform:translate(0,0) scale(1) rotate(0deg)}
+  50%{transform:translate(-50px,60px) scale(1.2) rotate(60deg)}
+}
+@keyframes b5 {
+  0%,100%{transform:translate(0,0) scale(1)}
+  50%{transform:translate(-60px,-80px) scale(1.1)}
+}
+
+#rlink-dl /* ── FROST ── */
+.frost{
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.60);
+  z-index: 1;
+  pointer-events: none;
+}
+
+#rlink-dl /* ── INNER ── */
+.dl-inner{
+  position: relative;
+  z-index: 2;
+  max-width: 680px;
+  width: 100%;
+  margin: 0 auto;
+  text-align: center;
+}
+
+#rlink-dl /* ── HEADER ── */
+.dl-eyebrow{
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7c3aed;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  animation: fadeUp .6s .1s ease both;
+}
+
+#rlink-dl .dl-title{
+  font-size: clamp(32px, 6vw, 52px);
+  font-weight: 800;
+  letter-spacing: -2px;
+  color: #0f0f0f;
+  line-height: 1;
+  margin-bottom: 12px;
+  animation: fadeUp .6s .15s ease both;
+}
+#rlink-dl .dl-title .acc{ color: #7c3aed; }
+
+#rlink-dl .dl-sub{
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 48px;
+  animation: fadeUp .6s .2s ease both;
+}
+#rlink-dl .dl-ver-badge{
+  display: inline-block;
+  background: #f5f3ff;
+  border: 1px solid #ede9fe;
+  border-radius: 40px;
+  padding: 2px 12px;
+  font-weight: 800;
+  color: #7c3aed;
+  letter-spacing: .01em;
+  margin-left: 4px;
+}
+
+@keyframes fadeUp {
+  from{opacity:0;transform:translateY(16px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+#rlink-dl /* ── CARDS ── */
+.dl-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+  animation: fadeUp .7s .25s ease both;
+}
+
+@media(max-width: 520px) {
+  #rlink-dl .dl-grid{ grid-template-columns: 1fr; }
+}
+
+#rlink-dl .dl-card{
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.9);
+  border-radius: 20px;
+  padding: 22px 22px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform .22s, box-shadow .22s, background .2s;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+}
+
+#rlink-dl .dl-card:not(.disabled):hover{
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.88);
+}
+
+#rlink-dl .dl-card.disabled{
+  opacity: 0.75;
+  cursor: default;
+  pointer-events: none;
+  filter: grayscale(0.4);
+}
+
+#rlink-dl /* top accent line on hover */
+.dl-card::before{
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: #7c3aed;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .3s;
+}
+#rlink-dl .dl-card:not(.disabled):hover::before{ transform: scaleX(1); }
+
+#rlink-dl .dl-card-icon{
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: rgba(124,58,237,0.08);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background .2s;
+}
+#rlink-dl .dl-card:not(.disabled):hover .dl-card-icon{
+  background: rgba(124,58,237,0.14);
+}
+#rlink-dl .dl-card-icon svg{
+  width: 22px; height: 22px;
+  fill: #7c3aed;
+}
+
+#rlink-dl .dl-card-info{ flex: 1; min-width: 0; }
+
+#rlink-dl .dl-card-name{
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f0f0f;
+  letter-spacing: -.2px;
+  line-height: 1.2;
+  margin-bottom: 3px;
+}
+
+#rlink-dl .dl-card-spec{
+  font-family: 'Nunito', sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #9ca3af;
+}
+
+#rlink-dl .dl-card-arrow{
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: rgba(124,58,237,0.08);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background .2s, transform .2s;
+}
+#rlink-dl .dl-card:not(.disabled):hover .dl-card-arrow{
+  background: #7c3aed;
+  transform: translateY(2px);
+}
+#rlink-dl .dl-card-arrow svg{
+  width: 13px; height: 13px;
+  fill: #7c3aed;
+  transition: fill .2s;
+}
+#rlink-dl .dl-card:not(.disabled):hover .dl-card-arrow svg{ fill: #fff; }
+
+#rlink-dl .soon-badge{
+  position: absolute;
+  top: 12px; right: 12px;
+  background: rgba(0,0,0,0.05);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #9ca3af;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+#rlink-dl /* ── LATEST RELEASE BUTTON ── */
+.dl-latest{
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.80) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1.5px solid rgba(124,58,237,0.35) !important;
+  border-radius: 40px;
+  padding: 12px 26px;
+  font-family: 'Nunito', sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #7c3aed !important;
+  text-decoration: none !important;
+  transition: background .2s, transform .2s, box-shadow .2s;
+  animation: fadeUp .6s .35s ease both;
+  letter-spacing: .01em;
+  cursor: pointer;
+}
+#rlink-dl .dl-latest:hover{
+  background: rgba(255,255,255,0.97) !important;
+  color: #5b21b6 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(124,58,237,0.15);
+}
+#rlink-dl .dl-latest svg{ width:15px;height:15px;fill:#7c3aed !important;flex-shrink:0 }
+#rlink-dl .dl-latest *{ color: #7c3aed !important; }
+
+#rlink-dl /* ── VERSION NOTE ── */
+.dl-note{
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #d1d5db;
+  margin-top: 24px;
+  letter-spacing: .03em;
+  animation: fadeUp .6s .4s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #rlink-dl .blob, #rlink-dl .bl{ animation: none !important; }
+}
+
+#rlink-dl /* Стили для иконки перехода (без черты, #rlink-dl стрелка вбок/вверх) */
+.dl-card-web .dl-card-arrow svg{
+  transform: rotate(45deg);
+  transition: transform 0.2s, fill 0.2s;
+}
+#rlink-dl .dl-card-web:not(.disabled):hover .dl-card-arrow svg{
+  transform: rotate(45deg) translate(1px, -1px);
+}
+#rlink-dl .dl-card-web .dl-card-arrow svg{
+  fill: none;
+  stroke: #7c3aed;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  width: 14px;
+  height: 14px;
+  transition: stroke 0.2s, transform 0.2s;
+}
+#rlink-dl .dl-card-web:not(.disabled):hover .dl-card-arrow svg{
+  stroke: #ffffff;
+}
+#rlink-dl .dl-card-web .dl-card-arrow svg path{
+  fill: none;
+  stroke: inherit;
+}
+</style>
+
+<div id="rlink-dl">
+<section id="rl-dl">
+
+  <div class="blob-stage">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <div class="blob blob-4"></div>
+    <div class="blob blob-5"></div>
+  </div>
+  <div class="frost"></div>
+
+  <div class="dl-inner">
+
+    <p class="dl-sub">Выбери свою платформу <span class="dl-ver-badge" data-rl-ver>…</span></p>
+
+    <div class="dl-grid">
+
+      <!-- ANDROID -->
+      <a class="dl-card" data-rl="android" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" download>
+        <div class="dl-card-icon">
+          <svg viewBox="0 0 24 24"><path d="M6 18c0 .55.45 1 1 1h1v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h2v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h1c.55 0 1-.45 1-1V8H6v10zM3.5 8C2.67 8 2 8.67 2 9.5v7c0 .83.67 1.5 1.5 1.5S5 17.33 5 16.5v-7C5 8.67 4.33 8 3.5 8zm17 0c-.83 0-1.5.67-1.5 1.5v7c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-4.97-5.84l1.3-1.3c.2-.2.2-.51 0-.71-.2-.2-.51-.2-.71 0l-1.48 1.48A5.84 5.84 0 0012 1.5c-.69 0-1.35.12-1.96.33L8.56.35c-.2-.2-.51-.2-.71 0-.2.2-.2.51 0 .71l1.3 1.3A5.9 5.9 0 006 7h12a5.9 5.9 0 00-2.47-4.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z"/></svg>
+        </div>
+        <div class="dl-card-info">
+          <div class="dl-card-name">Android</div>
+          <div class="dl-card-spec">.apk · Android 8+ · <span data-rl-ver>…</span></div>
+        </div>
+        <div class="dl-card-arrow">
+          <svg viewBox="0 0 24 24"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-6 2h12v2H6v-2z"/></svg>
+        </div>
+      </a>
+
+      <!-- MACOS -->
+      <a class="dl-card" data-rl="macos" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" download>
+        <div class="dl-card-icon">
+          <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        </div>
+        <div class="dl-card-info">
+          <div class="dl-card-name">macOS Silicon</div>
+          <div class="dl-card-spec">.zip · Apple M1/M2/M3 · <span data-rl-ver>…</span></div>
+        </div>
+        <div class="dl-card-arrow">
+          <svg viewBox="0 0 24 24"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-6 2h12v2H6v-2z"/></svg>
+        </div>
+      </a>
+
+      <!-- WINDOWS -->
+      <a class="dl-card" data-rl="windows" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" download>
+        <div class="dl-card-icon">
+          <svg viewBox="0 0 88 88"><path fill="#7c3aed" d="M0 12.402l35.687-4.86.016 34.423-35.67.203zm35.67 33.529l.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349l-.011 41.34-47.318-6.678-.066-34.739z"/></svg>
+        </div>
+        <div class="dl-card-info">
+          <div class="dl-card-name">Windows</div>
+          <div class="dl-card-spec">.zip · x64 · <span data-rl-ver>…</span></div>
+        </div>
+        <div class="dl-card-arrow">
+          <svg viewBox="0 0 24 24"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-6 2h12v2H6v-2z"/></svg>
+        </div>
+      </a>
+
+      <!-- LINUX -->
+      <div class="dl-card disabled">
+        <div class="dl-card-icon">
+          <svg viewBox="0 0 24 24"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.4-.178-.86-.453-1.293-.34-.426-.7-.696-.888-.424-.305-.736-.9-1.002-1.423l-.202.406-.108.216c-.283.395-.636.624-1.015.756-.549.19-1.14.19-1.648.19-.506 0-.971-.015-1.352.17a.803.803 0 00-.3.25l-.01.013-.005.007c-.058.08-.11.173-.155.478-.042.33.01.63.122.88.224.486.665.73 1.095.815.43.087.827.036 1.07-.063.24-.1.325-.215.343-.327.018-.13-.035-.26-.11-.36v-.006c.058-.16.04-.337-.02-.5-.05-.165-.147-.307-.251-.44a1.88 1.88 0 01-.232-.398c-.059-.158-.08-.339-.036-.525.04-.187.15-.373.37-.529.415-.288.74-.322 1.041-.266.304.053.596.185.852.243.27.058.527.036.71-.055.185-.09.294-.24.284-.45-.015-.208-.165-.45-.513-.674-.342-.22-.843-.41-1.408-.508a4.048 4.048 0 00-.69-.052c-.152.002-.305.01-.46.012-.26-.006-.47.04-.664.082-.36.084-.633.112-.79.04-.33-.16-.578-.645-.547-1.025a.5.5 0 01.017-.093c.076-.276.252-.466.47-.553.214-.089.47-.084.73-.012.266.07.545.196.835.307.29.11.59.2.896.233.306.03.622-.007.91-.144.29-.135.554-.367.742-.712.39-.695.363-1.747.38-2.64.02-.894.098-1.73.66-2.47.551-.724 1.493-1.355 2.897-1.55.097.002.158-.048.142-.14C20.19 6.03 18.7 4.97 17 4.97c-.82 0-1.527.272-2.028.713-.5.44-.775 1.046-.775 1.646 0 .302.07.605.22.881.148.274.374.52.67.696a.14.14 0 00.205-.064c.117-.24.12-.545.095-.79-.026-.245-.082-.432-.082-.432s.108.047.235.178c.126.13.27.362.35.677.079.32.094.7.014 1.068-.075.358-.24.72-.536.986-.295.264-.727.444-1.362.444-.476 0-1.024-.123-1.51-.32-.486-.197-.91-.468-1.21-.764-.297-.294-.47-.617-.544-.9a1.738 1.738 0 01-.023-.26c0-.405.111-.793.296-1.113.37-.647 1.025-1.065 1.718-1.197l.018-.005c.126-.029.234-.048.33-.063.195-.03.34-.052.463-.107a.66.66 0 00.29-.26c.064-.12.085-.275.068-.438a1.167 1.167 0 00-.18-.48 1.565 1.565 0 00-.36-.36c-.135-.097-.28-.16-.388-.188a1.02 1.02 0 00-.25-.033C12.617 0 12.56 0 12.504 0z"/></svg>
+        </div>
+        <div class="dl-card-info">
+          <div class="dl-card-name">Linux</div>
+          <div class="dl-card-spec">.tar.gz · x64</div>
+        </div>
+        <div class="soon-badge">Скоро</div>
+      </div>
+
+      <!-- WEB -->
+      <a class="dl-card dl-card-web" href="https://mihailkashintsev.github.io/rlink-web/" target="_blank" rel="noopener noreferrer">
+        <div class="dl-card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+        </div>
+        <div class="dl-card-info">
+          <div class="dl-card-name">Web-версия</div>
+          <div class="dl-card-spec">Браузер · Онлайн</div>
+        </div>
+        <div class="dl-card-arrow">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M7 17L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 7H17V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- LATEST RELEASE -->
+    <a class="dl-latest" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" target="_blank">
+      <svg viewBox="0 0 24 24"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+      <span>Все релизы на GitHub</span>
+    </a>
+
+  </div>
+</section>
+
+<!-- ═══ АКТУАЛЬНЫЕ ССЫЛКИ + ВЕРСИЯ (тянет манифест с нашего сервера) ═══ -->
+<script>
+(function () {
+  var MANIFEST = 'https://185.244.172.90.nip.io/updates/manifest.json';
+  function fname(u){ try { return decodeURIComponent(String(u).split('/').pop()); } catch(e){ return ''; } }
+  fetch(MANIFEST, { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (m) {
+      var v = m.version || '';
+      var a = m.assets || {};
+      document.querySelectorAll('[data-rl-ver]').forEach(function (el) { if (v) el.textContent = v; });
+      ['android','macos','windows','linux'].forEach(function (p) {
+        var url = a[p];
+        document.querySelectorAll('[data-rl="' + p + '"]').forEach(function (el) {
+          if (url) { el.setAttribute('href', url); el.classList.remove('disabled'); }
+        });
+        document.querySelectorAll('[data-rl-file="' + p + '"]').forEach(function (el) {
+          if (url) el.textContent = fname(url);
+        });
+      });
+    })
+    .catch(function () { /* манифест недоступен — остаются ссылки на страницу последнего релиза GitHub */ });
+})();
+</script>
+</div>

@@ -1,0 +1,610 @@
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+#rlink-landing *, #rlink-landing *::before, #rlink-landing *::after{box-sizing:border-box;margin:0;padding:0}
+#rlink-landing{scroll-behavior:smooth}
+
+#rlink-landing{
+  font-family: 'Nunito', sans-serif;
+  background: #fff;
+  color: #111;
+  -webkit-font-smoothing: antialiased;
+}
+
+#rlink-landing /* ── SHARED ── */
+.w{
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+#rlink-landing .section{
+  padding: 72px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+#rlink-landing .section:last-child{ border-bottom: none; }
+
+#rlink-landing .eyebrow{
+  font-size: 11px;
+  font-weight: 700;
+  color: #7c3aed;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+#rlink-landing h1, #rlink-landing h2, #rlink-landing h3{
+  font-family: 'Syne', sans-serif;
+  letter-spacing: -.5px;
+  color: #0f0f0f;
+}
+
+#rlink-landing /* ── HERO ── */
+#s-hero{
+  padding: 100px 0 72px;
+  border-bottom: 1px solid #f0f0f0;
+}
+#rlink-landing .hero-grid{
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 48px;
+  align-items: center;
+}
+#rlink-landing .hero-badge{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #f5f3ff;
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 5px 13px;
+  border-radius: 40px;
+  margin-bottom: 20px;
+}
+#rlink-landing .hero-badge span{
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #7c3aed;
+  flex-shrink: 0;
+}
+#rlink-landing .hero-title{
+  font-size: clamp(42px, 8vw, 72px);
+  font-weight: 800;
+  line-height: .95;
+  letter-spacing: -2px;
+  margin-bottom: 16px;
+}
+#rlink-landing .hero-title .acc{ color: #7c3aed; }
+#rlink-landing .hero-sub{
+  font-size: 16px;
+  color: #555;
+  line-height: 1.65;
+  max-width: 440px;
+  margin-bottom: 28px;
+}
+#rlink-landing .hero-pills{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 32px;
+}
+#rlink-landing .pill{
+  background: #f8f7ff;
+  border: 1px solid #ede9fe;
+  border-radius: 40px;
+  padding: 4px 13px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5b21b6;
+}
+
+#rlink-landing /* phone mockup */
+.phone-mock{
+  width: 220px;
+  background: #fff;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 36px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0,0,0,.09);
+  margin: 0 auto;
+}
+#rlink-landing .pm-notch{
+  height: 22px;
+  background: #0f0f0f;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+}
+#rlink-landing .pm-di{
+  width: 80px; height: 16px;
+  background: #0f0f0f;
+  border-radius: 0 0 12px 12px;
+  border-top: 1.5px solid #222;
+}
+#rlink-landing .pm-screen{
+  background: #f8f7ff;
+  padding: 10px 10px 14px;
+}
+#rlink-landing .pm-hdr{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 10px;
+}
+#rlink-landing .pm-av{
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,#7c3aed,#ec4899);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne',sans-serif;
+  font-size: 11px; font-weight: 700; color: #fff;
+}
+#rlink-landing .pm-name{ font-family:'Syne',sans-serif; font-size:11px; font-weight:700; color:#0f0f0f; }
+#rlink-landing .pm-st{ font-size:9px; font-weight:600; color:#10b981; }
+#rlink-landing .pm-msgs{ display:flex; flex-direction:column; gap:6px; }
+#rlink-landing .pm-m{ display:flex; flex-direction:column; max-width:80%; }
+#rlink-landing .pm-m.t{ align-self:flex-start; }
+#rlink-landing .pm-m.m{ align-self:flex-end; }
+#rlink-landing .pm-b{
+  border-radius:12px; padding:6px 10px;
+  font-size:10.5px; font-weight:600; line-height:1.4;
+}
+#rlink-landing .pm-m.t .pm-b{ background:#e5e7eb; color:#374151; border-bottom-left-radius:3px; }
+#rlink-landing .pm-m.m .pm-b{ background:linear-gradient(135deg,#7c3aed,#9333ea); color:#fff; border-bottom-right-radius:3px; }
+#rlink-landing .pm-file{
+  display:flex; align-items:center; gap:6px;
+  background:linear-gradient(135deg,#7c3aed,#9333ea);
+  border-radius:12px; border-bottom-right-radius:3px;
+  padding:7px 10px; max-width:80%; align-self:flex-end;
+}
+#rlink-landing .pm-file-ico{
+  width:24px;height:24px;border-radius:6px;
+  background:rgba(255,255,255,.2);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+#rlink-landing .pm-file-ico svg{width:13px;height:13px;fill:#fff;}
+#rlink-landing .pm-file-info{}
+#rlink-landing .pm-file-name{font-size:9.5px;font-weight:700;color:#fff;white-space:nowrap;}
+#rlink-landing .pm-file-sz{font-size:8px;font-weight:600;color:rgba(255,255,255,.65);}
+#rlink-landing .pm-t{font-size:8.5px;font-weight:600;color:#9ca3af;margin-top:2px;padding:0 3px;}
+#rlink-landing .pm-m.m .pm-t{text-align:right;}
+
+#rlink-landing /* ── DOWNLOAD ── */
+.dl-grid{
+  display: grid;
+  grid-template-columns: repeat(2,1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+#rlink-landing .dl-card{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 18px 18px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .18s, box-shadow .18s;
+}
+#rlink-landing .dl-card:hover{
+  border-color: #c4b5fd;
+  box-shadow: 0 4px 20px rgba(124,58,237,.08);
+}
+#rlink-landing .dl-card.disabled{
+  opacity: .5;
+  pointer-events: none;
+}
+#rlink-landing .dl-ico{
+  width: 40px; height: 40px;
+  background: #f5f3ff;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+#rlink-landing .dl-ico svg{ width: 20px; height: 20px; fill: #7c3aed; }
+#rlink-landing .dl-name{ font-family:'Syne',sans-serif; font-size:14px; font-weight:700; color:#0f0f0f; }
+#rlink-landing .dl-spec{ font-size:11px; color:#9ca3af; font-weight:600; margin-top:2px; }
+#rlink-landing .dl-arrow{ margin-left:auto; font-size:16px; color:#c4b5fd; }
+#rlink-landing .soon{
+  font-size:10px; font-weight:700; color:#9ca3af;
+  background:#f3f4f6; border-radius:6px;
+  padding:2px 8px; margin-left:auto; letter-spacing:.06em;
+  text-transform:uppercase;
+}
+#rlink-landing .dl-latest{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 40px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #7c3aed;
+  text-decoration: none;
+  transition: border-color .18s;
+}
+#rlink-landing .dl-latest:hover{ border-color: #c4b5fd; }
+#rlink-landing .dl-latest svg{ width:14px;height:14px;fill:#7c3aed; }
+
+#rlink-landing /* ── DESC ── */
+.desc-lead-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-bottom: 40px;
+}
+#rlink-landing .desc-tagline{
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+#rlink-landing .desc-tagline .acc{ color: #7c3aed; }
+#rlink-landing .desc-body{
+  font-size: 14px;
+  color: #555;
+  line-height: 1.75;
+}
+#rlink-landing .desc-cards{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+#rlink-landing .desc-card{
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 22px 20px;
+}
+#rlink-landing .desc-card.wide{ grid-column: 1/-1; }
+#rlink-landing .desc-card-head{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+#rlink-landing .desc-card-ico{
+  width: 34px; height: 34px;
+  background: #f5f3ff;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+#rlink-landing .desc-card-ico svg{ width: 17px; height: 17px; }
+#rlink-landing .desc-card-title{
+  font-family: 'Syne',sans-serif;
+  font-size: 14px; font-weight: 700;
+  color: #0f0f0f;
+}
+#rlink-landing .feat-list{ list-style:none; display:flex; flex-direction:column; gap:7px; }
+#rlink-landing .feat-list li{
+  display:flex; align-items:flex-start; gap:8px;
+  font-size:13px; color:#374151; font-weight:600; line-height:1.5;
+}
+#rlink-landing .feat-list li::before{
+  content:'';display:block;
+  width:5px;height:5px;border-radius:50%;
+  background:var(--dot,#7c3aed);flex-shrink:0;margin-top:5px;
+}
+#rlink-landing .feat-two{ display:grid; grid-template-columns:1fr 1fr; gap:7px 20px; }
+#rlink-landing .tags{ display:flex; flex-wrap:wrap; gap:7px; }
+#rlink-landing .tag{
+  background:#f5f3ff; border:1px solid #ede9fe;
+  border-radius:40px; padding:4px 12px;
+  font-size:12px; font-weight:700; color:#7c3aed;
+}
+
+#rlink-landing /* ── SCREENSHOTS ── */
+.shots-row{
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 8px 0 20px;
+  scrollbar-width: none;
+}
+#rlink-landing .shots-row::-webkit-scrollbar{ display:none; }
+#rlink-landing .shot-phone{
+  flex-shrink: 0;
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+#rlink-landing .shot-frame{
+  width: 160px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,.07);
+}
+#rlink-landing .shot-di{
+  height: 18px;
+  background: #0f0f0f;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 2px;
+}
+#rlink-landing .shot-di-pill{
+  width: 60px; height: 13px;
+  background: #0f0f0f;
+  border-radius: 0 0 10px 10px;
+  border-top: 1px solid #222;
+}
+#rlink-landing .shot-img{
+  width: 160px;
+  height: 347px;
+  display: block;
+  object-fit: cover;
+  object-position: top;
+  background: #f5f3ff;
+}
+#rlink-landing .shot-label{
+  font-size: 11px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-align: center;
+}
+
+#rlink-landing /* ── FOOTER NOTE ── */
+.footnote{
+  text-align: center;
+  padding: 40px 0 24px;
+  font-size: 12px;
+  color: #c4b5fd;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+
+#rlink-landing /* ── RESPONSIVE ── */
+@media(max-width:700px){
+  .hero-grid { grid-template-columns:1fr; }
+  .phone-mock { display:none; }
+  .desc-lead-grid { grid-template-columns:1fr; gap:20px; }
+  .desc-cards { grid-template-columns:1fr; }
+  .desc-card.wide { grid-column:1; }
+  .dl-grid { grid-template-columns:1fr; }
+  .feat-two { grid-template-columns:1fr; }
+}
+@media(max-width:480px) {
+  #rlink-landing #s-hero{ padding: 80px 0 56px; }
+  #rlink-landing .section{ padding: 48px 0; }
+  #rlink-landing .hero-title{ letter-spacing:-1.5px; }
+}
+</style>
+
+<div id="rlink-landing">
+<!-- ── HERO ── -->
+<section id="s-hero">
+  <div class="w">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-badge"><span></span>RENDERGAMES</div>
+        <h1 class="hero-title">R<span class="acc">link</span></h1>
+        <p class="hero-sub">Мессенджер без интернета — общайся по Bluetooth с теми, кто рядом. Никаких SIM-карт, серверов и подписок.</p>
+        <div class="hero-pills">
+          <span class="pill">Без интернета</span>
+          <span class="pill">E2E шифрование</span>
+          <span class="pill">Mesh-сеть</span>
+          <span class="pill">P2P</span>
+          <span class="pill">Бесплатно</span>
+        </div>
+      </div>
+      <!-- Static phone mockup -->
+      <div class="phone-mock">
+        <div class="pm-notch"><div class="pm-di"></div></div>
+        <div class="pm-screen">
+          <div class="pm-hdr">
+            <div class="pm-av">М</div>
+            <div>
+              <div class="pm-name">Максим</div>
+              <div class="pm-st">● BLE · 12м</div>
+            </div>
+          </div>
+          <div class="pm-msgs">
+            <div class="pm-m t"><div class="pm-b">Без интернета?? 😱</div><div class="pm-t">14:21</div></div>
+            <div class="pm-m m"><div class="pm-b">Прямо с телефона! 🔵</div><div class="pm-t">14:21 ✓✓</div></div>
+            <div class="pm-m t"><div class="pm-b">Отправь файл!</div><div class="pm-t">14:22</div></div>
+            <div class="pm-file">
+              <div class="pm-file-ico"><svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg></div>
+              <div class="pm-file-info"><div class="pm-file-name">photo_123.jpg</div><div class="pm-file-sz">2.4 МБ</div></div>
+            </div>
+            <div class="pm-m m"><div class="pm-t" style="text-align:right">14:23 ✓✓</div></div>
+            <div class="pm-m t"><div class="pm-b">✅ Получил! Топ!</div><div class="pm-t">14:23</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DOWNLOAD ── -->
+<section class="section" id="s-download">
+  <div class="w">
+    <div class="eyebrow">Скачать</div>
+    <h2 style="font-size:clamp(24px,4vw,36px);font-weight:800;margin-bottom:8px">Выбери платформу</h2>
+    <p style="font-size:14px;color:#9ca3af;font-weight:600;margin-bottom:28px"><b data-rl-ver style="color:#7c3aed">…</b> · Early Access</p>
+    <div class="dl-grid">
+      <a class="dl-card" data-rl="android" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" download>
+        <div class="dl-ico"><svg viewBox="0 0 24 24"><path d="M6 18c0 .55.45 1 1 1h1v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h2v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h1c.55 0 1-.45 1-1V8H6v10zM3.5 8C2.67 8 2 8.67 2 9.5v7c0 .83.67 1.5 1.5 1.5S5 17.33 5 16.5v-7C5 8.67 4.33 8 3.5 8zm17 0c-.83 0-1.5.67-1.5 1.5v7c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-4.97-5.84l1.3-1.3c.2-.2.2-.51 0-.71-.2-.2-.51-.2-.71 0l-1.48 1.48A5.84 5.84 0 0012 1.5c-.69 0-1.35.12-1.96.33L8.56.35c-.2-.2-.51-.2-.71 0-.2.2-.2.51 0 .71l1.3 1.3A5.9 5.9 0 006 7h12a5.9 5.9 0 00-2.47-4.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z"/></svg></div>
+        <div><div class="dl-name">Android</div><div class="dl-spec">.apk · Android 8+ · <span data-rl-ver>…</span></div></div>
+        <div class="dl-arrow">↓</div>
+      </a>
+      <a class="dl-card" data-rl="macos" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" download>
+        <div class="dl-ico"><svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg></div>
+        <div><div class="dl-name">macOS Silicon</div><div class="dl-spec">.zip · Apple M1/M2/M3 · <span data-rl-ver>…</span></div></div>
+        <div class="dl-arrow">↓</div>
+      </a>
+      <a class="dl-card" data-rl="windows" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" download>
+        <div class="dl-ico"><svg viewBox="0 0 88 88"><path fill="#7c3aed" d="M0 12.402l35.687-4.86.016 34.423-35.67.203zm35.67 33.529l.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349l-.011 41.34-47.318-6.678-.066-34.739z"/></svg></div>
+        <div><div class="dl-name">Windows</div><div class="dl-spec">.zip · x64 · <span data-rl-ver>…</span></div></div>
+        <div class="dl-arrow">↓</div>
+      </a>
+      <div class="dl-card disabled">
+        <div class="dl-ico"><svg viewBox="0 0 24 24"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376-.17-.2-.25-.535-.338-.926-.085-.4-.178-.86-.453-1.293-.34-.426-.7-.696-.888-.424-.305-.736-.9-1.002-1.423l-.202.406-.108.216c-.283.395-.636.624-1.015.756-.549.19-1.14.19-1.648.19-.506 0-.971-.015-1.352.17a.803.803 0 00-.3.25c-.058.08-.11.173-.155.478-.042.33.01.63.122.88.224.486.665.73 1.095.815.43.087.827.036 1.07-.063.24-.1.325-.215.343-.327.018-.13-.035-.26-.11-.36.058-.16.04-.337-.02-.5-.05-.165-.147-.307-.251-.44-.059-.158-.08-.339-.036-.525.04-.187.15-.373.37-.529.415-.288.74-.322 1.041-.266.304.053.596.185.852.243.27.058.527.036.71-.055.185-.09.294-.24.284-.45-.015-.208-.165-.45-.513-.674-.342-.22-.843-.41-1.408-.508-.152.002-.305.01-.46.012-.26-.006-.47.04-.664.082-.36.084-.633.112-.79.04-.33-.16-.578-.645-.547-1.025a.5.5 0 01.017-.093c.076-.276.252-.466.47-.553.214-.089.47-.084.73-.012.266.07.545.196.835.307.29.11.59.2.896.233.306.03.622-.007.91-.144.29-.135.554-.367.742-.712.39-.695.363-1.747.38-2.64.02-.894.098-1.73.66-2.47.551-.724 1.493-1.355 2.897-1.55.097.002.158-.048.142-.14C20.19 6.03 18.7 4.97 17 4.97c-.82 0-1.527.272-2.028.713-.5.44-.775 1.046-.775 1.646 0 .302.07.605.22.881.148.274.374.52.67.696.117-.24.12-.545.095-.79-.026-.245-.082-.432-.082-.432s.108.047.235.178c.126.13.27.362.35.677.079.32.094.7.014 1.068-.075.358-.24.72-.536.986-.295.264-.727.444-1.362.444-.476 0-1.024-.123-1.51-.32-.486-.197-.91-.468-1.21-.764-.297-.294-.47-.617-.544-.9a1.738 1.738 0 01-.023-.26c0-.405.111-.793.296-1.113.37-.647 1.025-1.065 1.718-1.197l.018-.005c.126-.029.234-.048.33-.063.195-.03.34-.052.463-.107a.66.66 0 00.29-.26c.064-.12.085-.275.068-.438a1.167 1.167 0 00-.18-.48 1.565 1.565 0 00-.36-.36c-.135-.097-.28-.16-.388-.188A1.02 1.02 0 0012.504 0z" fill="#7c3aed"/></svg></div>
+        <div><div class="dl-name">Linux</div><div class="dl-spec">.tar.gz · x64</div></div>
+        <div class="soon">Скоро</div>
+      </div>
+    </div>
+    <a class="dl-latest" href="https://github.com/MihailKashintsev/Rlink-releases/releases/latest" target="_blank">
+      <svg viewBox="0 0 24 24"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" fill="#7c3aed"/></svg>
+      Все релизы на GitHub
+    </a>
+  </div>
+</section>
+
+<!-- ── ABOUT ── -->
+<section class="section" id="s-about">
+  <div class="w">
+    <div class="eyebrow">О приложении</div>
+    <div class="desc-lead-grid">
+      <h2 class="desc-tagline">Мессенджер<br>без <span class="acc">интернета</span></h2>
+      <p class="desc-body">Rlink работает через Bluetooth и WiFi Direct — никаких SIM-карт, серверов и подписок. Каждое устройство становится частью mesh-сети: сообщения передаются от телефона к телефону, расширяя зону покрытия с каждым новым участником.</p>
+    </div>
+    <div class="desc-cards">
+      <div class="desc-card wide">
+        <div class="desc-card-head">
+          <div class="desc-card-ico"><svg viewBox="0 0 24 24" style="fill:#7c3aed;width:17px;height:17px"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>
+          <div class="desc-card-title">Возможности</div>
+        </div>
+        <ul class="feat-list feat-two">
+          <li>Текстовые сообщения с шифрованием ChaCha20-Poly1305 + X25519</li>
+          <li>Голосовые сообщения</li>
+          <li>Отправка фото, видео и файлов</li>
+          <li>Квадратные видеосообщения (аналог кружков Telegram)</li>
+          <li>Эфир — анонимный чат для всех устройств поблизости</li>
+          <li>Истории — делись моментами с контактами</li>
+          <li>Форматирование: жирный, курсив, зачёркнутый, спойлер</li>
+          <li>Предпросмотр ссылок и геолокация в сообщениях</li>
+          <li>Фон чата — глобальный или для каждого собеседника</li>
+          <li>Тёмная и светлая тема, 8 акцентных цветов</li>
+          <li>Профили с аватарками и эмодзи</li>
+        </ul>
+      </div>
+      <div class="desc-card" style="--dot:#10b981">
+        <div class="desc-card-head">
+          <div class="desc-card-ico" style="background:#f0fdf4"><svg viewBox="0 0 24 24" style="fill:#10b981;width:17px;height:17px"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></div>
+          <div class="desc-card-title">Безопасность</div>
+        </div>
+        <ul class="feat-list" style="--dot:#10b981">
+          <li>Сквозное шифрование (E2EE) с эфемерными ключами для forward secrecy</li>
+          <li>Никакие данные не проходят через сервер — всё P2P</li>
+          <li>Нет регистрации, аккаунтов и привязки к номеру</li>
+          <li>Ed25519 идентификация, X25519 обмен ключами</li>
+        </ul>
+      </div>
+      <div class="desc-card" style="--dot:#3b82f6">
+        <div class="desc-card-head">
+          <div class="desc-card-ico" style="background:#eff6ff"><svg viewBox="0 0 24 24" style="fill:#3b82f6;width:17px;height:17px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg></div>
+          <div class="desc-card-title">Mesh-сеть</div>
+        </div>
+        <ul class="feat-list" style="--dot:#3b82f6">
+          <li>Bluetooth Low Energy: до 30 метров</li>
+          <li>WiFi Direct: до 100+ метров</li>
+          <li>Gossip-протокол: до 7 промежуточных устройств</li>
+          <li>Чем больше пользователей — тем шире сеть</li>
+        </ul>
+      </div>
+      <div class="desc-card wide" style="--dot:#ec4899">
+        <div class="desc-card-head">
+          <div class="desc-card-ico" style="background:#fdf2f8"><svg viewBox="0 0 24 24" style="fill:#ec4899;width:17px;height:17px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div>
+          <div class="desc-card-title">Идеально для</div>
+        </div>
+        <div class="tags">
+          <span class="tag">Фестивали и концерты</span>
+          <span class="tag">Путешествия без связи</span>
+          <span class="tag">Школы и университеты</span>
+          <span class="tag">Мероприятия</span>
+          <span class="tag">Когда интернет недоступен</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SCREENSHOTS ── -->
+<section class="section" id="s-screens">
+  <div class="w">
+    <div class="eyebrow">Интерфейс</div>
+    <h2 style="font-size:clamp(24px,4vw,36px);font-weight:800;margin-bottom:24px">Скриншоты приложения</h2>
+  </div>
+  <div style="padding:0 20px;max-width:960px;margin:0 auto">
+    <div class="shots-row">
+      <div class="shot-phone">
+        <div class="shot-frame">
+          <div class="shot-di"><div class="shot-di-pill"></div></div>
+          <img class="shot-img" src="https://github.com/user-attachments/assets/e188807e-55a8-416a-ba3d-dd0ebd5d9911" alt="Чаты">
+        </div>
+        <div class="shot-label">Список чатов</div>
+      </div>
+      <div class="shot-phone">
+        <div class="shot-frame">
+          <div class="shot-di"><div class="shot-di-pill"></div></div>
+          <img class="shot-img" src="https://github.com/user-attachments/assets/9dd0c62f-3a81-4956-837b-adcb0e0eb6e2" alt="Переписка">
+        </div>
+        <div class="shot-label">Переписка</div>
+      </div>
+      <div class="shot-phone">
+        <div class="shot-frame">
+          <div class="shot-di"><div class="shot-di-pill"></div></div>
+          <img class="shot-img" src="https://github.com/user-attachments/assets/bcfbaef5-f871-423f-8208-a5f595b69600" alt="Эфир">
+        </div>
+        <div class="shot-label">Эфир</div>
+      </div>
+      <div class="shot-phone">
+        <div class="shot-frame">
+          <div class="shot-di"><div class="shot-di-pill"></div></div>
+          <img class="shot-img" src="https://github.com/user-attachments/assets/98fbb581-aa02-4952-b4b4-6509568ece89" alt="Профиль">
+        </div>
+        <div class="shot-label">Профиль</div>
+      </div>
+      <div class="shot-phone">
+        <div class="shot-frame">
+          <div class="shot-di"><div class="shot-di-pill"></div></div>
+          <img class="shot-img" src="https://github.com/user-attachments/assets/bf52ac7c-4ad9-423f-a987-98a84fe8f7fa" alt="Настройки">
+        </div>
+        <div class="shot-label">Настройки</div>
+      </div>
+    </div>
+  </div>
+  <div class="w">
+    <p style="font-size:12px;color:#c4b5fd;font-weight:600;text-align:center;margin-top:4px">Rlink — общение без границ сети.</p>
+  </div>
+</section>
+
+<div class="footnote"><span data-rl-ver>…</span> · Исходный код закрыт · © 2026 RENDERGAMES</div>
+
+<!-- ═══ АКТУАЛЬНЫЕ ССЫЛКИ + ВЕРСИЯ (тянет манифест с нашего сервера) ═══ -->
+<script>
+(function () {
+  var MANIFEST = 'https://185.244.172.90.nip.io/updates/manifest.json';
+  function fname(u){ try { return decodeURIComponent(String(u).split('/').pop()); } catch(e){ return ''; } }
+  fetch(MANIFEST, { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (m) {
+      var v = m.version || '';
+      var a = m.assets || {};
+      document.querySelectorAll('[data-rl-ver]').forEach(function (el) { if (v) el.textContent = v; });
+      ['android','macos','windows','linux'].forEach(function (p) {
+        var url = a[p];
+        document.querySelectorAll('[data-rl="' + p + '"]').forEach(function (el) {
+          if (url) { el.setAttribute('href', url); el.classList.remove('disabled'); }
+        });
+        document.querySelectorAll('[data-rl-file="' + p + '"]').forEach(function (el) {
+          if (url) el.textContent = fname(url);
+        });
+      });
+    })
+    .catch(function () { /* манифест недоступен — остаются ссылки на страницу последнего релиза GitHub */ });
+})();
+</script>
+</div>
