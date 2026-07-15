@@ -800,6 +800,23 @@ Future<void> initServices() async {
           return;
         }
 
+        // Дедуп повторной доставки: relay при реконнекте пира заново шлёт
+        // очередь, а in-memory кэш пакетов (TTL 30 мин, чистится при рестарте)
+        // может её не поймать → то же сообщение пере-сохранялось и повторно
+        // уведомляло («10 уведомлений просто из-за того что человек зашёл в
+        // сеть»). Если оно уже в БД — пере-ACK'аем (чтобы relay перестал
+        // класть его в очередь) и выходим.
+        if (messageId.isNotEmpty &&
+            await ChatStorageService.instance.getMessageById(messageId) !=
+                null) {
+          unawaited(GossipRouter.instance.sendAck(
+            messageId: messageId,
+            senderId: CryptoService.instance.publicKeyHex,
+            recipientId: fromId,
+          ));
+          return;
+        }
+
         final String text;
         if (encrypted.ephemeralPublicKey.isEmpty) {
           // raw (plaintext) message — cipherText contains the actual text
