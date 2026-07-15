@@ -1164,7 +1164,14 @@ class _MeTab extends StatelessWidget {
       );
     }
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      // Bottom clearance so the last settings item scrolls clear of the floating
+      // nav pill (extendBody makes this tab fill behind it in the new design).
+      padding: EdgeInsets.fromLTRB(
+        8,
+        12,
+        8,
+        settings.newDesign ? MediaQuery.paddingOf(context).bottom + 84 : 12,
+      ),
       children: [
         if (profile != null)
           Card(
