@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/update_service.dart';
 
-/// Прогресс скачивания обновления. Загрузка стартует сразу (принудительно).
+/// Красивый прогресс обновления. Загрузка стартует сразу (принудительно).
 /// Десктоп: скачал → распаковал → перезапуск (сюда уже не вернётся).
 /// Android: скачал → системный установщик поверх диалога.
 class UpdateProgressDialog extends StatefulWidget {
@@ -13,13 +13,19 @@ class UpdateProgressDialog extends StatefulWidget {
   State<UpdateProgressDialog> createState() => _UpdateProgressDialogState();
 }
 
-class _UpdateProgressDialogState extends State<UpdateProgressDialog> {
+class _UpdateProgressDialogState extends State<UpdateProgressDialog>
+    with SingleTickerProviderStateMixin {
   String? _error;
   bool _launched = false; // download done, installer launched (mobile)
+  late final AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
     UpdateService.instance.downloadProgress.addListener(_rebuild);
     _run();
   }
@@ -27,8 +33,6 @@ class _UpdateProgressDialogState extends State<UpdateProgressDialog> {
   Future<void> _run() async {
     try {
       await UpdateService.instance.downloadAndInstall(widget.update);
-      // Desktop exits inside the install step and never returns here.
-      // Android/iOS return after launching the system installer / page.
       if (mounted) setState(() => _launched = true);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -41,55 +45,165 @@ class _UpdateProgressDialogState extends State<UpdateProgressDialog> {
 
   @override
   void dispose() {
+    _pulse.dispose();
     UpdateService.instance.downloadProgress.removeListener(_rebuild);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final progress = UpdateService.instance.downloadProgress.value;
+    final failed = _error != null;
 
-    if (_error != null) {
-      return AlertDialog(
-        title: Text('Обновление ${widget.update.version}'),
-        content: Text('Не удалось загрузить обновление.\n$_error'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            child: const Text('Закрыть'),
-          ),
-        ],
-      );
-    }
+    final String status = failed
+        ? 'Не удалось загрузить'
+        : _launched
+            ? 'Загрузка завершена'
+            : (progress == null ? 'Подготовка…' : 'Загрузка обновления');
+    final String sub = failed
+        ? '$_error'
+        : _launched
+            ? 'Подтверди установку в системном окне.'
+            : 'Пожалуйста, не закрывай приложение…';
 
-    if (_launched) {
-      return AlertDialog(
-        title: Text('Обновление ${widget.update.version}'),
-        content: const Text(
-            'Загрузка завершена. Подтверди установку в системном окне.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            child: const Text('Закрыть'),
-          ),
-        ],
-      );
-    }
-
-    return AlertDialog(
-      title: Text('Обновление ${widget.update.version}'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (progress == null)
-            const CircularProgressIndicator()
-          else ...[
-            LinearProgressIndicator(value: progress),
-            const SizedBox(height: 8),
-            Text('${(progress * 100).toStringAsFixed(0)}%'),
+    return Dialog(
+      backgroundColor: cs.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 32, 28, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _Hero(
+              cs: cs,
+              pulse: _pulse,
+              progress: progress,
+              done: _launched,
+              failed: failed,
+            ),
+            const SizedBox(height: 24),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: Text(
+                (!failed && !_launched && progress != null)
+                    ? '${(progress * 100).round()}%'
+                    : status,
+                key: ValueKey('$status-$progress-$_launched-$failed'),
+                style: TextStyle(
+                  fontSize: (!failed && !_launched && progress != null) ? 32 : 20,
+                  fontWeight: FontWeight.w800,
+                  color: failed ? cs.error : cs.onSurface,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Rlink ${widget.update.version}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: cs.primary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              sub,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
+            ),
+            if (failed || _launched) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: const Text('Закрыть'),
+                ),
+              ),
+            ],
           ],
-          const SizedBox(height: 8),
-          const Text('Пожалуйста, не закрывай приложение...'),
+        ),
+      ),
+    );
+  }
+}
+
+/// Animated hero circle: progress ring + pulsing download arrow while loading,
+/// a scale-in check when done, an error mark on failure.
+class _Hero extends StatelessWidget {
+  const _Hero({
+    required this.cs,
+    required this.pulse,
+    required this.progress,
+    required this.done,
+    required this.failed,
+  });
+
+  final ColorScheme cs;
+  final AnimationController pulse;
+  final double? progress;
+  final bool done;
+  final bool failed;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = failed ? cs.error : cs.primary;
+    return SizedBox(
+      width: 108,
+      height: 108,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Soft glow behind
+          Container(
+            width: 108,
+            height: 108,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: accent.withValues(alpha: 0.08),
+            ),
+          ),
+          // Progress / spinner ring
+          SizedBox(
+            width: 92,
+            height: 92,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: (done || failed) ? 1.0 : (progress ?? 0)),
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOut,
+              builder: (_, v, __) => CircularProgressIndicator(
+                value: (progress == null && !done && !failed) ? null : v,
+                strokeWidth: 5,
+                strokeCap: StrokeCap.round,
+                backgroundColor: accent.withValues(alpha: 0.12),
+                valueColor: AlwaysStoppedAnimation(accent),
+              ),
+            ),
+          ),
+          // Center icon
+          if (failed)
+            Icon(Icons.close_rounded, color: accent, size: 40)
+          else if (done)
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.elasticOut,
+              builder: (_, v, __) => Transform.scale(
+                scale: v,
+                child: Icon(Icons.check_rounded, color: accent, size: 44),
+              ),
+            )
+          else
+            ScaleTransition(
+              scale: pulse.drive(
+                Tween(begin: 0.9, end: 1.12)
+                    .chain(CurveTween(curve: Curves.easeInOut)),
+              ),
+              child: Icon(Icons.arrow_downward_rounded, color: accent, size: 38),
+            ),
         ],
       ),
     );

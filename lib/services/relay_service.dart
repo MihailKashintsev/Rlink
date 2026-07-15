@@ -1834,6 +1834,7 @@ class RelayService with WidgetsBindingObserver {
     final online = _relayJsonBool(msg['online']);
     if (publicKey == null || online == null) return;
 
+    final wasOnline = _peerOnline[publicKey.toLowerCase()] ?? false;
     _peerOnline[publicKey.toLowerCase()] = online;
     presenceVersion.value++;
     _recomputeOnlineCountFromPresence();
@@ -1860,9 +1861,12 @@ class RelayService with WidgetsBindingObserver {
     debugPrint(
         '[RLINK][Relay] Presence: ${publicKey.substring(0, 8)} → ${online ? 'online' : 'offline'}');
 
-    // Notify about new peer online (for avatar sync, etc.)
+    // Notify about new peer online (for avatar sync, etc.) — ONLY on the real
+    // offline→online transition. The relay re-broadcasts presence, and firing
+    // this on every message re-sent our full profile each time → a flood of
+    // (empty) profile/avatar service-messages.
     if (online) {
-      onPeerOnline?.call(publicKey);
+      if (!wasOnline) onPeerOnline?.call(publicKey);
     } else {
       // Update lastSeen when peer goes offline
       unawaited(ChatStorageService.instance.updateContactLastSeen(publicKey));

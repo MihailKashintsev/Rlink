@@ -119,6 +119,9 @@ class NotificationService {
   }) async {
     if (!AppSettings.instance.notificationsEnabled) return;
     if (!AppSettings.instance.notifyPersonal) return;
+    // No empty notifications: service/profile packets with no text must never
+    // surface as a blank banner (was a flood of empties when a peer came online).
+    if (body.trim().isEmpty) return;
     if (currentRoute.value == 'dm:$peerId' && !isInBackground.value) return;
     // App open elsewhere → in-app banner (no OS permission needed). Backgrounded
     // → fall through to the OS/web notification.
