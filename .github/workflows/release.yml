@@ -187,6 +187,11 @@ jobs:
       # doesn't depend on GitHub (throttled/blocked in RU). Uploads the binaries
       # + regenerates the manifest the app polls. No-ops if the secret is absent.
       - name: Publish update to relay (own server)
+        # The GitHub release above is the source of truth; a temporarily
+        # unreachable relay must NOT mark the whole release as failed. If this
+        # is skipped/failed, re-sync the relay manually (relay wgets the assets
+        # from the GitHub release + regenerates manifest.json).
+        continue-on-error: true
         env:
           RELAY_SSH_KEY: ${{ secrets.RELAY_SSH_KEY }}
           V: ${{ github.ref_name }}
@@ -196,8 +201,9 @@ jobs:
           fi
           mkdir -p ~/.ssh
           printf '%s\n' "$RELAY_SSH_KEY" > ~/.ssh/relay && chmod 600 ~/.ssh/relay
-          SSH="ssh -i $HOME/.ssh/relay -o StrictHostKeyChecking=no -o ConnectTimeout=25"
-          SCP="scp -i $HOME/.ssh/relay -o StrictHostKeyChecking=no -o ConnectTimeout=25"
+          SSHOPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=25 -o ServerAliveInterval=10 -o ServerAliveCountMax=6"
+          SSH="ssh -i $HOME/.ssh/relay $SSHOPTS"
+          SCP="scp -i $HOME/.ssh/relay $SSHOPTS"
           HOST=root@185.244.172.90
           DIR=/var/www/rlink-updates
           B=https://185.244.172.90.nip.io/updates
