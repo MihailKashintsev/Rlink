@@ -16,6 +16,10 @@ concurrency:
 
 jobs:
   build-and-deploy:
+    # This same workflow file lives in both repos; only rlink-web has Pages
+    # enabled. Skip on the source repo (MihailKashintsev/Rlink) so it doesn't
+    # fail on every push — the real deploy runs when we push to rlink-web.
+    if: ${{ github.repository == 'MihailKashintsev/rlink-web' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
