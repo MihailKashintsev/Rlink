@@ -3,14 +3,19 @@ import 'package:flutter/material.dart';
 import '../../services/update_service.dart';
 import 'update_progress_dialog.dart';
 
-/// Подписка на [pendingUpdateNotifier] и показ баннера «доступно обновление».
+/// Обновление принудительное: как только оно найдено — сразу стартуем загрузку
+/// (не ждём тапа). Флаг на уровне модуля, чтобы не запуститься дважды с разных
+/// экранов (chat_list + home оба подмешивают миксин).
+bool _updateFlowStarted = false;
+
+/// Подписка на [pendingUpdateNotifier] и принудительный запуск обновления.
 mixin UpdateAvailableBannerMixin<T extends StatefulWidget> on State<T> {
   void registerUpdateBannerListener() {
     pendingUpdateNotifier.addListener(_onPendingUpdateNotifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final u = pendingUpdateNotifier.value;
-      if (u != null) showUpdateAvailableBanner(u);
+      if (u != null) _autoStartUpdate(u);
     });
   }
 
@@ -21,9 +26,14 @@ mixin UpdateAvailableBannerMixin<T extends StatefulWidget> on State<T> {
   void _onPendingUpdateNotifier() {
     if (!mounted) return;
     final u = pendingUpdateNotifier.value;
-    if (u != null) {
-      showUpdateAvailableBanner(u);
-    }
+    if (u != null) _autoStartUpdate(u);
+  }
+
+  /// Принудительный старт: сразу открываем поток загрузки/установки.
+  void _autoStartUpdate(UpdateInfo update) {
+    if (_updateFlowStarted) return;
+    _updateFlowStarted = true;
+    openUpdateFlow(update);
   }
 
   void showUpdateAvailableBanner(UpdateInfo update) {
