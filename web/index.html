@@ -46,6 +46,7 @@
   -->
   <script>
     async function _rlinkClearStaleFlutterWorker() {
+      let killed = false;
       try {
         if ('serviceWorker' in navigator) {
           const registrations = await navigator.serviceWorker.getRegistrations();
@@ -54,6 +55,7 @@
             const scriptUrl = worker && worker.scriptURL ? worker.scriptURL : '';
             if (scriptUrl.includes('flutter_service_worker.js')) {
               await registration.unregister();
+              killed = true;
             }
           }));
         }
@@ -65,12 +67,25 @@
               key.startsWith('flutter-temp-cache') ||
               key.startsWith('flutter-app-manifest')
             ) {
+              killed = true;
               return caches.delete(key);
             }
             return Promise.resolve(false);
           }));
         }
       } catch (_) {}
+      // A stale Flutter SW already served this navigation from its OLD cache, so
+      // just clearing it isn't enough — reload ONCE (guarded) to fetch the fresh
+      // index + assets from the network. Self-heals users stuck on an old build.
+      if (killed) {
+        try {
+          if (!sessionStorage.getItem('rlinkSwReloaded')) {
+            sessionStorage.setItem('rlinkSwReloaded', '1');
+            location.reload();
+            return new Promise(() => {}); // hang until the reload takes over
+          }
+        } catch (_) {}
+      }
     }
 
     // Bump on every deploy that changes Dart code — busts the cached bootstrap

@@ -227,6 +227,9 @@ class NotificationService {
     required String payload,
     String? threadIdentifier,
   }) async {
+    // Backstop: never raise an OS/web notification with no body (service/
+    // presence packets). Applies to personal/group/channel alike.
+    if (body.trim().isEmpty) return;
     if (kIsWeb) {
       await showWebNotification(
         title: title,

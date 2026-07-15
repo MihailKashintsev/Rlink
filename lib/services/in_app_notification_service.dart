@@ -45,9 +45,10 @@ class InAppNotificationService {
     String? imagePath,
     bool isCall = false,
   }) {
-    // Never surface an empty banner (blank title+body) — a safety net against
-    // service/presence packets leaking into the notification path.
-    if (!isCall && title.trim().isEmpty && body.trim().isEmpty) return;
+    // Never surface a contentless banner: a real message always has body text
+    // (or a media label). An empty body = a service/presence/profile packet
+    // leaking into the notification path → drop it (calls are exempt).
+    if (!isCall && body.trim().isEmpty) return;
     current.value = InAppNotif(
       title: title,
       body: body,
