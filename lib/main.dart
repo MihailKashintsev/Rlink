@@ -4269,6 +4269,12 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
         state == AppLifecycleState.hidden) {
       NotificationService.instance.isInBackground.value = true;
       AppLockService.instance.onBackground();
+      // Свёрнуто → показываемся «не в сети» контактам (соединение остаётся для
+      // приёма). inactive — транзиентное (шторка/свитчер приложений), его не
+      // считаем сворачиванием, иначе presence будет «мигать».
+      if (state != AppLifecycleState.inactive) {
+        RelayService.instance.sendPresenceAway(true);
+      }
     } else if (state == AppLifecycleState.detached) {
       NotificationService.instance.isInBackground.value = true;
       AppLockService.instance.onBackground();
@@ -4276,6 +4282,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       NotificationService.instance.isInBackground.value = false;
       AppLockService.instance.onResume();
+      RelayService.instance.sendPresenceAway(false);
       _notifyPeersOnline();
     }
   }

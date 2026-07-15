@@ -708,6 +708,14 @@ class RelayService with WidgetsBindingObserver {
     }
   }
 
+  /// Сообщает relay «отошёл / вернулся»: при [away]=true контакты видят нас
+  /// offline, но WebSocket остаётся открытым (продолжаем принимать сообщения).
+  /// Используется при сворачивании приложения (фон ≠ «в сети»).
+  void sendPresenceAway(bool away) {
+    if (!isConnected) return;
+    _safeSend({'type': 'presence', 'away': away}, context: 'presence_away');
+  }
+
   void disconnect() {
     _intentionalClose = true;
     _connectEpoch++;
