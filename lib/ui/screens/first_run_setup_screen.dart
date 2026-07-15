@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
 import '../../services/app_settings.dart';
 import '../../services/model_download_service.dart';
+import '../app_palettes.dart';
 
 /// First-launch quick setup: language, theme, accent color and (on platforms
 /// that use the on-device whisper.cpp engine) the transcription model to use.
@@ -60,13 +61,12 @@ class _FirstRunSetupScreenState extends State<FirstRunSetupScreen> {
                     },
                   ),
                   const SizedBox(height: 26),
-                  _sectionTitle('Акцентный цвет', Icons.palette_rounded, cs),
+                  _sectionTitle('Цветовая палитра', Icons.palette_rounded, cs),
                   const SizedBox(height: 12),
-                  _AccentPicker(
-                    selectedIndex: AppSettings.accentColors
-                        .indexOf(_settings.accentColor),
+                  _PalettePicker(
+                    selectedIndex: _settings.appPalette,
                     onPick: (i) async {
-                      await _settings.setAccentColor(i);
+                      await _settings.setAppPalette(i);
                       if (mounted) setState(() {});
                     },
                   ),
@@ -224,54 +224,52 @@ class _ThemePicker extends StatelessWidget {
   }
 }
 
-class _AccentPicker extends StatelessWidget {
-  const _AccentPicker({required this.selectedIndex, required this.onPick});
+/// Полноценный выбор палитры (тех же, что в основных настройках): пишет
+/// [AppSettings.setAppPalette], который РЕАЛЬНО читает тема (_buildTheme).
+/// Кружки — градиенты палитр, а не плоские цвета.
+class _PalettePicker extends StatelessWidget {
+  const _PalettePicker({required this.selectedIndex, required this.onPick});
   final int selectedIndex;
   final ValueChanged<int> onPick;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: AppSettings.accentColors.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, i) {
-          final color = AppSettings.accentColors[i];
-          final isSel = i == selectedIndex;
-          return GestureDetector(
-            onTap: () => onPick(i),
+    final cs = Theme.of(context).colorScheme;
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: List.generate(kAppPalettes.length, (i) {
+        final p = kAppPalettes[i];
+        final isSel = i == selectedIndex;
+        return GestureDetector(
+          onTap: () => onPick(i),
+          child: Tooltip(
+            message: p.name,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
+              duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
-              width: 44,
-              height: 44,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
-                color: color,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: p.gradient,
+                ),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSel ? Colors.white : Colors.transparent,
-                  width: 3,
+                  color: isSel ? cs.onSurface : cs.outlineVariant,
+                  width: isSel ? 3 : 1,
                 ),
-                boxShadow: isSel
-                    ? [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.55),
-                          blurRadius: 10,
-                          spreadRadius: 1,
-                        )
-                      ]
-                    : null,
               ),
               child: isSel
                   ? const Icon(Icons.check_rounded,
                       color: Colors.white, size: 22)
                   : null,
             ),
-          );
-        },
-      ),
+          ),
+        );
+      }),
     );
   }
 }
