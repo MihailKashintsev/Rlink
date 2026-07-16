@@ -35,7 +35,10 @@ jobs:
         with:
           flutter-version: '3.41.5'
           channel: 'stable'
-          cache: true
+          # cache disabled: the account's Actions storage quota is over limit,
+          # which breaks the cache backend (BlobNotFound) and fails setup. Re-
+          # downloading Flutter each run is slower but reliable.
+          cache: false
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore.jks
       - name: Create key.properties
@@ -100,7 +103,10 @@ jobs:
         with:
           flutter-version: '3.41.5'
           channel: 'stable'
-          cache: true
+          # cache disabled: the account's Actions storage quota is over limit,
+          # which breaks the cache backend (BlobNotFound) and fails setup. Re-
+          # downloading Flutter each run is slower but reliable.
+          cache: false
       - run: flutter pub get
       # flutter_webrtc's third_party/CMakeLists.txt extracts libwebrtc.zip into a
       # path that runs THROUGH the flutter/ephemeral/.plugin_symlinks/flutter_webrtc
@@ -155,7 +161,10 @@ jobs:
         with:
           flutter-version: '3.41.5'
           channel: 'stable'
-          cache: true
+          # cache disabled: the account's Actions storage quota is over limit,
+          # which breaks the cache backend (BlobNotFound) and fails setup. Re-
+          # downloading Flutter each run is slower but reliable.
+          cache: false
       - run: flutter pub get
       - name: Build
         run: flutter build macos --release

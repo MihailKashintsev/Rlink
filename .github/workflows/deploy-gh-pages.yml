@@ -29,7 +29,9 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
+          # cache off: the Actions storage quota is over limit and breaks the
+          # cache backend (BlobNotFound). Re-download is reliable.
+          cache: false
 
       - name: Flutter pub get
         run: flutter pub get
