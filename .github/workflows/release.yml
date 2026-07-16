@@ -1,15 +1,17 @@
 name: Release
 
 # Builds signed Android (AAB + APK), macOS and Windows on a v*.*.* tag and
-# publishes them as ONE release to the PUBLIC repo MihailKashintsev/Rlink-releases
-# (the private source repo Rlink never gets release artifacts).
+# publishes them to the PUBLIC repo MihailKashintsev/Rlink-releases.
 #
-# The desktop in-app updater (lib/services/update_service.dart) reads that public
-# repo by default and matches assets ending in _macos.zip / _windows.zip, so it
-# needs NO token baked into the binary — we intentionally do not pass GITHUB_PAT.
+# IMPORTANT: each build job uploads its asset DIRECTLY to the GitHub release
+# (release storage is separate from the Actions *artifact* storage quota — that
+# quota filled up and made upload-artifact fail on every release, blocking
+# publish). No intermediate actions/upload-artifact anywhere. The relay job then
+# pulls the finished assets from the public release.
 #
 # Requires secrets on THIS repo: KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_PASSWORD,
-# KEY_ALIAS (Android signing) and RELEASES_PAT (contents:write on Rlink-releases).
+# KEY_ALIAS (Android signing), RELEASES_PAT (contents:write on Rlink-releases),
+# RELAY_SSH_KEY (optional — relay mirror).
 
 on:
   push:
@@ -66,13 +68,25 @@ jobs:
           V="${{ github.ref_name }}"
           cp build/app/outputs/bundle/release/app-release.aab   rlink_${V}_rustore.aab
           cp build/app/outputs/flutter-apk/app-release.apk      Rlink-${V}.apk
-      - uses: actions/upload-artifact@v4
+      - name: Upload to Rlink-releases
+        uses: softprops/action-gh-release@v2
         with:
-          name: android
-          retention-days: 1
-          path: |
+          repository: MihailKashintsev/Rlink-releases
+          tag_name: ${{ github.ref_name }}
+          name: "Rlink ${{ github.ref_name }}"
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          token: ${{ secrets.RELEASES_PAT }}
+          files: |
             rlink_*_rustore.aab
             Rlink-*.apk
+          body: |
+            Rlink ${{ github.ref_name }}
+
+            • Android APK: `Rlink-${{ github.ref_name }}.apk` (установи, разрешив «неизвестные источники»)
+            • macOS: `rlink_${{ github.ref_name }}_macos.zip`
+            • Windows: `rlink_${{ github.ref_name }}_windows.zip`
+            • RuStore AAB: `rlink_${{ github.ref_name }}_rustore.aab`
 
   build-windows:
     name: Build Windows
@@ -110,8 +124,6 @@ jobs:
             Expand-Archive -Path $zip -DestinationPath $tp -Force
           }
           Get-ChildItem $tp | Select-Object Name
-      # No GITHUB_* dart-defines: the updater defaults to the public Rlink-releases
-      # repo and reads it anonymously, so no write-capable token is baked in.
       # CL env var injects the define into every cl.exe call so plugins that pull
       # <experimental/coroutine> (audioplayers/gal/permission_handler/…) don't hard-error.
       - name: Build
@@ -121,20 +133,21 @@ jobs:
       - name: ZIP
         shell: pwsh
         run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "rlink_${{ github.ref_name }}_windows.zip"
-      - uses: actions/upload-artifact@v4
+      - name: Upload to Rlink-releases
+        uses: softprops/action-gh-release@v2
         with:
-          name: windows
-          retention-days: 1
-          path: rlink_*_windows.zip
+          repository: MihailKashintsev/Rlink-releases
+          tag_name: ${{ github.ref_name }}
+          name: "Rlink ${{ github.ref_name }}"
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          token: ${{ secrets.RELEASES_PAT }}
+          files: rlink_*_windows.zip
 
   build-macos:
     name: Build macOS
-    # NOTE: macOS currently fails on a WhisperKit SPM dependency conflict —
-    # macos-latest (Xcode 16/Swift 6) resolves swift-transformers 1.1.9 but it
-    # won't compile (Config.swift ObjectKey), while macos-14 (Xcode 15) can't
-    # even resolve (swift-jinja 2.0 needs swift-tools 6.0). Needs a dedicated fix
-    # (pin a Swift-6-clean swift-transformers / bump WhisperKit). Kept on
-    # macos-latest as the more tractable base. Publish still ships Android+Windows.
+    # NOTE: macOS can fail on a WhisperKit SPM dependency conflict on some Xcode
+    # images. It's independent now — a macOS failure never blocks Android/Windows.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -150,51 +163,42 @@ jobs:
         run: |
           cd build/macos/Build/Products/Release
           zip -r "$GITHUB_WORKSPACE/rlink_${{ github.ref_name }}_macos.zip" Rlink.app
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos
-          retention-days: 1
-          path: rlink_*_macos.zip
-
-  publish:
-    name: Publish to Rlink-releases
-    needs: [build-android, build-windows, build-macos]
-    # Publish as long as Android succeeded; don't let a flaky Windows toolchain
-    # hold the whole release hostage. macOS/Windows are included only if their
-    # jobs produced artifacts.
-    if: ${{ always() && needs.build-android.result == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
-          merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - name: Upload to Rlink-releases
+        uses: softprops/action-gh-release@v2
         with:
           repository: MihailKashintsev/Rlink-releases
           tag_name: ${{ github.ref_name }}
           name: "Rlink ${{ github.ref_name }}"
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: artifacts/*
           token: ${{ secrets.RELEASES_PAT }}
-          body: |
-            Rlink ${{ github.ref_name }}
+          files: rlink_*_macos.zip
 
-            • Android APK: `Rlink-${{ github.ref_name }}.apk` (установи, разрешив «неизвестные источники»)
-            • macOS: `rlink_${{ github.ref_name }}_macos.zip`
-            • Windows: `rlink_${{ github.ref_name }}_windows.zip`
-            • RuStore AAB: `rlink_${{ github.ref_name }}_rustore.aab`
-
-      # Mirror the update to our OWN server (relay) so the in-app auto-updater
-      # doesn't depend on GitHub (throttled/blocked in RU). Uploads the binaries
-      # + regenerates the manifest the app polls. No-ops if the secret is absent.
-      - name: Publish update to relay (own server)
-        # The GitHub release above is the source of truth; a temporarily
-        # unreachable relay must NOT mark the whole release as failed. If this
-        # is skipped/failed, re-sync the relay manually (relay wgets the assets
-        # from the GitHub release + regenerates manifest.json).
-        continue-on-error: true
+  relay:
+    name: Publish update to relay (own server)
+    needs: [build-android, build-windows, build-macos]
+    # Runs as long as Android built; a flaky Windows/macOS or a down relay must
+    # not block it. The relay is best-effort (source of truth is the GitHub
+    # release) — if it fails, re-sync manually the same way this job does.
+    if: ${{ always() && needs.build-android.result == 'success' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Pull assets from the GitHub release
+        env:
+          V: ${{ github.ref_name }}
+        run: |
+          B=https://github.com/MihailKashintsev/Rlink-releases/releases/download/$V
+          mkdir -p artifacts && cd artifacts
+          for f in "Rlink-$V.apk" "rlink_${V}_windows.zip" "rlink_${V}_macos.zip"; do
+            if curl -fsSL --retry 6 --retry-delay 3 -o "$f" "$B/$f"; then
+              echo "got $f"
+            else
+              rm -f "$f"; echo "miss $f (build may have failed — will omit)"
+            fi
+          done
+          ls -lah
+      - name: Mirror to relay + regenerate manifest
         env:
           RELAY_SSH_KEY: ${{ secrets.RELAY_SSH_KEY }}
           V: ${{ github.ref_name }}
@@ -210,9 +214,7 @@ jobs:
           HOST=root@185.244.172.90
           DIR=/var/www/rlink-updates
           B=https://185.244.172.90.nip.io/updates
-          # Only list a platform if its artifact actually built — otherwise the
-          # site/updater would point at a file that was never uploaded.
-          au=""; [ -f "artifacts/Rlink-${V}.apk" ]        && au="$B/Rlink-${V}.apk"
+          au=""; [ -f "artifacts/Rlink-${V}.apk" ]         && au="$B/Rlink-${V}.apk"
           wu=""; [ -f "artifacts/rlink_${V}_windows.zip" ] && wu="$B/rlink_${V}_windows.zip"
           mu=""; [ -f "artifacts/rlink_${V}_macos.zip" ]   && mu="$B/rlink_${V}_macos.zip"
           jq -n --arg v "$V" --arg au "$au" --arg wu "$wu" --arg mu "$mu" '{
@@ -224,8 +226,6 @@ jobs:
             if [ -f "artifacts/$f" ]; then $SCP "artifacts/$f" "$HOST:$DIR/$f"; else echo "skip missing $f"; fi
           done
           $SCP manifest.json "$HOST:$DIR/manifest.json"
-          # Keep ONLY the current version on the relay: delete every older build
-          # so updates don't pile up and eat disk. GitHub Rlink-releases still
-          # keeps the full version history.
+          # Keep ONLY the current version on the relay (GitHub keeps full history).
           $SSH $HOST "cd $DIR && for f in Rlink-*.apk rlink_*_windows.zip rlink_*_macos.zip rlink_*_linux.tar.gz; do [ -e \"\$f\" ] || continue; case \"\$f\" in Rlink-${V}.apk|rlink_${V}_windows.zip|rlink_${V}_macos.zip|rlink_${V}_linux.tar.gz) : ;; *) rm -f \"\$f\" && echo \"removed old \$f\" ;; esac; done && chmod -R 755 $DIR && ls -lah $DIR"
           echo "relay update published: $V"
