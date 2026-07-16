@@ -1129,6 +1129,10 @@ class ChannelService {
       }
     } catch (_) {}
 
+    // Which directory channels do we already have locally (one query, O(1)
+    // lookups below).
+    final localIds = (await getChannels()).map((c) => c.id).toSet();
+
     var changed = false;
     for (final item in raw) {
       if (item is! Map) continue;
@@ -1145,12 +1149,18 @@ class ChannelService {
 
       final updatedAt = (p['updatedAt'] as num?)?.toInt() ?? 0;
       if (updatedAt <= 0) continue;
-      if (updatedAt <= (revs[channelId] ?? 0)) continue;
-
       if ((p['isPublic'] as bool?) == false) continue;
 
       final name = p['name'] as String?;
       if (name == null || name.isEmpty) continue;
+
+      // Rev-gate: skip entries already applied at this rev — BUT only if the
+      // channel is still present locally. If it was removed/lost, re-apply it
+      // even at the same rev; an OFFLINE admin won't re-publish (bump updatedAt),
+      // so otherwise the channel becomes permanently un-findable in search.
+      if (updatedAt <= (revs[channelId] ?? 0) && localIds.contains(channelId)) {
+        continue;
+      }
 
       await applyChannelMetaFromPayload(p);
       revs[channelId] = updatedAt;

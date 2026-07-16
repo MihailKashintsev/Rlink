@@ -268,7 +268,8 @@ class RelayService with WidgetsBindingObserver {
   }
 
   /// Get X25519 key for a peer discovered via relay
-  String? getPeerX25519Key(String publicKey) => _peerX25519Keys[publicKey];
+  String? getPeerX25519Key(String publicKey) =>
+      _peerX25519Keys[publicKey.toLowerCase()] ?? _peerX25519Keys[publicKey];
 
   String? relayBotAvatarUrl(String publicKey) {
     if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(publicKey)) return null;
@@ -1697,7 +1698,7 @@ class RelayService with WidgetsBindingObserver {
       if (cmds.isNotEmpty) {
         _relayBotCommandsById[id] = cmds;
       }
-      _peerX25519Keys[id] = x;
+      _peerX25519Keys[id.toLowerCase()] = x;
       BleService.instance.registerPeerX25519Key(id, x);
       unawaited(ChatStorageService.instance.updateContactX25519Key(id, x));
       final av = (m['avatarUrl'] as String?)?.trim() ?? '';
@@ -1785,7 +1786,7 @@ class RelayService with WidgetsBindingObserver {
         );
       }
       if (peer.x25519Key.isNotEmpty && peer.publicKey.isNotEmpty) {
-        _peerX25519Keys[peer.publicKey] = peer.x25519Key;
+        _peerX25519Keys[peer.publicKey.toLowerCase()] = peer.x25519Key;
         BleService.instance
             .registerPeerX25519Key(peer.publicKey, peer.x25519Key);
         unawaited(ChatStorageService.instance
@@ -1850,7 +1851,7 @@ class RelayService with WidgetsBindingObserver {
     // Store X25519 key if provided (for E2E encryption with relay-discovered peers)
     final x25519Key = msg['x25519'] as String?;
     if (x25519Key != null && x25519Key.isNotEmpty) {
-      _peerX25519Keys[publicKey] = x25519Key;
+      _peerX25519Keys[publicKey.toLowerCase()] = x25519Key;
       BleService.instance.registerPeerX25519Key(publicKey, x25519Key);
       unawaited(ChatStorageService.instance
           .updateContactX25519Key(publicKey, x25519Key));

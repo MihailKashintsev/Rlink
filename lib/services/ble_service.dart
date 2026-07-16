@@ -108,14 +108,18 @@ class BleService {
   }
 
   /// Регистрирует X25519 публичный ключ пира (для E2E шифрования).
+  /// Ключуем в НИЖНЕМ регистре — публичные ключи приходят из разных источников
+  /// (presence/search/профиль/контакты) в разном регистре, а рассинхрон регистра
+  /// давал missing_peer_encryption_key при отправке (напр. Android→Web).
   void registerPeerX25519Key(String publicKey, String x25519KeyBase64) {
     if (x25519KeyBase64.isNotEmpty) {
-      _x25519Keys[publicKey] = x25519KeyBase64;
+      _x25519Keys[publicKey.toLowerCase()] = x25519KeyBase64;
     }
   }
 
   /// Возвращает X25519 публичный ключ пира (base64) или null если неизвестен.
-  String? getPeerX25519Key(String publicKey) => _x25519Keys[publicKey];
+  String? getPeerX25519Key(String publicKey) =>
+      _x25519Keys[publicKey.toLowerCase()] ?? _x25519Keys[publicKey];
 
   /// Возвращает последний известный RSSI для пира (по publicKey или BLE ID).
   int? getRssi(String peerId) {
