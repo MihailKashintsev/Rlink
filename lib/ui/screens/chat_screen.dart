@@ -5879,9 +5879,11 @@ class _ChatScreenState extends State<ChatScreen> {
       // Snapshot is best-effort. Skip it on web entirely — toImage can hang on
       // the web renderer, which would block the menu from ever opening.
       ui.Image? image;
-      if (!kIsWeb &&
-          bubbleRo is RenderRepaintBoundary &&
-          !bubbleRo.debugNeedsPaint) {
+      // NB: do NOT gate on `debugNeedsPaint` — it's a debug-only getter that
+      // throws LateInitializationError in RELEASE builds (assert stripped), which
+      // aborted the whole long-press handler → the message menu/blur never opened
+      // on Android release. toImage is already wrapped in try/catch below.
+      if (!kIsWeb && bubbleRo is RenderRepaintBoundary) {
         try {
           image = await bubbleRo
               .toImage(pixelRatio: MediaQuery.of(context).devicePixelRatio)

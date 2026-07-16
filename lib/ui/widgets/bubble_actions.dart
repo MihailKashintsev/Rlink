@@ -20,7 +20,9 @@ Future<void> showBubbleActions({
   if (ro is! RenderBox || !ro.hasSize) return;
   final rect = ro.localToGlobal(Offset.zero) & ro.size;
   ui.Image? image;
-  if (!kIsWeb && ro is RenderRepaintBoundary && !ro.debugNeedsPaint) {
+  // `debugNeedsPaint` throws LateInitializationError in RELEASE builds — never
+  // use it in production. toImage is guarded by the try/catch below.
+  if (!kIsWeb && ro is RenderRepaintBoundary) {
     try {
       image = await ro
           .toImage(pixelRatio: MediaQuery.of(context).devicePixelRatio)
