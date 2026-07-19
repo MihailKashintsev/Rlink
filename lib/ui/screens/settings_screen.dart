@@ -41,6 +41,7 @@ import '../screens/emoji_hub_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/diagnostics_screen.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/update_restart_dialog.dart';
 import '../widgets/status_emoji_view.dart';
 import '../screens/about_screen.dart';
 import '../screens/documentation_screen.dart';
@@ -609,6 +610,9 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         searchField,
+        // Прогресс фоновой загрузки обновления / кнопка установки (сам скрыт,
+        // когда обновления нет).
+        const UpdateProgressTile(),
         for (var i = 0; i < groups.length; i++) ...[
           if (i > 0) const SizedBox(height: 8),
           _CategoryGroup(isDark: isDark, items: groups[i]),

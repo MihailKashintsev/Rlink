@@ -65,6 +65,16 @@ class UpdateService {
 
   ValueNotifier<double?> downloadProgress = ValueNotifier(null);
 
+  /// Выставляется, когда обновление уже СКАЧАНО и готово к установке. UI по
+  /// этому сигналу показывает окно-предупреждение «приложение перезапустится»,
+  /// а затем вызывает [install]. Загрузка при этом идёт в фоне — не мешает
+  /// пользоваться мессенджером.
+  final ValueNotifier<UpdateInfo?> readyToInstall = ValueNotifier(null);
+
+  String? _readyFilePath;
+  UpdateInfo? _readyInfo;
+  bool _downloading = false;
+
   /// На Android загрузка идёт в фоне (системный DownloadManager) — приложение
   /// можно свернуть, скачивание продолжится. На остальных ОС загрузка живёт
   /// в процессе приложения, поэтому его лучше не закрывать.
@@ -109,42 +119,74 @@ class UpdateService {
     }
   }
 
-  Future<void> downloadAndInstall(UpdateInfo info) async {
+  /// Открывает страницу загрузки в браузере (iOS / любой openExternalDownloadPage
+  /// — сами установить не можем).
+  Future<void> openDownloadPage(UpdateInfo info) async {
+    final uri = Uri.parse(info.downloadUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  /// Скачивает обновление В ФОНЕ, НЕ устанавливая сразу. Прогресс виден в
+  /// настройках ([downloadProgress]). По завершении выставляет [readyToInstall];
+  /// саму установку запускает UI — после окна с предупреждением о перезапуске.
+  Future<void> startDownload(UpdateInfo info) async {
     if (!isUpdateSupported) return;
-
-    // iOS (и любой openExternalDownloadPage): установить из приложения нельзя —
-    // открываем страницу загрузки в браузере.
-    if (info.openExternalDownloadPage || Platform.isIOS) {
-      final uri = Uri.parse(info.downloadUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-      return;
-    }
-
-    // Android: качаем в фоне через системный DownloadManager — загрузка идёт
-    // вне процесса приложения и продолжается, даже если его свернуть/выгрузить.
-    if (Platform.isAndroid) {
-      await _downloadAndroidBackground(info);
-      return;
-    }
-
-    // Десктоп: качаем во временную папку и заменяем себя / перезапускаемся.
-    final dir = await getTemporaryDirectory();
-    final filePath = '${dir.path}/${info.assetName}';
-    downloadProgress.value = 0.0;
+    // iOS / внешняя страница: устанавливать нечем — это не фоновый поток.
+    if (info.openExternalDownloadPage || Platform.isIOS) return;
+    if (_downloading) return; // уже качаем
+    if (readyToInstall.value != null) return; // уже скачано, ждём установки
+    _downloading = true;
     try {
-      await _downloadResilient(info, filePath);
-      downloadProgress.value = 1.0;
-      if (Platform.isWindows) {
-        await _installWindows(filePath);
-      } else if (Platform.isMacOS) {
-        await _installMacOS(filePath);
-      } else if (Platform.isLinux) {
-        await _installLinux(filePath);
+      if (Platform.isAndroid) {
+        // Системный DownloadManager: качает вне процесса приложения, можно
+        // свернуть/выгрузить. По завершении сам выставит readyToInstall.
+        await _downloadAndroidBackground(info);
+      } else {
+        // Десктоп: качаем во временную папку (async-IO, UI не блокируется).
+        final dir = await getTemporaryDirectory();
+        final filePath = '${dir.path}/${info.assetName}';
+        downloadProgress.value = 0.0;
+        await _downloadResilient(info, filePath);
+        _markReadyToInstall(info, filePath);
       }
-    } finally {
+    } catch (e) {
+      debugPrint('[UpdateService] download failed: $e');
       downloadProgress.value = null;
+    } finally {
+      _downloading = false;
+    }
+  }
+
+  /// Помечает обновление скачанным и готовым к установке (UI покажет окно и
+  /// затем вызовет [install]).
+  void _markReadyToInstall(UpdateInfo info, String? path) {
+    _readyInfo = info;
+    _readyFilePath = path;
+    downloadProgress.value = 1.0;
+    readyToInstall.value = info;
+  }
+
+  /// Запускает установку уже скачанного обновления. Android — системный
+  /// установщик (приложение закроется и перезапустится после установки);
+  /// десктоп — распаковка поверх + перезапуск (внутри `exit(0)`).
+  Future<void> install() async {
+    final info = _readyInfo;
+    final path = _readyFilePath;
+    if (info == null) return;
+    try {
+      if (Platform.isAndroid) {
+        if (path != null && path.isNotEmpty) await _installAndroid(path);
+      } else if (Platform.isWindows) {
+        if (path != null) await _installWindows(path);
+      } else if (Platform.isMacOS) {
+        if (path != null) await _installMacOS(path);
+      } else if (Platform.isLinux) {
+        if (path != null) await _installLinux(path);
+      }
+    } catch (e) {
+      debugPrint('[UpdateService] install failed: $e');
     }
   }
 
@@ -184,7 +226,7 @@ class UpdateService {
     }
     if (id == null || id < 0) {
       // DownloadManager недоступен — фолбэк на устойчивую dio-загрузку.
-      await _downloadViaDioAndInstall(info);
+      await _downloadViaDioResilient(info);
       return;
     }
     await _savePending(id, info);
@@ -212,20 +254,16 @@ class UpdateService {
           downloadProgress.value = (downloaded / total).clamp(0.0, 1.0);
         }
         if (status == 'successful') {
-          downloadProgress.value = 1.0;
           final path = st['path'] as String?;
           await _clearPending();
-          if (path != null && path.isNotEmpty) {
-            await _installAndroid(path);
-          }
-          downloadProgress.value = null;
+          _markReadyToInstall(info, path); // не ставим сразу — ждём окна в UI
           return;
         }
         if (status == 'failed' || status == 'unknown') {
           // Системная загрузка сорвалась (или запись смахнули из шторки) —
           // устойчивый фолбэк: dio с ретраями + GitHub.
           await _clearPending();
-          await _downloadViaDioAndInstall(info);
+          await _downloadViaDioResilient(info);
           return;
         }
         // pending / running / paused — продолжаем ждать.
@@ -236,8 +274,8 @@ class UpdateService {
   }
 
   /// Фолбэк, когда DownloadManager недоступен/сорвался: качаем через dio
-  /// (ретраи + GitHub) во временную папку и запускаем установщик.
-  Future<void> _downloadViaDioAndInstall(UpdateInfo info) async {
+  /// (ретраи + GitHub) во временную папку и помечаем готовым к установке.
+  Future<void> _downloadViaDioResilient(UpdateInfo info) async {
     if (info.downloadUrl.isEmpty) {
       downloadProgress.value = null;
       return;
@@ -247,9 +285,9 @@ class UpdateService {
     downloadProgress.value = 0.0;
     try {
       await _downloadResilient(info, filePath);
-      downloadProgress.value = 1.0;
-      await _installAndroid(filePath);
-    } finally {
+      _markReadyToInstall(info, filePath);
+    } catch (e) {
+      debugPrint('[UpdateService] dio fallback failed: $e');
       downloadProgress.value = null;
     }
   }
@@ -280,11 +318,9 @@ class UpdateService {
     if (status == 'successful') {
       final path = st!['path'] as String?;
       await _clearPending();
-      if (path != null && path.isNotEmpty) {
-        downloadProgress.value = 1.0;
-        await _installAndroid(path);
-        downloadProgress.value = null;
-      }
+      // Загрузка завершилась, пока приложения не было, — не ставим молча:
+      // помечаем готовым, UI покажет окно «перезапуск для установки».
+      _markReadyToInstall(info, path);
       return true;
     }
     if (status == 'pending' || status == 'running' || status == 'paused') {
