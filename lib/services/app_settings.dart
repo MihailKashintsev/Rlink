@@ -20,6 +20,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyThemeMode = 'theme_mode';
   static const _keyAccentColor = 'accent_color';
   static const _keyNotifications = 'notifications';
+  static const _keyPushOptOut = 'push_opt_out';
   static const _keyNotifSound = 'notif_sound';
   static const _keyNotifVibration = 'notif_vibration';
   static const _keyChatBgPrefix = 'chat_bg_';
@@ -184,7 +185,9 @@ class AppSettings extends ChangeNotifier {
   int _transcriptionModelSize = 0; // 0=tiny, 1=base, 2=small
   int _appPalette = 0;
   bool _animatedGradient = false;
-  bool _liquidGlass = true;
+  // «Стеклянное» размытие (BackdropFilter) очень дорого на Android → по
+  // умолчанию выключено там; на iOS/десктопе (быстрее) — включено.
+  bool _liquidGlass = !RuntimePlatform.isAndroid;
   bool _newDesign = true;
   bool _chatBackground = true;
   double _animationLevel = 1.0;
@@ -464,7 +467,7 @@ class AppSettings extends ChangeNotifier {
         (_prefs.getInt(_keyTranscriptionModelSize) ?? 0).clamp(0, 2);
     _appPalette = (_prefs.getInt(_keyAppPalette) ?? 0).clamp(0, 99);
     _animatedGradient = _prefs.getBool(_keyAnimatedGradient) ?? false;
-    _liquidGlass = _prefs.getBool(_keyLiquidGlass) ?? true;
+    _liquidGlass = _prefs.getBool(_keyLiquidGlass) ?? !RuntimePlatform.isAndroid;
     _newDesign = _prefs.getBool(_keyNewDesign) ?? true;
     _chatBackground = _prefs.getBool(_keyChatBackground) ?? true;
     _animationLevel = (_prefs.getDouble(_keyAnimationLevel) ?? 1.0).clamp(0.0, 1.0);

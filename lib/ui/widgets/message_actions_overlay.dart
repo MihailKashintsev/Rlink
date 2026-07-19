@@ -2,6 +2,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../services/app_settings.dart';
+
 /// One row in the compact message action menu.
 class MessageMenuAction {
   final IconData icon;
@@ -104,13 +106,20 @@ class _MessageActionsLayer extends StatelessWidget {
                 // bubble so the real message stays sharp above the blur.
                 child: ClipPath(
                   clipper: snapshot == null ? _HoleClipper(rect) : null,
-                  child: BackdropFilter(
-                    filter:
-                        ui.ImageFilter.blur(sigmaX: 9 * t, sigmaY: 9 * t),
-                    child: Container(
-                      color: Colors.black.withValues(alpha: 0.22 * t),
-                    ),
-                  ),
+                  // Размытие фона под меню дорого на Android (пересчёт каждый
+                  // кадр анимации открытия) — при выключенном стекле берём
+                  // просто затемняющую подложку без BackdropFilter.
+                  child: AppSettings.instance.liquidGlass
+                      ? BackdropFilter(
+                          filter: ui.ImageFilter.blur(
+                              sigmaX: 9 * t, sigmaY: 9 * t),
+                          child: Container(
+                            color: Colors.black.withValues(alpha: 0.22 * t),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.black.withValues(alpha: 0.5 * t),
+                        ),
                 ),
               ),
             ),

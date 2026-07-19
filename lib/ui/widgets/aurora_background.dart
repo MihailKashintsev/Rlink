@@ -44,7 +44,14 @@ class _AuroraBackgroundState extends State<AuroraBackground>
 
   void _maybeAnimate() {
     final s = AppSettings.instance;
-    final on = _appActive && s.newDesign && s.animationLevel > 0.05;
+    // Анимируем свечение ТОЛЬКО если пользователь включил «анимированный фон».
+    // По умолчанию выкл: статический градиент не перерисовывает весь экран
+    // каждый кадр и не заставляет стеклянный хром (BackdropFilter) пересчитывать
+    // размытие постоянно — это и была главная причина 30 fps на Android.
+    final on = _appActive &&
+        s.newDesign &&
+        s.animatedGradient &&
+        s.animationLevel > 0.05;
     if (on && !_c.isAnimating) {
       _c.repeat();
     } else if (!on && _c.isAnimating) {

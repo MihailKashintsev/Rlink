@@ -1179,15 +1179,26 @@ class _AppearancePageState extends State<_AppearancePage> {
           ),
           // ── Движение и анимации ──────────────────────────────────
           const _SectionHeader('Движение и анимации'),
-          if (RuntimePlatform.isIos)
-            SwitchListTile(
-              secondary: Icon(Icons.blur_on_rounded, color: cs.primary),
-              title: const Text('Жидкое стекло (iOS)'),
-              subtitle: Text('Полупрозрачные «стеклянные» панели',
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-              value: settings.liquidGlass,
-              onChanged: (v) => settings.setLiquidGlass(v),
-            ),
+          SwitchListTile(
+            secondary: Icon(Icons.blur_on_rounded, color: cs.primary),
+            title: const Text('Жидкое стекло (размытие)'),
+            subtitle: Text(
+                RuntimePlatform.isAndroid
+                    ? 'Размытые «стеклянные» панели. Красиво, но снижает плавность — выключите, если подтормаживает'
+                    : 'Полупрозрачные панели с размытием фона',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            value: settings.liquidGlass,
+            onChanged: (v) => settings.setLiquidGlass(v),
+          ),
+          SwitchListTile(
+            secondary: Icon(Icons.gradient_rounded, color: cs.primary),
+            title: const Text('Анимированный фон'),
+            subtitle: Text(
+                'Плавно переливающийся градиент. Выключен по умолчанию ради скорости',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            value: settings.animatedGradient,
+            onChanged: (v) => settings.setAnimatedGradient(v),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Column(

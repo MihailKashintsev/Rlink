@@ -95,19 +95,28 @@ class RlinkDesign {
     List<BoxShadow>? shadows,
   }) {
     final cs = Theme.of(context).colorScheme;
+    // «Жидкое стекло» (размытие фона) — самый дорогой эффект: BackdropFilter над
+    // прокручиваемым/анимированным контентом пере-считывается каждый кадр и
+    // роняет FPS на Android. Когда стекло выключено — рисуем ту же панель более
+    // плотной заливкой БЕЗ BackdropFilter (визуально почти то же, но дёшево).
+    final glass = AppSettings.instance.liquidGlass;
+    final panel = DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: glass ? fill : (fill + 0.4).clamp(0.0, 1.0)),
+        borderRadius: borderRadius,
+        border: border,
+        boxShadow: shadows,
+      ),
+      child: child,
+    );
+    if (!glass) {
+      return ClipRRect(borderRadius: borderRadius, child: panel);
+    }
     return ClipRRect(
       borderRadius: borderRadius,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: cs.surface.withValues(alpha: fill),
-            borderRadius: borderRadius,
-            border: border,
-            boxShadow: shadows,
-          ),
-          child: child,
-        ),
+        child: panel,
       ),
     );
   }

@@ -547,8 +547,11 @@ class _EtherCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        // Размытие фона под каждой карточкой ленты дорого при прокрутке на
+        // Android — при выключенном стекле рисуем карточку без BackdropFilter
+        // (заливка и так почти непрозрачная).
+        child: _EtherCardBlurWrap(
+          blur: AppSettings.instance.liquidGlass,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
             child: Column(
@@ -841,6 +844,24 @@ class _EtherInputState extends State<_EtherInput>
           },
         ),
       ),
+    );
+  }
+}
+
+/// Обёртка карточки ленты: размывает фон под ней (стекло) либо, когда стекло
+/// выключено (по умолчанию на Android), просто отдаёт ребёнка без BackdropFilter
+/// — чтобы прокрутка ленты не проседала по FPS.
+class _EtherCardBlurWrap extends StatelessWidget {
+  final bool blur;
+  final Widget child;
+  const _EtherCardBlurWrap({required this.blur, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!blur) return child;
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+      child: child,
     );
   }
 }
