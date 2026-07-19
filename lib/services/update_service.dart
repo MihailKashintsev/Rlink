@@ -99,9 +99,13 @@ class UpdateService {
       final latest = _normalizeVersionTag(rawVersion);
       if (!_isNewer(latest, current)) return null;
 
-      final assets = manifest['assets'];
-      final url = _assetUrlForPlatform(
-          assets is Map ? Map<String, dynamic>.from(assets) : null);
+      final assets = manifest['assets'] is Map
+          ? Map<String, dynamic>.from(manifest['assets'] as Map)
+          : null;
+      // На Android выбираем APK под ABI устройства (меньший файл = быстрее
+      // качается): arm64 по умолчанию, отдельный arm32 для старых 32-бит.
+      final abi = Platform.isAndroid ? await _deviceAbi() : '';
+      final url = _assetUrlForPlatform(assets, abi);
       // iOS не может установить сам: показываем баннер только если задана
       // страница загрузки (assets.ios). Иначе не тревожим.
       if (url == null || url.isEmpty) return null;
@@ -435,21 +439,40 @@ class UpdateService {
     exit(0);
   }
 
-  String? _assetUrlForPlatform(Map<String, dynamic>? assets) {
+  String? _assetUrlForPlatform(Map<String, dynamic>? assets, String abi) {
     if (assets == null) return null;
+    if (Platform.isAndroid) {
+      // 32-битные ARM (armeabi-v7a / armv7) — берём отдельный arm32-APK, если
+      // он есть; иначе `android` (arm64, покрывает подавляющее большинство).
+      final is32 = abi.startsWith('armeabi') ||
+          (abi.contains('arm') && !abi.contains('64'));
+      if (is32) {
+        final a32 = assets['android_arm32'] as String?;
+        if (a32 != null && a32.isNotEmpty) return a32;
+      }
+      return assets['android'] as String?;
+    }
     final key = Platform.isWindows
         ? 'windows'
         : Platform.isMacOS
             ? 'macos'
             : Platform.isLinux
                 ? 'linux'
-                : Platform.isAndroid
-                    ? 'android'
-                    : Platform.isIOS
-                        ? 'ios'
-                        : null;
+                : Platform.isIOS
+                    ? 'ios'
+                    : null;
     if (key == null) return null;
     return assets[key] as String?;
+  }
+
+  /// Основная ABI Android-устройства (`arm64-v8a` / `armeabi-v7a` / …).
+  Future<String> _deviceAbi() async {
+    if (!Platform.isAndroid) return '';
+    try {
+      return await _installChannel.invokeMethod<String>('deviceAbi') ?? '';
+    } catch (_) {
+      return '';
+    }
   }
 
   String _fileNameFromUrl(String url) {

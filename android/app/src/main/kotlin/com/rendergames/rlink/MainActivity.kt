@@ -326,6 +326,11 @@ class MainActivity : FlutterActivity() {
                         }
                         result.success(null)
                     }
+                    "deviceAbi" -> {
+                        // Основная ABI устройства (arm64-v8a / armeabi-v7a / …) —
+                        // чтобы апдейтер скачал правильный (маленький) APK под неё.
+                        result.success(Build.SUPPORTED_ABIS.firstOrNull() ?: "")
+                    }
                     else -> result.notImplemented()
                 }
             }
