@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show File;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -11,22 +12,39 @@ import 'package:image_picker/image_picker.dart';
 import '../../main.dart' show broadcastMyAvatar;
 import '../../services/image_service.dart';
 import '../../services/profile_service.dart';
+import 'avatar_crop_screen.dart';
 import 'desktop_image_picker.dart';
 
 /// Pick a new profile photo and save + broadcast it directly — no profile-edit
 /// screen needed (the avatar is managed via its long-press menu; the edit screen
 /// handles everything else). Returns true if the photo changed.
 Future<bool> pickAndSaveProfileAvatar(BuildContext context) async {
-  String? newPath;
+  // Сначала получаем исходные байты (web/native), затем ОБЯЗАТЕЛЬНО показываем
+  // экран обрезки с круглым предпросмотром — так пользователь видит, как аватар
+  // обрежется, и результат всегда квадратный (не растягивается).
+  Uint8List? srcBytes;
   if (kIsWeb) {
     final r = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: false,
       withData: true,
     );
-    final bytes = r?.files.single.bytes;
-    if (bytes == null) return false;
-    final dataUrl = webAvatarDataUrl(bytes);
+    srcBytes = r?.files.single.bytes;
+  } else {
+    final raw = await pickImagePathDesktopAware(imagePicker: ImagePicker());
+    if (raw != null) srcBytes = await File(raw).readAsBytes();
+  }
+  if (srcBytes == null) return false;
+  if (!context.mounted) return false;
+
+  final cropped = await Navigator.of(context).push<Uint8List?>(
+    MaterialPageRoute(builder: (_) => AvatarCropScreen(imageBytes: srcBytes!)),
+  );
+  if (cropped == null) return false; // отменил обрезку
+
+  String? newPath;
+  if (kIsWeb) {
+    final dataUrl = webAvatarDataUrl(cropped);
     if (dataUrl == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -38,9 +56,7 @@ Future<bool> pickAndSaveProfileAvatar(BuildContext context) async {
     }
     newPath = dataUrl;
   } else {
-    final raw = await pickImagePathDesktopAware(imagePicker: ImagePicker());
-    if (raw == null) return false;
-    newPath = await ImageService.instance.compressAndSave(raw, isAvatar: true);
+    newPath = await ImageService.instance.saveAvatarFromBytes(cropped);
   }
   await ProfileService.instance.updateProfile(
     setAvatarImagePath: true,

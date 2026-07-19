@@ -162,6 +162,37 @@ class ImageService {
     return result.path;
   }
 
+  /// Квадратный аватар после обрезки: JPEG до ~512 px, имя `avatar_*.jpg`.
+  /// Байты уже обрезаны в квадрат (из AvatarCropScreen), поэтому картинка не
+  /// растягивается ни при каком соотношении сторон исходника.
+  Future<String> saveAvatarFromBytes(Uint8List croppedBytes) async {
+    final dir = await _imagesDir();
+    final tmpPath = p.join(dir.path, 'ava_crop_${_uuid.v4()}.png');
+    final tmpFile = File(tmpPath);
+    await tmpFile.writeAsBytes(croppedBytes);
+    final out = p.join(dir.path, 'avatar_${_uuid.v4()}.jpg');
+    try {
+      final result = await FlutterImageCompress.compressAndGetFile(
+        tmpPath,
+        out,
+        minWidth: 512,
+        minHeight: 512,
+        quality: 82,
+        format: CompressFormat.jpeg,
+      );
+      if (result != null) return result.path;
+    } catch (_) {
+      // fall through to PNG fallback
+    } finally {
+      try {
+        await tmpFile.delete();
+      } catch (_) {}
+    }
+    final fallback = p.join(dir.path, 'avatar_${_uuid.v4()}.png');
+    await File(fallback).writeAsBytes(croppedBytes);
+    return fallback;
+  }
+
   /// Квадратный стикер после обрезки: JPEG до ~512 px, имя `stk_*.jpg`.
   Future<String> saveStickerFromBytes(Uint8List croppedBytes) async {
     final dir = await _imagesDir();
