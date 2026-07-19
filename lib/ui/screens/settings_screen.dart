@@ -3691,6 +3691,18 @@ class _ChatBgTile extends StatelessWidget {
     await settings.setChatBgForPeer('__global__', dest.path);
   }
 
+  /// Убирает глобальный фон чата: очищает настройку и удаляет сам файл.
+  Future<void> _removeBg() async {
+    final path = settings.chatBgForPeer('__global__');
+    await settings.setChatBgForPeer('__global__', null);
+    if (path != null && !RuntimePlatform.isWeb) {
+      try {
+        final f = File(path);
+        if (f.existsSync()) await f.delete();
+      } catch (_) {/* файл мог быть уже удалён — не критично */}
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -3698,41 +3710,55 @@ class _ChatBgTile extends StatelessWidget {
     final hasBg =
         !RuntimePlatform.isWeb && bgPath != null && File(bgPath).existsSync();
 
-    return ListTile(
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: hasBg
-            ? Image.file(File(bgPath), width: 44, height: 44, fit: BoxFit.cover)
-            : Container(
-                width: 44,
-                height: 44,
-                color: cs.surfaceContainerHigh,
-                child:
-                    Icon(Icons.wallpaper_outlined, color: cs.onSurfaceVariant),
-              ),
-      ),
-      title: Text(AppL10n.t('settings_chat_bg')),
-      subtitle: Text(
-        RuntimePlatform.isWeb
-            ? 'Недоступно в web-версии'
-            : bgPath != null
-                ? AppL10n.t('settings_chat_bg_custom')
-                : AppL10n.t('settings_chat_bg_none'),
-        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-      ),
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (bgPath != null)
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
-            tooltip: AppL10n.t('settings_chat_bg_remove_tooltip'),
-            onPressed: () => settings.setChatBgForPeer('__global__', null),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListTile(
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: hasBg
+                ? Image.file(File(bgPath),
+                    width: 44, height: 44, fit: BoxFit.cover)
+                : Container(
+                    width: 44,
+                    height: 44,
+                    color: cs.surfaceContainerHigh,
+                    child: Icon(Icons.wallpaper_outlined,
+                        color: cs.onSurfaceVariant),
+                  ),
           ),
-        IconButton(
-          icon: const Icon(Icons.photo_library_outlined),
-          tooltip: AppL10n.t('settings_chat_bg_pick_tooltip'),
-          onPressed: () => _pickBg(context),
+          title: Text(AppL10n.t('settings_chat_bg')),
+          subtitle: Text(
+            RuntimePlatform.isWeb
+                ? 'Недоступно в web-версии'
+                : bgPath != null
+                    ? AppL10n.t('settings_chat_bg_custom')
+                    : AppL10n.t('settings_chat_bg_none'),
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+          trailing: IconButton(
+            icon: const Icon(Icons.photo_library_outlined),
+            tooltip: AppL10n.t('settings_chat_bg_pick_tooltip'),
+            onPressed: () => _pickBg(context),
+          ),
         ),
-      ]),
+        // Явная кнопка удаления фона — видна, только когда фон установлен.
+        if (bgPath != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _removeBg,
+                icon: Icon(Icons.delete_outline, color: cs.error, size: 20),
+                label: Text(
+                  AppL10n.t('settings_chat_bg_remove'),
+                  style: TextStyle(color: cs.error, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
