@@ -1,5 +1,6 @@
 package com.rendergames.rlink
 
+import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,6 +10,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Environment
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -269,26 +272,127 @@ class MainActivity : FlutterActivity() {
         // Native square video cropping
         VideoCropPlugin.register(flutterEngine.dartExecutor.binaryMessenger)
 
-        // In-app updater: install a downloaded APK via the system installer.
+        // In-app updater: download an APK in the background (system DownloadManager,
+        // survives minimizing/killing the app) and install it via the system installer.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
                 "com.rendergames.rlink/updates")
             .setMethodCallHandler { call, result ->
-                if (call.method == "installApk") {
-                    val path = call.argument<String>("path")
-                    if (path == null) {
-                        result.error("ARG", "missing path", null)
-                    } else {
-                        try {
-                            installApk(path)
-                            result.success(null)
-                        } catch (e: Exception) {
-                            result.error("INSTALL", e.message, null)
+                when (call.method) {
+                    "installApk" -> {
+                        val path = call.argument<String>("path")
+                        if (path == null) {
+                            result.error("ARG", "missing path", null)
+                        } else {
+                            try {
+                                installApk(path)
+                                result.success(null)
+                            } catch (e: Exception) {
+                                result.error("INSTALL", e.message, null)
+                            }
                         }
                     }
-                } else {
-                    result.notImplemented()
+                    "downloadApk" -> {
+                        val url = call.argument<String>("url")
+                        val fileName = call.argument<String>("fileName")
+                        if (url.isNullOrEmpty() || fileName.isNullOrEmpty()) {
+                            result.error("ARG", "missing url/fileName", null)
+                        } else {
+                            try {
+                                result.success(enqueueApkDownload(url, fileName))
+                            } catch (e: Exception) {
+                                result.error("DOWNLOAD", e.message, null)
+                            }
+                        }
+                    }
+                    "downloadStatus" -> {
+                        val id = (call.argument<Number>("id"))?.toLong()
+                        if (id == null) {
+                            result.error("ARG", "missing id", null)
+                        } else {
+                            try {
+                                result.success(queryDownload(id))
+                            } catch (e: Exception) {
+                                result.error("STATUS", e.message, null)
+                            }
+                        }
+                    }
+                    "cancelDownload" -> {
+                        val id = (call.argument<Number>("id"))?.toLong()
+                        if (id != null) {
+                            try {
+                                (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager)
+                                    .remove(id)
+                            } catch (_: Exception) { }
+                        }
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
                 }
             }
+    }
+
+    /// Ставит APK в очередь системного DownloadManager. Загрузка идёт вне
+    /// процесса приложения — продолжается, даже если приложение свёрнуто или
+    /// выгружено системой; в шторке видно прогресс. Возвращает downloadId.
+    private fun enqueueApkDownload(url: String, fileName: String): Long {
+        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        // Пишем в приватную external-files-папку (без разрешений на storage),
+        // её же отдаёт FileProvider установщику. Старый файл удаляем.
+        val destFile = File(
+            getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
+        if (destFile.exists()) destFile.delete()
+        val request = DownloadManager.Request(Uri.parse(url)).apply {
+            setTitle("Rlink")
+            setDescription("Загрузка обновления…")
+            setNotificationVisibility(
+                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            setDestinationInExternalFilesDir(
+                this@MainActivity, Environment.DIRECTORY_DOWNLOADS, fileName)
+            setAllowedOverMetered(true)
+            setAllowedOverRoaming(true)
+            addRequestHeader("Accept", "application/octet-stream")
+        }
+        return dm.enqueue(request)
+    }
+
+    /// Состояние фоновой загрузки: status(pending|running|paused|successful|
+    /// failed|unknown), сколько байт скачано/всего, локальный путь по готовности.
+    private fun queryDownload(id: Long): Map<String, Any?> {
+        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val cursor = dm.query(DownloadManager.Query().setFilterById(id))
+            ?: return mapOf("status" to "unknown")
+        return cursor.use { c ->
+            if (!c.moveToFirst()) {
+                mapOf("status" to "unknown")
+            } else {
+                val status = c.getInt(
+                    c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                val downloaded = c.getLong(
+                    c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                val total = c.getLong(
+                    c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                val reason = c.getInt(
+                    c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                val localUri = c.getString(
+                    c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+                val statusStr = when (status) {
+                    DownloadManager.STATUS_PENDING -> "pending"
+                    DownloadManager.STATUS_RUNNING -> "running"
+                    DownloadManager.STATUS_PAUSED -> "paused"
+                    DownloadManager.STATUS_SUCCESSFUL -> "successful"
+                    DownloadManager.STATUS_FAILED -> "failed"
+                    else -> "unknown"
+                }
+                val path = if (localUri != null) Uri.parse(localUri).path else null
+                mapOf(
+                    "status" to statusStr,
+                    "downloaded" to downloaded,
+                    "total" to total,
+                    "reason" to reason,
+                    "path" to path,
+                )
+            }
+        }
     }
 
     /// Открывает системный установщик для скачанного APK (обновление).

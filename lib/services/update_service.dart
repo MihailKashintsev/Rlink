@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Обновления берём со СВОЕГО сервера (relay), а не с GitHub — в РФ GitHub
@@ -63,6 +65,11 @@ class UpdateService {
 
   ValueNotifier<double?> downloadProgress = ValueNotifier(null);
 
+  /// На Android загрузка идёт в фоне (системный DownloadManager) — приложение
+  /// можно свернуть, скачивание продолжится. На остальных ОС загрузка живёт
+  /// в процессе приложения, поэтому его лучше не закрывать.
+  bool get supportsBackgroundDownload => !kIsWeb && Platform.isAndroid;
+
   Future<UpdateInfo?> checkForUpdate() async {
     if (!isUpdateSupported) return null;
     try {
@@ -115,6 +122,14 @@ class UpdateService {
       return;
     }
 
+    // Android: качаем в фоне через системный DownloadManager — загрузка идёт
+    // вне процесса приложения и продолжается, даже если его свернуть/выгрузить.
+    if (Platform.isAndroid) {
+      await _downloadAndroidBackground(info);
+      return;
+    }
+
+    // Десктоп: качаем во временную папку и заменяем себя / перезапускаемся.
     final dir = await getTemporaryDirectory();
     final filePath = '${dir.path}/${info.assetName}';
     downloadProgress.value = 0.0;
@@ -127,12 +142,174 @@ class UpdateService {
         await _installMacOS(filePath);
       } else if (Platform.isLinux) {
         await _installLinux(filePath);
-      } else if (Platform.isAndroid) {
-        await _installAndroid(filePath);
       }
     } finally {
       downloadProgress.value = null;
     }
+  }
+
+  // ---- Android: фоновая загрузка через системный DownloadManager ----
+  // Загрузка живёт вне приложения (своё уведомление в шторке), поэтому её можно
+  // свернуть. downloadId + информацию о версии храним в prefs, чтобы «подхватить»
+  // уже завершившуюся загрузку при следующем запуске (если приложение выгрузили).
+
+  static const _prefsPendingId = 'rlink_update_dl_id';
+  static const _prefsPendingVer = 'rlink_update_dl_ver';
+  static const _prefsPendingUrl = 'rlink_update_dl_url';
+  static const _prefsPendingAsset = 'rlink_update_dl_asset';
+
+  bool _pollingAndroid = false;
+
+  Future<void> _downloadAndroidBackground(UpdateInfo info) async {
+    // Эта версия уже качается в фоне? Не плодим дубли — просто следим за ней.
+    final prefs = await SharedPreferences.getInstance();
+    final existingId = prefs.getInt(_prefsPendingId);
+    if (existingId != null &&
+        prefs.getString(_prefsPendingVer) == info.version) {
+      downloadProgress.value = 0.0;
+      await _pollAndroidDownload(existingId, info);
+      return;
+    }
+
+    downloadProgress.value = 0.0;
+    int? id;
+    try {
+      id = await _installChannel.invokeMethod<int>('downloadApk', {
+        'url': info.downloadUrl,
+        'fileName': info.assetName,
+      });
+    } catch (e) {
+      debugPrint('[UpdateService] DownloadManager enqueue failed: $e');
+      id = null;
+    }
+    if (id == null || id < 0) {
+      // DownloadManager недоступен — фолбэк на устойчивую dio-загрузку.
+      await _downloadViaDioAndInstall(info);
+      return;
+    }
+    await _savePending(id, info);
+    await _pollAndroidDownload(id, info);
+  }
+
+  Future<void> _pollAndroidDownload(int id, UpdateInfo info) async {
+    if (_pollingAndroid) return; // уже следим за этой загрузкой
+    _pollingAndroid = true;
+    try {
+      while (true) {
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        Map<Object?, Object?>? st;
+        try {
+          st = await _installChannel.invokeMethod<Map<Object?, Object?>>(
+              'downloadStatus', {'id': id});
+        } catch (_) {
+          continue;
+        }
+        if (st == null) continue;
+        final status = st['status'] as String? ?? 'unknown';
+        final downloaded = (st['downloaded'] as num?)?.toDouble() ?? 0;
+        final total = (st['total'] as num?)?.toDouble() ?? 0;
+        if (total > 0) {
+          downloadProgress.value = (downloaded / total).clamp(0.0, 1.0);
+        }
+        if (status == 'successful') {
+          downloadProgress.value = 1.0;
+          final path = st['path'] as String?;
+          await _clearPending();
+          if (path != null && path.isNotEmpty) {
+            await _installAndroid(path);
+          }
+          downloadProgress.value = null;
+          return;
+        }
+        if (status == 'failed' || status == 'unknown') {
+          // Системная загрузка сорвалась (или запись смахнули из шторки) —
+          // устойчивый фолбэк: dio с ретраями + GitHub.
+          await _clearPending();
+          await _downloadViaDioAndInstall(info);
+          return;
+        }
+        // pending / running / paused — продолжаем ждать.
+      }
+    } finally {
+      _pollingAndroid = false;
+    }
+  }
+
+  /// Фолбэк, когда DownloadManager недоступен/сорвался: качаем через dio
+  /// (ретраи + GitHub) во временную папку и запускаем установщик.
+  Future<void> _downloadViaDioAndInstall(UpdateInfo info) async {
+    if (info.downloadUrl.isEmpty) {
+      downloadProgress.value = null;
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    final filePath = '${dir.path}/${info.assetName}';
+    downloadProgress.value = 0.0;
+    try {
+      await _downloadResilient(info, filePath);
+      downloadProgress.value = 1.0;
+      await _installAndroid(filePath);
+    } finally {
+      downloadProgress.value = null;
+    }
+  }
+
+  /// При старте: если фоновая загрузка уже завершилась (в т.ч. пока приложение
+  /// было выгружено) — ставим её; если ещё идёт — снова показываем прогресс.
+  /// Возвращает true, если была незавершённая/готовая загрузка (тогда обычную
+  /// проверку обновлений в этот запуск можно пропустить).
+  Future<bool> resumePendingInstall() async {
+    if (!isUpdateSupported || !Platform.isAndroid) return false;
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getInt(_prefsPendingId);
+    if (id == null) return false;
+    Map<Object?, Object?>? st;
+    try {
+      st = await _installChannel
+          .invokeMethod<Map<Object?, Object?>>('downloadStatus', {'id': id});
+    } catch (_) {
+      return false;
+    }
+    final status = st?['status'] as String?;
+    final info = UpdateInfo(
+      version: prefs.getString(_prefsPendingVer) ?? '',
+      body: '',
+      downloadUrl: prefs.getString(_prefsPendingUrl) ?? '',
+      assetName: prefs.getString(_prefsPendingAsset) ?? '',
+    );
+    if (status == 'successful') {
+      final path = st!['path'] as String?;
+      await _clearPending();
+      if (path != null && path.isNotEmpty) {
+        downloadProgress.value = 1.0;
+        await _installAndroid(path);
+        downloadProgress.value = null;
+      }
+      return true;
+    }
+    if (status == 'pending' || status == 'running' || status == 'paused') {
+      downloadProgress.value = 0.0;
+      unawaited(_pollAndroidDownload(id, info)); // не блокируем старт
+      return true;
+    }
+    await _clearPending();
+    return false;
+  }
+
+  Future<void> _savePending(int id, UpdateInfo info) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefsPendingId, id);
+    await prefs.setString(_prefsPendingVer, info.version);
+    await prefs.setString(_prefsPendingUrl, info.downloadUrl);
+    await prefs.setString(_prefsPendingAsset, info.assetName);
+  }
+
+  Future<void> _clearPending() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsPendingId);
+    await prefs.remove(_prefsPendingVer);
+    await prefs.remove(_prefsPendingUrl);
+    await prefs.remove(_prefsPendingAsset);
   }
 
   /// Скачивает обновление устойчиво: relay — одиночный VPS, и большой APK на

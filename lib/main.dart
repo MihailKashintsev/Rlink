@@ -4197,6 +4197,10 @@ Future<void> _checkUpdate() async {
   // Все нативные ОС проверяют обновления на нашем сервере (relay). На web
   // isUpdateSupported == false — PWA обновляется сама при перезагрузке.
   if (!isUpdateSupported) return;
+  // Сначала «подхватываем» фоновую загрузку обновления, которая могла
+  // завершиться, пока приложение было свёрнуто/выгружено (Android). Если она
+  // ещё идёт или уже готова — не запускаем новую проверку в этот запуск.
+  if (await UpdateService.instance.resumePendingInstall()) return;
   await Future.delayed(const Duration(seconds: 5));
   final update = await UpdateService.instance.checkForUpdate();
   if (update != null) pendingUpdateNotifier.value = update;

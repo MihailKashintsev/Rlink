@@ -61,11 +61,15 @@ class _UpdateProgressDialogState extends State<UpdateProgressDialog>
         : _launched
             ? 'Загрузка завершена'
             : (progress == null ? 'Подготовка…' : 'Загрузка обновления');
+    final bool bg = UpdateService.instance.supportsBackgroundDownload;
+    final bool downloading = !failed && !_launched;
     final String sub = failed
         ? '$_error'
         : _launched
             ? 'Подтверди установку в системном окне.'
-            : 'Пожалуйста, не закрывай приложение…';
+            : bg
+                ? 'Можно свернуть — загрузка продолжится в фоне.'
+                : 'Пожалуйста, не закрывай приложение…';
 
     return Dialog(
       backgroundColor: cs.surface,
@@ -121,6 +125,18 @@ class _UpdateProgressDialogState extends State<UpdateProgressDialog>
                 child: FilledButton(
                   onPressed: () => Navigator.of(context).maybePop(),
                   child: const Text('Закрыть'),
+                ),
+              ),
+            ] else if (downloading && bg) ...[
+              // Android качает в фоне — можно спрятать диалог, загрузка не
+              // прервётся; по готовности откроется системный установщик.
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.expand_more_rounded, size: 20),
+                  label: const Text('Свернуть'),
                 ),
               ),
             ],
