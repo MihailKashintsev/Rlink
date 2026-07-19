@@ -119,14 +119,7 @@ class UpdateService {
     final filePath = '${dir.path}/${info.assetName}';
     downloadProgress.value = 0.0;
     try {
-      await _dio.download(
-        info.downloadUrl,
-        filePath,
-        options: Options(headers: {'Accept': 'application/octet-stream'}),
-        onReceiveProgress: (r, t) {
-          if (t > 0) downloadProgress.value = r / t;
-        },
-      );
+      await _downloadResilient(info, filePath);
       downloadProgress.value = 1.0;
       if (Platform.isWindows) {
         await _installWindows(filePath);
@@ -140,6 +133,49 @@ class UpdateService {
     } finally {
       downloadProgress.value = null;
     }
+  }
+
+  /// Скачивает обновление устойчиво: relay — одиночный VPS, и большой APK на
+  /// мобильной сети рвётся на середине (DioException unknown → «обновление не
+  /// удалось»). Ретраим relay несколько раз, затем фолбэк на GitHub-релиз (CDN).
+  /// Каждая попытка качает заново (deleteOnError). Долгий receiveTimeout — файл
+  /// большой (~160 МБ).
+  Future<void> _downloadResilient(UpdateInfo info, String filePath) async {
+    final urls = <String>[
+      info.downloadUrl,
+      _githubFallbackUrl(info),
+    ].where((u) => u.isNotEmpty).toList();
+    Object? lastErr;
+    for (final url in urls) {
+      for (var attempt = 0; attempt < 3; attempt++) {
+        try {
+          await _dio.download(
+            url,
+            filePath,
+            deleteOnError: true,
+            options: Options(
+              headers: {'Accept': 'application/octet-stream'},
+              receiveTimeout: const Duration(minutes: 20),
+            ),
+            onReceiveProgress: (r, t) {
+              if (t > 0) downloadProgress.value = r / t;
+            },
+          );
+          return; // success
+        } catch (e) {
+          lastErr = e;
+          downloadProgress.value = 0.0;
+          await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+        }
+      }
+    }
+    throw lastErr ?? Exception('download failed');
+  }
+
+  String _githubFallbackUrl(UpdateInfo info) {
+    final v = info.version.startsWith('v') ? info.version : 'v${info.version}';
+    if (info.assetName.isEmpty) return '';
+    return 'https://github.com/MihailKashintsev/Rlink-releases/releases/download/$v/${info.assetName}';
   }
 
   /// Android: отдаём APK нативному коду, который открывает системный установщик
