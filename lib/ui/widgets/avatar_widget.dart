@@ -87,6 +87,13 @@ class AvatarWidget extends StatelessWidget {
     // Guard against negative/zero size to prevent NaN in CoreGraphics
     final innerSize = math.max(size - (ringWidth + gap) * 2, 1.0);
 
+    // Декодируем аватар в РАЗМЕР ОТОБРАЖЕНИЯ, а не в исходное разрешение фото.
+    // Без этого фото 1000×1000 декодируется целиком ради кружка 52px → тяжёлый
+    // decode при заезде строки в список и раздутый image-cache (GC-фризы) —
+    // главная причина лагов при скролле списка чатов.
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final decodeSide = (innerSize * dpr).round().clamp(1, 4096);
+
     Widget avatar = Container(
       width: innerSize,
       height: innerSize,
@@ -101,6 +108,8 @@ class AvatarWidget extends StatelessWidget {
                 width: innerSize,
                 height: innerSize,
                 fit: BoxFit.cover,
+                cacheWidth: decodeSide,
+                cacheHeight: decodeSide,
                 errorBuilder: (_, __, ___) => Center(
                   child: _buildEmojiOrInitials(innerSize),
                 ),
@@ -111,6 +120,8 @@ class AvatarWidget extends StatelessWidget {
                     width: innerSize,
                     height: innerSize,
                     fit: BoxFit.cover,
+                    cacheWidth: decodeSide,
+                    cacheHeight: decodeSide,
                     errorBuilder: (_, __, ___) => Center(
                       child: _buildEmojiOrInitials(innerSize),
                     ),
@@ -129,6 +140,8 @@ class AvatarWidget extends StatelessWidget {
                             width: innerSize,
                             height: innerSize,
                             fit: BoxFit.cover,
+                            cacheWidth: decodeSide,
+                            cacheHeight: decodeSide,
                             errorBuilder: (_, __, ___) => Center(
                               child: _buildEmojiOrInitials(innerSize),
                             ),
