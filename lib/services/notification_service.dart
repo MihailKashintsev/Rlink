@@ -151,6 +151,9 @@ class NotificationService {
     required String groupId,
     required String title,
     required String body,
+    int? color,
+    String? imagePath,
+    String emoji = '👥',
   }) async {
     if (!AppSettings.instance.notificationsEnabled) return;
     if (!AppSettings.instance.notifyGroups) return;
@@ -160,8 +163,9 @@ class NotificationService {
         title: title,
         body: body,
         payload: 'group:$groupId',
-        color: _accentFor(groupId),
-        emoji: '👥',
+        color: color ?? _accentFor(groupId),
+        emoji: emoji,
+        imagePath: imagePath,
       );
       return;
     }
@@ -180,6 +184,9 @@ class NotificationService {
     required String channelId,
     required String title,
     required String body,
+    int? color,
+    String? imagePath,
+    String emoji = '📢',
   }) async {
     if (!AppSettings.instance.notificationsEnabled) return;
     if (!AppSettings.instance.notifyChannels) return;
@@ -191,8 +198,9 @@ class NotificationService {
         title: title,
         body: body,
         payload: 'channel:$channelId',
-        color: _accentFor(channelId),
-        emoji: '📢',
+        color: color ?? _accentFor(channelId),
+        emoji: emoji,
+        imagePath: imagePath,
       );
       return;
     }

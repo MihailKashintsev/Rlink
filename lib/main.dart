@@ -2026,6 +2026,7 @@ Future<void> initServices() async {
             payload: 'channel:$channelId',
             color: after.avatarColor,
             emoji: after.avatarEmoji.isNotEmpty ? after.avatarEmoji : '👑',
+            imagePath: after.avatarImagePath,
           );
         }
       }());
@@ -2127,6 +2128,9 @@ Future<void> initServices() async {
             channelId: channelId,
             title: ch.name,
             body: preview,
+            color: ch.avatarColor,
+            imagePath: ch.avatarImagePath,
+            emoji: ch.avatarEmoji.isNotEmpty ? ch.avatarEmoji : '📢',
           );
         }
       }
@@ -2373,10 +2377,16 @@ Future<void> initServices() async {
               (post?.reactions[em] ?? const <String>[]).contains(from);
           if (reacted && post != null && post.authorId == myKey) {
             final emojiPlain = humanizeCustomEmojiCodes(em);
+            final rch = await ChannelService.instance.getChannel(post.channelId);
             await NotificationService.instance.showChannelPost(
               channelId: post.channelId,
               title: 'Реакция на ваш пост',
               body: '$reactorName: $emojiPlain',
+              color: rch?.avatarColor,
+              imagePath: rch?.avatarImagePath,
+              emoji: (rch?.avatarEmoji.isNotEmpty ?? false)
+                  ? rch!.avatarEmoji
+                  : '📢',
             );
           }
           break;
@@ -2612,6 +2622,9 @@ Future<void> initServices() async {
           groupId: groupId,
           title: g?.name ?? 'Группа',
           body: '$author: $preview',
+          color: g?.avatarColor,
+          imagePath: g?.avatarImagePath,
+          emoji: (g?.avatarEmoji.isNotEmpty ?? false) ? g!.avatarEmoji : '👥',
         );
       }
     };
@@ -2762,6 +2775,7 @@ Future<void> initServices() async {
             payload: 'group:$groupId',
             color: updated.avatarColor,
             emoji: updated.avatarEmoji.isNotEmpty ? updated.avatarEmoji : '👑',
+            imagePath: updated.avatarImagePath,
           );
         }
       }());

@@ -6,6 +6,7 @@ import '../../l10n/app_l10n.dart';
 
 import '../../models/channel.dart';
 import '../../services/ai_bot_constants.dart';
+import '../widgets/avatar_widget.dart';
 import '../../services/app_settings.dart';
 import '../../services/channel_service.dart';
 import '../../services/crypto_service.dart';
@@ -140,6 +141,18 @@ String _sha256Digest(List<int> data) {
 
   String hex(int v) => v.toRadixString(16).padLeft(8, '0');
   return '${hex(h0)}${hex(h1)}${hex(h2)}${hex(h3)}${hex(h4)}${hex(h5)}${hex(h6)}${hex(h7)}';
+}
+
+int _colorFor(String id) {
+  const palette = [
+    0xFF42A5F5, 0xFFAB47BC, 0xFF26A69A, 0xFFEF5350,
+    0xFFFFA726, 0xFF5C6BC0, 0xFF66BB6A, 0xFFEC407A,
+  ];
+  var h = 0;
+  for (final c in id.codeUnits) {
+    h = (h * 31 + c) & 0x7fffffff;
+  }
+  return palette[h % palette.length];
 }
 
 // ─── Admin Screen ──────────────────────────────────────────────────
@@ -472,10 +485,11 @@ class _AdminScreenState extends State<AdminScreen>
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: SwitchListTile(
                 value: isEnabled,
-                secondary: CircleAvatar(
-                  backgroundColor: Color(bot.avatarColor),
-                  child: Text(bot.avatarEmoji,
-                      style: const TextStyle(fontSize: 18)),
+                secondary: AvatarWidget(
+                  initials: bot.name.isNotEmpty ? bot.name[0] : 'B',
+                  color: bot.avatarColor,
+                  emoji: bot.avatarEmoji,
+                  size: 40,
                 ),
                 title: Text(
                   bot.name,
@@ -888,10 +902,13 @@ class _RequestTile extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: cs.primaryContainer,
-                  child: Text(request.avatarEmoji,
-                      style: const TextStyle(fontSize: 20)),
+                AvatarWidget(
+                  initials: request.channelName.isNotEmpty
+                      ? request.channelName[0]
+                      : '?',
+                  color: _colorFor(request.channelId),
+                  emoji: request.avatarEmoji,
+                  size: 40,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1167,8 +1184,13 @@ class _RelayBotAdminTile extends StatelessWidget {
           children: [
             Row(
               children: [
-                const CircleAvatar(
-                  child: Icon(Icons.smart_toy_outlined),
+                AvatarWidget(
+                  initials: bot.handle.isNotEmpty
+                      ? bot.handle[0].toUpperCase()
+                      : 'B',
+                  color: _colorFor(bot.botId),
+                  emoji: '🤖',
+                  size: 40,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1426,10 +1448,12 @@ class _ChannelAdminTile extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: Color(channel.avatarColor),
-                  child: Text(channel.avatarEmoji,
-                      style: const TextStyle(fontSize: 20)),
+                AvatarWidget(
+                  initials: channel.name.isNotEmpty ? channel.name[0] : '?',
+                  color: channel.avatarColor,
+                  emoji: channel.avatarEmoji,
+                  imagePath: channel.avatarImagePath,
+                  size: 40,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
