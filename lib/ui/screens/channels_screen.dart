@@ -59,6 +59,7 @@ import 'channel_profile_screen.dart';
 import 'text_selection_view_screen.dart';
 import 'channel_profile_edit_dialog.dart';
 import 'chat_screen.dart' show ChatScreen, DmForwardDraft;
+import 'settings_screen.dart';
 import '../mention_nav.dart';
 import '../widgets/composer_input_bar.dart';
 import '../widgets/forward_target_sheet.dart';
@@ -2900,6 +2901,39 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                     ],
                   ),
           ),
+          // Drive warning for channel admin without backup linked
+          if (_isAdmin &&
+              !GoogleDriveChannelBackup.hasRelayAccount &&
+              !GoogleDriveChannelBackup.hasValidManualCreds)
+            Material(
+              color: Colors.orange.withValues(alpha: 0.1),
+              child: InkWell(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const SettingsScreen()),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.drive_eta_outlined,
+                          color: Colors.orange, size: 16),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'История канала не сохраняется — подключите Google Drive в Настройках',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.orange),
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right,
+                          color: Colors.orange, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           // Post input bar for admin + moderators (hidden if channel blocked)
           if (_channel.canPost(_myId) && !_channel.blocked)
             ComposerInputBar(
