@@ -568,6 +568,8 @@ class _ChannelAdminSettingsScreenState
                               if (fresh != null && mounted) {
                                 setState(() => _channel = fresh);
                                 setModal(() {});
+                                unawaited(ChannelBackupService.instance
+                                    .publishBackupIfAdminDriveEnabled(ch.id));
                               }
                             },
                           ),
@@ -656,6 +658,10 @@ class _ChannelAdminSettingsScreenState
                                 unawaited(updated.broadcastGossipMeta(
                                     recipientId: uid));
                               }
+                              // Re-publish Drive so subscribers see the new
+                              // moderator list and moderator gets history access.
+                              unawaited(ChannelBackupService.instance
+                                  .publishBackupIfAdminDriveEnabled(ch.id));
                             }
                           },
                         );
