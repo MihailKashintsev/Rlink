@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 class AppVersion {
   AppVersion._();
 
-  static const String version = '1.0.11';
-  static const String buildNumber = '29';
+  static const String version = '1.0.12';
+  static const String buildNumber = '30';
   static const String webPushId =
       String.fromEnvironment('RLINK_WEB_PUSH_ID', defaultValue: '');
 
