@@ -767,10 +767,14 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
               OutlinedButton.icon(
                 icon: const Icon(Icons.open_in_browser),
                 label: const Text('Открыть вход Google'),
-                onPressed: () => launchUrl(
-                  Uri.parse(GoogleDriveChannelBackup.buildManualAuthUrl()),
-                  mode: LaunchMode.externalApplication,
-                ),
+                onPressed: () {
+                  final uri = Uri.parse(GoogleDriveChannelBackup.buildManualAuthUrl());
+                  if (kIsWeb) {
+                    launchUrl(uri);
+                  } else {
+                    launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
               ),
               const SizedBox(height: 12),
               TextField(
@@ -933,35 +937,37 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
           }),
           const SizedBox(height: 8),
           const _SectionHeader('Привязка'),
-          ListTile(
-            leading: Icon(Icons.cloud_done_outlined,
-                color: Theme.of(context).colorScheme.primary),
-            title: const Text('Добавить аккаунт Google (постоянно)'),
-            subtitle: const Text(
-              'Через сервер Rlink: не отваливается через час, можно несколько аккаунтов.',
-              style: TextStyle(fontSize: 12),
-            ),
-            onTap: _busy ? null : _linkRelay,
-          ),
-          if (RuntimePlatform.isWeb)
+          if (!kIsWeb)
             ListTile(
-              leading: const Icon(Icons.phone_iphone),
-              title: const Text('Привязать через Safari (1 час)'),
+              leading: Icon(Icons.cloud_done_outlined,
+                  color: Theme.of(context).colorScheme.primary),
+              title: const Text('Добавить аккаунт Google (постоянно)'),
               subtitle: const Text(
-                'Запасной вариант без сервера; токен живёт ~час.',
+                'Через сервер Rlink: не отваливается через час, можно несколько аккаунтов.',
+                style: TextStyle(fontSize: 12),
+              ),
+              onTap: _busy ? null : _linkRelay,
+            ),
+          if (kIsWeb)
+            ListTile(
+              leading: const Icon(Icons.open_in_browser),
+              title: const Text('Привязать Google Drive'),
+              subtitle: const Text(
+                'Откроется вход Google — разрешите доступ к Drive, скопируйте код и вставьте.',
                 style: TextStyle(fontSize: 12),
               ),
               onTap: _busy ? null : _linkSafari,
             ),
-          ListTile(
-            leading: const Icon(Icons.login),
-            title: const Text('Войти через Google'),
-            subtitle: const Text(
-              'Обычный вход (ПК/Android). На iPhone используйте вариант выше.',
-              style: TextStyle(fontSize: 12),
+          if (!kIsWeb)
+            ListTile(
+              leading: const Icon(Icons.login),
+              title: const Text('Войти через Google'),
+              subtitle: const Text(
+                'Обычный вход (ПК/Android).',
+                style: TextStyle(fontSize: 12),
+              ),
+              onTap: _busy ? null : _linkGis,
             ),
-            onTap: _busy ? null : _linkGis,
-          ),
           if (linked)
             ListTile(
               leading: const Icon(Icons.link_off, color: Colors.red),

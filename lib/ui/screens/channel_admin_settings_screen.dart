@@ -117,12 +117,14 @@ class _ChannelAdminSettingsScreenState
     if (ch == null || ch.adminId != _myId) return;
     if (enabled) {
       final linked = GoogleDriveChannelBackup.hasValidManualCreds ||
+          GoogleDriveChannelBackup.hasRelayAccount ||
           GoogleDriveChannelBackup.cachedCurrentUser != null;
       if (!linked) {
         // Try a silent restore (manual token from a previous session).
         await GoogleDriveChannelBackup.ensureUserSignedIn(interactive: false);
       }
       final nowLinked = GoogleDriveChannelBackup.hasValidManualCreds ||
+          GoogleDriveChannelBackup.hasRelayAccount ||
           GoogleDriveChannelBackup.cachedCurrentUser != null;
       if (!nowLinked) {
         if (!mounted) return;

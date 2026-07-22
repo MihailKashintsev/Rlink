@@ -94,7 +94,7 @@ class Channel {
     this.username = '',
     this.universalCode = '',
     this.isPublic = true,
-    this.driveBackupEnabled = false,
+    this.driveBackupEnabled = true,
     this.driveBackupRev = 0,
     this.driveFileId,
     this.driveFileUrl,

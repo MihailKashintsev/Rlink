@@ -365,6 +365,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final profile = ProfileService.instance.profile!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
     final maxContentWidth =
         MediaQuery.of(context).size.width >= 900 ? 760.0 : 640.0;
     final bannerWidth =
@@ -504,21 +505,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Positioned(
                       right: 0,
                       bottom: 0,
-                      child: GestureDetector(
+                      child: _PressableScale(
                         onTap: _showAvatarPhotoMenu,
                         child: Container(
-                          width: 28,
-                          height: 28,
+                          width: 30,
+                          height: 30,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1DB954),
+                            color: cs.primary,
                             shape: BoxShape.circle,
                             border: Border.all(
                                 color:
                                     Theme.of(context).scaffoldBackgroundColor,
-                                width: 2),
+                                width: 2.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: cs.primary.withValues(alpha: 0.35),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                          child: const Icon(Icons.edit,
-                              size: 14, color: Colors.white),
+                          child: Icon(Icons.edit,
+                              size: 15, color: cs.onPrimary),
                         ),
                       ),
                     ),
@@ -597,7 +605,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       maxLength: 20,
                       decoration: InputDecoration(
                         labelText: 'Имя',
-                        border: const OutlineInputBorder(),
+                        filled: true,
+                        fillColor: cs.surfaceContainerHigh,
+                        prefixIcon: Icon(Icons.person_outline_rounded,
+                            color: cs.onSurfaceVariant),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.primary, width: 1.5),
+                        ),
                         counterStyle: TextStyle(
                             color: Theme.of(context).hintColor, fontSize: 11),
                       ),
@@ -1132,6 +1155,37 @@ class _InfoTile extends StatelessWidget {
         if (onCopy != null)
           IconButton(icon: const Icon(Icons.copy, size: 18), onPressed: onCopy),
       ]),
+    );
+  }
+}
+
+/// Небольшой отклик на нажатие: элемент слегка «поджимается» (scale 0.9),
+/// как советует дизайн-подход — кнопка должна отзываться на касание.
+class _PressableScale extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  const _PressableScale({required this.child, required this.onTap});
+
+  @override
+  State<_PressableScale> createState() => _PressableScaleState();
+}
+
+class _PressableScaleState extends State<_PressableScale> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _down = true),
+      onTapUp: (_) => setState(() => _down = false),
+      onTapCancel: () => setState(() => _down = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _down ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: widget.child,
+      ),
     );
   }
 }
