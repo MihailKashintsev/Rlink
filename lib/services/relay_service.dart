@@ -177,6 +177,10 @@ class RelayService with WidgetsBindingObserver {
   final Map<String, Completer<Map<String, dynamic>>>
       _botCommandsSetAckCompleters = {};
 
+  // channelId → completer for channel_keystore_result
+  final Map<String, Completer<Map<String, dynamic>?>> _keystoreGetCompleters =
+      {};
+
   /// Peer X25519 keys discovered via relay
   final Map<String, String> _peerX25519Keys = {};
 
@@ -1327,6 +1331,25 @@ class RelayService with WidgetsBindingObserver {
         case 'account_sync_ack':
           break;
 
+        case 'channel_keystore_ack':
+          break;
+
+        case 'channel_keystore_result':
+          final ksChannelId = msg['channelId'] as String?;
+          if (ksChannelId != null) {
+            final c = _keystoreGetCompleters.remove(ksChannelId);
+            if (c != null && !c.isCompleted) {
+              final found = msg['found'] as bool? ?? false;
+              final wrapped = found
+                  ? msg['wrapped'] as Map<String, dynamic>?
+                  : null;
+              scheduleMicrotask(() {
+                if (!c.isCompleted) c.complete(wrapped);
+              });
+            }
+          }
+          break;
+
         case 'error':
           final errorMsg = msg['msg']?.toString() ?? '';
           debugPrint('[RLINK][Relay] Server error: $errorMsg');
@@ -1362,6 +1385,55 @@ class RelayService with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('[RLINK][Relay] channel_dir_put failed: $e');
     }
+  }
+
+  /// Сохраняет зашифрованные ключи подписчиков канала на relay — резервный путь
+  /// доставки ключа когда Google Drive недоступен или админ офлайн.
+  Future<void> putChannelKeystore({
+    required String channelId,
+    required String adminId,
+    required Map<String, dynamic> keys,
+    required String signatureHex,
+  }) async {
+    if (!isConnected) return;
+    if (channelId.isEmpty || keys.isEmpty) return;
+    try {
+      await _safeSend({
+        'type': 'channel_keystore_put',
+        'channelId': channelId,
+        'adminId': adminId,
+        'keys': keys,
+        'signature': signatureHex,
+      }, context: 'channel_keystore_put');
+    } catch (e) {
+      debugPrint('[RLINK][Relay] channel_keystore_put failed: $e');
+    }
+  }
+
+  /// Запрашивает у relay зашифрованный ключ для текущего пользователя.
+  /// Возвращает JSON обёртки ключа (EncryptedMessage.toJson()) или null если
+  /// ключ не найден / relay не ответил за 10 секунд.
+  Future<Map<String, dynamic>?> getChannelKeyFromRelay(String channelId) async {
+    if (!isConnected || channelId.isEmpty) return null;
+    final c = Completer<Map<String, dynamic>?>();
+    _keystoreGetCompleters[channelId] = c;
+    try {
+      await _safeSend({
+        'type': 'channel_keystore_get',
+        'channelId': channelId,
+      }, context: 'channel_keystore_get');
+    } catch (e) {
+      _keystoreGetCompleters.remove(channelId);
+      debugPrint('[RLINK][Relay] channel_keystore_get failed: $e');
+      return null;
+    }
+    return c.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        _keystoreGetCompleters.remove(channelId);
+        return null;
+      },
+    );
   }
 
   /// Сохранить на relay зашифрованный бокс аккаунта (тот же формат, что admin_cfg2).

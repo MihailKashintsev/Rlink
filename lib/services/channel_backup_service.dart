@@ -268,6 +268,27 @@ class ChannelBackupService {
       }
     } catch (_) {}
 
+    // Push wrapped keys to relay keystore so subscribers can get their key even
+    // when the admin is offline or Google Drive is unavailable.
+    if (wrappedKeys.isNotEmpty && RelayService.instance.isConnected) {
+      try {
+        final payloadToSign = jsonEncode({'channelId': channel.id, 'adminId': myId});
+        final sig = await CryptoService.instance.signUtf8Message(payloadToSign);
+        final relayKeys = <String, dynamic>{};
+        for (final e in wrappedKeys.entries) {
+          relayKeys[e.key] = e.value; // already EncryptedMessage.toJson()
+        }
+        unawaited(RelayService.instance.putChannelKeystore(
+          channelId: channel.id,
+          adminId: myId,
+          keys: relayKeys,
+          signatureHex: sig,
+        ));
+      } catch (e) {
+        debugPrint('[RLINK][ChBak] relay keystore push failed: $e');
+      }
+    }
+
     // Broadcast the snapshot to P2P peers. With media embedded the blob is large
     // and gossip caps img packets at ~500B → thousands of 90B chunks. Awaiting
     // this made "Опубликовать историю" spin forever AND blocked the Drive upload
@@ -651,7 +672,11 @@ class ChannelBackupService {
   Future<Uint8List?> _fetchKeyFromKeysFile(Channel channel,
       {void Function(String)? onStep}) async {
     final keysUrl = channel.driveKeysUrl;
-    if (keysUrl == null || keysUrl.isEmpty) return null;
+    // No Drive keys file → try relay keystore directly.
+    if (keysUrl == null || keysUrl.isEmpty) {
+      onStep?.call('Запрос ключа с сервера…');
+      return _fetchKeyFromRelay(channel.id);
+    }
     final myId = CryptoService.instance.publicKeyHex;
     if (myId.isEmpty) return null;
     try {
@@ -690,7 +715,10 @@ class ChannelBackupService {
       final keys = parsed['keys'] as Map<String, dynamic>?;
       if (keys == null) return null;
       final myEntry = keys[myId];
-      if (myEntry is! Map) return null;
+      if (myEntry is! Map) {
+        // Not yet in Drive keys-file — try relay keystore as fallback.
+        return _fetchKeyFromRelay(channel.id);
+      }
       final em = EncryptedMessage.fromJson(Map<String, dynamic>.from(myEntry));
       final plain = await CryptoService.instance.decryptMessage(em);
       if (plain == null) return null;
@@ -703,6 +731,37 @@ class ChannelBackupService {
       return key;
     } catch (e, st) {
       debugPrint('[RLINK][ChBak] _fetchKeyFromKeysFile failed: $e\n$st');
+      // Try relay keystore as last resort.
+      return _fetchKeyFromRelay(channel.id);
+    }
+  }
+
+  /// Fetches the subscriber's wrapped channel key directly from the relay
+  /// keystore (set by the admin on each backup publish). Works even when the
+  /// admin is offline or Drive is unavailable.
+  Future<Uint8List?> _fetchKeyFromRelay(String channelId) async {
+    try {
+      final myId = CryptoService.instance.publicKeyHex;
+      if (myId.isEmpty) return null;
+      debugPrint('[RLINK][ChBak] trying relay keystore for $channelId');
+      final wrapped =
+          await RelayService.instance.getChannelKeyFromRelay(channelId);
+      if (wrapped == null) {
+        debugPrint('[RLINK][ChBak] relay keystore: no entry for $channelId');
+        return null;
+      }
+      final em =
+          EncryptedMessage.fromJson(Map<String, dynamic>.from(wrapped));
+      final plain = await CryptoService.instance.decryptMessage(em);
+      if (plain == null) return null;
+      final bytes = base64Decode(plain);
+      if (bytes.length != 32) return null;
+      final key = Uint8List.fromList(bytes);
+      await _writeSymKeyBytes(channelId, key);
+      debugPrint('[RLINK][ChBak] key recovered from relay keystore for $channelId');
+      return key;
+    } catch (e) {
+      debugPrint('[RLINK][ChBak] _fetchKeyFromRelay failed: $e');
       return null;
     }
   }
