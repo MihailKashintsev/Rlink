@@ -26,6 +26,7 @@ import '../../utils/rlink_deep_link.dart';
 import '../../services/app_settings.dart';
 import '../../services/broadcast_outbox_service.dart';
 import '../../services/channel_backup_service.dart';
+import '../../services/google_drive_channel_backup.dart';
 import '../../services/channel_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/crypto_service.dart';
@@ -886,6 +887,20 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   void _maybeAutoDriveBackupAfterOwnerPost() {
     unawaited(() async {
       if (!mounted) return;
+      // Warn admin when channel has Drive backup enabled but no account linked.
+      if (_channel.driveBackupEnabled &&
+          _channel.adminId == _myId &&
+          !GoogleDriveChannelBackup.hasRelayAccount &&
+          !GoogleDriveChannelBackup.hasValidManualCreds) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(seconds: 6),
+            content: Text(
+                'Пост сохранён, но Google Drive не привязан — история недоступна подписчикам. Привяжите аккаунт в Настройках.'),
+          ),
+        );
+        return;
+      }
       setState(() {
         _isBackingUp = true;
         _backupStep = 'Сохранение на Google Drive…';
