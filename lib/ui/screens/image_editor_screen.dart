@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../l10n/app_l10n.dart';
 import 'package:flutter/rendering.dart';
+import '../../services/ocr_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public entry point
@@ -26,7 +28,7 @@ class ImageEditorScreen extends StatefulWidget {
 
 // ── Models ───────────────────────────────────────────────────────────────────
 
-enum _Mode { draw, text, blur, rotate, crop }
+enum _Mode { draw, text, blur, rotate, crop, ocr }
 
 /// Мазок кисти-блюра / прямоугольник блюра — маска, внутри которой картинка
 /// заменяется на размытую версию (редакция скриншотов).
@@ -104,6 +106,12 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
 
   bool _saving = false;
 
+  // OCR
+  List<OcrBlock> _ocrBlocks = [];
+  bool _ocrRunning = false;
+  // White-fill erase rects added when user chooses "Стереть" on an OCR block.
+  final List<Rect> _ocrEraseRects = [];
+
   static const _kPalette = [
     Colors.white,
     Colors.black,
@@ -136,6 +144,78 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       debugPrint('[ImageEditor] capture error: $e');
       if (mounted) Navigator.pop(context, null);
     }
+  }
+
+  // ── OCR ──────────────────────────────────────────────────────────────────────
+
+  Future<void> _startOcr() async {
+    if (_ocrRunning || kIsWeb) return;
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    setState(() {
+      _ocrRunning = true;
+      _ocrBlocks = [];
+    });
+    try {
+      final boundary =
+          _repaintKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      // pixelRatio 1.0 → block rects map 1:1 to widget pixel coordinates
+      final img = await boundary.toImage(pixelRatio: 1.0);
+      final data = await img.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null || !mounted) return;
+      final blocks =
+          await OcrService.recognizeFromBytes(data.buffer.asUint8List());
+      if (mounted) setState(() => _ocrBlocks = blocks);
+    } catch (e) {
+      debugPrint('[ImageEditor] OCR error: $e');
+    } finally {
+      if (mounted) setState(() => _ocrRunning = false);
+    }
+  }
+
+  void _ocrBlockTap(BuildContext context, OcrBlock block) {
+    final cs = Theme.of(context).colorScheme;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 8),
+          Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                  color: cs.onSurface.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2))),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(block.text,
+                  style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant)),
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.copy),
+            title: const Text('Копировать'),
+            onTap: () async {
+              Navigator.pop(context);
+              await Clipboard.setData(ClipboardData(text: block.text));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.auto_fix_off_outlined),
+            title: const Text('Стереть'),
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _ocrEraseRects.add(block.boundingBox));
+            },
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
   }
 
   static Future<Uint8List?> _crop(Uint8List png, Rect norm) async {
@@ -385,12 +465,15 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
               onTapUp: _mode == _Mode.text
                   ? (d) => _addText(d.localPosition)
                   : null,
-              child: RepaintBoundary(
-                key: _repaintKey,
-                child: Stack(
-                  fit: StackFit.passthrough,
-                  clipBehavior: Clip.none,
-                  children: [
+              child: Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  RepaintBoundary(
+                    key: _repaintKey,
+                    child: Stack(
+                      fit: StackFit.passthrough,
+                      clipBehavior: Clip.none,
+                      children: [
                     // Image with rotation & flip
                     Transform(
                       alignment: Alignment.center,
@@ -424,6 +507,13 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                             currentRect: _currentBlurRect,
                             sigma: _blurSigma,
                           ),
+                        ),
+                      ),
+                    // White erase rects (OCR "стереть текст") — inside RepaintBoundary so they export
+                    if (_ocrEraseRects.isNotEmpty)
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _EraseRectPainter(rects: _ocrEraseRects),
                         ),
                       ),
                     // Drawing layer
@@ -490,6 +580,28 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                   ],
                 ),
               ),
+              // OCR overlay — outside RepaintBoundary (not exported)
+              if (_mode == _Mode.ocr) ...[
+                if (_ocrRunning)
+                  const Positioned.fill(
+                    child: Center(child: CircularProgressIndicator(color: Colors.white)),
+                  ),
+                ..._ocrBlocks.map((b) => Positioned.fromRect(
+                  rect: b.boundingBox,
+                  child: GestureDetector(
+                    onTap: () => _ocrBlockTap(context, b),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                            color: Colors.yellow.withValues(alpha: 0.85), width: 1.5),
+                        color: Colors.yellow.withValues(alpha: 0.15),
+                      ),
+                    ),
+                  ),
+                )),
+              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -555,35 +667,68 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           crop: _cropNorm,
           onCropChanged: (r) => setState(() => _cropNorm = r),
         );
+      case _Mode.ocr:
+        if (_ocrRunning) {
+          return const SizedBox(
+            height: 44,
+            child: Center(
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+              SizedBox(width: 10),
+              Text('Распознавание текста…',
+                  style: TextStyle(color: Colors.white70, fontSize: 13)),
+            ])),
+          );
+        }
+        return SizedBox(
+          height: 44,
+          child: Center(
+            child: Text(
+              _ocrBlocks.isEmpty
+                  ? 'Текст не найден'
+                  : 'Нажмите на блок текста — Копировать / Стереть',
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
+            ),
+          ),
+        );
     }
   }
 
   Widget _buildModeBar() {
-    const labels = ['Рисунок', 'Текст', 'Блюр', 'Поворот', 'Кадр'];
-    const icons = [
-      Icons.brush,
-      Icons.title,
-      Icons.blur_on,
-      Icons.rotate_90_degrees_ccw,
-      Icons.crop
+    final modes = <(
+      _Mode,
+      IconData,
+      String
+    )>[
+      (_Mode.draw, Icons.brush, 'Рисунок'),
+      (_Mode.text, Icons.title, 'Текст'),
+      (_Mode.blur, Icons.blur_on, 'Блюр'),
+      (_Mode.rotate, Icons.rotate_90_degrees_ccw, 'Поворот'),
+      (_Mode.crop, Icons.crop, 'Кадр'),
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
+        (_Mode.ocr, Icons.document_scanner_outlined, 'OCR'),
     ];
     return Container(
       height: 54,
       color: Colors.black,
       child: Row(
-        children: List.generate(_Mode.values.length, (i) {
-          final mode = _Mode.values[i];
+        children: modes.map((entry) {
+          final (mode, icon, label) = entry;
           final sel = _mode == mode;
           return Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _mode = mode),
+              onTap: () {
+                setState(() => _mode = mode);
+                if (mode == _Mode.ocr) _startOcr();
+              },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 color: sel ? Colors.white12 : Colors.transparent,
                 child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(icons[i], color: sel ? Colors.white : Colors.white38, size: 20),
+                  Icon(icon, color: sel ? Colors.white : Colors.white38, size: 20),
                   const SizedBox(height: 2),
-                  Text(labels[i],
+                  Text(label,
                       style: TextStyle(
                           color: sel ? Colors.white : Colors.white38,
                           fontSize: 10,
@@ -592,7 +737,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
               ),
             ),
           );
-        }),
+        }).toList(),
       ),
     );
   }
@@ -655,6 +800,28 @@ class _DrawPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_DrawPainter o) => true;
+}
+
+// ── OCR erase-rect painter ───────────────────────────────────────────────────
+// Paints white-filled rectangles over recognised text so it exports clean.
+
+class _EraseRectPainter extends CustomPainter {
+  final List<Rect> rects;
+  const _EraseRectPainter({required this.rects});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill
+      ..blendMode = BlendMode.srcOver;
+    for (final r in rects) {
+      canvas.drawRect(r, p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_EraseRectPainter o) => o.rects != rects;
 }
 
 // ── Blur (redaction) painter ──────────────────────────────────────────────────

@@ -559,11 +559,33 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     }
     final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
+    final hasDrive = GoogleDriveChannelBackup.hasRelayAccount ||
+        GoogleDriveChannelBackup.hasValidManualCreds;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(AppL10n.t('cm_new_channel')),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (!hasDrive)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+              ),
+              child: const Row(children: [
+                Icon(Icons.drive_eta_outlined, color: Colors.orange, size: 16),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Привяжите Google Drive в настройках — без него история будет доступна только онлайн',
+                    style: TextStyle(fontSize: 12, color: Colors.orange),
+                  ),
+                ),
+              ]),
+            ),
           TextField(
             controller: nameCtrl,
             maxLength: 30,
@@ -757,7 +779,6 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
 
   Future<void> _backgroundPullFromDrive() async {
     if (_bgPulling) return;
-    if (!_isSubscribed && _channel.adminId != _myId) return;
     if (_channel.driveFileUrl == null || _channel.driveFileUrl!.isEmpty) return;
     _bgPulling = true;
     try {
