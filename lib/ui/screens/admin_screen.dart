@@ -345,6 +345,7 @@ class _AdminScreenState extends State<AdminScreen>
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemBuilder: (_, i) => _ChannelAdminTile(
                 channel: filtered[i],
+                onToggleVerified: () => _toggleVerifyChannel(filtered[i]),
                 onToggleForeignAgent: () => _toggleForeignAgent(filtered[i]),
                 onToggleBlock: () => _toggleBlock(filtered[i]),
                 onDelete: () => _deleteChannel(filtered[i]),
@@ -528,6 +529,34 @@ class _AdminScreenState extends State<AdminScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${req.channelName} отклонён')),
       );
+    }
+  }
+
+  Future<void> _toggleVerifyChannel(Channel ch) async {
+    final myKey = CryptoService.instance.publicKeyHex;
+    if (ch.verified) {
+      await GossipRouter.instance.sendVerificationRevoke(
+        channelId: ch.id,
+        byAdmin: myKey,
+      );
+      await ChannelService.instance.unverifyChannel(ch.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${ch.name}: галочка снята')),
+        );
+      }
+    } else {
+      await GossipRouter.instance.sendVerificationApproval(
+        channelId: ch.id,
+        verifiedBy: myKey,
+      );
+      await ChannelService.instance.verifyChannel(ch.id, myKey);
+      await ChannelService.instance.removeVerificationRequest(ch.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${ch.name}: верифицирован')),
+        );
+      }
     }
   }
 
@@ -1424,12 +1453,14 @@ class _RelayBotAdminTile extends StatelessWidget {
 
 class _ChannelAdminTile extends StatelessWidget {
   final Channel channel;
+  final VoidCallback onToggleVerified;
   final VoidCallback onToggleForeignAgent;
   final VoidCallback onToggleBlock;
   final VoidCallback onDelete;
 
   const _ChannelAdminTile({
     required this.channel,
+    required this.onToggleVerified,
     required this.onToggleForeignAgent,
     required this.onToggleBlock,
     required this.onDelete,
@@ -1507,6 +1538,18 @@ class _ChannelAdminTile extends StatelessWidget {
               spacing: 8,
               runSpacing: 4,
               children: [
+                OutlinedButton.icon(
+                  onPressed: onToggleVerified,
+                  icon: Icon(
+                    channel.verified ? Icons.verified : Icons.verified_outlined,
+                    size: 16,
+                    color: channel.verified ? Colors.blue : null,
+                  ),
+                  label: Text(
+                    channel.verified ? 'Снять галочку' : 'Галочка',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
                 OutlinedButton.icon(
                   onPressed: onToggleForeignAgent,
                   icon: Icon(Icons.flag_outlined,

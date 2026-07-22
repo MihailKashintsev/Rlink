@@ -2232,6 +2232,10 @@ class GossipRouter {
         onVerifyApproval?.call(packet.payload);
         return;
       }
+      if (packet.type == 'verify_revoke') {
+        onVerifyRevoke?.call(packet.payload);
+        return;
+      }
 
       // ── Admin action packets ───────────────────────────────────
       if (packet.type == 'channel_foreign_agent') {
@@ -2991,9 +2995,27 @@ class GossipRouter {
     await _forward(packet);
   }
 
+  Future<void> sendVerificationRevoke({
+    required String channelId,
+    required String byAdmin,
+  }) async {
+    final packet = GossipPacket(
+      id: const Uuid().v4(),
+      type: 'verify_revoke',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: {
+        'channelId': channelId,
+        'byAdmin': byAdmin,
+      },
+    );
+    await _forward(packet);
+  }
+
   // Callbacks for verification
   void Function(Map<String, dynamic> payload)? onVerifyRequest;
   void Function(Map<String, dynamic> payload)? onVerifyApproval;
+  void Function(Map<String, dynamic> payload)? onVerifyRevoke;
 
   // ══════════════════════════════════════════════════════════════
   // Admin actions (foreign agent / block / delete)

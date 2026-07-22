@@ -2805,6 +2805,12 @@ Future<void> initServices() async {
       debugPrint('[RLINK] Channel verified: $channelId by $verifiedBy');
       ChannelService.instance.verifyChannel(channelId, verifiedBy);
     };
+    GossipRouter.instance.onVerifyRevoke = (payload) {
+      final channelId = payload['channelId'] as String?;
+      if (channelId == null) return;
+      debugPrint('[RLINK] Channel verification revoked: $channelId');
+      ChannelService.instance.unverifyChannel(channelId);
+    };
     GossipRouter.instance.onChannelForeignAgent = (payload) {
       final channelId = payload['channelId'] as String?;
       final value = payload['value'] as bool? ?? true;

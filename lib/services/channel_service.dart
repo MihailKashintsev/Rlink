@@ -1424,6 +1424,16 @@ class ChannelService {
     }
   }
 
+  Future<void> unverifyChannel(String channelId) async {
+    final ch = await getChannel(channelId);
+    if (ch == null) return;
+    final updated = ch.copyWith(verified: false, verifiedBy: '');
+    await updateChannel(updated);
+    if (updated.adminId == CryptoService.instance.publicKeyHex) {
+      unawaited(updated.broadcastGossipMeta());
+    }
+  }
+
   /// Авто-верификация: возвращает true, если у канала 10+ подписчиков.
   bool checkAutoVerify(Channel ch) {
     return ch.subscriberIds.length >= 10;
