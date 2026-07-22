@@ -992,11 +992,23 @@ class ChannelService {
     final existing = await getChannel(channelId);
 
     List<String> subs() {
+      List<String> computed;
       if (p.containsKey('subscriberIds')) {
         final raw = p['subscriberIds'] as List<dynamic>?;
-        return raw?.cast<String>() ?? [adminId];
+        computed = raw?.cast<String>() ?? [adminId];
+      } else {
+        computed = existing?.subscriberIds ?? [adminId];
       }
-      return existing?.subscriberIds ?? [adminId];
+      // Never evict my own subscription through a remote directory merge.
+      // The relay directory only carries a subset of subscribers and can
+      // overwrite the local list, silently dropping me on web page reload.
+      final me = CryptoService.instance.publicKeyHex;
+      if (me.isNotEmpty &&
+          !computed.contains(me) &&
+          (existing?.subscriberIds.contains(me) ?? false)) {
+        computed = [...computed, me];
+      }
+      return computed;
     }
 
     List<String> mods() {
