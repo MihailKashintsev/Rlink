@@ -2575,10 +2575,20 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               content: Text(AppL10n.t('chn_history_restored'))),
         );
       } else {
+        // Key not yet in the Drive keys-file. Re-broadcast our subscription
+        // with our X25519 key so the admin republishes the keys-file including
+        // us on their next reconnect.
+        unawaited(GossipRouter.instance.broadcastChannelSubscribe(
+          channelId: _channel.id,
+          userId: _myId,
+          x25519: CryptoService.instance.x25519PublicKeyBase64,
+        ));
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text(
-                  'Не удалось загрузить историю. Возможно, ключ ещё не получен от автора.')),
+            duration: Duration(seconds: 6),
+            content: Text(
+                'Ключ запрошен от автора. Когда автор будет в сети, попробуйте снова.'),
+          ),
         );
       }
     } finally {

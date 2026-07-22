@@ -97,6 +97,8 @@ final navigatorKey = GlobalKey<NavigatorState>();
 final PacketTransport packetTransport = DefaultPacketTransport();
 bool _relayChannelRepublishInFlight = false;
 int _lastRelayChannelRepublishAtMs = 0;
+bool _adminKeyRefreshInFlight = false;
+int _lastAdminKeyRefreshAtMs = 0;
 bool _incomingCallOverlayBound = false;
 bool _incomingCallOverlayOpen = false;
 
@@ -2893,6 +2895,10 @@ Future<void> initServices() async {
         Future.delayed(const Duration(seconds: 3), sendProfileToAllContacts);
         Future.delayed(
             const Duration(milliseconds: 2400), _republishOwnChannelsToRelay);
+        // Re-publish Drive keys-file for all admin channels so any subscriber
+        // who joined while the admin was offline can finally receive their key.
+        Future.delayed(
+            const Duration(seconds: 6), _refreshAdminChannelDriveKeys);
         Future.delayed(const Duration(seconds: 3), flushOutbox);
         Future.delayed(const Duration(seconds: 4), _requestStoriesFromPeers);
         Future.delayed(
@@ -3323,6 +3329,33 @@ Future<void> _republishOwnChannelsToRelay() async {
     debugPrint('[RLINK][ChDir] republish on connect failed: $e\n$st');
   } finally {
     _relayChannelRepublishInFlight = false;
+  }
+}
+
+/// Re-publish Drive keys-file for every channel where I'm admin + Drive backup
+/// enabled. Rate-limited to once per 5 minutes. Runs on relay reconnect so
+/// subscribers who joined while admin was offline can receive their key.
+Future<void> _refreshAdminChannelDriveKeys() async {
+  if (_adminKeyRefreshInFlight) return;
+  final nowMs = DateTime.now().millisecondsSinceEpoch;
+  if (nowMs - _lastAdminKeyRefreshAtMs < 300000) return; // 5 min cooldown
+  _lastAdminKeyRefreshAtMs = nowMs;
+
+  final myId = CryptoService.instance.publicKeyHex;
+  if (myId.isEmpty) return;
+
+  _adminKeyRefreshInFlight = true;
+  try {
+    final all = await ChannelService.instance.getChannels();
+    for (final ch in all) {
+      if (ch.adminId != myId || !ch.driveBackupEnabled) continue;
+      await ChannelBackupService.instance.publishBackup(ch);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+  } catch (e) {
+    debugPrint('[RLINK][ChBak] key-refresh on connect failed: $e');
+  } finally {
+    _adminKeyRefreshInFlight = false;
   }
 }
 
