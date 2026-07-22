@@ -91,7 +91,8 @@ class LocalTranscriptionServiceIO {
         throw StateError('Не удалось декодировать аудио для расшифровки: $e');
       }
     }
-    final text = WhisperFfi.instance.transcribe(wavPath, language: language);
+    final text =
+        await WhisperFfi.instance.transcribeAsync(wavPath, language: language);
     if (text.trim().isEmpty) throw StateError('Речь не распознана');
     return text.trim();
   }

@@ -13,12 +13,13 @@ self.addEventListener('push', (event) => {
   } catch (_) {
     payload = {};
   }
+  // Service/presence/typing pushes carry no body — silently drop them.
+  if (!payload.body) return;
   const title = payload.title || 'Rlink';
-  const body = payload.body || 'Новое сообщение. Откройте Rlink, чтобы получить его.';
   const tag = payload.tag || 'rlink-message';
   event.waitUntil(
     self.registration.showNotification(title, {
-      body,
+      body: payload.body,
       tag,
       renotify: true,
       icon: 'icons/Icon-192.png',

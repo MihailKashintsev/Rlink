@@ -1459,6 +1459,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _transcribeVoiceMessage(ChatMessage msg) async {
     final id = msg.id;
+    // Don't transcribe while the voice message is still being uploaded —
+    // the file may not be fully written yet, which causes a hang.
+    if (_uploadingMsgIds.contains(id)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(seconds: 2),
+            content: Text('Подождите, сообщение ещё отправляется'),
+          ),
+        );
+      }
+      return;
+    }
     // Voice messages use voicePath; square/quick video messages have audio in
     // videoPath — transcribe that when there's no voicePath.
     final rawPath = (msg.voicePath != null && msg.voicePath!.isNotEmpty)

@@ -1,5 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
 
@@ -110,5 +111,43 @@ class WhisperFfi {
     _freeText = null;
     _freeModel = null;
     _lastError = null;
+  }
+
+  /// Runs the synchronous FFI transcription on a background isolate so the
+  /// UI isolate stays responsive during long inference.
+  Future<String> transcribeAsync(String audioPath, {String language = 'ru'}) =>
+      Isolate.run(() => _transcribeInIsolate(audioPath, language));
+}
+
+// Top-level: Isolate.run needs a closure that captures only sendable values
+// (Strings are). The native library is process-global — DynamicLibrary.open
+// returns the already-mapped SO from cache with no disk I/O.
+String _transcribeInIsolate(String audioPath, String language) {
+  late final DynamicLibrary lib;
+  if (Platform.isAndroid || Platform.isLinux) {
+    lib = DynamicLibrary.open('libwhisper_bridge.so');
+  } else if (Platform.isWindows) {
+    lib = DynamicLibrary.open('whisper_bridge.dll');
+  } else {
+    throw UnsupportedError('whisper FFI not supported on this platform');
+  }
+  final transcribe = lib.lookupFunction<
+      Pointer<Utf8> Function(Pointer<Utf8>, Pointer<Utf8>),
+      Pointer<Utf8> Function(Pointer<Utf8>, Pointer<Utf8>)>(
+    'whisper_bridge_transcribe',
+  );
+  final freeText = lib.lookupFunction<Void Function(Pointer<Utf8>),
+      void Function(Pointer<Utf8>)>('whisper_bridge_free_text');
+  final ap = audioPath.toNativeUtf8();
+  final lp = language.toNativeUtf8();
+  try {
+    final r = transcribe(ap, lp);
+    if (r == nullptr) return '';
+    final text = r.toDartString();
+    freeText(r);
+    return text;
+  } finally {
+    calloc.free(ap);
+    calloc.free(lp);
   }
 }
