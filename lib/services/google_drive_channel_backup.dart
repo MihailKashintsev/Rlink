@@ -673,6 +673,35 @@ class GoogleDriveChannelBackup {
   }
 
   /// Пытается восстановить сессию; при [interactive] открывает выбор аккаунта.
+  /// Android `google_sign_in` кидает `sign_in_failed ... 10` (DEVELOPER_ERROR),
+  /// когда SHA-1 подписи установленного приложения не зарегистрирован как Android
+  /// OAuth-клиент. Ретрай бессмысленен — распознаём этот случай отдельно.
+  static bool _isDeveloperError(Object e) {
+    final s = e.toString().toLowerCase();
+    return s.contains('sign_in_failed') &&
+        (s.contains(': 10:') ||
+            s.contains(' 10,') ||
+            s.contains('developer_error') ||
+            s.contains('10:'));
+  }
+
+  /// Понятное пользователю сообщение вместо сырого PlatformException.
+  static String _humanizeSignInError(Object e) {
+    if (_isDeveloperError(e)) {
+      return 'Обычный вход через Google недоступен в этой сборке. '
+          'Используйте «Добавить аккаунт Google (постоянно)» — вход пройдёт '
+          'через сервер Rlink и не требует дополнительной настройки.';
+    }
+    final s = e.toString();
+    if (s.toLowerCase().contains('network')) {
+      return 'Нет соединения с Google. Проверьте интернет и повторите.';
+    }
+    if (s.contains('12501') || s.toLowerCase().contains('canceled')) {
+      return 'Вход отменён.';
+    }
+    return 'Не удалось войти. Попробуйте «Добавить аккаунт Google (постоянно)».';
+  }
+
   static Future<GoogleSignInAccount?> ensureUserSignedIn({
     bool interactive = true,
   }) async {
@@ -726,8 +755,12 @@ class GoogleDriveChannelBackup {
               '[RLINK][Drive] signIn cancelled by user, stopping retries');
           break;
         } catch (e, st) {
-          _lastSignInError = e.toString();
+          _lastSignInError = _humanizeSignInError(e);
           debugPrint('[RLINK][Drive] signIn failed: $e\n$st');
+          // DEVELOPER_ERROR (10) = этот APK подписан ключом, чей SHA-1 не заведён
+          // в Google Cloud как Android OAuth-клиент. Ретрай не поможет — выходим,
+          // чтобы пользователь увидел подсказку про постоянную привязку.
+          if (_isDeveloperError(e)) break;
         }
         await Future<void>.delayed(const Duration(milliseconds: 220));
       }
