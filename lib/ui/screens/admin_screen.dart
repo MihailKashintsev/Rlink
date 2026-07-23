@@ -516,6 +516,12 @@ class _AdminScreenState extends State<AdminScreen>
     );
     await ChannelService.instance.verifyChannel(req.channelId, myKey);
     await ChannelService.instance.removeVerificationRequest(req.channelId);
+    unawaited(RelayService.instance.sendAdminChannelVerify(
+      adminHash: AppSettings.instance.adminPasswordHash,
+      channelId: req.channelId,
+      verified: true,
+      verifiedBy: myKey,
+    ));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${req.channelName} верифицирован')),
@@ -540,6 +546,11 @@ class _AdminScreenState extends State<AdminScreen>
         byAdmin: myKey,
       );
       await ChannelService.instance.unverifyChannel(ch.id);
+      unawaited(RelayService.instance.sendAdminChannelVerify(
+        adminHash: AppSettings.instance.adminPasswordHash,
+        channelId: ch.id,
+        verified: false,
+      ));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${ch.name}: галочка снята')),
@@ -552,6 +563,12 @@ class _AdminScreenState extends State<AdminScreen>
       );
       await ChannelService.instance.verifyChannel(ch.id, myKey);
       await ChannelService.instance.removeVerificationRequest(ch.id);
+      unawaited(RelayService.instance.sendAdminChannelVerify(
+        adminHash: AppSettings.instance.adminPasswordHash,
+        channelId: ch.id,
+        verified: true,
+        verifiedBy: myKey,
+      ));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${ch.name}: верифицирован')),

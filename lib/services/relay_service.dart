@@ -1281,6 +1281,7 @@ class RelayService with WidgetsBindingObserver {
           break;
         case 'admin_bot_list_ack':
         case 'admin_bot_update_ack':
+        case 'admin_channel_verify_ack':
           final adminRid = msg['reqId']?.toString() ?? '';
           if (adminRid.isNotEmpty) {
             final c = _adminBotAckCompleters.remove(adminRid);
@@ -1700,6 +1701,47 @@ class RelayService with WidgetsBindingObserver {
         if (revoke) 'revoke': true,
         'reqId': reqId,
       }, context: 'admin_bot_update');
+      return await c.future.timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {
+          _adminBotAckCompleters.remove(reqId);
+          return {'ok': false, 'error': 'timeout'};
+        },
+      );
+    } catch (e) {
+      _adminBotAckCompleters.remove(reqId);
+      return {'ok': false, 'error': e.toString()};
+    }
+  }
+
+  /// Relay-админ выдаёт/снимает галочку каналу. Состояние хранится на relay
+  /// (в записи каталога) — переживает перезаход и ре-публиш владельца.
+  Future<Map<String, dynamic>> sendAdminChannelVerify({
+    required String adminHash,
+    required String channelId,
+    required bool verified,
+    String verifiedBy = '',
+  }) async {
+    if (!isConnected) return {'ok': false, 'error': 'offline'};
+    final h = adminHash.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(h)) {
+      return {'ok': false, 'error': 'bad_admin_hash'};
+    }
+    final cid = channelId.trim();
+    if (cid.isEmpty) return {'ok': false, 'error': 'bad_channel_id'};
+
+    final reqId = _newBotOwnerReqId();
+    final c = Completer<Map<String, dynamic>>();
+    _adminBotAckCompleters[reqId] = c;
+    try {
+      await _safeSend({
+        'type': 'admin_channel_verify',
+        'adminHash': h,
+        'channelId': cid,
+        'verified': verified,
+        if (verifiedBy.isNotEmpty) 'verifiedBy': verifiedBy,
+        'reqId': reqId,
+      }, context: 'admin_channel_verify');
       return await c.future.timeout(
         const Duration(seconds: 20),
         onTimeout: () {
