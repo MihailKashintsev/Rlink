@@ -33,18 +33,25 @@ class _ChannelAdminSettingsScreenState
     extends State<ChannelAdminSettingsScreen> {
   Channel? _channel;
   GoogleDriveSyncStatus? _driveStatus;
-  bool _driveRefreshing = false;
-  bool _isPublishingBackup = false;
-  bool _isRestoringBackup = false;
-  String _publishStep = '';
 
   String get _myId => CryptoService.instance.publicKeyHex;
-  bool get _canManageDriveAccount {
-    final ch = _channel;
-    if (ch == null) return false;
-    if (ch.adminId == _myId) return true;
-    return ch.allowModeratorsManageDriveAccount &&
-        ch.moderatorIds.contains(_myId);
+
+  /// «Свободно X из Y» для привязанного Google-аккаунта (пусто, если квота
+  /// недоступна). Только для отображения — управление Drive убрано из настроек
+  /// канала, аккаунт привязывается в Настройки → Google Drive.
+  String get _driveSpaceLabel {
+    final st = _driveStatus;
+    final free = st?.freeBytes;
+    final limit = st?.limitBytes;
+    if (free == null || limit == null || limit <= 0) return '';
+    return 'Свободно ${_fmtGb(free)} из ${_fmtGb(limit)}';
+  }
+
+  String _fmtGb(int bytes) {
+    const gb = 1024 * 1024 * 1024;
+    const mb = 1024 * 1024;
+    if (bytes >= gb) return '${(bytes / gb).toStringAsFixed(1)} ГБ';
+    return '${(bytes / mb).toStringAsFixed(0)} МБ';
   }
 
   @override
@@ -70,269 +77,6 @@ class _ChannelAdminSettingsScreenState
       if (mounted) setState(() => _driveStatus = st);
     } else if (mounted) {
       setState(() => _driveStatus = null);
-    }
-  }
-
-  Future<void> _refreshDriveQuota() async {
-    if (!_canManageDriveAccount) return;
-    if (_driveRefreshing) return;
-    setState(() => _driveRefreshing = true);
-    try {
-      final st =
-          await GoogleDriveChannelBackup.getSyncStatus(interactive: true);
-      if (!mounted) return;
-      setState(() => _driveStatus = st);
-      if (st == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Не удалось связаться с Google Drive. Проверьте интернет и '
-              'что в аккаунте Google включён доступ к Диску для Rlink.',
-            ),
-          ),
-        );
-      } else if (st.email != null &&
-          st.email!.isNotEmpty &&
-          st.limitBytes == null &&
-          st.usageBytes == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Вход выполнен, но нет доступа к Диску. Нажмите снова и '
-              'разрешите доступ к Google Drive в запросе прав.',
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _driveRefreshing = false);
-    }
-  }
-
-  Future<void> _toggleDriveBackup(bool enabled) async {
-    final ch = _channel;
-    if (ch == null || ch.adminId != _myId) return;
-    if (enabled) {
-      final linked = GoogleDriveChannelBackup.hasValidManualCreds ||
-          GoogleDriveChannelBackup.hasRelayAccount ||
-          GoogleDriveChannelBackup.cachedCurrentUser != null;
-      if (!linked) {
-        // Try a silent restore (manual token from a previous session).
-        await GoogleDriveChannelBackup.ensureUserSignedIn(interactive: false);
-      }
-      final nowLinked = GoogleDriveChannelBackup.hasValidManualCreds ||
-          GoogleDriveChannelBackup.hasRelayAccount ||
-          GoogleDriveChannelBackup.cachedCurrentUser != null;
-      if (!nowLinked) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Сначала привяжите Google-аккаунт: Настройки → Google Drive'),
-          ),
-        );
-        return;
-      }
-    }
-    final updated = ch.copyWith(driveBackupEnabled: enabled);
-    await ChannelService.instance.updateChannel(updated);
-    await updated.broadcastGossipMeta();
-    if (!mounted) return;
-    setState(() {
-      _channel = updated;
-      if (!enabled) _driveStatus = null;
-    });
-    if (enabled) {
-      await _refreshDriveQuota();
-    }
-  }
-
-  Future<void> _toggleModeratorDrivePermission(bool enabled) async {
-    final ch = _channel;
-    if (ch == null || ch.adminId != _myId) return;
-    final updated = ch.copyWith(allowModeratorsManageDriveAccount: enabled);
-    await ChannelService.instance.updateChannel(updated);
-    await updated.broadcastGossipMeta();
-    if (!mounted) return;
-    setState(() => _channel = updated);
-  }
-
-  String _channelDriveAccountLabel(String channelId) {
-    final p = GoogleDriveChannelBackup.channelAccountPairing(channelId);
-    if (p == null) return 'По умолчанию (активный аккаунт)';
-    for (final a in GoogleDriveChannelBackup.relayAccounts) {
-      if (a['pairing'] == p) {
-        return (a['email'] ?? '').isNotEmpty ? a['email']! : 'Аккаунт';
-      }
-    }
-    return 'По умолчанию (активный аккаунт)';
-  }
-
-  Future<void> _pickChannelDriveAccount(String channelId) async {
-    final accounts = GoogleDriveChannelBackup.relayAccounts;
-    final current = GoogleDriveChannelBackup.channelAccountPairing(channelId);
-    final chosen = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(14),
-              child: Text('Аккаунт Google для резерва этого канала'),
-            ),
-            ListTile(
-              leading: Icon(current == null ? Icons.check : null),
-              title: const Text('По умолчанию (активный аккаунт)'),
-              onTap: () => Navigator.pop(ctx, '__default__'),
-            ),
-            for (final a in accounts)
-              ListTile(
-                leading: Icon(a['pairing'] == current ? Icons.check : null),
-                title: Text(
-                    (a['email'] ?? '').isNotEmpty ? a['email']! : 'Аккаунт'),
-                onTap: () => Navigator.pop(ctx, a['pairing']),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (chosen == null) return;
-    await GoogleDriveChannelBackup.setChannelAccount(
-        channelId, chosen == '__default__' ? null : chosen);
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _publishBackupNow() async {
-    final ch = _channel;
-    if (ch == null) return;
-    setState(() { _isPublishingBackup = true; _publishStep = 'Сборка снимка истории…'; });
-    try {
-      await ChannelBackupService.instance.publishBackup(ch);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('История успешно сохранена на Google Drive')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка при публикации: $e')),
-      );
-    } finally {
-      if (mounted) setState(() { _isPublishingBackup = false; _publishStep = ''; });
-    }
-  }
-
-  Future<void> _restoreBackupNow() async {
-    final ch = _channel;
-    if (ch == null) return;
-    setState(() {
-      _isRestoringBackup = true;
-      _publishStep = 'Подключение к Google Drive…';
-    });
-    try {
-      final ok = await ChannelBackupService.instance.restoreFromDriveUrl(
-        ch,
-        onStep: (s) {
-          if (mounted) setState(() => _publishStep = s);
-        },
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ok
-              ? 'История вытянута из Google Drive'
-              : 'Не удалось вытянуть историю (нет ключа или файла сохранения)'),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isRestoringBackup = false;
-          _publishStep = '';
-        });
-      }
-    }
-  }
-
-  Future<void> _clearDriveBackupHistory() async {
-    final ch = _channel;
-    if (ch == null) return;
-    if (ch.adminId != _myId) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Очистка истории доступна только владельцу канала'),
-        ),
-      );
-      return;
-    }
-    final fileId = ch.driveFileId;
-    if (fileId == null || fileId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('На Google Drive пока нет файла истории для этого канала'),
-        ),
-      );
-      return;
-    }
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Очистить историю на Google Drive?'),
-        content: const Text(
-          'Файл резервной истории этого канала будет удалён с Google Drive. '
-          'Действие нельзя отменить.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(AppL10n.t('common_cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(AppL10n.t('common_delete')),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    setState(() => _driveRefreshing = true);
-    try {
-      final deleted = await GoogleDriveChannelBackup.deleteBackupFile(
-        fileId: fileId,
-        interactive: true,
-      );
-      if (!mounted) return;
-      if (!deleted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Не удалось удалить файл истории с Google Drive'),
-          ),
-        );
-        return;
-      }
-      final updated = ch.copyWith(driveFileId: null);
-      await ChannelService.instance.updateChannel(updated);
-      await updated.broadcastGossipMeta();
-      if (!mounted) return;
-      setState(() {
-        _channel = updated;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('История канала на Google Drive очищена'),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _driveRefreshing = false);
     }
   }
 
@@ -795,112 +539,31 @@ class _ChannelAdminSettingsScreenState
       appBar: AppBar(title: Text('Настройки: ${ch.name}')),
       body: ListView(
         children: [
-          // ── Google Drive ──────────────────────────────────────────────
+          // ── Google Drive: только просмотр привязанного аккаунта ───────────
+          // Все тумблеры/действия убраны намеренно: аккаунт привязывается в
+          // Настройки → Google Drive владельцем устройства. Здесь — только
+          // почта и свободное место; модераторы аккаунт менять не могут.
           ListTile(
             leading: Icon(
               Icons.add_to_drive_outlined,
               color: hasEmail ? theme.colorScheme.primary : null,
             ),
+            isThreeLine: hasEmail && _driveSpaceLabel.isNotEmpty,
             title: const Text('Google-аккаунт'),
             subtitle: Text(
-              hasEmail ? (email ?? '') : 'Не привязан — Настройки → Google Drive',
+              hasEmail
+                  ? (_driveSpaceLabel.isEmpty
+                      ? email!
+                      : '${email!}\n$_driveSpaceLabel')
+                  : 'Не привязан — Настройки → Google Drive',
               style: TextStyle(
                 fontSize: 12,
-                color: hasEmail ? null : theme.colorScheme.error,
+                color: hasEmail
+                    ? theme.colorScheme.onSurfaceVariant
+                    : theme.colorScheme.error,
               ),
             ),
           ),
-          if (amOwner) ...[
-            if (GoogleDriveChannelBackup.relayAccounts.length >= 2)
-              ListTile(
-                leading: const Icon(Icons.switch_account_outlined),
-                title: const Text('Аккаунт Drive для этого канала'),
-                subtitle: Text(_channelDriveAccountLabel(ch.id),
-                    style: const TextStyle(fontSize: 12)),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _pickChannelDriveAccount(ch.id),
-              ),
-            SwitchListTile(
-              value: ch.driveBackupEnabled,
-              onChanged: (v) => _toggleDriveBackup(v),
-              title: const Text('Резерв (Google Drive + сеть)'),
-              subtitle: const Text(
-                'Шифрованная копия истории на Диске и в сети.',
-                style: TextStyle(fontSize: 12),
-              ),
-              secondary: const Icon(Icons.cloud_sync_outlined),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              dense: true,
-            ),
-            SwitchListTile(
-              value: ch.allowModeratorsManageDriveAccount,
-              onChanged: (v) => _toggleModeratorDrivePermission(v),
-              title: const Text('Управление Drive для модераторов'),
-              subtitle: const Text(
-                'Разрешить модераторам публиковать и вытягивать историю Drive.',
-                style: TextStyle(fontSize: 12),
-              ),
-              secondary: const Icon(Icons.admin_panel_settings_outlined),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              dense: true,
-            ),
-          ],
-          if (ch.driveBackupEnabled && _canManageDriveAccount) ...[
-            ListTile(
-              leading: _isPublishingBackup
-                  ? SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2.5, color: theme.colorScheme.primary),
-                    )
-                  : const Icon(Icons.cloud_upload_outlined),
-              title: const Text('Опубликовать историю'),
-              subtitle: Text(
-                _isPublishingBackup
-                    ? (_publishStep.isNotEmpty ? _publishStep : 'Подготовка…')
-                    : 'Загрузить текущую историю канала на Google Drive',
-                style: const TextStyle(fontSize: 12),
-              ),
-              onTap: (_driveRefreshing || _isPublishingBackup)
-                  ? null
-                  : _publishBackupNow,
-            ),
-            ListTile(
-              leading: _isRestoringBackup
-                  ? SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2.5, color: theme.colorScheme.primary),
-                    )
-                  : const Icon(Icons.cloud_download_outlined),
-              title: const Text('Вытянуть историю из Drive'),
-              subtitle: Text(
-                _isRestoringBackup
-                    ? (_publishStep.isNotEmpty ? _publishStep : 'Загрузка…')
-                    : 'Загрузить активный файл сохранения',
-                style: const TextStyle(fontSize: 12),
-              ),
-              onTap: (_driveRefreshing ||
-                      _isPublishingBackup ||
-                      _isRestoringBackup)
-                  ? null
-                  : _restoreBackupNow,
-            ),
-            if (amOwner)
-              ListTile(
-                leading: const Icon(Icons.delete_sweep_outlined),
-                title: const Text('Очистить историю Drive'),
-                subtitle: const Text(
-                  'Удалить файл резервной истории этого канала с Google Drive',
-                  style: TextStyle(fontSize: 12),
-                ),
-                onTap: (_driveRefreshing || _isPublishingBackup)
-                    ? null
-                    : _clearDriveBackupHistory,
-              ),
-          ],
           const Divider(height: 24),
 
           // ── Профиль ───────────────────────────────────────────────────

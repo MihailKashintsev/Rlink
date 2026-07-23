@@ -47,6 +47,7 @@ import '../widgets/avatar_widget.dart';
 import '../widgets/update_restart_dialog.dart';
 import '../widgets/status_emoji_view.dart';
 import '../widgets/security_visuals.dart';
+import '../widgets/google_sign_in_button.dart';
 import '../screens/about_screen.dart';
 import '../screens/documentation_screen.dart';
 import '../screens/settings_data_page.dart';
@@ -719,55 +720,6 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
     }
   }
 
-  /// Durable link via the relay OAuth backend (refresh token on the server).
-  Future<void> _linkRelay() async {
-    final url = GoogleDriveChannelBackup.startRelayLink();
-    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    if (!mounted) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Подтвердите вход'),
-        content: const Text(
-          'В открывшемся браузере войдите в Google и разрешите доступ к Drive. '
-          'Когда увидите «Готово ✓» — вернитесь сюда и нажмите «Готово».',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(AppL10n.t('common_cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppL10n.t('common_done')),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    setState(() => _busy = true);
-    var linked = false;
-    for (var i = 0; i < 4 && !linked; i++) {
-      linked = await GoogleDriveChannelBackup.finishRelayLink();
-      if (!linked) await Future<void>.delayed(const Duration(seconds: 2));
-    }
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (linked) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google Drive привязан (постоянно)')),
-      );
-      await _load(interactive: false);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(GoogleDriveChannelBackup.lastSignInError ??
-              'Не удалось подтвердить вход. Попробуйте снова.'),
-        ),
-      );
-    }
-  }
-
   Future<void> _linkGis() async {
     setState(() => _busy = true);
     try {
@@ -982,38 +934,16 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
             );
           }),
           const SizedBox(height: 8),
-          const _SectionHeader('Привязка'),
-          if (!kIsWeb)
-            ListTile(
-              leading: Icon(Icons.cloud_done_outlined,
-                  color: Theme.of(context).colorScheme.primary),
-              title: const Text('Добавить аккаунт Google (постоянно)'),
-              subtitle: const Text(
-                'Через сервер Rlink: не отваливается через час, можно несколько аккаунтов.',
-                style: TextStyle(fontSize: 12),
+          if (!linked) ...[
+            const _SectionHeader('Привязка'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+              child: GoogleSignInButton(
+                busy: _busy,
+                onPressed: _busy ? null : (kIsWeb ? _linkSafari : _linkGis),
               ),
-              onTap: _busy ? null : _linkRelay,
             ),
-          if (kIsWeb)
-            ListTile(
-              leading: const Icon(Icons.open_in_browser),
-              title: const Text('Привязать Google Drive'),
-              subtitle: const Text(
-                'Откроется вход Google — разрешите доступ к Drive, скопируйте код и вставьте.',
-                style: TextStyle(fontSize: 12),
-              ),
-              onTap: _busy ? null : _linkSafari,
-            ),
-          if (!kIsWeb)
-            ListTile(
-              leading: const Icon(Icons.login),
-              title: const Text('Войти через Google'),
-              subtitle: const Text(
-                'Обычный вход (ПК/Android).',
-                style: TextStyle(fontSize: 12),
-              ),
-              onTap: _busy ? null : _linkGis,
-            ),
+          ],
           if (linked)
             ListTile(
               leading: const Icon(Icons.link_off, color: Colors.red),
@@ -1021,13 +951,16 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
                   style: TextStyle(color: Colors.red)),
               onTap: _busy ? null : _disconnect,
             ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Text(
-              'Этот аккаунт используется для резервного копирования каналов '
-              '(если в настройках канала включён резерв). В веб-версии токен '
-              'живёт около часа — затем потребуется привязать заново.',
-              style: TextStyle(fontSize: 12),
+              kIsWeb
+                  ? 'Аккаунт используется для резервного копирования каналов. '
+                      'В веб-версии токен доступа живёт около часа — затем '
+                      'потребуется войти заново.'
+                  : 'Аккаунт используется для резервного копирования каналов '
+                      '(если в настройках канала включён резерв).',
+              style: const TextStyle(fontSize: 12),
             ),
           ),
         ],
