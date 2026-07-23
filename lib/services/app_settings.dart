@@ -79,6 +79,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyBatterySaverAnimations = 'battery_saver_animations';
   static const _keyBatteryAnimReduceAt = 'battery_anim_reduce_at'; // percent
   static const _keyBatteryAnimOffAt = 'battery_anim_off_at'; // percent
+  static const _keyHideLastSeen = 'hide_last_seen';
 
   late SharedPreferences _prefs;
   bool _prefsReady = false;
@@ -194,6 +195,7 @@ class AppSettings extends ChangeNotifier {
   bool _batterySaverAnimations = true;
   int _batteryAnimReduceAt = 20;
   int _batteryAnimOffAt = 5;
+  bool _hideLastSeen = false;
   Map<String, String> _customSoundPaths = const {};
   int _appIconVariant = 0;
   bool _useIosStyleEmoji = false;
@@ -248,6 +250,7 @@ class AppSettings extends ChangeNotifier {
   bool get batterySaverAnimations => _batterySaverAnimations;
   int get batteryAnimReduceAt => _batteryAnimReduceAt.clamp(0, 100);
   int get batteryAnimOffAt => _batteryAnimOffAt.clamp(0, 100);
+  bool get hideLastSeen => _hideLastSeen;
 
   TranscriptionEngine get transcriptionEngine =>
       TranscriptionEngine.fromIndex(_transcriptionEngine);
@@ -407,6 +410,7 @@ class AppSettings extends ChangeNotifier {
     _hasSeenIntro = _prefs.getBool(_keyHasSeenIntro) ?? false;
     _showReadReceipts = _prefs.getBool(_keyShowReadReceipts) ?? true;
     _showOnlineStatus = _prefs.getBool(_keyShowOnlineStatus) ?? true;
+    _hideLastSeen = _prefs.getBool(_keyHideLastSeen) ?? false;
     _autoDownloadMedia = _prefs.getBool(_keyAutoDownloadMedia) ?? true;
     _compactMode = _prefs.getBool(_keyCompactMode) ?? false;
     _etherRulesAccepted = _prefs.getBool(_keyEtherRulesAccepted) ?? false;
@@ -910,6 +914,12 @@ class AppSettings extends ChangeNotifier {
   Future<void> setShowOnlineStatus(bool value) async {
     _showOnlineStatus = value;
     await _runPrefsWrite((p) => p.setBool(_keyShowOnlineStatus, value));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setHideLastSeen(bool value) async {
+    _hideLastSeen = value;
+    await _runPrefsWrite((p) => p.setBool(_keyHideLastSeen, value));
     _notifySettingsChanged();
   }
 

@@ -1155,6 +1155,10 @@ Future<void> initServices() async {
           textColor, textBold, textItalic, textBgOpacity, overlays, strokes) {
         debugPrint(
             '[RLINK][Main] onStory: author=${authorId.substring(0, 16)} text=${text.substring(0, text.length.clamp(0, 20))}');
+        // Check if this story is already known BEFORE adding it, so we can
+        // skip the notification for re-broadcasts from reconnecting peers.
+        final isNewStory =
+            StoryService.instance.findStory(storyId) == null;
         StoryService.instance.addStory(StoryItem(
           id: storyId,
           authorId: authorId,
@@ -1178,9 +1182,10 @@ Future<void> initServices() async {
               .toList(),
         ));
         final myKey = CryptoService.instance.publicKeyHex;
-        if (authorId == myKey) return;
+        if (authorId == myKey || !isNewStory) return;
         unawaited(() async {
-          // Notify only for known contacts.
+          // Notify only for known contacts, and only for truly new stories
+          // (not re-broadcasts from a peer reconnecting to the network).
           final contact =
               await ChatStorageService.instance.getContact(authorId);
           final title = contact?.nickname.trim();

@@ -361,6 +361,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _aiThinking = false;
   StreamSubscription<List<ConnectivityResult>>? _vpnConnSub;
   ScaffoldMessengerState? _scaffoldMessenger;
+  DateTime? _peerLastSeen;
 
   /// Множественный выбор пузырей: переслать / удалить.
   bool _bulkSelectMode = false;
@@ -976,6 +977,7 @@ class _ChatScreenState extends State<ChatScreen> {
     BleService.instance.peersCount.addListener(_onPeersChanged);
     BleService.instance.peerMappingsVersion.addListener(_onPeersChanged);
     RelayService.instance.presenceVersion.addListener(_onPeersChanged);
+    unawaited(_refreshPeerLastSeen());
     // Следим за изменением списка контактов
     _contactListener = () => _checkContactStatus();
     ChatStorageService.instance.contactsNotifier.addListener(_contactListener!);
@@ -1074,6 +1076,26 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     // Key may have just resolved — re-check contact status
     unawaited(_checkContactStatus());
+    // Refresh last-seen timestamp for the header subtitle
+    unawaited(_refreshPeerLastSeen());
+  }
+
+  Future<void> _refreshPeerLastSeen() async {
+    final contact =
+        await ChatStorageService.instance.getContact(_resolvedPeerId);
+    if (!mounted) return;
+    setState(() => _peerLastSeen = contact?.lastSeen);
+  }
+
+  String _formatPeerLastSeen(DateTime? lastSeen) {
+    if (AppSettings.instance.hideLastSeen) return 'не в сети';
+    if (lastSeen == null) return 'не в сети';
+    final diff = DateTime.now().difference(lastSeen);
+    if (diff.inSeconds < 60) return 'был(а) только что';
+    if (diff.inMinutes < 60) return 'был(а) ${diff.inMinutes} мин назад';
+    if (diff.inHours < 24) return 'был(а) ${diff.inHours} ч назад';
+    if (diff.inDays < 7) return 'был(а) ${diff.inDays} дн назад';
+    return 'не в сети';
   }
 
   String _composeDraftStorageKey() =>
@@ -6973,10 +6995,12 @@ class _ChatScreenState extends State<ChatScreen> {
                                                             _resolvedPeerId);
                                                 final isOnline =
                                                     online || relayOnline;
+                                                final subtitleText = isOnline
+                                                    ? 'в сети'
+                                                    : _formatPeerLastSeen(
+                                                        _peerLastSeen);
                                                 return Text(
-                                                  isOnline
-                                                      ? 'в сети'
-                                                      : 'не в сети',
+                                                  subtitleText,
                                                   style: TextStyle(
                                                     fontSize: 12,
                                                     color: isOnline

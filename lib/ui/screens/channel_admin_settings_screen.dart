@@ -39,9 +39,6 @@ class _ChannelAdminSettingsScreenState
   String _publishStep = '';
 
   String get _myId => CryptoService.instance.publicKeyHex;
-  bool get _isModeratorDriveMode => widget.allowModeratorDriveManagement;
-  bool get _isOwnerMode => !_isModeratorDriveMode;
-
   bool get _canManageDriveAccount {
     final ch = _channel;
     if (ch == null) return false;
@@ -67,7 +64,7 @@ class _ChannelAdminSettingsScreenState
     final ch = await ChannelService.instance.getChannel(widget.channelId);
     if (!mounted) return;
     setState(() => _channel = ch);
-    if (ch != null && _canManageDriveAccount) {
+    if (ch != null) {
       final st =
           await GoogleDriveChannelBackup.getSyncStatus(interactive: false);
       if (mounted) setState(() => _driveStatus = st);
@@ -206,41 +203,6 @@ class _ChannelAdminSettingsScreenState
     if (mounted) setState(() {});
   }
 
-  Future<void> _disconnectDriveAccount() async {
-    if (!_canManageDriveAccount) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Отвязать Google-аккаунт?'),
-        content: const Text(
-          'Текущая привязка будет удалена на этом устройстве. '
-          'Можно сразу привязать другой аккаунт.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(AppL10n.t('common_cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppL10n.t('cm_unlink')),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    await GoogleDriveChannelBackup.disconnectCurrentUser();
-    if (!mounted) return;
-    setState(() {
-      _driveStatus = const GoogleDriveSyncStatus();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Google-аккаунт отвязан'),
-      ),
-    );
-  }
-
   Future<void> _publishBackupNow() async {
     final ch = _channel;
     if (ch == null) return;
@@ -372,35 +334,6 @@ class _ChannelAdminSettingsScreenState
     } finally {
       if (mounted) setState(() => _driveRefreshing = false);
     }
-  }
-
-  String _fmtBytes(int bytes) {
-    if (bytes >= 1073741824) {
-      return '${(bytes / 1073741824).toStringAsFixed(2)} ГБ';
-    }
-    if (bytes >= 1048576) {
-      return '${(bytes / 1048576).toStringAsFixed(1)} МБ';
-    }
-    if (bytes >= 1024) {
-      return '${(bytes / 1024).toStringAsFixed(0)} КБ';
-    }
-    return '$bytes Б';
-  }
-
-  String _driveFreeSubtitle() {
-    final s = _driveStatus;
-    if (s == null) return 'Загрузка…';
-    if (s.email == null || s.email!.isEmpty) {
-      return 'Войдите через кнопку обновления, чтобы увидеть квоту';
-    }
-    if (s.limitBytes == null || s.limitBytes! <= 0) {
-      return 'Размер хранилища недоступен для этого аккаунта';
-    }
-    if (s.usageBytes == null || s.freeBytes == null) {
-      return 'Нажмите «обновить», чтобы загрузить квоту';
-    }
-    return '${_fmtBytes(s.freeBytes!)} свободно из ${_fmtBytes(s.limitBytes!)} '
-        '(занято ${_fmtBytes(s.usageBytes!)})';
   }
 
   bool get _canTransferOwnership {
@@ -842,45 +775,42 @@ class _ChannelAdminSettingsScreenState
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-    if (!_isOwnerMode && !_canManageDriveAccount) {
+
+    final amOwner = ch.adminId == _myId;
+    final amMod = !amOwner && ch.moderatorIds.contains(_myId);
+
+    if (!amOwner && !amMod) {
       return Scaffold(
         appBar: AppBar(title: Text(AppL10n.t('cm_channel_settings'))),
-        body: const Center(
-          child: Text('Недостаточно прав для настроек канала'),
-        ),
-      );
-    }
-    if (_isOwnerMode && ch.adminId != _myId) {
-      return Scaffold(
-        appBar: AppBar(title: Text(AppL10n.t('cm_channel_settings'))),
-        body: const Center(
-          child: Text('Доступно только владельцу канала'),
-        ),
+        body: const Center(child: Text('Недостаточно прав для настроек канала')),
       );
     }
 
     final theme = Theme.of(context);
+    final email = _driveStatus?.email;
+    final hasEmail = email != null && email.isNotEmpty;
 
     return Scaffold(
-      // Plain themed background instead of the app wallpaper (cleaner here).
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        title: Text(_isModeratorDriveMode
-            ? 'Google Drive: ${ch.name}'
-            : 'Настройки: ${ch.name}'),
-      ),
+      backgroundColor: theme.colorScheme.surface,
+      appBar: AppBar(title: Text('Настройки: ${ch.name}')),
       body: ListView(
         children: [
-          if (_isOwnerMode) ...[
-            const ListTile(
-              leading: Icon(Icons.add_to_drive_outlined),
-              title: Text('Аккаунт Google'),
-              subtitle: Text(
-                'Привязка аккаунта — в Настройки → Google Drive. '
-                'Здесь только включается резерв канала.',
-                style: TextStyle(fontSize: 12),
+          // ── Google Drive ──────────────────────────────────────────────
+          ListTile(
+            leading: Icon(
+              Icons.add_to_drive_outlined,
+              color: hasEmail ? theme.colorScheme.primary : null,
+            ),
+            title: const Text('Google-аккаунт'),
+            subtitle: Text(
+              hasEmail ? (email ?? '') : 'Не привязан — Настройки → Google Drive',
+              style: TextStyle(
+                fontSize: 12,
+                color: hasEmail ? null : theme.colorScheme.error,
               ),
             ),
+          ),
+          if (amOwner) ...[
             if (GoogleDriveChannelBackup.relayAccounts.length >= 2)
               ListTile(
                 leading: const Icon(Icons.switch_account_outlined),
@@ -895,7 +825,7 @@ class _ChannelAdminSettingsScreenState
               onChanged: (v) => _toggleDriveBackup(v),
               title: const Text('Резерв (Google Drive + сеть)'),
               subtitle: const Text(
-                'Отдельный ключ канала; на Диск уходит только шифротекст.',
+                'Шифрованная копия истории на Диске и в сети.',
                 style: TextStyle(fontSize: 12),
               ),
               secondary: const Icon(Icons.cloud_sync_outlined),
@@ -905,10 +835,9 @@ class _ChannelAdminSettingsScreenState
             SwitchListTile(
               value: ch.allowModeratorsManageDriveAccount,
               onChanged: (v) => _toggleModeratorDrivePermission(v),
-              title: const Text(
-                  'Разрешить модераторам управлять Google-аккаунтом'),
+              title: const Text('Управление Drive для модераторов'),
               subtitle: const Text(
-                'Если включено, модераторы смогут отвязать и привязать другой аккаунт.',
+                'Разрешить модераторам публиковать и вытягивать историю Drive.',
                 style: TextStyle(fontSize: 12),
               ),
               secondary: const Icon(Icons.admin_panel_settings_outlined),
@@ -917,117 +846,40 @@ class _ChannelAdminSettingsScreenState
             ),
           ],
           if (ch.driveBackupEnabled && _canManageDriveAccount) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Text(
-                'Резерв на Google Drive',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ),
-            Builder(builder: (context) {
-              final email = _driveStatus?.email;
-              final hasEmail = email != null && email.isNotEmpty;
-              return ListTile(
-                leading: Icon(
-                  hasEmail
-                      ? Icons.account_circle
-                      : Icons.account_circle_outlined,
-                  color: hasEmail ? theme.colorScheme.primary : null,
-                ),
-                title: const Text('Аккаунт синхронизации'),
-                subtitle: Text(
-                  hasEmail
-                      ? email
-                      : 'Не подключён — нажмите, чтобы войти в Google',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: hasEmail ? null : theme.colorScheme.error,
-                  ),
-                ),
-                trailing: _driveRefreshing
-                    ? const SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : IconButton(
-                        icon: Icon(hasEmail ? Icons.swap_horiz : Icons.login),
-                        tooltip: hasEmail
-                            ? 'Сменить / обновить аккаунт Google'
-                            : 'Войти в Google',
-                        onPressed: _refreshDriveQuota,
-                      ),
-                onTap: _driveRefreshing ? null : _refreshDriveQuota,
-              );
-            }),
             ListTile(
-              leading: const Icon(Icons.link_off_outlined),
-              title: const Text('Отвязать Google-аккаунт'),
-              subtitle: const Text(
-                'Удалить текущую привязку и при желании подключить другой аккаунт',
-                style: TextStyle(fontSize: 12),
-              ),
-              onTap: _disconnectDriveAccount,
-            ),
-            ListTile(
-              leading: const Icon(Icons.pie_chart_outline),
-              title: const Text('Место в Google'),
+              leading: _isPublishingBackup
+                  ? SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.5, color: theme.colorScheme.primary),
+                    )
+                  : const Icon(Icons.cloud_upload_outlined),
+              title: const Text('Опубликовать историю'),
               subtitle: Text(
-                _driveFreeSubtitle(),
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.file_present_outlined),
-              title: const Text('Файл на Диске'),
-              subtitle: Text(
-                ch.driveFileId != null && ch.driveFileId!.isNotEmpty
-                    ? 'Один файл перезаписывается при каждом резерве '
-                        '(Rlink_ch_${ChannelService.compactChannelId(ch.id)}.bin)'
-                    : 'Появится после первой успешной выгрузки',
+                _isPublishingBackup
+                    ? (_publishStep.isNotEmpty ? _publishStep : 'Подготовка…')
+                    : 'Загрузить текущую историю канала на Google Drive',
                 style: const TextStyle(fontSize: 12),
               ),
+              onTap: (_driveRefreshing || _isPublishingBackup)
+                  ? null
+                  : _publishBackupNow,
             ),
-            if (!_isModeratorDriveMode)
-              ListTile(
-                leading: _isPublishingBackup
-                    ? SizedBox(
-                        width: 24, height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      )
-                    : const Icon(Icons.cloud_upload_outlined),
-                title: const Text('Опубликовать историю сейчас'),
-                subtitle: Text(
-                  _isPublishingBackup
-                      ? _publishStep.isNotEmpty ? _publishStep : 'Подготовка…'
-                      : 'Загрузить текущую историю канала на Google Drive',
-                  style: const TextStyle(fontSize: 12),
-                ),
-                onTap: (_driveRefreshing || _isPublishingBackup) ? null : _publishBackupNow,
-              ),
-            // Available to moderators too: pull the active Drive save to see
-            // exactly what subscribers see and refresh the local copy.
             ListTile(
               leading: _isRestoringBackup
                   ? SizedBox(
                       width: 24,
                       height: 24,
                       child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                          strokeWidth: 2.5, color: theme.colorScheme.primary),
                     )
                   : const Icon(Icons.cloud_download_outlined),
               title: const Text('Вытянуть историю из Drive'),
               subtitle: Text(
                 _isRestoringBackup
                     ? (_publishStep.isNotEmpty ? _publishStep : 'Загрузка…')
-                    : 'Загрузить активный файл сохранения (увидеть, что видят подписчики)',
+                    : 'Загрузить активный файл сохранения',
                 style: const TextStyle(fontSize: 12),
               ),
               onTap: (_driveRefreshing ||
@@ -1036,92 +888,116 @@ class _ChannelAdminSettingsScreenState
                   ? null
                   : _restoreBackupNow,
             ),
-            if (!_isModeratorDriveMode)
+            if (amOwner)
               ListTile(
                 leading: const Icon(Icons.delete_sweep_outlined),
-                title: const Text('Очистить Google-историю канала'),
+                title: const Text('Очистить историю Drive'),
                 subtitle: const Text(
                   'Удалить файл резервной истории этого канала с Google Drive',
                   style: TextStyle(fontSize: 12),
                 ),
-                onTap: (_driveRefreshing || _isPublishingBackup) ? null : _clearDriveBackupHistory,
+                onTap: (_driveRefreshing || _isPublishingBackup)
+                    ? null
+                    : _clearDriveBackupHistory,
               ),
-            const Divider(height: 24),
           ],
-          if (_isModeratorDriveMode &&
-              (!ch.driveBackupEnabled || !_canManageDriveAccount))
-            const ListTile(
-              leading: Icon(Icons.info_outline),
-              title: Text('Drive-резерв недоступен'),
-              subtitle: Text(
-                'Владелец канала выключил резерв или запретил модераторам управление аккаунтом.',
-                style: TextStyle(fontSize: 12),
-              ),
-            ),
-          if (_isModeratorDriveMode) ...[
-            const SizedBox(height: 8),
-          ],
-          if (_isOwnerMode) ...[
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('Редактировать профиль'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _openEditDialog,
-            ),
-            ListTile(
-              leading: const Icon(Icons.people_outline),
-              title: Text(AppL10n.t('cm_subscribers')),
-              subtitle: Text('${ch.subscriberIds.length} подписчиков',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text('${ch.subscriberIds.length}',
-                        style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.w700)),
+          const Divider(height: 24),
+
+          // ── Профиль ───────────────────────────────────────────────────
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('Редактировать профиль'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _openEditDialog,
+          ),
+
+          // ── Статистика ────────────────────────────────────────────────
+          ListTile(
+            leading: const Icon(Icons.people_outline),
+            title: Text(AppL10n.t('cm_subscribers')),
+            subtitle: Text('${ch.subscriberIds.length} подписчиков',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurfaceVariant)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Text('${ch.subscriberIds.length}',
+                      style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w700)),
+                ),
+                if (amOwner) ...[
                   const SizedBox(width: 4),
                   const Icon(Icons.chevron_right),
                 ],
-              ),
-              onTap: _manageSubscribers,
+              ],
             ),
-            ListTile(
-              leading: Icon(
-                ch.commentsEnabled
-                    ? Icons.comments_disabled_outlined
-                    : Icons.comment_outlined,
-              ),
-              title: Text(ch.commentsEnabled
-                  ? 'Выключить комментарии'
-                  : 'Включить комментарии'),
-              onTap: _toggleComments,
+            onTap: amOwner ? _manageSubscribers : null,
+          ),
+          ListTile(
+            leading: const Icon(Icons.manage_accounts_outlined),
+            title: const Text('Модераторы'),
+            subtitle: Text('${ch.moderatorIds.length} модераторов',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurfaceVariant)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color:
+                        theme.colorScheme.secondary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('${ch.moderatorIds.length}',
+                      style: TextStyle(
+                          color: theme.colorScheme.secondary,
+                          fontWeight: FontWeight.w700)),
+                ),
+                if (amOwner) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right),
+                ],
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.manage_accounts_outlined),
-              title: const Text('Модераторы'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _manageModerators,
+            onTap: amOwner ? _manageModerators : null,
+          ),
+
+          // ── Настройки ─────────────────────────────────────────────────
+          ListTile(
+            enabled: amOwner,
+            leading: Icon(
+              ch.commentsEnabled
+                  ? Icons.comments_disabled_outlined
+                  : Icons.comment_outlined,
             ),
-            ListTile(
-              leading: const Icon(Icons.badge_outlined),
-              title: const Text('Команда и подписи'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _manageStaffAndLinks,
-            ),
+            title: Text(ch.commentsEnabled
+                ? 'Выключить комментарии'
+                : 'Включить комментарии'),
+            onTap: amOwner ? _toggleComments : null,
+          ),
+
+          // ── Команда ───────────────────────────────────────────────────
+          ListTile(
+            leading: const Icon(Icons.badge_outlined),
+            title: const Text('Команда и подписи'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _manageStaffAndLinks,
+          ),
+
+          // ── Только для владельца ──────────────────────────────────────
+          if (amOwner) ...[
             if (!ch.verified)
               ListTile(
                 leading: const Icon(Icons.verified_outlined),

@@ -2399,6 +2399,19 @@ class _PrivacyPageState extends State<_PrivacyPage> {
             value: settings.showOnlineStatus,
             onChanged: (v) => settings.setShowOnlineStatus(v),
           ),
+          SwitchListTile(
+            secondary: Icon(Icons.access_time_rounded,
+                color: settings.hideLastSeen
+                    ? cs.primary
+                    : Theme.of(context).hintColor),
+            title: const Text('Скрыть время последнего визита'),
+            subtitle: Text(
+              'Другие не увидят, когда вы были в сети',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            value: settings.hideLastSeen,
+            onChanged: (v) => settings.setHideLastSeen(v),
+          ),
           _SectionHeader(AppL10n.t('settings_section_presence')),
           _OnlineStatusSelector(
             current: settings.onlineStatusMode,

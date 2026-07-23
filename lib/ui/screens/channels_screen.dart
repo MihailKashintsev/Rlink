@@ -322,21 +322,29 @@ class ChannelsScreen extends StatefulWidget {
   State<ChannelsScreen> createState() => _ChannelsScreenState();
 }
 
-class _ChannelsScreenState extends State<ChannelsScreen> {
+class _ChannelsScreenState extends State<ChannelsScreen>
+    with WidgetsBindingObserver {
   List<Channel> _channels = [];
   int _loadGen = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
     ChannelService.instance.version.addListener(_load);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     ChannelService.instance.version.removeListener(_load);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load();
   }
 
   void _load() {
@@ -2850,6 +2858,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                           child: ListView.builder(
                         controller: _feedScrollController,
                         padding: const EdgeInsets.symmetric(vertical: 8),
+                        cacheExtent: 1200,
+                        addRepaintBoundaries: false,
                         itemCount: _visiblePosts.length,
                         itemBuilder: (_, i) {
                           final post = _visiblePosts[i];
