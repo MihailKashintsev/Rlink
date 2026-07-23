@@ -46,6 +46,7 @@ import '../screens/diagnostics_screen.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/update_restart_dialog.dart';
 import '../widgets/status_emoji_view.dart';
+import '../widgets/security_visuals.dart';
 import '../screens/about_screen.dart';
 import '../screens/documentation_screen.dart';
 import '../screens/settings_data_page.dart';
@@ -4763,9 +4764,6 @@ class _PasswordStrengthFieldState extends State<_PasswordStrengthField> {
   @override
   Widget build(BuildContext context) {
     final s = _strength(widget.controller.text);
-    final barColor = [Colors.transparent, Colors.red, Colors.orange, Colors.amber, Colors.green][s];
-    final icons = ['', '🚪', '🔒', '🚪', '🔐'];
-    final labels = ['', 'Слабый', 'Средний', 'Хороший', 'Надёжный'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4782,31 +4780,17 @@ class _PasswordStrengthFieldState extends State<_PasswordStrengthField> {
             ),
           ),
         ),
-        if (widget.controller.text.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Row(children: [
-            Text(icons[s], style: const TextStyle(fontSize: 18)),
-            const SizedBox(width: 8),
-            Expanded(child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                height: 5,
-                child: LinearProgressIndicator(
-                  value: s / 4,
-                  backgroundColor: Colors.grey.withValues(alpha: 0.2),
-                  valueColor: AlwaysStoppedAnimation(barColor),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: widget.controller.text.isEmpty
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: SecurityStrengthMeter(strength: s),
                 ),
-              ),
-            )),
-            const SizedBox(width: 8),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: TextStyle(fontSize: 12, color: barColor, fontWeight: FontWeight.w600),
-              child: Text(labels[s]),
-            ),
-          ]),
-        ],
+        ),
       ],
     );
   }

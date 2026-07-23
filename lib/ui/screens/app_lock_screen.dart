@@ -1,8 +1,10 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/app_lock_service.dart';
+import '../widgets/security_visuals.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Overlay wrapper
@@ -70,22 +72,25 @@ class _Pin4LockScreenState extends State<_Pin4LockScreen>
 
   late final AnimationController _successCtrl = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
+    duration: const Duration(milliseconds: 1150),
   );
   late final Animation<double> _successScale =
-      Tween<double>(begin: 0.6, end: 1.0).animate(CurvedAnimation(
+      Tween<double>(begin: 0.55, end: 1.0).animate(CurvedAnimation(
           parent: _successCtrl,
-          curve: const Interval(0, 0.5, curve: Curves.easeOutBack)));
+          curve: const Interval(0, 0.45, curve: Curves.easeOutBack)));
+  // Two full turns of the star carousel before they coalesce.
   late final Animation<double> _starRotation =
-      Tween<double>(begin: 0, end: 2 * math.pi)
-          .animate(CurvedAnimation(parent: _successCtrl, curve: Curves.easeIn));
-  late final Animation<double> _checkOpacity =
+      Tween<double>(begin: 0, end: 4 * math.pi)
+          .animate(CurvedAnimation(parent: _successCtrl, curve: Curves.easeInOut));
+  // Checkmark stroke draws in as the stars pull inward.
+  late final Animation<double> _checkT =
       Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
-          parent: _successCtrl, curve: const Interval(0.5, 0.8)));
+          parent: _successCtrl, curve: const Interval(0.4, 0.82)));
+  // Real backdrop blur over the keypad just before the app is revealed.
   late final Animation<double> _blurAnim =
-      Tween<double>(begin: 0, end: 18).animate(CurvedAnimation(
+      Tween<double>(begin: 0, end: 22).animate(CurvedAnimation(
           parent: _successCtrl,
-          curve: const Interval(0.7, 1.0, curve: Curves.easeIn)));
+          curve: const Interval(0.6, 1.0, curve: Curves.easeInCubic)));
 
   @override
   void dispose() {
@@ -147,7 +152,7 @@ class _Pin4LockScreenState extends State<_Pin4LockScreen>
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.lock_outline_rounded, size: 42, color: cs.primary),
+                LockGlyph(size: 48, color: cs.primary),
                 const SizedBox(height: 16),
                 Text('Rlink заблокирован',
                     style: Theme.of(context).textTheme.titleMedium),
@@ -171,7 +176,7 @@ class _Pin4LockScreenState extends State<_Pin4LockScreen>
                       final color = isError
                           ? cs.error
                           : isSuccess
-                              ? Colors.green
+                              ? const Color(0xFF30A46C)
                               : cs.primary;
                       return AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
@@ -187,6 +192,14 @@ class _Pin4LockScreenState extends State<_Pin4LockScreen>
                                 : cs.outline.withValues(alpha: 0.5),
                             width: 1.5,
                           ),
+                          boxShadow: filled && isSuccess
+                              ? [
+                                  BoxShadow(
+                                    color: color.withValues(alpha: 0.5),
+                                    blurRadius: 8,
+                                  ),
+                                ]
+                              : null,
                         ),
                       );
                     }),
@@ -196,14 +209,31 @@ class _Pin4LockScreenState extends State<_Pin4LockScreen>
                 _Keypad(onDigit: _onDigit, onBackspace: _backspace),
               ],
             ),
-            // Success overlay: stars + checkmark + blur
-            if (isSuccess)
-              _SuccessOverlay(
-                rotation: _starRotation.value,
-                checkOpacity: _checkOpacity.value,
-                scale: _successScale.value,
-                blur: _blurAnim.value,
+            // Success: blur the keypad, then the orbiting-stars → checkmark seal.
+            if (isSuccess) ...[
+              if (_blurAnim.value > 0.1)
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(
+                      sigmaX: _blurAnim.value,
+                      sigmaY: _blurAnim.value,
+                    ),
+                    child: ColoredBox(
+                      color: const Color(0xFF30A46C)
+                          .withValues(alpha: 0.06 * (_blurAnim.value / 22)),
+                    ),
+                  ),
+                ),
+              Positioned.fill(
+                child: Center(
+                  child: SuccessSeal(
+                    rotation: _starRotation.value,
+                    checkT: _checkT.value,
+                    scale: _successScale.value,
+                  ),
+                ),
               ),
+            ],
           ],
         );
       },
@@ -212,74 +242,6 @@ class _Pin4LockScreenState extends State<_Pin4LockScreen>
 }
 
 enum _Pin4State { idle, error, success }
-
-// Animated success overlay
-class _SuccessOverlay extends StatelessWidget {
-  final double rotation;
-  final double checkOpacity;
-  final double scale;
-  final double blur;
-
-  const _SuccessOverlay({
-    required this.rotation,
-    required this.checkOpacity,
-    required this.scale,
-    required this.blur,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: ColoredBox(
-        color: Colors.green.withValues(alpha: 0.08),
-        child: Center(
-          child: Transform.scale(
-            scale: scale,
-            child: SizedBox(
-              width: 140,
-              height: 140,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // 4 stars rotating
-                  for (var i = 0; i < 4; i++)
-                    Transform.rotate(
-                      angle: rotation + i * math.pi / 2,
-                      child: Transform.translate(
-                        offset: const Offset(0, -50),
-                        child: const Icon(Icons.star_rounded,
-                            color: Colors.green, size: 22),
-                      ),
-                    ),
-                  // Checkmark
-                  Opacity(
-                    opacity: checkOpacity,
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.green.withValues(alpha: 0.4),
-                            blurRadius: 20,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.check_rounded,
-                          color: Colors.white, size: 40),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pattern lock (9-dot grid)
@@ -375,7 +337,7 @@ class _PatternLockScreenState extends State<_PatternLockScreen>
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(Icons.lock_outline_rounded, size: 42, color: cs.primary),
+        LockGlyph(size: 46, color: _error ? cs.error : cs.primary),
         const SizedBox(height: 16),
         Text('Rlink заблокирован',
             style: Theme.of(context).textTheme.titleMedium),
@@ -460,38 +422,100 @@ class _PatternPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final color = error ? errorColor : primaryColor;
+
+    // Glowing trail under the connecting line.
+    if (pattern.length > 1 || (pattern.isNotEmpty && currentDrag != null)) {
+      final glow = Paint()
+        ..color = color.withValues(alpha: 0.28)
+        ..strokeWidth = 10
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke
+        ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6);
+      final trail = Path();
+      trail.moveTo(_dotPos(pattern.first, size).dx, _dotPos(pattern.first, size).dy);
+      for (var i = 1; i < pattern.length; i++) {
+        trail.lineTo(_dotPos(pattern[i], size).dx, _dotPos(pattern[i], size).dy);
+      }
+      if (currentDrag != null) trail.lineTo(currentDrag!.dx, currentDrag!.dy);
+      canvas.drawPath(trail, glow);
+    }
+
+    // Solid connecting line with directional arrows between nodes.
     final linePaint = Paint()
-      ..color = color.withValues(alpha: 0.6)
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-
-    // Draw lines between connected dots
+      ..color = color.withValues(alpha: 0.85)
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
     for (var i = 0; i < pattern.length - 1; i++) {
-      canvas.drawLine(
-        _dotPos(pattern[i], size),
-        _dotPos(pattern[i + 1], size),
-        linePaint,
-      );
+      final a = _dotPos(pattern[i], size);
+      final b = _dotPos(pattern[i + 1], size);
+      canvas.drawLine(a, b, linePaint);
+      _arrow(canvas, a, b, color);
     }
-    // Line from last dot to current finger position
     if (pattern.isNotEmpty && currentDrag != null) {
-      canvas.drawLine(_dotPos(pattern.last, size), currentDrag!, linePaint);
+      canvas.drawLine(_dotPos(pattern.last, size), currentDrag!,
+          linePaint..color = color.withValues(alpha: 0.5));
     }
 
-    // Draw dots
+    // Draw the nine nodes.
     for (var i = 0; i < 9; i++) {
       final pos = _dotPos(i, size);
       final selected = pattern.contains(i);
-      final dotPaint = Paint()
-        ..color = selected ? color : outlineColor.withValues(alpha: 0.35)
-        ..style = PaintingStyle.fill;
-      final ringPaint = Paint()
-        ..color = selected ? color.withValues(alpha: 0.25) : outlineColor.withValues(alpha: 0.2)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5;
-      canvas.drawCircle(pos, selected ? 14 : 10, dotPaint);
-      canvas.drawCircle(pos, 22, ringPaint);
+      if (selected) {
+        // Halo around a selected node.
+        canvas.drawCircle(
+          pos,
+          20,
+          Paint()
+            ..color = color.withValues(alpha: 0.22)
+            ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 5),
+        );
+      }
+      canvas.drawCircle(
+        pos,
+        24,
+        Paint()
+          ..color = selected
+              ? color.withValues(alpha: 0.4)
+              : outlineColor.withValues(alpha: 0.25)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = selected ? 2 : 1.4,
+      );
+      canvas.drawCircle(
+        pos,
+        selected ? 9 : 6,
+        Paint()
+          ..color = selected ? color : outlineColor.withValues(alpha: 0.4)
+          ..style = PaintingStyle.fill,
+      );
     }
+  }
+
+  // Little chevron pointing along a→b, drawn at the midpoint.
+  void _arrow(Canvas canvas, Offset a, Offset b, Color color) {
+    final dir = b - a;
+    final len = dir.distance;
+    if (len < 1) return;
+    final unit = dir / len;
+    final mid = a + unit * (len / 2);
+    final ang = math.atan2(unit.dy, unit.dx);
+    const armLen = 7.0;
+    const spread = 2.4; // radians from the shaft
+    final p1 = mid +
+        Offset(math.cos(ang + math.pi - spread), math.sin(ang + math.pi - spread)) *
+            armLen;
+    final p2 = mid +
+        Offset(math.cos(ang + math.pi + spread), math.sin(ang + math.pi + spread)) *
+            armLen;
+    final ap = Paint()
+      ..color = color
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(mid, p1, ap);
+    canvas.drawLine(mid, p2, ap);
   }
 
   @override
@@ -555,7 +579,7 @@ class _TextLockScreenState extends State<_TextLockScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.lock_outline_rounded, size: 42, color: cs.primary),
+          LockGlyph(size: 46, color: _error ? cs.error : cs.primary),
           const SizedBox(height: 16),
           Text('Rlink заблокирован',
               style: Theme.of(context).textTheme.titleMedium),
