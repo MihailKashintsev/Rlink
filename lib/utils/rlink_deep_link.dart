@@ -20,6 +20,32 @@ class RlinkDeepLink {
   static Uri botUri(String botId) =>
       Uri(scheme: 'rlink', host: 'bot', pathSegments: [botId]);
 
+  /// Contact-exchange link encoded in a QR: `rlink://user/<publicKeyHex>` with
+  /// the profile carried in short query params (n=nick, u=username, c=color,
+  /// e=avatar emoji, s=status emoji, x=X25519 key for E2E).
+  static Uri userUri({
+    required String publicKeyHex,
+    String? x25519Key,
+    String nickname = '',
+    String username = '',
+    int? avatarColor,
+    String avatarEmoji = '',
+    String statusEmoji = '',
+  }) =>
+      Uri(
+        scheme: 'rlink',
+        host: 'user',
+        pathSegments: [publicKeyHex],
+        queryParameters: {
+          if (x25519Key != null && x25519Key.isNotEmpty) 'x': x25519Key,
+          if (nickname.isNotEmpty) 'n': nickname,
+          if (username.isNotEmpty) 'u': username,
+          if (avatarColor != null) 'c': '$avatarColor',
+          if (avatarEmoji.isNotEmpty) 'e': avatarEmoji,
+          if (statusEmoji.isNotEmpty) 's': statusEmoji,
+        },
+      );
+
   /// Ссылка для шаринга и браузера: откроется сайт; при настроенных App Links — приложение.
   static Uri channelInviteWebUri(String channelId) => Uri.parse(
         '$channelWebInvitePage?channel=${Uri.encodeQueryComponent(channelId)}',
@@ -123,4 +149,63 @@ class RlinkDeepLink {
     }
     return null;
   }
+
+  static final RegExp _hex64 = RegExp(r'^[0-9a-fA-F]{64}$');
+
+  /// Parse a contact-exchange link (`rlink://user/<hex>?…` or an `https` variant
+  /// with `?user=<hex>`). Returns null if it isn't a valid identity link.
+  static RlinkUserLink? parseUser(Uri uri) {
+    String? hex;
+    if (uri.scheme == 'rlink' && uri.host == 'user') {
+      if (uri.pathSegments.isNotEmpty) {
+        hex = uri.pathSegments.first;
+      } else if (uri.path.length > 1 && uri.path.startsWith('/')) {
+        hex = uri.path
+            .substring(1)
+            .split('/')
+            .firstWhere((s) => s.isNotEmpty, orElse: () => '');
+      }
+    } else if (uri.scheme == 'https' || uri.scheme == 'http') {
+      hex = uri.queryParameters['user'];
+      if (hex == null || hex.isEmpty) {
+        final segs = uri.pathSegments;
+        final i = segs.indexOf('user');
+        if (i >= 0 && i + 1 < segs.length) hex = segs[i + 1];
+      }
+    }
+    if (hex == null || !_hex64.hasMatch(hex)) return null;
+    final q = uri.queryParameters;
+    final colorStr = q['c'];
+    final x = q['x'];
+    return RlinkUserLink(
+      publicKeyHex: hex.toLowerCase(),
+      x25519Key: (x == null || x.isEmpty) ? null : x,
+      nickname: q['n'] ?? '',
+      username: q['u'] ?? '',
+      avatarColor: colorStr != null ? int.tryParse(colorStr) : null,
+      avatarEmoji: q['e'] ?? '',
+      statusEmoji: q['s'] ?? '',
+    );
+  }
+}
+
+/// Identity parsed from an `rlink://user/…` contact-exchange link or QR code.
+class RlinkUserLink {
+  final String publicKeyHex;
+  final String? x25519Key;
+  final String nickname;
+  final String username;
+  final int? avatarColor;
+  final String avatarEmoji;
+  final String statusEmoji;
+
+  const RlinkUserLink({
+    required this.publicKeyHex,
+    this.x25519Key,
+    this.nickname = '',
+    this.username = '',
+    this.avatarColor,
+    this.avatarEmoji = '',
+    this.statusEmoji = '',
+  });
 }

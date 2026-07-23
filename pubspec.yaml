@@ -2,7 +2,7 @@ name: rlink
 description: Rlink — Bluetooth mesh messenger
 # После смены version: сделайте `flutter build ios --config-only` и при необходимости
 # `flutter build macos --config-only`, иначе PackageInfo / Xcode могут тянуть старый номер из Generated.xcconfig.
-version: 1.1.1+32
+version: 1.2.0+33
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -74,6 +74,10 @@ dependencies:
 
   # Share exported chats
   share_plus: ^10.1.4
+
+  # QR contact exchange: generate (pure Dart, all platforms) + scan (camera)
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
 
   # Optional: encrypted backup file on Google Drive (OAuth in console)
   google_sign_in: ^6.2.2

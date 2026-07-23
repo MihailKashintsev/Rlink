@@ -49,3 +49,6 @@ app.*.map.json
 relay_server/bin/server
 relay_server/.env
 .vscode/launch.json.local
+
+# Claude Code local config (skills, memory) — never commit
+.claude/

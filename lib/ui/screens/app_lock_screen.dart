@@ -113,7 +113,8 @@ class _Pin4LockScreenState extends State<_Pin4LockScreen>
       if (ok) {
         setState(() => _state = _Pin4State.success);
         await _successCtrl.forward();
-        // AppLockService.locked flips to false → overlay disappears
+        // Unlock only now — the success seal has fully played.
+        AppLockService.instance.unlock();
       } else {
         HapticFeedback.mediumImpact();
         setState(() {
@@ -260,6 +261,7 @@ class _PatternLockScreenState extends State<_PatternLockScreen>
   Offset? _currentDrag;
   bool _error = false;
   bool _busy = false;
+  bool _success = false;
 
   late final AnimationController _shakeCtrl = AnimationController(
     vsync: this,
@@ -281,7 +283,7 @@ class _PatternLockScreenState extends State<_PatternLockScreen>
   }
 
   void _onPanStart(DragStartDetails d, Size size) {
-    if (_busy) return;
+    if (_busy || _success) return;
     setState(() {
       _pattern.clear();
       _error = false;
@@ -291,7 +293,7 @@ class _PatternLockScreenState extends State<_PatternLockScreen>
   }
 
   void _onPanUpdate(DragUpdateDetails d, Size size) {
-    if (_busy) return;
+    if (_busy || _success) return;
     setState(() => _currentDrag = d.localPosition);
     _hitTest(d.localPosition, size);
   }
@@ -309,7 +311,8 @@ class _PatternLockScreenState extends State<_PatternLockScreen>
   }
 
   Future<void> _onPanEnd(DragEndDetails _) async {
-    if (_busy || _pattern.length < 4) {
+    if (_busy || _success) return;
+    if (_pattern.length < 4) {
       setState(() {
         _pattern.clear();
         _currentDrag = null;
@@ -322,7 +325,11 @@ class _PatternLockScreenState extends State<_PatternLockScreen>
     final code = _pattern.join(',');
     final ok = await AppLockService.instance.verify(code);
     if (!mounted) return;
-    if (!ok) {
+    if (ok) {
+      HapticFeedback.lightImpact();
+      // Keep the connecting line drawn under the celebration overlay.
+      setState(() => _success = true);
+    } else {
       HapticFeedback.mediumImpact();
       setState(() => _error = true);
       await _shakeCtrl.forward(from: 0);
@@ -334,7 +341,9 @@ class _PatternLockScreenState extends State<_PatternLockScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Column(
+    return Stack(
+      children: [
+        Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         LockGlyph(size: 46, color: _error ? cs.error : cs.primary),
@@ -389,6 +398,14 @@ class _PatternLockScreenState extends State<_PatternLockScreen>
             ),
           ),
         ),
+      ],
+        ),
+        if (_success)
+          Positioned.fill(
+            child: LockSuccessOverlay(
+              onCompleted: () => AppLockService.instance.unlock(),
+            ),
+          ),
       ],
     );
   }
@@ -542,6 +559,7 @@ class _TextLockScreenState extends State<_TextLockScreen>
   bool _error = false;
   bool _busy = false;
   bool _obscure = true;
+  bool _success = false;
 
   late final AnimationController _shakeCtrl = AnimationController(
     vsync: this,
@@ -556,11 +574,15 @@ class _TextLockScreenState extends State<_TextLockScreen>
   }
 
   Future<void> _submit() async {
-    if (_busy || _ctrl.text.isEmpty) return;
+    if (_busy || _success || _ctrl.text.isEmpty) return;
     _busy = true;
     final ok = await AppLockService.instance.verify(_ctrl.text);
     if (!mounted) return;
-    if (!ok) {
+    if (ok) {
+      HapticFeedback.lightImpact();
+      FocusScope.of(context).unfocus();
+      setState(() => _success = true);
+    } else {
       HapticFeedback.mediumImpact();
       setState(() {
         _error = true;
@@ -574,7 +596,9 @@ class _TextLockScreenState extends State<_TextLockScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Padding(
+    return Stack(
+      children: [
+        Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -639,12 +663,20 @@ class _TextLockScreenState extends State<_TextLockScreen>
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: _busy ? null : _submit,
+              onPressed: (_busy || _success) ? null : _submit,
               child: const Text('Войти'),
             ),
           ),
         ],
       ),
+        ),
+        if (_success)
+          Positioned.fill(
+            child: LockSuccessOverlay(
+              onCompleted: () => AppLockService.instance.unlock(),
+            ),
+          ),
+      ],
     );
   }
 }

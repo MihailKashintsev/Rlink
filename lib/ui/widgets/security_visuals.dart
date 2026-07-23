@@ -506,6 +506,90 @@ class _SuccessSealPainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// LockSuccessOverlay — full-screen unlock celebration: the keypad/field blurs
+// away while four stars orbit inward and resolve into a drawn checkmark, then
+// [onCompleted] fires (the caller unlocks the app there, so the animation is
+// fully seen before the overlay disappears).
+// ─────────────────────────────────────────────────────────────────────────────
+
+class LockSuccessOverlay extends StatefulWidget {
+  final VoidCallback onCompleted;
+  final Color color;
+
+  const LockSuccessOverlay({
+    super.key,
+    required this.onCompleted,
+    this.color = const Color(0xFF30A46C),
+  });
+
+  @override
+  State<LockSuccessOverlay> createState() => _LockSuccessOverlayState();
+}
+
+class _LockSuccessOverlayState extends State<LockSuccessOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1150),
+  );
+
+  late final Animation<double> _scale =
+      Tween<double>(begin: 0.55, end: 1.0).animate(CurvedAnimation(
+          parent: _ctrl,
+          curve: const Interval(0, 0.45, curve: Curves.easeOutBack)));
+  late final Animation<double> _rotation =
+      Tween<double>(begin: 0, end: 4 * math.pi)
+          .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  late final Animation<double> _checkT = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _ctrl, curve: const Interval(0.4, 0.82)));
+  late final Animation<double> _blur = Tween<double>(begin: 0, end: 22).animate(
+      CurvedAnimation(
+          parent: _ctrl,
+          curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic)));
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.forward().whenComplete(widget.onCompleted);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) => Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_blur.value > 0.1)
+            BackdropFilter(
+              filter: ui.ImageFilter.blur(
+                  sigmaX: _blur.value, sigmaY: _blur.value),
+              child: ColoredBox(
+                color: widget.color
+                    .withValues(alpha: 0.06 * (_blur.value / 22)),
+              ),
+            ),
+          Center(
+            child: SuccessSeal(
+              rotation: _rotation.value,
+              checkT: _checkT.value,
+              scale: _scale.value,
+              color: widget.color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // LockGlyph — a small drawn padlock for the lock-screen header.
 // ─────────────────────────────────────────────────────────────────────────────
 

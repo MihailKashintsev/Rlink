@@ -74,15 +74,20 @@ class AppLockService {
     _timeoutSec = seconds;
   }
 
+  /// Checks the code WITHOUT unlocking. The caller unlocks explicitly via
+  /// [unlock] after its success animation finishes — otherwise the lock
+  /// overlay unmounts the moment the code is correct and the animation is
+  /// never seen.
   Future<bool> verify(String code) async {
     final p = await SharedPreferences.getInstance();
     final salt = p.getString(_kSalt);
     final hash = p.getString(_kHash);
     if (salt == null || hash == null) return false;
-    final ok = (await _hash(code, salt)) == hash;
-    if (ok) locked.value = false;
-    return ok;
+    return (await _hash(code, salt)) == hash;
   }
+
+  /// Dismiss the lock overlay. Call after the unlock success animation.
+  void unlock() => locked.value = false;
 
   Future<void> disable() async {
     final p = await SharedPreferences.getInstance();

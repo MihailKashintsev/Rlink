@@ -50,9 +50,9 @@ PODS:
     - Flutter
     - Google-Maps-iOS-Utils (< 7.0, >= 5.0)
     - GoogleMaps (< 11.0, >= 8.4)
-  - GoogleMaps (10.13.0):
-    - GoogleMaps/Maps (= 10.13.0)
-  - GoogleMaps/Maps (10.13.0)
+  - GoogleMaps (10.15.0):
+    - GoogleMaps/Maps (= 10.15.0)
+  - GoogleMaps/Maps (10.15.0)
   - libwebp (1.5.0):
     - libwebp/demux (= 1.5.0)
     - libwebp/mux (= 1.5.0)
@@ -137,7 +137,7 @@ SPEC CHECKSUMS:
   flutter_webrtc: ec91d94b484ad49cf191ef93413f64a40ffd3b4c
   Google-Maps-iOS-Utils: bed22fa703c919259b3901449434d60d994fae20
   google_maps_flutter_ios: 17552876e72723da1d41accc22f03b5f7afbde69
-  GoogleMaps: 6204a0dfa2914b85f6e408cedff5fa19c7243618
+  GoogleMaps: 306f6ea18af2dc9ef85d98b0d1b41bc7d506df5f
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   Mantle: c5aa8794a29a022dfbbfc9799af95f477a69b62d
   open_filex: 432f3cd11432da3e39f47fcc0df2b1603854eff1

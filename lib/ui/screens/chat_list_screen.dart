@@ -46,6 +46,7 @@ import 'chat_screen.dart';
 import 'device_security_screen.dart';
 import 'ether_screen.dart';
 import 'groups_screen.dart';
+import 'qr_contact_screen.dart';
 import 'location_map_screen.dart';
 import 'profile_screen.dart';
 import 'chat_inbox_filters_manage_screen.dart';
@@ -570,6 +571,12 @@ class _ChatListScreenState extends State<ChatListScreen>
                   ]),
                 ),
               ],
+            ),
+          if (_currentTab == 1 && !_searchActive)
+            IconButton(
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+              tooltip: 'Знакомство по QR',
+              onPressed: () => showAddByQrSheet(context),
             ),
           if (_currentTab == 1 && !_searchActive)
             ValueListenableBuilder<bool>(
