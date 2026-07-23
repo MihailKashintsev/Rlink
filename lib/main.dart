@@ -3106,7 +3106,7 @@ Future<void> _sendProfileDirectToPeer(String peerKey) async {
     },
   );
   try {
-    await RelayService.instance.sendPacket(packet, recipientKey: peerKey);
+    await RelayService.instance.sendPacket(packet, recipientKey: peerKey, noPush: true);
     debugPrint(
         '[RLINK][Profile] Sent DIRECTED profile to ${peerKey.substring(0, 8)}');
   } catch (e) {
@@ -3151,6 +3151,7 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
         msgId: msgId,
         compressedData: sealed,
         isSquare: true,
+        noPush: true,
       );
       debugPrint(
           '[RLINK][Avatar] Sent avatar blob to ${peerKey.substring(0, 8)}');
@@ -3177,6 +3178,7 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
         fromId: myProfile.publicKeyHex,
         msgId: msgId,
         compressedData: sealed,
+        noPush: true,
       );
       debugPrint(
           '[RLINK][Banner] Sent banner blob to ${peerKey.substring(0, 8)}');

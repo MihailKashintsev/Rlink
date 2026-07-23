@@ -846,7 +846,11 @@ class RelayService with WidgetsBindingObserver {
   ///
   /// img_chunk packets are throttled through an internal queue to avoid
   /// relay server rate-limiting (100+ chunks/image would be rejected instantly).
-  Future<void> sendPacket(GossipPacket packet, {String? recipientKey}) async {
+  Future<void> sendPacket(
+    GossipPacket packet, {
+    String? recipientKey,
+    bool noPush = false,
+  }) async {
     if (!isConnected) {
       _relayTrace(
           '[RLINK][Relay][DROP] type=${packet.type} id=${packet.id.substring(0, packet.id.length.clamp(0, 8))} reason=not_connected');
@@ -862,6 +866,7 @@ class RelayService with WidgetsBindingObserver {
         'to': recipientKey,
         'msgId': packet.id,
         'data': b64,
+        if (noPush) 'noPush': true,
       };
     } else {
       envelope = {'type': 'broadcast', 'data': b64};
@@ -945,6 +950,7 @@ class RelayService with WidgetsBindingObserver {
     String? fileName,
     String? caption,
     bool viewOnce = false,
+    bool noPush = false,
   }) async {
     debugPrint(
         '[RLINK][Relay] sendBlob size=${compressedData.length} voice=$isVoice video=$isVideo file=$isFile sticker=$isSticker');
@@ -975,6 +981,7 @@ class RelayService with WidgetsBindingObserver {
       if (fileName != null) 'fname': fileName,
       if (caption != null && caption.isNotEmpty) 'cap': caption,
       if (viewOnce) 'vo': true,
+      if (noPush) 'noPush': true,
     };
     debugPrint('[RLINK][Relay] sendBlob prepared, sending...');
     try {
