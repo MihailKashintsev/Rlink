@@ -5,9 +5,8 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Блокировка приложения по коду-паролю. Работает везде (в т.ч. web/iOS PWA).
-/// Код хранится как соль+SHA-256, не в открытом виде. Биометрия (native) —
-/// отдельное расширение поверх этого.
+enum LockMethod { pin4, pattern, text }
+
 class AppLockService {
   AppLockService._();
   static final AppLockService instance = AppLockService._();
@@ -16,27 +15,32 @@ class AppLockService {
   static const _kHash = 'applock_hash';
   static const _kSalt = 'applock_salt';
   static const _kLen = 'applock_len';
-  static const _kTimeout = 'applock_timeout_sec'; // 0 = сразу
+  static const _kTimeout = 'applock_timeout_sec';
+  static const _kMethod = 'applock_method';
 
-  /// true → показываем экран блокировки поверх приложения.
   final ValueNotifier<bool> locked = ValueNotifier<bool>(false);
 
   bool _enabled = false;
   int _timeoutSec = 0;
   int _codeLen = 4;
+  LockMethod _method = LockMethod.pin4;
   int _bgAt = 0;
 
   bool get isEnabled => _enabled;
   int get timeoutSeconds => _timeoutSec;
   int get codeLength => _codeLen;
+  LockMethod get method => _method;
 
-  /// Вызвать в main() до runApp — чтобы на холодном старте контент не мелькал.
   Future<void> init() async {
     final p = await SharedPreferences.getInstance();
     _enabled = p.getBool(_kEnabled) ?? false;
     _timeoutSec = p.getInt(_kTimeout) ?? 0;
     _codeLen = p.getInt(_kLen) ?? 4;
-    if (_enabled) locked.value = true; // запираем на запуске
+    _method = LockMethod.values.firstWhere(
+      (m) => m.name == (p.getString(_kMethod) ?? ''),
+      orElse: () => LockMethod.pin4,
+    );
+    if (_enabled) locked.value = true;
   }
 
   Future<String> _hash(String code, String salt) async {
@@ -44,7 +48,11 @@ class AppLockService {
     return base64.encode(d.bytes);
   }
 
-  Future<void> setPasscode(String code, {int timeoutSeconds = 0}) async {
+  Future<void> setPasscode(
+    String code, {
+    int timeoutSeconds = 0,
+    LockMethod method = LockMethod.pin4,
+  }) async {
     final p = await SharedPreferences.getInstance();
     final rnd = Random.secure();
     final salt = base64.encode(List<int>.generate(16, (_) => rnd.nextInt(256)));
@@ -53,9 +61,11 @@ class AppLockService {
     await p.setInt(_kLen, code.length);
     await p.setBool(_kEnabled, true);
     await p.setInt(_kTimeout, timeoutSeconds);
+    await p.setString(_kMethod, method.name);
     _enabled = true;
     _timeoutSec = timeoutSeconds;
     _codeLen = code.length;
+    _method = method;
   }
 
   Future<void> setTimeout(int seconds) async {
@@ -81,11 +91,11 @@ class AppLockService {
     await p.remove(_kSalt);
     await p.remove(_kLen);
     await p.remove(_kTimeout);
+    await p.remove(_kMethod);
     _enabled = false;
     locked.value = false;
   }
 
-  // ── lifecycle ─────────────────────────────────────────────────────────────
   void onBackground() {
     if (_enabled) _bgAt = DateTime.now().millisecondsSinceEpoch;
   }

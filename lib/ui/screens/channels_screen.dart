@@ -58,6 +58,7 @@ import 'square_video_recorder_screen.dart';
 import 'channel_profile_screen.dart';
 import 'text_selection_view_screen.dart';
 import 'channel_profile_edit_dialog.dart';
+import 'channel_admin_settings_screen.dart';
 import 'chat_screen.dart' show ChatScreen, DmForwardDraft;
 import 'settings_screen.dart';
 import '../mention_nav.dart';
@@ -2692,75 +2693,78 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.share_outlined),
-            tooltip: 'Поделиться каналом',
-            onPressed: () {
-              unawaited(RlinkDeepLink.shareChannelInvite(
-                context: context,
-                channelTitle: _channel.name,
-                channelId: _channel.id,
-              ));
-            },
-          ),
-          // «Подписаться» — быстрая кнопка только для неподписанных;
-          // «Отписаться» переехала в меню ⋮.
           if (!_isAdmin && !_isSubscribed)
             TextButton.icon(
               onPressed: _toggleSubscribe,
               icon: const Icon(Icons.notifications_outlined, size: 18),
-              label:
-                  const Text('Подписаться', style: TextStyle(fontSize: 13)),
+              label: const Text('Подписаться', style: TextStyle(fontSize: 13)),
             ),
-          if (_isAdmin)
-            IconButton(
-              icon: const Icon(Icons.person_add_outlined),
-              tooltip: 'Пригласить',
-              onPressed: _inviteSubscriber,
-            ),
-          if (_isAdmin || _isModerator || _isSubscribed)
-            PopupMenuButton<String>(
-              onSelected: (v) {
-                if (v == 'edit') _editChannel();
-                if (v == 'subscribers') _manageSubscribers();
-                if (v == 'unsub') unawaited(_unsubscribeViaMenu());
-              },
-              itemBuilder: (_) => [
-                if (!_isAdmin && _isModerator) ...[
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Row(children: [
-                      const Icon(Icons.edit_outlined, size: 18),
-                      const SizedBox(width: 8),
-                      Text(AppL10n.t('common_edit')),
-                    ]),
+          PopupMenuButton<String>(
+            onSelected: (v) async {
+              if (v == 'settings') {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChannelAdminSettingsScreen(
+                      channelId: _channel.id,
+                      allowModeratorDriveManagement: _isModerator && !_isAdmin,
+                    ),
                   ),
-                  PopupMenuItem(
-                    value: 'subscribers',
-                    child: Row(children: [
-                      const Icon(Icons.people_outline, size: 18),
-                      const SizedBox(width: 8),
-                      Text(AppL10n.t('cm_subscribers')),
-                    ]),
-                  ),
-                ],
-                if (_isAdmin || _isSubscribed)
-                  PopupMenuItem(
-                    value: 'unsub',
-                    child: Row(children: [
-                      const Icon(Icons.logout_rounded,
-                          size: 18, color: Colors.red),
-                      const SizedBox(width: 8),
-                      Text(
-                        _isAdmin
-                            ? 'Отписаться (сложить полномочия)'
-                            : 'Отписаться',
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    ]),
-                  ),
-              ],
-            ),
+                );
+              }
+              if (v == 'share') {
+                unawaited(RlinkDeepLink.shareChannelInvite(
+                  context: context,
+                  channelTitle: _channel.name,
+                  channelId: _channel.id,
+                ));
+              }
+              if (v == 'invite') _inviteSubscriber();
+              if (v == 'unsub') unawaited(_unsubscribeViaMenu());
+            },
+            itemBuilder: (_) => [
+              if (_isAdmin || _isModerator)
+                const PopupMenuItem(
+                  value: 'settings',
+                  child: Row(children: [
+                    Icon(Icons.settings_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Настройки'),
+                  ]),
+                ),
+              const PopupMenuItem(
+                value: 'share',
+                child: Row(children: [
+                  Icon(Icons.share_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Поделиться каналом'),
+                ]),
+              ),
+              if (_isAdmin)
+                const PopupMenuItem(
+                  value: 'invite',
+                  child: Row(children: [
+                    Icon(Icons.person_add_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Добавить пользователей'),
+                  ]),
+                ),
+              if (_isAdmin || _isSubscribed)
+                PopupMenuItem(
+                  value: 'unsub',
+                  child: Row(children: [
+                    Icon(Icons.logout_rounded, size: 18, color: Colors.red),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isAdmin
+                          ? 'Отписаться (сложить полномочия)'
+                          : 'Отписаться',
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ]),
+                ),
+            ],
+          ),
         ],
       ),
       body: Column(

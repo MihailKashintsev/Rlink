@@ -13,6 +13,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_version.dart';
 import '../../l10n/app_l10n.dart';
+import '../../services/update_service.dart';
+import '../../services/app_lock_service.dart' show LockMethod;
+import '../../main.dart' show isUpdateSupported, pendingUpdateNotifier;
 import '../../models/contact.dart';
 import '../../models/user_profile.dart';
 import '../../services/app_settings.dart';
@@ -64,10 +67,11 @@ Scaffold _subScaffold({
 }) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   final nd = AppSettings.instance.newDesign;
+  final bg = nd
+      ? Theme.of(context).colorScheme.surface
+      : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8));
   return Scaffold(
-    backgroundColor: nd
-        ? Colors.transparent
-        : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
+    backgroundColor: bg,
     appBar: AppBar(
       title: Text(title),
       elevation: 0,
@@ -126,7 +130,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: AppSettings.instance.newDesign
-          ? Colors.transparent
+          ? Theme.of(context).colorScheme.surface
           : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
       appBar: AppBar(
         title: Text(AppL10n.t('settings')),
@@ -183,7 +187,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: AppSettings.instance.newDesign
-          ? Colors.transparent
+          ? Theme.of(context).colorScheme.surface
           : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
       appBar: AppBar(
         title: Text(AppL10n.t('settings')),
@@ -406,6 +410,7 @@ class SettingsCategoryCards extends StatefulWidget {
 class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
   final _searchCtrl = TextEditingController();
   String _query = '';
+  bool _checkingUpdate = false;
 
   @override
   void dispose() {
@@ -415,6 +420,33 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
 
   void _open(BuildContext context, Widget page) {
     Navigator.push(context, rlinkPushRoute(page));
+  }
+
+  Future<void> _manualCheckUpdate(BuildContext context) async {
+    if (_checkingUpdate || !isUpdateSupported) return;
+    setState(() => _checkingUpdate = true);
+    try {
+      final update = await UpdateService.instance.checkForUpdate();
+      if (!mounted) return;
+      if (update != null) {
+        pendingUpdateNotifier.value = update;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Доступно обновление ${update.version}'),
+            action: SnackBarAction(
+              label: 'Скачать',
+              onPressed: () => UpdateService.instance.startDownload(update),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('У вас последняя версия')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _checkingUpdate = false);
+    }
   }
 
   List<List<_CategoryItem>> _groups(BuildContext context) => [
@@ -527,6 +559,18 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             subtitle: 'Rlink, боты Lib, python -m rlink_bot onboard — RU / EN',
             onTap: () => DocumentationScreen.open(context),
           ),
+          if (isUpdateSupported)
+            _CategoryItem(
+              icon: _checkingUpdate
+                  ? Icons.sync_rounded
+                  : Icons.system_update_alt_rounded,
+              color: const Color(0xFF43A047),
+              title: 'Проверить обновление',
+              subtitle: _checkingUpdate
+                  ? 'Проверяем…'
+                  : 'Rlink v${AppVersion.label} — проверить сейчас',
+              onTap: () => _manualCheckUpdate(context),
+            ),
           _CategoryItem(
             icon: Icons.info_outline_rounded,
             color: const Color(0xFF607D8B),
@@ -2367,8 +2411,12 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                     ? cs.primary
                     : Theme.of(context).hintColor),
             title: const Text('Блокировка приложения'),
-            subtitle: Text('Код-пароль при запуске и возврате из фона',
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            subtitle: Text(
+              AppLockService.instance.isEnabled
+                  ? _lockMethodLabel(AppLockService.instance.method)
+                  : 'PIN, графический ключ или пароль при запуске',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
             value: AppLockService.instance.isEnabled,
             onChanged: (v) async {
               if (v) {
@@ -2389,7 +2437,9 @@ class _PrivacyPageState extends State<_PrivacyPage> {
             ),
             ListTile(
               leading: const Icon(Icons.password_outlined),
-              title: const Text('Изменить код'),
+              title: const Text('Изменить защиту'),
+              subtitle: Text(_lockMethodLabel(AppLockService.instance.method),
+                  style: const TextStyle(fontSize: 12)),
               onTap: _enableOrSetPasscode,
             ),
           ],
@@ -2399,14 +2449,190 @@ class _PrivacyPageState extends State<_PrivacyPage> {
   }
 
   Future<void> _enableOrSetPasscode() async {
-    final code = await _promptNewPasscode();
-    if (code == null) return;
-    await AppLockService.instance
-        .setPasscode(code, timeoutSeconds: AppLockService.instance.timeoutSeconds);
+    // Step 1: choose method
+    final method = await showModalBottomSheet<LockMethod>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Выберите способ защиты',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.grid_4x4_rounded, color: Colors.blue),
+              ),
+              title: const Text('Графический ключ'),
+              subtitle: const Text('9 точек — соедините пальцем',
+                  style: TextStyle(fontSize: 12)),
+              onTap: () => Navigator.pop(ctx, LockMethod.pattern),
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.pin_rounded, color: Colors.green),
+              ),
+              title: const Text('PIN-код'),
+              subtitle: const Text('4 цифры',
+                  style: TextStyle(fontSize: 12)),
+              onTap: () => Navigator.pop(ctx, LockMethod.pin4),
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.password_rounded, color: Colors.orange),
+              ),
+              title: const Text('Пароль'),
+              subtitle: const Text('Буквы, цифры, символы',
+                  style: TextStyle(fontSize: 12)),
+              onTap: () => Navigator.pop(ctx, LockMethod.text),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (method == null || !mounted) return;
+
+    String? code;
+    switch (method) {
+      case LockMethod.pin4:
+        code = await _setupPin4();
+      case LockMethod.pattern:
+        code = await _setupPattern();
+      case LockMethod.text:
+        code = await _setupTextPassword();
+    }
+
+    if (code == null || !mounted) return;
+    await AppLockService.instance.setPasscode(
+      code,
+      timeoutSeconds: AppLockService.instance.timeoutSeconds,
+      method: method,
+    );
     if (mounted) setState(() {});
   }
 
-  Future<String?> _promptNewPasscode() {
+  Future<String?> _setupPin4() async {
+    String? first;
+    String? err;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          return AlertDialog(
+            title: Text(first == null ? 'Введите PIN' : 'Повторите PIN'),
+            content: _PinSetupWidget(
+              key: ValueKey(first),
+              onComplete: (pin) async {
+                if (first == null) {
+                  setS(() {
+                    first = pin;
+                    err = null;
+                  });
+                } else if (pin == first) {
+                  Navigator.pop(ctx, pin);
+                } else {
+                  setS(() {
+                    first = null;
+                    err = 'PIN не совпадает — введите снова';
+                  });
+                }
+              },
+              error: err,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Отмена'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<String?> _setupPattern() async {
+    List<int>? first;
+    String? err;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: Text(first == null
+              ? 'Нарисуйте графический ключ'
+              : 'Повторите ключ'),
+          content: SizedBox(
+            width: 240,
+            height: 260,
+            child: Column(
+              children: [
+                if (err != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(err!,
+                        style: TextStyle(
+                            color: Theme.of(ctx).colorScheme.error,
+                            fontSize: 13)),
+                  ),
+                Expanded(
+                  child: _PatternSetupWidget(
+                    key: ValueKey(first?.join(',')),
+                    onComplete: (pattern) {
+                      if (pattern.length < 4) {
+                        setS(() => err = 'Соедините не менее 4 точек');
+                        return;
+                      }
+                      if (first == null) {
+                        setS(() {
+                          first = pattern;
+                          err = null;
+                        });
+                      } else if (pattern.join(',') == first!.join(',')) {
+                        Navigator.pop(ctx, pattern.join(','));
+                      } else {
+                        setS(() {
+                          first = null;
+                          err = 'Ключи не совпадают — начните заново';
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _setupTextPassword() async {
     final c1 = TextEditingController();
     final c2 = TextEditingController();
     String? err;
@@ -2414,39 +2640,30 @@ class _PrivacyPageState extends State<_PrivacyPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          title: const Text('Код-пароль'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: c1,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(6),
-                ],
-                decoration:
-                    const InputDecoration(labelText: 'Новый код (4–6 цифр)'),
-              ),
-              TextField(
-                controller: c2,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(6),
-                ],
-                decoration: const InputDecoration(labelText: 'Повторите код'),
-              ),
-              if (err != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(err!,
-                      style: TextStyle(
-                          color: Theme.of(ctx).colorScheme.error)),
+          title: const Text('Установить пароль'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _PasswordStrengthField(
+                  controller: c1,
+                  label: 'Новый пароль',
+                  onChanged: (_) {
+                    if (err != null) setS(() => err = null);
+                  },
                 ),
-            ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: c2,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Повторите пароль',
+                    border: const OutlineInputBorder(),
+                    errorText: err,
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -2454,14 +2671,14 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                 child: const Text('Отмена')),
             FilledButton(
               onPressed: () {
-                final a = c1.text.trim();
-                final b = c2.text.trim();
+                final a = c1.text;
+                final b = c2.text;
                 if (a.length < 4) {
-                  setS(() => err = 'Минимум 4 цифры');
+                  setS(() => err = 'Минимум 4 символа');
                   return;
                 }
                 if (a != b) {
-                  setS(() => err = 'Коды не совпадают');
+                  setS(() => err = 'Пароли не совпадают');
                   return;
                 }
                 Navigator.pop(ctx, a);
@@ -2473,6 +2690,12 @@ class _PrivacyPageState extends State<_PrivacyPage> {
       ),
     );
   }
+
+  String _lockMethodLabel(LockMethod m) => switch (m) {
+        LockMethod.pin4    => 'PIN-код (4 цифры)',
+        LockMethod.pattern => 'Графический ключ',
+        LockMethod.text    => 'Текстовый пароль',
+      };
 
   Future<void> _pickLockTimeout() async {
     const opts = [
@@ -4344,3 +4567,235 @@ class _PeerSearchSheetState extends State<_PeerSearchSheet> {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Lock setup helpers
+// ─────────────────────────────────────────────────────────────────────
+
+class _PinSetupWidget extends StatefulWidget {
+  final void Function(String pin) onComplete;
+  final String? error;
+  const _PinSetupWidget({super.key, required this.onComplete, this.error});
+  @override
+  State<_PinSetupWidget> createState() => _PinSetupWidgetState();
+}
+
+class _PinSetupWidgetState extends State<_PinSetupWidget> {
+  String _pin = '';
+  void _onDigit(int d) {
+    if (_pin.length >= 4) return;
+    setState(() => _pin += '$d');
+    if (_pin.length == 4) {
+      final p = _pin;
+      setState(() => _pin = '');
+      widget.onComplete(p);
+    }
+  }
+  void _backspace() {
+    if (_pin.isEmpty) return;
+    setState(() => _pin = _pin.substring(0, _pin.length - 1));
+  }
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (widget.error != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(widget.error!, style: TextStyle(color: cs.error, fontSize: 13)),
+          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(4, (i) {
+            final filled = i < _pin.length;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              width: 14, height: 14,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: filled ? cs.primary : Colors.transparent,
+                border: Border.all(
+                  color: filled ? cs.primary : cs.outline.withValues(alpha: 0.5),
+                  width: 1.5,
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 16),
+        for (final row in [[1,2,3],[4,5,6],[7,8,9],[-1,0,-2]])
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: row.map((d) {
+              if (d == -1) return const SizedBox(width: 56, height: 44);
+              if (d == -2) return SizedBox(width: 56, height: 44,
+                child: IconButton(icon: const Icon(Icons.backspace_outlined, size: 18), onPressed: _backspace));
+              return SizedBox(width: 56, height: 44,
+                child: TextButton(onPressed: () => _onDigit(d),
+                  child: Text('$d', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w400))));
+            }).toList(),
+          ),
+      ],
+    );
+  }
+}
+
+class _PatternSetupWidget extends StatefulWidget {
+  final void Function(List<int>) onComplete;
+  const _PatternSetupWidget({super.key, required this.onComplete});
+  @override
+  State<_PatternSetupWidget> createState() => _PatternSetupWidgetState();
+}
+
+class _PatternSetupWidgetState extends State<_PatternSetupWidget> {
+  final List<int> _pattern = [];
+  Offset? _currentDrag;
+  bool _done = false;
+
+  Offset _pos(int i, Size s) {
+    final cw = s.width / 3; final ch = s.height / 3;
+    return Offset(cw * (i % 3) + cw / 2, ch * (i ~/ 3) + ch / 2);
+  }
+  void _onPanStart(DragStartDetails d, Size s) {
+    if (_done) return;
+    setState(() { _pattern.clear(); _currentDrag = d.localPosition; _done = false; });
+    _hitTest(d.localPosition, s);
+  }
+  void _onPanUpdate(DragUpdateDetails d, Size s) {
+    if (_done) return;
+    setState(() => _currentDrag = d.localPosition);
+    _hitTest(d.localPosition, s);
+  }
+  void _hitTest(Offset pos, Size s) {
+    for (var i = 0; i < 9; i++) {
+      if (_pattern.contains(i)) continue;
+      if ((pos - _pos(i, s)).distance < 26) { setState(() => _pattern.add(i)); break; }
+    }
+  }
+  void _onPanEnd(DragEndDetails _) {
+    if (_done || _pattern.isEmpty) return;
+    setState(() { _done = true; _currentDrag = null; });
+    widget.onComplete(List.from(_pattern));
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() { _pattern.clear(); _done = false; });
+    });
+  }
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return LayoutBuilder(builder: (_, c) {
+      final size = Size(c.maxWidth, c.maxHeight);
+      return GestureDetector(
+        onPanStart: (d) => _onPanStart(d, size),
+        onPanUpdate: (d) => _onPanUpdate(d, size),
+        onPanEnd: _onPanEnd,
+        child: CustomPaint(
+          painter: _PatternPainterSimple(
+            pattern: _pattern, currentDrag: _currentDrag,
+            color: cs.primary, outline: cs.outline),
+          size: size,
+        ),
+      );
+    });
+  }
+}
+
+class _PatternPainterSimple extends CustomPainter {
+  final List<int> pattern;
+  final Offset? currentDrag;
+  final Color color, outline;
+  const _PatternPainterSimple({required this.pattern, required this.currentDrag, required this.color, required this.outline});
+  Offset _pos(int i, Size s) {
+    final cw = s.width/3; final ch = s.height/3;
+    return Offset(cw*(i%3)+cw/2, ch*(i~/3)+ch/2);
+  }
+  @override
+  void paint(Canvas canvas, Size size) {
+    final lp = Paint()..color=color.withValues(alpha:0.55)..strokeWidth=2.5..strokeCap=StrokeCap.round;
+    for (var i = 0; i < pattern.length-1; i++) canvas.drawLine(_pos(pattern[i],size),_pos(pattern[i+1],size),lp);
+    if (pattern.isNotEmpty && currentDrag!=null) canvas.drawLine(_pos(pattern.last,size),currentDrag!,lp);
+    for (var i = 0; i < 9; i++) {
+      final pos = _pos(i,size); final sel = pattern.contains(i);
+      canvas.drawCircle(pos, sel?12:9, Paint()..color=sel?color:outline.withValues(alpha:0.3));
+      canvas.drawCircle(pos, 19, Paint()..color=sel?color.withValues(alpha:0.2):outline.withValues(alpha:0.15)..style=PaintingStyle.stroke..strokeWidth=1.5);
+    }
+  }
+  @override
+  bool shouldRepaint(_PatternPainterSimple o) => o.pattern!=pattern||o.currentDrag!=currentDrag;
+}
+
+class _PasswordStrengthField extends StatefulWidget {
+  final TextEditingController controller;
+  final String label;
+  final void Function(String)? onChanged;
+  const _PasswordStrengthField({required this.controller, required this.label, this.onChanged});
+  @override
+  State<_PasswordStrengthField> createState() => _PasswordStrengthFieldState();
+}
+
+class _PasswordStrengthFieldState extends State<_PasswordStrengthField> {
+  bool _obscure = true;
+  int _strength(String pw) {
+    if (pw.isEmpty) return 0;
+    var s = 0;
+    if (pw.length >= 8) s++;
+    if (pw.contains(RegExp(r'[A-Z]'))) s++;
+    if (pw.contains(RegExp(r'[0-9]'))) s++;
+    if (pw.contains(RegExp(r'[^A-Za-z0-9]'))) s++;
+    return s;
+  }
+  @override
+  Widget build(BuildContext context) {
+    final s = _strength(widget.controller.text);
+    final barColor = [Colors.transparent, Colors.red, Colors.orange, Colors.amber, Colors.green][s];
+    final icons = ['', '🚪', '🔒', '🚪', '🔐'];
+    final labels = ['', 'Слабый', 'Средний', 'Хороший', 'Надёжный'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: widget.controller,
+          obscureText: _obscure,
+          onChanged: (v) { setState((){}); widget.onChanged?.call(v); },
+          decoration: InputDecoration(
+            labelText: widget.label,
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+              onPressed: () => setState(() => _obscure = !_obscure),
+            ),
+          ),
+        ),
+        if (widget.controller.text.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(children: [
+            Text(icons[s], style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: 8),
+            Expanded(child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                height: 5,
+                child: LinearProgressIndicator(
+                  value: s / 4,
+                  backgroundColor: Colors.grey.withValues(alpha: 0.2),
+                  valueColor: AlwaysStoppedAnimation(barColor),
+                ),
+              ),
+            )),
+            const SizedBox(width: 8),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(fontSize: 12, color: barColor, fontWeight: FontWeight.w600),
+              child: Text(labels[s]),
+            ),
+          ]),
+        ],
+      ],
+    );
+  }
+}
+
