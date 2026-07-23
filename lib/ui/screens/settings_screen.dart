@@ -175,7 +175,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _push(BuildContext context, Widget page) {
-    Navigator.push(context, rlinkPushRoute(page));
+    Navigator.push(context, rlinkOpaquePushRoute(page));
   }
 
   // ── Child linked-device restricted settings ────────────────────────
@@ -420,7 +420,7 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
   }
 
   void _open(BuildContext context, Widget page) {
-    Navigator.push(context, rlinkPushRoute(page));
+    Navigator.push(context, rlinkOpaquePushRoute(page));
   }
 
   Future<void> _manualCheckUpdate(BuildContext context) async {
@@ -510,7 +510,7 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             title: AppL10n.t('help_center_title'),
             subtitle: AppL10n.t('help_center_sub'),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const HelpCenterScreen()),
+              rlinkOpaquePushRoute(const HelpCenterScreen()),
             ),
           ),
           _CategoryItem(
@@ -778,8 +778,9 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
         final reason = GoogleDriveChannelBackup.lastSignInError;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            duration: const Duration(seconds: 7),
             content: Text(reason?.isNotEmpty == true
-                ? 'Не удалось войти: $reason'
+                ? reason!
                 : 'Не удалось войти в Google. На iPhone используйте «Привязать через Safari».'),
           ),
         );
@@ -2374,8 +2375,8 @@ class _PrivacyPageState extends State<_PrivacyPage> {
             subtitle: Text('Как защищены данные на этом устройстве',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const DeviceSecurityScreen())),
+            onTap: () => Navigator.of(context).push(
+                rlinkOpaquePushRoute(const DeviceSecurityScreen())),
           ),
           SwitchListTile(
             secondary: Icon(Icons.done_all_rounded,
@@ -3045,7 +3046,7 @@ class _ProfilePageState extends State<_ProfilePage> {
             ),
             onTap: () => Navigator.push<void>(
               context,
-              MaterialPageRoute(builder: (_) => const StickersHubScreen()),
+              rlinkOpaquePushRoute(const StickersHubScreen()),
             ),
           ),
           ListTile(
@@ -3057,7 +3058,7 @@ class _ProfilePageState extends State<_ProfilePage> {
             ),
             onTap: () => Navigator.push<void>(
               context,
-              MaterialPageRoute(builder: (_) => const EmojiHubScreen()),
+              rlinkOpaquePushRoute(const EmojiHubScreen()),
             ),
           ),
           ListTile(
@@ -3634,7 +3635,7 @@ class _NetworkPageState extends State<_NetworkPage> {
               ),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const DiagnosticsScreen()),
+                rlinkOpaquePushRoute(const DiagnosticsScreen()),
               ),
             ),
           ],

@@ -2,11 +2,28 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart' show Theme;
 
 /// Переходы в стиле iOS: свайп от левого края для возврата (на iOS и в типичной конфигурации).
 Route<T> rlinkPushRoute<T>(Widget page) {
   return CupertinoPageRoute<T>(
     builder: (_) => page,
+  );
+}
+
+/// Как [rlinkPushRoute], но подкладывает НЕПРОЗРАЧНЫЙ фон под страницу.
+///
+/// В новом дизайне scaffoldBackgroundColor = transparent, чтобы на главных
+/// экранах просвечивала общая AuroraBackground. Но для вложенных страниц
+/// (настройки и их вкладки) это давало «наслоение»: во время slide-перехода
+/// прозрачная страница не перекрывала предыдущую, и тексты накладывались друг
+/// на друга. Этот роут гарантирует сплошной фон под любой открываемой вкладкой.
+Route<T> rlinkOpaquePushRoute<T>(Widget page) {
+  return CupertinoPageRoute<T>(
+    builder: (context) => ColoredBox(
+      color: Theme.of(context).colorScheme.surface,
+      child: page,
+    ),
   );
 }
 

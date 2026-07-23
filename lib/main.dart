@@ -29,6 +29,7 @@ import 'models/contact.dart';
 import 'models/group.dart';
 import 'models/user_profile.dart';
 import 'models/shared_collab.dart';
+import 'app_version.dart';
 import 'services/app_settings.dart';
 import 'services/app_lock_service.dart';
 import 'services/motion_controller.dart';
@@ -677,6 +678,7 @@ Future<void> initServices() async {
     await ImageService.instance.init();
     await CryptoService.instance.init();
     await AppSettings.instance.init();
+    unawaited(AppVersion.init());
     unawaited(MotionController.instance.init());
     // Await so the linked Google account is ready before channel settings /
     // publish read `hasRelayAccount` (avoids a race that looks like "not linked").
