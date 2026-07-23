@@ -820,6 +820,55 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
     }
   }
 
+  /// Durable server-side linking: the relay holds the refresh token, so the
+  /// account survives re-login (unlike the ~1h implicit token). Works on web
+  /// and native alike once the relay OAuth backend is deployed.
+  Future<void> _linkRelay() async {
+    final uri = Uri.tryParse(GoogleDriveChannelBackup.startRelayLink());
+    if (uri == null) return;
+    if (kIsWeb) {
+      await launchUrl(uri, webOnlyWindowName: '_blank');
+    } else {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+    if (!mounted) return;
+    final done = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Привязка через сервер'),
+        content: const Text(
+          'В открывшемся окне войдите в Google и разрешите доступ к Drive, '
+          'затем вернитесь сюда и нажмите «Готово».\n\n'
+          'Токен хранится на сервере — привязка не слетит после перезахода.',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppL10n.t('common_cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Готово'),
+          ),
+        ],
+      ),
+    );
+    if (done != true || !mounted) return;
+    setState(() => _busy = true);
+    final ok = await GoogleDriveChannelBackup.finishRelayLink();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Google Drive привязан (постоянно)'
+            : 'Не удалось завершить привязку — попробуйте ещё раз'),
+      ),
+    );
+    if (ok) await _load(interactive: false);
+  }
+
   Future<void> _disconnect() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -941,6 +990,14 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
               child: GoogleSignInButton(
                 busy: _busy,
                 onPressed: _busy ? null : (kIsWeb ? _linkSafari : _linkGis),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+              child: TextButton.icon(
+                onPressed: _busy ? null : _linkRelay,
+                icon: const Icon(Icons.cloud_sync_outlined, size: 18),
+                label: const Text('Привязать навсегда (через сервер)'),
               ),
             ),
           ],

@@ -8,8 +8,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 class AppVersion {
   AppVersion._();
 
-  static const String _fallbackVersion = '1.2.1';
-  static const String _fallbackBuild = '34';
+  static const String _fallbackVersion = '1.2.2';
+  static const String _fallbackBuild = '35';
 
   static String _version = _fallbackVersion;
   static String _buildNumber = _fallbackBuild;
