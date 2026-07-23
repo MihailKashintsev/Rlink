@@ -573,12 +573,6 @@ class _ChatListScreenState extends State<ChatListScreen>
               ],
             ),
           if (_currentTab == 1 && !_searchActive)
-            IconButton(
-              icon: const Icon(Icons.qr_code_scanner_rounded),
-              tooltip: 'Знакомство по QR',
-              onPressed: () => showAddByQrSheet(context),
-            ),
-          if (_currentTab == 1 && !_searchActive)
             ValueListenableBuilder<bool>(
               valueListenable: _nearbyShowRadar,
               builder: (ctx, radar, _) {
@@ -1233,6 +1227,16 @@ class _MeTab extends StatelessWidget {
               ),
             ),
           ),
+        Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            leading: Icon(Icons.qr_code_2_rounded, color: cs.primary),
+            title: const Text('Знакомство по QR'),
+            subtitle: const Text('Показать свой код или отсканировать чужой'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showAddByQrSheet(context),
+          ),
+        ),
         const Padding(
           padding: EdgeInsets.fromLTRB(4, 4, 4, 28),
           child: SettingsCategoryCards(),

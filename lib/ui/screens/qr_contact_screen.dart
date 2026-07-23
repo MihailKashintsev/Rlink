@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show File;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -16,6 +15,7 @@ import '../../services/rlink_deep_link_service.dart';
 import '../../utils/rlink_deep_link.dart';
 import '../rlink_nav_routes.dart';
 import '../screens/chat_screen.dart';
+import '../widgets/avatar_widget.dart';
 import '../widgets/security_visuals.dart';
 
 /// True on platforms where the camera QR scanner is available.
@@ -200,7 +200,8 @@ class _MyQrScreenState extends State<MyQrScreen>
                       child: _QrCard(
                         data: link,
                         sweep: _sweep,
-                        avatarColor: Color(p.avatarColor),
+                        initials: p.initials,
+                        avatarColor: p.avatarColor,
                         avatarEmoji: p.avatarEmoji,
                         avatarImagePath: p.avatarImagePath,
                       ),
@@ -245,13 +246,15 @@ class _MyQrScreenState extends State<MyQrScreen>
 class _QrCard extends StatelessWidget {
   final String data;
   final Animation<double> sweep;
-  final Color avatarColor;
+  final String initials;
+  final int avatarColor;
   final String avatarEmoji;
   final String? avatarImagePath;
 
   const _QrCard({
     required this.data,
     required this.sweep,
+    required this.initials,
     required this.avatarColor,
     required this.avatarEmoji,
     this.avatarImagePath,
@@ -295,25 +298,20 @@ class _QrCard extends StatelessWidget {
               errorCorrectionLevel: QrErrorCorrectLevel.H,
             ),
             // Avatar coin in the center (H-level EC tolerates the occlusion).
+            // AvatarWidget is web-safe (handles OPFS/blob photos), unlike a raw
+            // dart:io File — that's why the photo was missing on web.
             Container(
-              width: 54,
-              height: 54,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: avatarColor,
                 border: Border.all(color: Colors.white, width: 4),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: (avatarImagePath != null &&
-                      !kIsWeb &&
-                      File(avatarImagePath!).existsSync())
-                  ? Image.file(File(avatarImagePath!), fit: BoxFit.cover)
-                  : Center(
-                      child: Text(
-                        avatarEmoji.isNotEmpty ? avatarEmoji : '🙂',
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                    ),
+              child: AvatarWidget(
+                initials: initials,
+                color: avatarColor,
+                emoji: avatarEmoji,
+                imagePath: avatarImagePath,
+                size: 50,
+              ),
             ),
             // One-shot diagonal sweep on reveal.
             Positioned.fill(
