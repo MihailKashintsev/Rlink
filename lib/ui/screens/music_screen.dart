@@ -5,8 +5,13 @@ import 'package:flutter/material.dart';
 import '../../services/audio_queue_mini_player_layout.dart';
 import '../../services/music_catalog_service.dart';
 import '../../services/music_library_service.dart';
+import '../../services/google_drive_channel_backup.dart';
+import '../../services/my_tracks_service.dart';
 import '../../services/voice_service.dart';
+import 'package:flutter/services.dart';
+
 import '../widgets/music_lyrics_panel.dart';
+import '../widgets/track_upload_sheet.dart';
 import 'music_player_screen.dart';
 
 /// Built-in music player: catalog search, a local "liked" list and a player
@@ -21,7 +26,7 @@ class MusicScreen extends StatefulWidget {
 
 class _MusicScreenState extends State<MusicScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 3, vsync: this);
+  late final TabController _tabs = TabController(length: 4, vsync: this);
   final _searchCtrl = TextEditingController();
   Timer? _debounce;
   List<CatalogTrack> _results = const [];
@@ -30,6 +35,9 @@ class _MusicScreenState extends State<MusicScreen>
 
   // "Линия" — endless random stream. Playback uses VoiceService's queue, so
   // one track rolls into the next without us scheduling anything.
+  bool _signingIn = false;
+  String? _signInError;
+
   final List<CatalogTrack> _line = [];
   bool _lineLoading = false;
   int _linePage = 0;
@@ -38,6 +46,7 @@ class _MusicScreenState extends State<MusicScreen>
   void initState() {
     super.initState();
     MusicLibraryService.instance.load();
+    MyTracksService.instance.load();
     _loadMoreLine();
     // This screen has its own player bar — the floating one would be a second
     // player for the same track.
@@ -47,9 +56,12 @@ class _MusicScreenState extends State<MusicScreen>
   Future<void> _loadMoreLine() async {
     if (_lineLoading) return;
     setState(() => _lineLoading = true);
-    final more = await MusicCatalogService.instance.randomStream(
+    final raw = await MusicCatalogService.instance.randomStream(
       page: _linePage,
     );
+    // Drop tracks whose content node can't be reached from here, so Линия
+    // never offers something that silently won't play.
+    final more = await filterReachable(raw);
     if (!mounted) return;
     setState(() {
       _linePage++;
@@ -98,8 +110,15 @@ class _MusicScreenState extends State<MusicScreen>
     setState(() => _loading = true);
     final r = await MusicCatalogService.instance.search(v);
     if (!mounted) return;
+    // Uploaded tracks are part of the same library — match them first.
+    final q = v.trim().toLowerCase();
+    final mine = MyTracksService.instance.tracks.value
+        .where((t) =>
+            t.title.toLowerCase().contains(q) ||
+            t.artist.toLowerCase().contains(q))
+        .map((t) => t.toCatalogTrack());
     setState(() {
-      _results = r;
+      _results = [...mine, ...r];
       _loading = false;
       _searched = true;
     });
@@ -116,6 +135,7 @@ class _MusicScreenState extends State<MusicScreen>
           tabs: const [
             Tab(text: 'Линия'),
             Tab(text: 'Поиск'),
+            Tab(text: 'Мои'),
             Tab(text: 'Нравится'),
           ],
         ),
@@ -133,6 +153,7 @@ class _MusicScreenState extends State<MusicScreen>
                   children: [
                     _lineTab(cs),
                     _searchTab(cs),
+                    _myTab(cs),
                     _likedTab(cs),
                   ],
                 ),
@@ -217,6 +238,144 @@ class _MusicScreenState extends State<MusicScreen>
     );
   }
 
+  Widget _myTab(ColorScheme cs) {
+    // Uploading puts the file on the user's OWN Drive, so a linked Google
+    // account is a hard requirement — gate the whole tab rather than letting
+    // them fill the form and fail at the last step.
+    if (!isGoogleLinked) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lock_outline, size: 44, color: cs.onSurfaceVariant),
+              const SizedBox(height: 12),
+              const Text('Нужен вход в Google',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(
+                'Треки загружаются на ваш собственный Google Drive — Rlink '
+                'хранит только ссылку. Без привязанного аккаунта загружать '
+                'некуда.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _signingIn ? null : _linkGoogle,
+                icon: _signingIn
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.login),
+                label: Text(_signingIn ? 'Входим…' : 'Войти в Google'),
+              ),
+              if (_signInError != null) ...[
+                const SizedBox(height: 10),
+                Text(_signInError!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: cs.error)),
+              ],
+              const SizedBox(height: 8),
+              Text(
+                'Привязать также можно в Настройки → Google Drive.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return ValueListenableBuilder<List<MyTrack>>(
+      valueListenable: MyTracksService.instance.tracks,
+      builder: (_, mine, __) {
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: Row(
+                children: [
+                  Icon(Icons.cloud_done_outlined, size: 16, color: cs.primary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      googleAccountEmail ?? 'Google подключён',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: FilledButton.icon(
+                onPressed: () async {
+                  final ref = await showTrackUploadSheet(context);
+                  if (ref == null || !context.mounted) return;
+                  await Clipboard.setData(
+                      ClipboardData(text: parseMusicRef(ref).url));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Загружено. Ссылка скопирована — её можно вставить в профиль.'),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.cloud_upload_outlined),
+                label: const Text('Загрузить трек на Google Drive'),
+              ),
+            ),
+            Expanded(
+              child: mine.isEmpty
+                  ? _hint(cs,
+                      'Здесь будут ваши треки.\nФайл лежит на вашем Google Drive — Rlink хранит только ссылку.')
+                  : ListView.builder(
+                      itemCount: mine.length,
+                      itemBuilder: (_, i) {
+                        final t = mine[i];
+                        return MyTrackRow(
+                          track: t,
+                          onPlay: () {
+                            final ref = encodeMusicRef(t.toCatalogTrack());
+                            rememberTrackRef(ref);
+                            VoiceService.instance.play(t.url, title: t.title);
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _linkGoogle() async {
+    setState(() {
+      _signingIn = true;
+      _signInError = null;
+    });
+    try {
+      await GoogleDriveChannelBackup.ensureUserSignedIn(interactive: true);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _signingIn = false;
+      if (!isGoogleLinked) {
+        _signInError = GoogleDriveChannelBackup.lastSignInError ??
+            'Не удалось войти. На iPhone используйте «Привязать через Safari» '
+                'в Настройки → Google Drive.';
+      }
+    });
+  }
+
   Widget _likedTab(ColorScheme cs) {
     return ValueListenableBuilder<List<String>>(
       valueListenable: MusicLibraryService.instance.liked,
@@ -264,10 +423,30 @@ class _MusicScreenState extends State<MusicScreen>
               style: TextStyle(
                   fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
                   color: isCurrent ? cs.primary : null)),
-          subtitle: Text(t.artist,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12)),
+          subtitle: Row(
+            children: [
+              Flexible(
+                child: Text(t.artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12)),
+              ),
+              if (t.isPreview) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: cs.secondaryContainer,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text('30 сек',
+                      style: TextStyle(
+                          fontSize: 9, color: cs.onSecondaryContainer)),
+                ),
+              ],
+            ],
+          ),
           trailing: ValueListenableBuilder<List<String>>(
             valueListenable: MusicLibraryService.instance.liked,
             builder: (_, __, ___) {
@@ -281,13 +460,21 @@ class _MusicScreenState extends State<MusicScreen>
               );
             },
           ),
-          onTap: () {
+          onTap: () async {
             rememberTrackRef(ref);
             if (onTap != null) {
               onTap();
-            } else {
-              VoiceService.instance.play(t.url, title: t.title);
+              return;
             }
+            final url = await resolvePlayableUrl(t.url);
+            if (url == null) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Трек недоступен')),
+              );
+              return;
+            }
+            VoiceService.instance.play(url, title: t.title);
           },
         );
       },

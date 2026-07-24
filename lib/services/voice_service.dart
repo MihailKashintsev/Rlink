@@ -64,6 +64,10 @@ class VoiceService {
   final ValueNotifier<int> squareVideoUiPausePulse = ValueNotifier(0);
   final ValueNotifier<int> squareVideoUiResumePulse = ValueNotifier(0);
 
+  /// Watchdog for remote tracks: an unreachable Audius content node never
+  /// errors, it just never starts — without this the player hangs silently.
+  Timer? _startWatchdog;
+
   List<PlaybackQueueItem> _queue = [];
   int _queuePos = 0;
   bool _sessionPaused = false;
@@ -425,7 +429,10 @@ class VoiceService {
     _player = AudioPlayer();
     playDuration.value = Duration.zero;
     _audioDurSub = _player!.onDurationChanged.listen((dur) {
-      if (dur.inMilliseconds > 0) playDuration.value = dur;
+      if (dur.inMilliseconds > 0) {
+        playDuration.value = dur;
+        _startWatchdog?.cancel();
+      }
     });
     _audioPosSub = _player!.onPositionChanged.listen((pos) async {
       try {
@@ -458,6 +465,20 @@ class VoiceService {
     final source =
         isRemote ? UrlSource(playablePath) : DeviceFileSource(playablePath);
     await _player!.play(source);
+
+    _startWatchdog?.cancel();
+    if (isRemote) {
+      final startedPath = playablePath;
+      _startWatchdog = Timer(const Duration(seconds: 12), () {
+        final stillHere = currentlyPlaying.value == startedPath;
+        final neverStarted = playDuration.value.inMilliseconds <= 0 &&
+            playProgress.value <= 0;
+        if (stillHere && neverStarted && !_sessionPaused) {
+          debugPrint('[Voice] stream never started, skipping: $startedPath');
+          unawaited(_advanceQueue());
+        }
+      });
+    }
   }
 
   /// Перемотка на позицию [progress] ∈ [0.0, 1.0].
@@ -639,6 +660,7 @@ class VoiceService {
 
   /// Полная остановка очереди и плееров.
   Future<void> stopPlayback() async {
+    _startWatchdog?.cancel();
     await _disposePlaybackOutputs();
     _queue = [];
     _queuePos = 0;
