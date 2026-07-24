@@ -12,6 +12,8 @@ import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'oauth.dart';
+
 /// ═══════════════════════════════════════════════════════════════════
 /// Rlink Relay Server — Zero-Knowledge WebSocket Relay
 /// ═══════════════════════════════════════════════════════════════════
@@ -77,6 +79,7 @@ class _User {
   final String publicKey;
   String nick;
   String x25519Key;
+  bool away = false; // true = backgrounded (don't show as online to others)
   String get shortId =>
       publicKey.length > 8 ? publicKey.substring(0, 8) : publicKey;
   DateTime connectedAt = DateTime.now();
@@ -1503,6 +1506,56 @@ void _handleChannelDirPut(_User user, Map<String, dynamic> msg) {
   unawaited(_handleChannelDirPutAsync(user, msg));
 }
 
+void _broadcastChannelDirSnapshotToAll() {
+  for (final u in _users.values) {
+    _sendChannelDirSnapshot(u.ws);
+  }
+}
+
+/// Relay-admin grants/clears a channel checkmark. Stored on the directory
+/// record (created minimally if the channel hasn't published yet) so it is
+/// server-authoritative and survives any re-login or admin re-publish.
+void _handleAdminChannelVerify(_User user, Map<String, dynamic> msg) {
+  final reqId = _jsonString(msg['reqId']);
+  void ack(Map<String, dynamic> extra) {
+    try {
+      user.ws.sink.add(jsonEncode({
+        'type': 'admin_channel_verify_ack',
+        if (reqId.isNotEmpty) 'reqId': reqId,
+        ...extra,
+      }));
+    } catch (_) {}
+  }
+
+  if (!_isAdminHashValid(_jsonString(msg['adminHash']))) {
+    ack({'ok': false, 'error': 'forbidden'});
+    return;
+  }
+  final channelId = _jsonString(msg['channelId']);
+  if (channelId.isEmpty) {
+    ack({'ok': false, 'error': 'bad_channel_id'});
+    return;
+  }
+  final verified = msg['verified'] == true;
+  final verifiedBy = _jsonString(msg['verifiedBy']);
+
+  final row = _channelDirectory[channelId] ??=
+      <String, dynamic>{'channelId': channelId, 'isPublic': true};
+  row['verified'] = verified;
+  if (verified) {
+    row['verifiedBy'] = verifiedBy.isEmpty ? 'admin' : verifiedBy;
+  } else {
+    row.remove('verifiedBy');
+  }
+  // Bump so clients (which rev-gate on updatedAt) re-apply the change.
+  row['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+  _persistChannelDirectory();
+  _broadcastChannelDirSnapshotToAll();
+  stdout.writeln(
+      '[RLINK][Relay] admin_channel_verify $channelId verified=$verified');
+  ack({'ok': true, 'channelId': channelId, 'verified': verified});
+}
+
 Future<void> _handleChannelDirPutAsync(
   _User user,
   Map<String, dynamic> msg,
@@ -1618,6 +1671,17 @@ Future<void> _handleChannelDirPutAsync(
       } catch (_) {}
       return;
     }
+  }
+
+  // Verification is relay-authoritative: only admin_channel_verify grants or
+  // clears it. A normal directory put by the channel admin can neither
+  // self-verify nor wipe a platform-granted checkmark — carry it over.
+  if (existing != null && existing['verified'] == true) {
+    obj['verified'] = true;
+    obj['verifiedBy'] = existing['verifiedBy'];
+  } else {
+    obj['verified'] = false;
+    obj.remove('verifiedBy');
   }
 
   _channelDirectory[channelId] = obj;
@@ -1959,11 +2023,25 @@ void _handleMessage(_User user, dynamic raw) {
     case 'admin_bot_update':
       _handleAdminBotUpdate(user, msg);
       break;
+    case 'admin_channel_verify':
+      _handleAdminChannelVerify(user, msg);
+      break;
     case 'admin_password_update':
       _handleAdminPasswordUpdate(user, msg);
       break;
     case 'relay_ack':
       _handleRelayAck(user, msg);
+      break;
+    case 'presence':
+      // Client signals away (backgrounded) or back (resumed).
+      // We broadcast online=false/true so peers see correct status without
+      // waiting for the WebSocket to actually close (which may not happen while
+      // a foreground service keeps the socket alive on Android).
+      final reqAway = msg['away'] as bool? ?? false;
+      if (user.away != reqAway) {
+        user.away = reqAway;
+        _broadcastPresence(user.publicKey, !reqAway);
+      }
       break;
   }
 }
@@ -2165,6 +2243,7 @@ void _handlePacket(_User sender, Map<String, dynamic> msg) {
   final toRaw = msg['to'] as String?;
   final data = msg['data'] as String?; // base64-encoded encrypted packet
   if (toRaw == null || data == null) return;
+  final noPush = msg['noPush'] as bool? ?? false;
   if (data.length > 262144) {
     _droppedOversizePackets++;
     return; // 256 KB max (blob chunks double-base64 ~90 KB each)
@@ -2189,12 +2268,14 @@ void _handlePacket(_User sender, Map<String, dynamic> msg) {
 
   final recipient = _users[to];
   if (recipient == null) {
-    final kind = _queuedKindFromPacketData(data);
-    unawaited(_notifyRecipientQueued(
-      recipientKey: to,
-      senderKey: sender.publicKey,
-      kind: kind,
-    ));
+    if (!noPush) {
+      final kind = _queuedKindFromPacketData(data);
+      unawaited(_notifyRecipientQueued(
+        recipientKey: to,
+        senderKey: sender.publicKey,
+        kind: kind,
+      ));
+    }
     sender.ws.sink.add(jsonEncode({
       'type': 'delivery_status',
       'to': to,
@@ -2266,6 +2347,7 @@ void _handleBroadcast(_User sender, Map<String, dynamic> msg) {
 void _handleBlob(_User sender, Map<String, dynamic> msg) {
   final toRaw = msg['to'] as String?;
   if (toRaw == null) return;
+  final noPush = msg['noPush'] as bool? ?? false;
   final to = toRaw.toLowerCase();
   final fullTo = (msg['fullTo'] as String?)?.toLowerCase();
   // Use fullTo (full public key) for routing when available;
@@ -2306,10 +2388,12 @@ void _handleBlob(_User sender, Map<String, dynamic> msg) {
 
   final recipient = _users[routeKey];
   if (recipient == null) {
-    unawaited(_notifyRecipientQueued(
-      recipientKey: routeKey,
-      senderKey: sender.publicKey,
-    ));
+    if (!noPush) {
+      unawaited(_notifyRecipientQueued(
+        recipientKey: routeKey,
+        senderKey: sender.publicKey,
+      ));
+    }
     sender.ws.sink.add(jsonEncode({
       'type': 'delivery_status',
       'to': routeKey,
@@ -2394,7 +2478,7 @@ void _handleSearch(_User requester, Map<String, dynamic> msg) {
         'publicKey': user.publicKey,
         'nick': user.nick,
         'shortId': user.shortId,
-        'online': true,
+        'online': !user.away,
         if (user.x25519Key.isNotEmpty) 'x25519': user.x25519Key,
       });
       seenKeys.add(user.publicKey);
@@ -2489,9 +2573,10 @@ shelf.Handler _wsHandler() {
             _sendChannelDirSnapshot(ws);
             _sendBotDirSnapshot(ws);
             _sendMailboxSnapshot(user!);
-            // Send currently online peers to the new user
+            // Send currently online (non-away) peers to the new user
             for (final other in _users.values) {
               if (other.publicKey == publicKey) continue;
+              if (other.away) continue; // don't show backgrounded peers as online
               try {
                 ws.sink.add(jsonEncode({
                   'type': 'presence',
@@ -2610,6 +2695,9 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
       },
     );
   }
+  // Durable Google Drive linking: /oauth/google/{start,callback,token}.
+  final oauthResp = await handleGoogleOauth(request);
+  if (oauthResp != null) return oauthResp;
   if (request.url.path == 'push/public_key') {
     if (!_webPushConfigured) {
       return _jsonResponse({'enabled': false, 'publicKey': ''}, status: 503);

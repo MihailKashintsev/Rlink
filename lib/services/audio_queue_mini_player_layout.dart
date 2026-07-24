@@ -11,6 +11,32 @@ class AudioQueueMiniPlayerLayout {
 
   final ValueNotifier<double?> barTop = ValueNotifier<double?>(null);
 
+  /// Screens that show their own player (the music add-on, the full-screen
+  /// player) hide the floating bar — two players for one track is just noise.
+  ///
+  /// A counter, not a flag: these screens nest, and with a plain bool the
+  /// inner screen's dispose un-hid the bar while the outer one was still up.
+  final ValueNotifier<bool> suppressed = ValueNotifier<bool>(false);
+  int _suppressCount = 0;
+
+  void pushSuppression() {
+    _suppressCount++;
+    _syncSuppressed();
+  }
+
+  void popSuppression() {
+    if (_suppressCount > 0) _suppressCount--;
+    _syncSuppressed();
+  }
+
+  void _syncSuppressed() {
+    final v = _suppressCount > 0;
+    if (suppressed.value == v) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      suppressed.value = v;
+    });
+  }
+
   void setBarTop(double? top) {
     if (barTop.value == top) return;
     // Use addPostFrameCallback to avoid setState during dispose

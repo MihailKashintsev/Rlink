@@ -18,6 +18,7 @@ import '../../models/sticker_pack.dart';
 import '../../services/runtime_platform.dart';
 import '../../services/sticker_collection_service.dart';
 import '../../utils/web_object_url.dart';
+import '../../services/app_settings.dart';
 import 'desktop_image_picker.dart';
 import 'sticker_crop_screen.dart';
 
@@ -26,6 +27,8 @@ const _kMaxRecentFiles = 24;
 
 bool get _useNativePhotoGrid {
   if (kIsWeb) return false;
+  // User asked for the OS picker in Settings → Галерея.
+  if (AppSettings.instance.useSystemGallery) return false;
   // PhotoManager doesn't work well on macOS, use desktop picker instead
   return RuntimePlatform.isAndroid || RuntimePlatform.isIos;
 }
@@ -743,6 +746,9 @@ class _GalleryPreviewGrid extends StatefulWidget {
 
 class _GalleryPreviewGridState extends State<_GalleryPreviewGrid> {
   List<AssetEntity>? _assets;
+  // Desktop has no photo library to enumerate — show what was sent recently
+  // instead of an empty sheet with a "pick a file" button.
+  List<String> _recentFiles = const [];
   bool _loading = true;
 
   @override
@@ -751,7 +757,24 @@ class _GalleryPreviewGridState extends State<_GalleryPreviewGrid> {
     if (_useNativePhotoGrid) {
       _loadRecentMedia();
     } else {
+      _loadRecentFiles();
+    }
+  }
+
+  Future<void> _loadRecentFiles() async {
+    final list = await _loadRecentFilePathsSafe();
+    if (!mounted) return;
+    setState(() {
+      _recentFiles = list;
       _loading = false;
+    });
+  }
+
+  Future<List<String>> _loadRecentFilePathsSafe() async {
+    try {
+      return await _loadRecentFilePaths();
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -807,9 +830,39 @@ class _GalleryPreviewGridState extends State<_GalleryPreviewGrid> {
     }
 
     if (!_useNativePhotoGrid) {
-      return _DesktopPlaceholder(
-        mode: _GalleryMode.photo,
-        onPressed: () {},
+      if (_recentFiles.isEmpty) {
+        return _DesktopPlaceholder(
+          mode: _GalleryMode.photo,
+          onPressed: () async {
+            final path = await pickImagePathDesktopAware();
+            if (path != null) await widget.onPhotoPath(path);
+          },
+        );
+      }
+      return ListView.builder(
+        controller: widget.scrollController,
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        itemCount: _recentFiles.length,
+        itemBuilder: (context, index) {
+          final path = _recentFiles[index];
+          return Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: GestureDetector(
+              onTap: () => widget.onPhotoPath(path),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.file(
+                  File(path),
+                  width: 92,
+                  height: 92,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          );
+        },
       );
     }
 

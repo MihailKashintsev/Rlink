@@ -25,10 +25,13 @@ class _Target {
 }
 
 const _targets = <_Target>[
-  _Target(0.125, 0.952, 0.22, 0.085, 'guide_chats_t', 'guide_chats_s'),
-  _Target(0.375, 0.952, 0.22, 0.085, 'guide_nearby_t', 'guide_nearby_s'),
-  _Target(0.625, 0.952, 0.22, 0.085, 'guide_ether_t', 'guide_ether_s'),
-  _Target(0.875, 0.952, 0.22, 0.085, 'guide_me_t', 'guide_me_s'),
+  // Five nav slots now (chats/nearby/ether/settings/search) — centres shift
+  // from quarters to fifths, otherwise the highlight points between buttons.
+  _Target(0.1, 0.952, 0.18, 0.085, 'guide_chats_t', 'guide_chats_s'),
+  _Target(0.3, 0.952, 0.18, 0.085, 'guide_nearby_t', 'guide_nearby_s'),
+  _Target(0.5, 0.952, 0.18, 0.085, 'guide_ether_t', 'guide_ether_s'),
+  _Target(0.7, 0.952, 0.18, 0.085, 'guide_me_t', 'guide_me_s'),
+  _Target(0.9, 0.952, 0.18, 0.085, 'guide_gsearch_t', 'guide_gsearch_s'),
   _Target(0.875, 0.046, 0.18, 0.05, 'guide_search_t', 'guide_search_s'),
   _Target(0.5, 0.15, 0.86, 0.12, 'guide_stories_t', 'guide_stories_s'),
 ];
@@ -530,7 +533,8 @@ class _RlinkMock extends StatelessWidget {
                     _navItem(Icons.chat_bubble_outline, 'Чаты', 0),
                     _navItem(Icons.radar, 'Рядом', 1),
                     _navItem(Icons.cell_tower, 'Эфир', 2),
-                    _navItem(Icons.person_outline, 'Я', 3),
+                    _navItem(Icons.settings_outlined, 'Настройки', 3),
+                    _navItem(Icons.search, '', 4),
                   ],
                 ),
               ),

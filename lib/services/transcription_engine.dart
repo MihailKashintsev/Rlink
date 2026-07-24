@@ -3,7 +3,9 @@
 /// Платформенно-нейтральный файл (без dart:io) — импортируется и на вебе.
 enum TranscriptionEngine {
   /// Локально на устройстве: WhisperKit на Apple, whisper.cpp (FFI) на
-  /// Android/desktop, whisper.cpp (WASM) на вебе. Приватно и оффлайн.
+  /// Android/desktop. На вебе — transformers.js (ONNX): whisper-small на
+  /// WebGPU, с откатом на whisper-tiny/WASM там, где WebGPU нет.
+  /// Приватно и оффлайн.
   onDevice,
 
   /// Облачный STT (Hugging Face). Аудио уходит на внешний сервер.

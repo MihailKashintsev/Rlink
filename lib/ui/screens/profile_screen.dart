@@ -28,12 +28,16 @@ import '../../main.dart'
         broadcastMyProfileMusic,
         sendProfileToAllContacts;
 import '../widgets/avatar_widget.dart';
+import '../../services/music_catalog_service.dart' show parseMusicRef;
+import '../widgets/music_picker_sheet.dart';
 import '../widgets/desktop_image_picker.dart';
 import '../widgets/profile_photo_actions.dart';
 import '../widgets/status_emoji_view.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  /// Open straight in edit mode (from the pencil in the Settings header).
+  final bool startEditing;
+  const ProfileScreen({super.key, this.startEditing = false});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -58,7 +62,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _bannerImagePath;
   String? _profileMusicPath;
   late List<String> _tags;
-  bool _editing = false;
+  late bool _editing = widget.startEditing;
   bool _saving = false;
   bool _showEmojiPicker = false;
   bool _showStatusEmojiPicker = false;
@@ -770,12 +774,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     : (ImageService.instance
                             .resolveStoredPath(_profileMusicPath) ??
                         _profileMusicPath);
+                // A catalog/shared link has no file on disk — checking
+                // File().existsSync() made it read as "Не выбрано" on
+                // native even though the track was set.
+                final isRemoteTrack = rp != null &&
+                    (rp.startsWith('http://') || rp.startsWith('https://'));
                 final hasMusic = rp != null &&
-                    (kIsWeb || (rp.isNotEmpty && File(rp).existsSync()));
+                    (isRemoteTrack ||
+                        kIsWeb ||
+                        (rp.isNotEmpty && File(rp).existsSync()));
                 final sub = hasMusic
-                    ? (kIsWeb
-                        ? p.basename(rp.split('#').first)
-                        : p.basename(rp))
+                    ? parseMusicRef(rp).title
                     : (_editing
                         ? 'Выберите аудиофайл — контакты смогут загрузить и послушать, когда вы в сети'
                         : 'Не выбрано');
@@ -798,6 +807,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 tooltip: 'Убрать',
                                 onPressed: _clearProfileMusic,
                               ),
+                            IconButton(
+                              icon: const Icon(Icons.travel_explore_outlined),
+                              tooltip: 'Каталог или ссылка',
+                              onPressed: () async {
+                                final url =
+                                    await showMusicPickerSheet(context);
+                                if (url == null || !mounted) return;
+                                setState(() => _profileMusicPath = url);
+                              },
+                            ),
                             IconButton(
                               icon: const Icon(Icons.audio_file_outlined),
                               tooltip: 'Выбрать файл',

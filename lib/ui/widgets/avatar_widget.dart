@@ -3,20 +3,17 @@ import 'dart:math' as math;
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:emoji_picker_flutter/emoji_picker_flutter.dart' as epf;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../models/sticker_pack.dart';
 import '../../utils/web_file_store.dart';
-import '../../models/emoji_pack.dart';
 import '../../services/app_settings.dart';
 import '../../services/emoji_pack_service.dart';
+import 'unified_emoji_picker.dart';
 import '../../services/image_service.dart';
-import '../../services/runtime_platform.dart';
 import '../../services/sticker_collection_service.dart';
 
 enum AvatarPresenceTransport { bluetooth, internet, wifiDirect }
@@ -32,6 +29,10 @@ class AvatarWidget extends StatelessWidget {
   final bool hasStory; // показывать ли кольцо сторис
   final bool hasUnviewedStory; // непросмотренная сторис — яркий градиент
 
+  /// Corner radius; null = circle. Used to morph the avatar into a square
+  /// when the profile header is pulled open.
+  final double? cornerRadius;
+
   const AvatarWidget({
     super.key,
     required this.initials,
@@ -43,6 +44,7 @@ class AvatarWidget extends StatelessWidget {
     this.onlineTransports = const [],
     this.hasStory = false,
     this.hasUnviewedStory = false,
+    this.cornerRadius,
   });
 
   static final RegExp _shortcodeRe = RegExp(r'^:([a-zA-Z0-9_]{1,48}):$');
@@ -94,14 +96,16 @@ class AvatarWidget extends StatelessWidget {
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final decodeSide = (innerSize * dpr).round().clamp(1, 4096);
 
+    final radius = BorderRadius.circular(cornerRadius ?? innerSize / 2);
     Widget avatar = Container(
       width: innerSize,
       height: innerSize,
       decoration: BoxDecoration(
         color: Color(color),
-        shape: BoxShape.circle,
+        borderRadius: radius,
       ),
-      child: ClipOval(
+      child: ClipRRect(
+        borderRadius: radius,
         child: hasImage
             ? Image.file(
                 file,
@@ -310,9 +314,6 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
   bool _loadingGifs = false;
 
   // Emoji packs for "Мои эмодзи" section
-  List<EmojiPack> _emojiPacks = [];
-  bool _loadingEmojiPacks = false;
-  String? _docsPath;
 
   @override
   void initState() {
@@ -322,19 +323,6 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
       _loadStickers();
       _loadGifs();
     }
-    _initEmojiPacks();
-  }
-
-  Future<void> _initEmojiPacks() async {
-    // getApplicationDocumentsDirectory() THROWS on web — guard it, otherwise
-    // _loadEmojiPacks() never runs and the "Мои эмодзи" section never appears.
-    if (!kIsWeb) {
-      try {
-        final docs = await getApplicationDocumentsDirectory();
-        if (mounted) setState(() => _docsPath = docs.path);
-      } catch (_) {}
-    }
-    _loadEmojiPacks();
   }
 
   @override
@@ -378,101 +366,9 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
     }
   }
 
-  Future<void> _loadEmojiPacks() async {
-    setState(() => _loadingEmojiPacks = true);
-    try {
-      await EmojiPackService.instance.warmIndex();
-      final packs = await EmojiPackService.instance.loadPacks();
-      if (mounted) {
-        setState(() {
-          _emojiPacks = packs;
-          _loadingEmojiPacks = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _loadingEmojiPacks = false);
-      }
-    }
-  }
-
-  void _showEmojiPackPicker(BuildContext context, EmojiPack pack) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.6,
-          minChildSize: 0.3,
-          maxChildSize: 0.9,
-          builder: (context, scrollController) {
-            return Column(
-              children: [
-                const SizedBox(height: 8),
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade400,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    pack.name,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                Expanded(
-                  child: GridView.builder(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 5,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                    ),
-                    itemCount: pack.emojis.length,
-                    itemBuilder: (context, index) {
-                      final emoji = pack.emojis[index];
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          // Insert the actual emoji character (shortcode format requires recipient to have pack)
-                          // For now, insert as text - the recipient needs the emoji pack installed
-                          widget.onSelected(':${emoji.shortcode}:');
-                        },
-                        child: Builder(
-                          builder: (context) {
-                            final provider = EmojiPackService.instance
-                                .emojiImageProvider(emoji.shortcode);
-                            if (provider == null) return const SizedBox();
-                            return Image(image: provider, fit: BoxFit.contain);
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final useNoto =
-        RuntimePlatform.isAndroid && AppSettings.instance.useIosStyleEmoji;
 
     if (widget.showStickersTab) {
       // Show tabs when stickers tab is enabled (for sticker picker)
@@ -508,151 +404,7 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
               Expanded(
                 child: TabBarView(
                   children: [
-                    Column(
-                      children: [
-                        // "Мои эмодзи" section
-                        if (_loadingEmojiPacks)
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          )
-                        else if (_emojiPacks.isNotEmpty)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  left: 8,
-                                  right: 8,
-                                  bottom: 8,
-                                ),
-                                child: Text(
-                                  'Мои эмодзи',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: cs.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                height: 60,
-                                child: ListView.builder(
-                                  scrollDirection: Axis.horizontal,
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 8),
-                                  itemCount: _emojiPacks.length,
-                                  itemBuilder: (context, index) {
-                                    final pack = _emojiPacks[index];
-                                    return GestureDetector(
-                                      onTap: () {
-                                        // Show emoji picker for this pack
-                                        _showEmojiPackPicker(context, pack);
-                                      },
-                                      child: Container(
-                                        width: 50,
-                                        margin: const EdgeInsets.only(right: 8),
-                                        decoration: BoxDecoration(
-                                          color: cs.surfaceContainerHighest
-                                              .withValues(alpha: 0.5),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Builder(
-                                              builder: (_) {
-                                                final provider = pack
-                                                        .emojis.isNotEmpty
-                                                    ? EmojiPackService.instance
-                                                        .emojiImageProvider(pack
-                                                            .emojis[0]
-                                                            .shortcode)
-                                                    : null;
-                                                if (provider == null) {
-                                                  return Icon(
-                                                    Icons
-                                                        .emoji_emotions_outlined,
-                                                    size: 24,
-                                                    color: cs.onSurfaceVariant,
-                                                  );
-                                                }
-                                                return Image(
-                                                  image: provider,
-                                                  width: 32,
-                                                  height: 32,
-                                                  fit: BoxFit.contain,
-                                                );
-                                              },
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              pack.name,
-                                              style: TextStyle(
-                                                fontSize: 9,
-                                                color: cs.onSurfaceVariant,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              const Divider(height: 16),
-                            ],
-                          ),
-                        // Standard emoji picker
-                        SizedBox(
-                          height: _emojiPacks.isNotEmpty ? 200 : 280,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: epf.EmojiPicker(
-                              onEmojiSelected: (_, emoji) =>
-                                  widget.onSelected(emoji.emoji),
-                              config: epf.Config(
-                                height: _emojiPacks.isNotEmpty ? 200 : 280,
-                                checkPlatformCompatibility: !useNoto,
-                                emojiTextStyle: useNoto
-                                    ? GoogleFonts.notoColorEmoji(fontSize: 26)
-                                    : null,
-                                emojiViewConfig: epf.EmojiViewConfig(
-                                  backgroundColor: cs.surfaceContainerHighest
-                                      .withValues(alpha: 0.5),
-                                  columns: 8,
-                                  emojiSizeMax: 26,
-                                ),
-                                categoryViewConfig: epf.CategoryViewConfig(
-                                  backgroundColor: cs.surfaceContainerHighest
-                                      .withValues(alpha: 0.5),
-                                  iconColorSelected: cs.primary,
-                                  indicatorColor: cs.primary,
-                                  iconColor: cs.onSurfaceVariant,
-                                ),
-                                bottomActionBarConfig:
-                                    epf.BottomActionBarConfig(
-                                  backgroundColor: cs.surfaceContainerHighest
-                                      .withValues(alpha: 0.5),
-                                  buttonIconColor: cs.onSurfaceVariant,
-                                ),
-                                searchViewConfig: epf.SearchViewConfig(
-                                  backgroundColor: cs.surfaceContainerHighest
-                                      .withValues(alpha: 0.5),
-                                  buttonIconColor: cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    UnifiedEmojiPicker(onSelected: widget.onSelected),
                     _StickerGrid(
                       stickerFiles: _stickerFiles,
                       stickerPacks: _stickerPacks,
@@ -685,43 +437,12 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
       );
     }
 
-    // Show only emoji picker without tabs
+    // Show only the unified picker (packs + official in one row).
     return SizedBox(
       height: 320,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: epf.EmojiPicker(
-          onEmojiSelected: (_, emoji) => widget.onSelected(emoji.emoji),
-          config: epf.Config(
-            height: 320,
-            checkPlatformCompatibility: !useNoto,
-            emojiTextStyle:
-                useNoto ? GoogleFonts.notoColorEmoji(fontSize: 26) : null,
-            emojiViewConfig: epf.EmojiViewConfig(
-              backgroundColor:
-                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
-              columns: 8,
-              emojiSizeMax: 26,
-            ),
-            categoryViewConfig: epf.CategoryViewConfig(
-              backgroundColor:
-                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
-              iconColorSelected: cs.primary,
-              indicatorColor: cs.primary,
-              iconColor: cs.onSurfaceVariant,
-            ),
-            bottomActionBarConfig: epf.BottomActionBarConfig(
-              backgroundColor:
-                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
-              buttonIconColor: cs.onSurfaceVariant,
-            ),
-            searchViewConfig: epf.SearchViewConfig(
-              backgroundColor:
-                  cs.surfaceContainerHighest.withValues(alpha: 0.5),
-              buttonIconColor: cs.onSurfaceVariant,
-            ),
-          ),
-        ),
+        child: UnifiedEmojiPicker(onSelected: widget.onSelected),
       ),
     );
   }

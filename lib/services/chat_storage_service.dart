@@ -932,6 +932,26 @@ class ChatStorageService {
     });
   }
 
+  /// Полнотекстовый поиск по всем перепискам (для глобального поиска).
+  /// Возвращает совпадения от новых к старым.
+  Future<List<ChatMessage>> searchMessages(String query,
+      {int limit = 40}) async {
+    final q = query.trim();
+    if (q.length < 2) return [];
+    await _ensureDbReady();
+    return _withWebDbRecovery('searchMessages', () async {
+      final rows = await _db?.query(
+            'messages',
+            where: 'text LIKE ?',
+            whereArgs: ['%$q%'],
+            orderBy: 'timestamp DESC',
+            limit: limit,
+          ) ??
+          [];
+      return rows.map(ChatMessage.fromMap).toList();
+    });
+  }
+
   /// Последние [limit] сообщений в хронологическом порядке (для ИИ / контекста API).
   Future<List<ChatMessage>> getRecentMessagesAscending(String peerId,
       {int limit = 24}) async {

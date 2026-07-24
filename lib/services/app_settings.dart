@@ -75,6 +75,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyLiquidGlass = 'liquid_glass';
   static const _keyNewDesign = 'new_design';
   static const _keyChatBackground = 'chat_background';
+  static const _keySystemGallery = 'use_system_gallery';
   static const _keyAnimationLevel = 'animation_level'; // 0.0..1.0
   static const _keyBatterySaverAnimations = 'battery_saver_animations';
   static const _keyBatteryAnimReduceAt = 'battery_anim_reduce_at'; // percent
@@ -191,6 +192,7 @@ class AppSettings extends ChangeNotifier {
   bool _liquidGlass = !RuntimePlatform.isAndroid;
   bool _newDesign = true;
   bool _chatBackground = true;
+  bool _useSystemGallery = false;
   double _animationLevel = 1.0;
   bool _batterySaverAnimations = true;
   int _batteryAnimReduceAt = 20;
@@ -246,6 +248,9 @@ class AppSettings extends ChangeNotifier {
   bool get liquidGlass => _liquidGlass;
   bool get newDesign => _newDesign;
   bool get chatBackground => _chatBackground;
+
+  /// Pick media with the OS picker instead of Rlink's own gallery sheet.
+  bool get useSystemGallery => _useSystemGallery;
   double get animationLevel => _animationLevel.clamp(0.0, 1.0);
   bool get batterySaverAnimations => _batterySaverAnimations;
   int get batteryAnimReduceAt => _batteryAnimReduceAt.clamp(0, 100);
@@ -474,6 +479,7 @@ class AppSettings extends ChangeNotifier {
     _liquidGlass = _prefs.getBool(_keyLiquidGlass) ?? !RuntimePlatform.isAndroid;
     _newDesign = _prefs.getBool(_keyNewDesign) ?? true;
     _chatBackground = _prefs.getBool(_keyChatBackground) ?? true;
+    _useSystemGallery = _prefs.getBool(_keySystemGallery) ?? false;
     _animationLevel = (_prefs.getDouble(_keyAnimationLevel) ?? 1.0).clamp(0.0, 1.0);
     _batterySaverAnimations = _prefs.getBool(_keyBatterySaverAnimations) ?? true;
     _batteryAnimReduceAt = (_prefs.getInt(_keyBatteryAnimReduceAt) ?? 20).clamp(0, 100);
@@ -714,6 +720,12 @@ class AppSettings extends ChangeNotifier {
   Future<void> setNewDesign(bool v) async {
     _newDesign = v;
     await _runPrefsWrite((p) => p.setBool(_keyNewDesign, v));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setUseSystemGallery(bool v) async {
+    _useSystemGallery = v;
+    await _runPrefsWrite((p) => p.setBool(_keySystemGallery, v));
     _notifySettingsChanged();
   }
 

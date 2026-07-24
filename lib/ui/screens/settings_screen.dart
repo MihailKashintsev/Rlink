@@ -41,6 +41,7 @@ import '../../services/web_notification_bridge.dart';
 import '../../utils/web_file_store.dart';
 import '../screens/stickers_hub_screen.dart';
 import '../screens/emoji_hub_screen.dart';
+import '../screens/music_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/diagnostics_screen.dart';
 import '../widgets/avatar_widget.dart';
@@ -492,6 +493,13 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             onTap: () => _open(context, const InputBarButtonOrderSettings()),
           ),
           _CategoryItem(
+            icon: Icons.library_music_outlined,
+            color: const Color(0xFF00BCD4),
+            title: 'Музыка',
+            subtitle: 'Плеер, поиск, «Нравится», текст (бета)',
+            onTap: () => _open(context, const MusicScreen()),
+          ),
+          _CategoryItem(
             icon: Icons.emoji_emotions_outlined,
             color: const Color(0xFFEC407A),
             title: AppL10n.t('emoji_my_packs'),
@@ -710,8 +718,8 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final st =
-          await GoogleDriveChannelBackup.getSyncStatus(interactive: interactive);
+      final st = await GoogleDriveChannelBackup.getSyncStatus(
+          interactive: interactive);
       if (mounted) setState(() => _status = st);
     } catch (_) {
       if (mounted) setState(() => _status = null);
@@ -766,7 +774,8 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
                 icon: const Icon(Icons.open_in_browser),
                 label: const Text('Открыть вход Google'),
                 onPressed: () {
-                  final uri = Uri.parse(GoogleDriveChannelBackup.buildManualAuthUrl());
+                  final uri =
+                      Uri.parse(GoogleDriveChannelBackup.buildManualAuthUrl());
                   if (kIsWeb) {
                     launchUrl(uri);
                   } else {
@@ -939,9 +948,8 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
                 for (final a in accounts)
                   Builder(builder: (_) {
                     final pairing = a['pairing'] ?? '';
-                    final email = (a['email'] ?? '').isNotEmpty
-                        ? a['email']!
-                        : 'Аккаунт';
+                    final email =
+                        (a['email'] ?? '').isNotEmpty ? a['email']! : 'Аккаунт';
                     final isActive = pairing == active;
                     return ListTile(
                       leading: Icon(
@@ -952,8 +960,7 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
                       ),
                       title: Text(email),
                       subtitle: isActive
-                          ? const Text(
-                              'Активный — для каналов и скачиваний',
+                          ? const Text('Активный — для каналов и скачиваний',
                               style: TextStyle(fontSize: 11))
                           : null,
                       onTap: _busy
@@ -1130,33 +1137,34 @@ class _AppearancePageState extends State<_AppearancePage> {
                       child: Tooltip(
                         message: p.name,
                         child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: p.gradient,
+                          duration: const Duration(milliseconds: 200),
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: p.gradient,
+                            ),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color:
+                                  selected ? cs.onSurface : cs.outlineVariant,
+                              width: selected ? 3 : 1,
+                            ),
+                            boxShadow: selected
+                                ? [
+                                    BoxShadow(
+                                        color: p.seed.withValues(alpha: 0.5),
+                                        blurRadius: 10)
+                                  ]
+                                : null,
                           ),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: selected ? cs.onSurface : cs.outlineVariant,
-                            width: selected ? 3 : 1,
-                          ),
-                          boxShadow: selected
-                              ? [
-                                  BoxShadow(
-                                      color: p.seed.withValues(alpha: 0.5),
-                                      blurRadius: 10)
-                                ]
+                          child: selected
+                              ? const Icon(Icons.check,
+                                  color: Colors.white, size: 22)
                               : null,
                         ),
-                        child: selected
-                            ? const Icon(Icons.check,
-                                color: Colors.white, size: 22)
-                            : null,
-                      ),
                       ),
                     );
                   }),
@@ -1205,8 +1213,8 @@ class _AppearancePageState extends State<_AppearancePage> {
           // ── Оформление ───────────────────────────────────────────
           const _SectionHeader('Оформление'),
           SwitchListTile(
-            secondary: Icon(Icons.auto_awesome_mosaic_rounded,
-                color: cs.primary),
+            secondary:
+                Icon(Icons.auto_awesome_mosaic_rounded, color: cs.primary),
             title: const Text('Новый дизайн'),
             subtitle: Text(
                 'Обновлённый стиль в духе заставки: скругления, свечение, '
@@ -1256,8 +1264,8 @@ class _AppearancePageState extends State<_AppearancePage> {
                   const Text('Интенсивность анимаций'),
                   const Spacer(),
                   Text('${(settings.animationLevel * 100).round()}%',
-                      style: TextStyle(
-                          color: cs.onSurfaceVariant, fontSize: 12)),
+                      style:
+                          TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
                 ]),
                 Slider(
                   value: settings.animationLevel,
@@ -1291,7 +1299,8 @@ class _AppearancePageState extends State<_AppearancePage> {
                     max: 50,
                     divisions: 9,
                     label: '${settings.batteryAnimReduceAt}%',
-                    onChanged: (v) => settings.setBatteryAnimReduceAt(v.round()),
+                    onChanged: (v) =>
+                        settings.setBatteryAnimReduceAt(v.round()),
                   ),
                 ),
                 SizedBox(
@@ -1669,8 +1678,10 @@ class _PermissionsPageState extends State<_PermissionsPage> {
     if (!mounted) return;
     setState(() {
       _busy = false;
-      if (audio) _mic = r == 'granted' ? 'granted' : (r == 'denied' ? 'denied' : _mic);
-      if (video) _cam = r == 'granted' ? 'granted' : (r == 'denied' ? 'denied' : _cam);
+      if (audio)
+        _mic = r == 'granted' ? 'granted' : (r == 'denied' ? 'denied' : _mic);
+      if (video)
+        _cam = r == 'granted' ? 'granted' : (r == 'denied' ? 'denied' : _cam);
     });
     if (r == 'denied') {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1781,7 +1792,8 @@ class _PermissionsPageState extends State<_PermissionsPage> {
     final granted = status == 'granted';
     final denied = status == 'denied';
     final label = granted ? 'Разрешено' : (denied ? 'Запрещено' : 'Не задано');
-    final color = granted ? Colors.green : (denied ? Colors.red : Colors.orange);
+    final color =
+        granted ? Colors.green : (denied ? Colors.red : Colors.orange);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -1824,8 +1836,8 @@ class _PermissionsPageState extends State<_PermissionsPage> {
                   ]),
                   const SizedBox(height: 4),
                   Text(subtitle,
-                      style: TextStyle(
-                          color: cs.onSurfaceVariant, fontSize: 13)),
+                      style:
+                          TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
                 ],
               ),
             ),
@@ -1846,7 +1858,9 @@ class _PermissionsPageState extends State<_PermissionsPage> {
     final off = _pushStatus == 'off';
     final (statusText, statusColor) = on
         ? ('включены', Colors.green)
-        : (off ? ('выключены', Colors.orange) : ('не проверено', cs.onSurfaceVariant));
+        : (off
+            ? ('выключены', Colors.orange)
+            : ('не проверено', cs.onSurfaceVariant));
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Padding(
@@ -1860,8 +1874,8 @@ class _PermissionsPageState extends State<_PermissionsPage> {
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text('Фоновые пуши',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 15)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                 ),
                 Text(statusText,
                     style: TextStyle(
@@ -1881,8 +1895,8 @@ class _PermissionsPageState extends State<_PermissionsPage> {
               children: [
                 FilledButton.tonalIcon(
                   onPressed: _busy ? null : _requestNotifications,
-                  icon: const Icon(Icons.notifications_active_outlined,
-                      size: 18),
+                  icon:
+                      const Icon(Icons.notifications_active_outlined, size: 18),
                   label: const Text('Включить'),
                 ),
                 OutlinedButton.icon(
@@ -2365,8 +2379,8 @@ class _PrivacyPageState extends State<_PrivacyPage> {
             subtitle: Text('Как защищены данные на этом устройстве',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-                rlinkOpaquePushRoute(const DeviceSecurityScreen())),
+            onTap: () => Navigator.of(context)
+                .push(rlinkOpaquePushRoute(const DeviceSecurityScreen())),
           ),
           SwitchListTile(
             secondary: Icon(Icons.done_all_rounded,
@@ -2436,8 +2450,8 @@ class _PrivacyPageState extends State<_PrivacyPage> {
             ListTile(
               leading: const Icon(Icons.timer_outlined),
               title: const Text('Автоблокировка'),
-              subtitle:
-                  Text(_lockTimeoutLabel(AppLockService.instance.timeoutSeconds)),
+              subtitle: Text(
+                  _lockTimeoutLabel(AppLockService.instance.timeoutSeconds)),
               onTap: _pickLockTimeout,
             ),
             ListTile(
@@ -2492,8 +2506,7 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                 child: const Icon(Icons.pin_rounded, color: Colors.green),
               ),
               title: const Text('PIN-код'),
-              subtitle: const Text('4 цифры',
-                  style: TextStyle(fontSize: 12)),
+              subtitle: const Text('4 цифры', style: TextStyle(fontSize: 12)),
               onTap: () => Navigator.pop(ctx, LockMethod.pin4),
             ),
             ListTile(
@@ -2583,9 +2596,8 @@ class _PrivacyPageState extends State<_PrivacyPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          title: Text(first == null
-              ? 'Нарисуйте графический ключ'
-              : 'Повторите ключ'),
+          title: Text(
+              first == null ? 'Нарисуйте графический ключ' : 'Повторите ключ'),
           content: SizedBox(
             width: 240,
             height: 260,
@@ -2697,9 +2709,9 @@ class _PrivacyPageState extends State<_PrivacyPage> {
   }
 
   String _lockMethodLabel(LockMethod m) => switch (m) {
-        LockMethod.pin4    => 'PIN-код (4 цифры)',
+        LockMethod.pin4 => 'PIN-код (4 цифры)',
         LockMethod.pattern => 'Графический ключ',
-        LockMethod.text    => 'Текстовый пароль',
+        LockMethod.text => 'Текстовый пароль',
       };
 
   Future<void> _pickLockTimeout() async {
@@ -2791,6 +2803,22 @@ class _MessagingPageState extends State<_MessagingPage> {
             value: settings.sendOnEnter,
             onChanged: (v) => settings.setSendOnEnter(v),
           ),
+          if (!kIsWeb)
+            SwitchListTile(
+              secondary: Icon(Icons.photo_library_outlined,
+                  color: settings.useSystemGallery
+                      ? cs.primary
+                      : Theme.of(context).hintColor),
+              title: const Text('Системная галерея'),
+              subtitle: Text(
+                settings.useSystemGallery
+                    ? 'Выбор фото через галерею системы'
+                    : 'Выбор фото во встроенной галерее Rlink',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
+              value: settings.useSystemGallery,
+              onChanged: (v) => settings.setUseSystemGallery(v),
+            ),
           SwitchListTile(
             secondary: Icon(Icons.download_for_offline_outlined,
                 color: settings.autoDownloadMedia
@@ -2801,17 +2829,6 @@ class _MessagingPageState extends State<_MessagingPage> {
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             value: settings.autoDownloadMedia,
             onChanged: (v) => settings.setAutoDownloadMedia(v),
-          ),
-          _SectionHeader('Панель ввода'),
-          ListTile(
-            leading: Icon(Icons.reorder, color: cs.primary),
-            title: Text(AppL10n.t('cm_button_order')),
-            subtitle: Text(
-              'Перетащите для изменения порядка',
-              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showInputBarButtonOrderPicker(context, settings),
           ),
           _SectionHeader(AppL10n.t('settings_section_memory')),
           ListTile(
@@ -2824,137 +2841,6 @@ class _MessagingPageState extends State<_MessagingPage> {
             onTap: () => showMessageCacheClearDialog(context),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showInputBarButtonOrderPicker(
-      BuildContext context, AppSettings settings) {
-    final buttonLabels = {
-      'emoji': 'Эмодзи',
-      'sticker': 'Стикеры',
-      'media_gallery': 'Медиа',
-      'todo': 'Задачи',
-      'calendar': 'Календарь',
-      'location': 'Геолокация',
-      'voice_video': 'Голосовое/Видео',
-    };
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => _InputBarButtonOrderSheet(
-        initialOrder: List.from(settings.inputBarButtonOrder),
-        buttonLabels: buttonLabels,
-        onSave: (order) async {
-          await settings.setInputBarButtonOrder(order);
-        },
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Input Bar Button Order Sheet
-// ─────────────────────────────────────────────────────────────────────
-
-class _InputBarButtonOrderSheet extends StatefulWidget {
-  final List<String> initialOrder;
-  final Map<String, String> buttonLabels;
-  final Future<void> Function(List<String>) onSave;
-
-  const _InputBarButtonOrderSheet({
-    required this.initialOrder,
-    required this.buttonLabels,
-    required this.onSave,
-  });
-
-  @override
-  State<_InputBarButtonOrderSheet> createState() =>
-      _InputBarButtonOrderSheetState();
-}
-
-class _InputBarButtonOrderSheetState extends State<_InputBarButtonOrderSheet> {
-  late List<String> _order;
-
-  @override
-  void initState() {
-    super.initState();
-    _order = List.from(widget.initialOrder);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        constraints: const BoxConstraints(maxHeight: 500),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(AppL10n.t('cm_button_order'),
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: cs.onSurface,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(AppL10n.t('common_cancel')),
-                ),
-              ],
-            ),
-            const Divider(),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ReorderableListView.builder(
-                itemCount: _order.length,
-                onReorder: (oldIndex, newIndex) {
-                  setState(() {
-                    if (newIndex > oldIndex) {
-                      newIndex -= 1;
-                    }
-                    final item = _order.removeAt(oldIndex);
-                    _order.insert(newIndex, item);
-                  });
-                },
-                itemBuilder: (context, index) {
-                  final buttonId = _order[index];
-                  return ListTile(
-                    key: ValueKey(buttonId),
-                    leading: const Icon(Icons.drag_handle),
-                    title: Text(widget.buttonLabels[buttonId] ?? buttonId),
-                    trailing: Icon(
-                      Icons.circle,
-                      size: 12,
-                      color: cs.onSurface.withValues(alpha: 0.3),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () async {
-                  await widget.onSave(_order);
-                  if (mounted) Navigator.pop(context);
-                },
-                child: Text(AppL10n.t('common_save')),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -3987,7 +3873,8 @@ class _ChatBgTile extends StatelessWidget {
                 icon: Icon(Icons.delete_outline, color: cs.error, size: 20),
                 label: Text(
                   AppL10n.t('settings_chat_bg_remove'),
-                  style: TextStyle(color: cs.error, fontWeight: FontWeight.w600),
+                  style:
+                      TextStyle(color: cs.error, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -4031,8 +3918,7 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
   bool get _isWeb => RuntimePlatform.isWeb;
   bool get _isApple => RuntimePlatform.isIos || RuntimePlatform.isDesktopMacos;
 
-  static String _fmtMb(int bytes) =>
-      '${(bytes / (1024 * 1024)).round()} МБ';
+  static String _fmtMb(int bytes) => '${(bytes / (1024 * 1024)).round()} МБ';
 
   String _onDeviceSubtitle() {
     if (_isWeb) return 'whisper.cpp в браузере (WASM)';
@@ -4108,7 +3994,8 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
           ),
           if (engine == TranscriptionEngine.onDevice) ...[
             const _SectionHeader('Модель'),
-            for (final s in WhisperModelSize.values) _modelTile(context, s, size),
+            for (final s in WhisperModelSize.values)
+              _modelTile(context, s, size),
             if (_isWeb)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -4596,10 +4483,12 @@ class _PinSetupWidgetState extends State<_PinSetupWidget> {
       widget.onComplete(p);
     }
   }
+
   void _backspace() {
     if (_pin.isEmpty) return;
     setState(() => _pin = _pin.substring(0, _pin.length - 1));
   }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -4609,7 +4498,8 @@ class _PinSetupWidgetState extends State<_PinSetupWidget> {
         if (widget.error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(widget.error!, style: TextStyle(color: cs.error, fontSize: 13)),
+            child: Text(widget.error!,
+                style: TextStyle(color: cs.error, fontSize: 13)),
           ),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -4618,12 +4508,14 @@ class _PinSetupWidgetState extends State<_PinSetupWidget> {
             return AnimatedContainer(
               duration: const Duration(milliseconds: 120),
               margin: const EdgeInsets.symmetric(horizontal: 8),
-              width: 14, height: 14,
+              width: 14,
+              height: 14,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: filled ? cs.primary : Colors.transparent,
                 border: Border.all(
-                  color: filled ? cs.primary : cs.outline.withValues(alpha: 0.5),
+                  color:
+                      filled ? cs.primary : cs.outline.withValues(alpha: 0.5),
                   width: 1.5,
                 ),
               ),
@@ -4631,16 +4523,31 @@ class _PinSetupWidgetState extends State<_PinSetupWidget> {
           }),
         ),
         const SizedBox(height: 16),
-        for (final row in [[1,2,3],[4,5,6],[7,8,9],[-1,0,-2]])
+        for (final row in [
+          [1, 2, 3],
+          [4, 5, 6],
+          [7, 8, 9],
+          [-1, 0, -2]
+        ])
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: row.map((d) {
               if (d == -1) return const SizedBox(width: 56, height: 44);
-              if (d == -2) return SizedBox(width: 56, height: 44,
-                child: IconButton(icon: const Icon(Icons.backspace_outlined, size: 18), onPressed: _backspace));
-              return SizedBox(width: 56, height: 44,
-                child: TextButton(onPressed: () => _onDigit(d),
-                  child: Text('$d', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w400))));
+              if (d == -2)
+                return SizedBox(
+                    width: 56,
+                    height: 44,
+                    child: IconButton(
+                        icon: const Icon(Icons.backspace_outlined, size: 18),
+                        onPressed: _backspace));
+              return SizedBox(
+                  width: 56,
+                  height: 44,
+                  child: TextButton(
+                      onPressed: () => _onDigit(d),
+                      child: Text('$d',
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w400))));
             }).toList(),
           ),
       ],
@@ -4661,33 +4568,53 @@ class _PatternSetupWidgetState extends State<_PatternSetupWidget> {
   bool _done = false;
 
   Offset _pos(int i, Size s) {
-    final cw = s.width / 3; final ch = s.height / 3;
+    final cw = s.width / 3;
+    final ch = s.height / 3;
     return Offset(cw * (i % 3) + cw / 2, ch * (i ~/ 3) + ch / 2);
   }
+
   void _onPanStart(DragStartDetails d, Size s) {
     if (_done) return;
-    setState(() { _pattern.clear(); _currentDrag = d.localPosition; _done = false; });
+    setState(() {
+      _pattern.clear();
+      _currentDrag = d.localPosition;
+      _done = false;
+    });
     _hitTest(d.localPosition, s);
   }
+
   void _onPanUpdate(DragUpdateDetails d, Size s) {
     if (_done) return;
     setState(() => _currentDrag = d.localPosition);
     _hitTest(d.localPosition, s);
   }
+
   void _hitTest(Offset pos, Size s) {
     for (var i = 0; i < 9; i++) {
       if (_pattern.contains(i)) continue;
-      if ((pos - _pos(i, s)).distance < 26) { setState(() => _pattern.add(i)); break; }
+      if ((pos - _pos(i, s)).distance < 26) {
+        setState(() => _pattern.add(i));
+        break;
+      }
     }
   }
+
   void _onPanEnd(DragEndDetails _) {
     if (_done || _pattern.isEmpty) return;
-    setState(() { _done = true; _currentDrag = null; });
+    setState(() {
+      _done = true;
+      _currentDrag = null;
+    });
     widget.onComplete(List.from(_pattern));
     Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) setState(() { _pattern.clear(); _done = false; });
+      if (mounted)
+        setState(() {
+          _pattern.clear();
+          _done = false;
+        });
     });
   }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -4699,8 +4626,10 @@ class _PatternSetupWidgetState extends State<_PatternSetupWidget> {
         onPanEnd: _onPanEnd,
         child: CustomPaint(
           painter: _PatternPainterSimple(
-            pattern: _pattern, currentDrag: _currentDrag,
-            color: cs.primary, outline: cs.outline),
+              pattern: _pattern,
+              currentDrag: _currentDrag,
+              color: cs.primary,
+              outline: cs.outline),
           size: size,
         ),
       );
@@ -4712,31 +4641,55 @@ class _PatternPainterSimple extends CustomPainter {
   final List<int> pattern;
   final Offset? currentDrag;
   final Color color, outline;
-  const _PatternPainterSimple({required this.pattern, required this.currentDrag, required this.color, required this.outline});
+  const _PatternPainterSimple(
+      {required this.pattern,
+      required this.currentDrag,
+      required this.color,
+      required this.outline});
   Offset _pos(int i, Size s) {
-    final cw = s.width/3; final ch = s.height/3;
-    return Offset(cw*(i%3)+cw/2, ch*(i~/3)+ch/2);
+    final cw = s.width / 3;
+    final ch = s.height / 3;
+    return Offset(cw * (i % 3) + cw / 2, ch * (i ~/ 3) + ch / 2);
   }
+
   @override
   void paint(Canvas canvas, Size size) {
-    final lp = Paint()..color=color.withValues(alpha:0.55)..strokeWidth=2.5..strokeCap=StrokeCap.round;
-    for (var i = 0; i < pattern.length-1; i++) canvas.drawLine(_pos(pattern[i],size),_pos(pattern[i+1],size),lp);
-    if (pattern.isNotEmpty && currentDrag!=null) canvas.drawLine(_pos(pattern.last,size),currentDrag!,lp);
+    final lp = Paint()
+      ..color = color.withValues(alpha: 0.55)
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < pattern.length - 1; i++)
+      canvas.drawLine(_pos(pattern[i], size), _pos(pattern[i + 1], size), lp);
+    if (pattern.isNotEmpty && currentDrag != null)
+      canvas.drawLine(_pos(pattern.last, size), currentDrag!, lp);
     for (var i = 0; i < 9; i++) {
-      final pos = _pos(i,size); final sel = pattern.contains(i);
-      canvas.drawCircle(pos, sel?12:9, Paint()..color=sel?color:outline.withValues(alpha:0.3));
-      canvas.drawCircle(pos, 19, Paint()..color=sel?color.withValues(alpha:0.2):outline.withValues(alpha:0.15)..style=PaintingStyle.stroke..strokeWidth=1.5);
+      final pos = _pos(i, size);
+      final sel = pattern.contains(i);
+      canvas.drawCircle(pos, sel ? 12 : 9,
+          Paint()..color = sel ? color : outline.withValues(alpha: 0.3));
+      canvas.drawCircle(
+          pos,
+          19,
+          Paint()
+            ..color = sel
+                ? color.withValues(alpha: 0.2)
+                : outline.withValues(alpha: 0.15)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5);
     }
   }
+
   @override
-  bool shouldRepaint(_PatternPainterSimple o) => o.pattern!=pattern||o.currentDrag!=currentDrag;
+  bool shouldRepaint(_PatternPainterSimple o) =>
+      o.pattern != pattern || o.currentDrag != currentDrag;
 }
 
 class _PasswordStrengthField extends StatefulWidget {
   final TextEditingController controller;
   final String label;
   final void Function(String)? onChanged;
-  const _PasswordStrengthField({required this.controller, required this.label, this.onChanged});
+  const _PasswordStrengthField(
+      {required this.controller, required this.label, this.onChanged});
   @override
   State<_PasswordStrengthField> createState() => _PasswordStrengthFieldState();
 }
@@ -4752,6 +4705,7 @@ class _PasswordStrengthFieldState extends State<_PasswordStrengthField> {
     if (pw.contains(RegExp(r'[^A-Za-z0-9]'))) s++;
     return s;
   }
+
   @override
   Widget build(BuildContext context) {
     final s = _strength(widget.controller.text);
@@ -4761,7 +4715,10 @@ class _PasswordStrengthFieldState extends State<_PasswordStrengthField> {
         TextField(
           controller: widget.controller,
           obscureText: _obscure,
-          onChanged: (v) { setState((){}); widget.onChanged?.call(v); },
+          onChanged: (v) {
+            setState(() {});
+            widget.onChanged?.call(v);
+          },
           decoration: InputDecoration(
             labelText: widget.label,
             border: const OutlineInputBorder(),
@@ -4787,3 +4744,57 @@ class _PasswordStrengthFieldState extends State<_PasswordStrengthField> {
   }
 }
 
+/// A settings page reachable from the global search.
+class SettingsSearchEntry {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Widget Function() page;
+  const SettingsSearchEntry(this.title, this.subtitle, this.icon, this.page);
+}
+
+/// Settings pages the global search can jump to. Titles reuse the same
+/// localisation keys as the category cards so they can't drift apart.
+List<SettingsSearchEntry> settingsSearchEntries() => [
+      SettingsSearchEntry(
+          AppL10n.t('settings_appearance'),
+          'Тема, цвета, шрифт, фон',
+          Icons.palette_outlined,
+          () => const _AppearancePage()),
+      SettingsSearchEntry(
+          AppL10n.t('settings_notifications'),
+          'Звуки, рингтон, вибрация',
+          Icons.notifications_outlined,
+          () => const _NotificationsPage()),
+      SettingsSearchEntry(
+          AppL10n.t('settings_messaging'),
+          'Отправка, медиа, память, галерея',
+          Icons.chat_bubble_outline,
+          () => const _MessagingPage()),
+      SettingsSearchEntry('Панель ввода', 'Порядок кнопок', Icons.tune,
+          () => const InputBarButtonOrderSettings()),
+      SettingsSearchEntry(
+          AppL10n.t('emoji_my_packs'),
+          'Свои :код: и анимированные эмодзи',
+          Icons.emoji_emotions_outlined,
+          () => const EmojiHubScreen()),
+      SettingsSearchEntry(
+          AppL10n.t('settings_privacy'),
+          'Прочтение, статус онлайн',
+          Icons.lock_outline,
+          () => const _PrivacyPage()),
+      SettingsSearchEntry('Расшифровка', 'Движок и модель',
+          Icons.record_voice_over_outlined, () => const _TranscriptionPage()),
+      SettingsSearchEntry(
+          AppL10n.t('settings_section_network'),
+          'BLE, интернет, ретранслятор',
+          Icons.wifi_tethering,
+          () => const _NetworkPage()),
+      SettingsSearchEntry(
+          AppL10n.t('settings_data'),
+          'История, контакты, сброс',
+          Icons.storage_outlined,
+          () => const SettingsDataPage()),
+      SettingsSearchEntry('Профиль', 'Имя, аватар, теги, музыка',
+          Icons.person_outline, () => const _ProfilePage()),
+    ];

@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart'
+    show PointerScrollEvent, PointerSignalEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../main.dart';
 import '../../models/channel.dart';
+import '../../models/chat_message.dart';
 import '../../models/contact.dart';
 import '../../services/ai_bot_constants.dart';
 import '../../services/app_settings.dart';
@@ -24,12 +27,16 @@ import '../../services/connection_transport.dart';
 import '../../l10n/app_l10n.dart';
 import '../../services/gossip_router.dart';
 import '../../services/relay_service.dart';
+import '../../services/addons_registry.dart';
 import '../../services/story_service.dart';
+import '../../services/voice_service.dart';
 import '../../services/audio_queue_mini_player_layout.dart';
 import '../../services/platform_capabilities.dart';
 import '../../services/wifi_direct_service.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/avatar_viewer.dart';
+import '../widgets/profile_quick_edit.dart';
+import '../widgets/settings_profile_header.dart';
 import '../widgets/profile_photo_actions.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/mesh_radar_widget.dart';
@@ -46,9 +53,8 @@ import 'chat_screen.dart';
 import 'device_security_screen.dart';
 import 'ether_screen.dart';
 import 'groups_screen.dart';
-import 'qr_contact_screen.dart';
+import 'addons_screen.dart';
 import 'location_map_screen.dart';
-import 'profile_screen.dart';
 import 'chat_inbox_filters_manage_screen.dart';
 import 'settings_screen.dart';
 import 'story_creator_screen.dart';
@@ -137,7 +143,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(AppL10n.t('cm_searching_devices')), duration: Duration(seconds: 2)),
+          content: Text(AppL10n.t('cm_searching_devices')),
+          duration: Duration(seconds: 2)),
     );
     setState(() => _currentTab = 1);
   }
@@ -302,7 +309,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: Text(AppL10n.t('common_cancel'))),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
             onPressed: () async {
               final name = nameCtrl.text.trim();
@@ -520,7 +528,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           ? AppL10n.t('nav_nearby')
                           : _currentTab == 2
                               ? AppL10n.t('nav_ether')
-                              : AppL10n.t('nav_me'),
+                              : AppL10n.t('settings'),
                   key: ValueKey<int>(_currentTab),
                   style: const TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 22),
@@ -540,6 +548,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                 if (v == 'channel') _createChannel();
                 if (v == 'group') _createGroup();
                 if (v == 'bots') _openBotsCatalog();
+                if (v == 'addons') {
+                  Navigator.push(
+                      context, rlinkOpaquePushRoute(const AddonsScreen()));
+                }
               },
               itemBuilder: (ctx) => [
                 PopupMenuItem(
@@ -549,6 +561,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                         size: 20, color: Theme.of(ctx).colorScheme.primary),
                     const SizedBox(width: 10),
                     const Text('Боты'),
+                  ]),
+                ),
+                PopupMenuItem(
+                  value: 'addons',
+                  child: Row(children: [
+                    Icon(Icons.extension_outlined,
+                        size: 20, color: Theme.of(ctx).colorScheme.primary),
+                    const SizedBox(width: 10),
+                    const Text('Дополнения'),
                   ]),
                 ),
                 if (channelsEnabled)
@@ -666,47 +687,47 @@ class _ChatListScreenState extends State<ChatListScreen>
           ],
           Expanded(
             child: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity == null) return;
-          // Swipe right to previous tab (negative velocity)
-          if (details.primaryVelocity! < -300 && _currentTab > 0) {
-            setState(() {
-              _currentTab--;
-              if (_searchActive) {
-                _searchActive = false;
-                _searchController.clear();
-                RelayService.instance.searchResults.value = [];
-              }
-            });
-          }
-          // Swipe left to next tab (positive velocity)
-          else if (details.primaryVelocity! > 300 && _currentTab < 3) {
-            setState(() {
-              _currentTab++;
-              if (_searchActive) {
-                _searchActive = false;
-                _searchController.clear();
-                RelayService.instance.searchResults.value = [];
-              }
-              if (_currentTab == 2) EtherService.instance.markRead();
-            });
-          }
-        },
-        child: IndexedStack(
-          index: _currentTab,
-          children: [
-            _UnifiedChatsTab(
-              searchQuery: _searchActive ? _searchController.text : '',
-              layoutActive: _currentTab == 0 &&
-                  !_searchActive &&
-                  (ModalRoute.of(context)?.isCurrent ?? true),
-              onGoNearby: () => setState(() => _currentTab = 1),
-            ),
-            _NearbyTab(showRadar: _nearbyShowRadar),
-            const EtherScreen(),
-            const _MeTab(),
-          ],
-        ),
+              onHorizontalDragEnd: (details) {
+                if (details.primaryVelocity == null) return;
+                // Swipe right to previous tab (negative velocity)
+                if (details.primaryVelocity! < -300 && _currentTab > 0) {
+                  setState(() {
+                    _currentTab--;
+                    if (_searchActive) {
+                      _searchActive = false;
+                      _searchController.clear();
+                      RelayService.instance.searchResults.value = [];
+                    }
+                  });
+                }
+                // Swipe left to next tab (positive velocity)
+                else if (details.primaryVelocity! > 300 && _currentTab < 3) {
+                  setState(() {
+                    _currentTab++;
+                    if (_searchActive) {
+                      _searchActive = false;
+                      _searchController.clear();
+                      RelayService.instance.searchResults.value = [];
+                    }
+                    if (_currentTab == 2) EtherService.instance.markRead();
+                  });
+                }
+              },
+              child: IndexedStack(
+                index: _currentTab,
+                children: [
+                  _UnifiedChatsTab(
+                    searchQuery: _searchActive ? _searchController.text : '',
+                    layoutActive: _currentTab == 0 &&
+                        !_searchActive &&
+                        (ModalRoute.of(context)?.isCurrent ?? true),
+                    onGoNearby: () => setState(() => _currentTab = 1),
+                  ),
+                  _NearbyTab(showRadar: _nearbyShowRadar),
+                  const EtherScreen(),
+                  const _MeTab(),
+                ],
+              ),
             ),
           ),
         ],
@@ -716,6 +737,11 @@ class _ChatListScreenState extends State<ChatListScreen>
           : _AnimatedNavBar(
               selectedIndex: _currentTab,
               onDestinationSelected: _selectDesktopTab,
+              onSearch: () {
+                // Search lives on the chats tab — jump there, then open it.
+                if (_currentTab != 0) _selectDesktopTab(0);
+                if (!_searchActive) _toggleSearch();
+              },
             ),
     );
   }
@@ -749,53 +775,17 @@ class _ChatListScreenState extends State<ChatListScreen>
 
 // ── Аватар в нижнем меню (вкладка «Я») ────────────────────────────
 
-class _MeTabNavIcon extends StatelessWidget {
-  final bool selected;
-  const _MeTabNavIcon({required this.selected});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return ValueListenableBuilder<UserProfile?>(
-      valueListenable: ProfileService.instance.profileNotifier,
-      builder: (context, profile, _) {
-        if (profile == null) {
-          return Icon(
-            selected ? Icons.person : Icons.person_outline,
-            size: 24,
-          );
-        }
-        final avatar = AvatarWidget(
-          initials: profile.initials,
-          color: profile.avatarColor,
-          emoji: profile.avatarEmoji,
-          imagePath: profile.avatarImagePath,
-          size: selected ? 26 : 24,
-        );
-        if (!selected) {
-          return Opacity(opacity: 0.85, child: avatar);
-        }
-        return Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: cs.primary, width: 2),
-          ),
-          child: avatar,
-        );
-      },
-    );
-  }
-}
-
 // ── Animated bottom nav bar (5 tabs) ─────────────────────────────
 
 class _AnimatedNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
+  final VoidCallback onSearch;
 
   const _AnimatedNavBar({
     required this.selectedIndex,
     required this.onDestinationSelected,
+    required this.onSearch,
   });
 
   @override
@@ -827,9 +817,9 @@ class _AnimatedNavBar extends StatelessWidget {
             label: AppL10n.t('nav_ether'),
           ),
           NavigationDestination(
-            icon: const _MeTabNavIcon(selected: false),
-            selectedIcon: const _MeTabNavIcon(selected: true),
-            label: AppL10n.t('nav_me'),
+            icon: const Icon(Icons.settings_outlined),
+            selectedIcon: const Icon(Icons.settings),
+            label: AppL10n.t('settings'),
           ),
         ],
       );
@@ -873,6 +863,11 @@ class _AnimatedNavBar extends StatelessWidget {
                   selectedIcon: Icons.cell_tower,
                   label: AppL10n.t('nav_ether'),
                   badge: EtherService.instance.unreadCount),
+              _navItem(context,
+                  index: 3,
+                  icon: Icons.settings_outlined,
+                  selectedIcon: Icons.settings,
+                  label: AppL10n.t('settings')),
             ],
           ),
         ),
@@ -888,7 +883,7 @@ class _AnimatedNavBar extends StatelessWidget {
           children: [
             Expanded(child: pill),
             const SizedBox(width: 8),
-            _meItem(context),
+            _searchItem(context),
           ],
         ),
       ),
@@ -926,9 +921,8 @@ class _AnimatedNavBar extends StatelessWidget {
       curve: Curves.easeOutCubic,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
       decoration: BoxDecoration(
-        color: selected
-            ? cs.primary.withValues(alpha: 0.18)
-            : Colors.transparent,
+        color:
+            selected ? cs.primary.withValues(alpha: 0.18) : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Icon(selected ? selectedIcon : icon, size: 22, color: tint),
@@ -938,9 +932,7 @@ class _AnimatedNavBar extends StatelessWidget {
         valueListenable: badge,
         builder: (_, count, child) {
           final show = count > 0 && (badgeGate?.call() ?? true);
-          return show
-              ? Badge(label: Text('$count'), child: child)
-              : child!;
+          return show ? Badge(label: Text('$count'), child: child) : child!;
         },
         child: iconWidget,
       );
@@ -969,47 +961,29 @@ class _AnimatedNavBar extends StatelessWidget {
     );
   }
 
-  Widget _meItem(BuildContext context) {
+  /// Global search — its own frosted circle, icon only (no label).
+  Widget _searchItem(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final selected = selectedIndex == 3;
     final circleRadius = BorderRadius.circular(26);
     return InkWell(
-      onTap: () => onDestinationSelected(3),
+      onTap: onSearch,
       borderRadius: circleRadius,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _floatShadow(
-            circleRadius,
-            RlinkDesign.frosted(
-              context: context,
-              blur: 14,
-              fill: 0.4,
-              borderRadius: circleRadius,
-              border: Border.all(
-                color: selected
-                    ? cs.primary.withValues(alpha: 0.9)
-                    : cs.outlineVariant.withValues(alpha: 0.5),
-                width: selected ? 2 : 0.8,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(7),
-                child: _MeTabNavIcon(selected: selected),
-              ),
-            ),
+      child: _floatShadow(
+        circleRadius,
+        RlinkDesign.frosted(
+          context: context,
+          blur: 14,
+          fill: 0.4,
+          borderRadius: circleRadius,
+          border: Border.all(
+            color: cs.outlineVariant.withValues(alpha: 0.5),
+            width: 0.8,
           ),
-          const SizedBox(height: 2),
-          Text(
-            AppL10n.t('nav_me'),
-            maxLines: 1,
-            style: TextStyle(
-              fontSize: 11,
-              height: 1.0,
-              color: selected ? cs.primary : cs.onSurfaceVariant,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            ),
+          child: Padding(
+            padding: const EdgeInsets.all(11),
+            child: Icon(Icons.search, size: 22, color: cs.onSurfaceVariant),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1048,11 +1022,10 @@ class _DesktopNavRail extends StatelessWidget {
         NavigationRailDestination(
           icon: ValueListenableBuilder<int>(
             valueListenable: BleService.instance.peersCount,
-            builder: (_, count, __) =>
-                count > 0 && AppSettings.instance.connectionMode != 1
-                    ? Badge(
-                        label: Text('$count'), child: const Icon(Icons.radar))
-                    : const Icon(Icons.radar_outlined),
+            builder: (_, count, __) => count > 0 &&
+                    AppSettings.instance.connectionMode != 1
+                ? Badge(label: Text('$count'), child: const Icon(Icons.radar))
+                : const Icon(Icons.radar_outlined),
           ),
           selectedIcon: const Icon(Icons.radar),
           label: Text(AppL10n.t('nav_nearby')),
@@ -1069,17 +1042,72 @@ class _DesktopNavRail extends StatelessWidget {
           label: Text(AppL10n.t('nav_ether')),
         ),
         NavigationRailDestination(
-          icon: const _MeTabNavIcon(selected: false),
-          selectedIcon: const _MeTabNavIcon(selected: true),
-          label: Text(AppL10n.t('nav_me')),
+          icon: const Icon(Icons.settings_outlined),
+          selectedIcon: const Icon(Icons.settings),
+          label: Text(AppL10n.t('settings')),
         ),
       ],
     );
   }
 }
 
-class _MeTab extends StatelessWidget {
+class _MeTab extends StatefulWidget {
   const _MeTab();
+
+  @override
+  State<_MeTab> createState() => _MeTabState();
+}
+
+class _MeTabState extends State<_MeTab> {
+  // 0..1 how far the profile header is pulled open. Fed by touch overscroll
+  // and (on desktop) by the wheel once the list sits at the top.
+  final _pull = ValueNotifier<double>(0);
+  final _listCtrl = ScrollController();
+  Timer? _snapTimer;
+  static const double _pullSpan = 130;
+
+  @override
+  void dispose() {
+    _snapTimer?.cancel();
+    _listCtrl.dispose();
+    _pull.dispose();
+    super.dispose();
+  }
+
+  void _snap() => _pull.value = _pull.value > 0.4 ? 1 : 0; // magnet
+
+  bool _onScroll(ScrollNotification n) {
+    if (n.depth != 0) return false;
+    if (n is ScrollEndNotification) {
+      _snap();
+      return false;
+    }
+    final px = n.metrics.pixels;
+    if (px <= 0) {
+      _pull.value = (-px / _pullSpan).clamp(0.0, 1.0);
+    } else if (_pull.value != 0) {
+      _pull.value = 0; // scrolled down → collapse
+    }
+    return false;
+  }
+
+  /// Wheel/trackpad: Flutter clamps pointer-scroll to the scroll extent and
+  /// never reports overscroll, so at the top we read the wheel directly.
+  void _onPointerSignal(PointerSignalEvent e) {
+    if (e is! PointerScrollEvent) return;
+    final dy = e.scrollDelta.dy;
+    final atTop = !_listCtrl.hasClients || _listCtrl.position.pixels <= 0;
+    if (dy < 0 && atTop) {
+      _pull.value = (_pull.value + -dy / _pullSpan).clamp(0.0, 1.0);
+    } else if (dy > 0 && _pull.value > 0) {
+      _pull.value = (_pull.value - dy / _pullSpan).clamp(0.0, 1.0);
+    } else {
+      return;
+    }
+    // No "finger up" with a wheel — settle shortly after it stops.
+    _snapTimer?.cancel();
+    _snapTimer = Timer(const Duration(milliseconds: 180), _snap);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1164,84 +1192,61 @@ class _MeTab extends StatelessWidget {
         ],
       );
     }
-    return ListView(
-      // Bottom clearance so the last settings item scrolls clear of the floating
-      // nav pill (extendBody makes this tab fill behind it in the new design).
-      padding: EdgeInsets.fromLTRB(
-        8,
-        12,
-        8,
-        settings.newDesign ? MediaQuery.paddingOf(context).bottom + 84 : 12,
-      ),
-      children: [
-        if (profile != null)
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              leading: Material(
-                color: Colors.transparent,
-                child: GestureDetector(
-                  onTap: () => showAvatarViewer(
-                    context,
-                    imagePath: profile.avatarImagePath,
-                    color: profile.avatarColor,
-                    emoji: profile.avatarEmoji,
-                    initials: profile.initials,
-                  ),
-                  onLongPress: () => _showOwnAvatarMenu(context, profile),
-                  child: AvatarWidget(
-                    initials: profile.initials,
-                    color: profile.avatarColor,
-                    emoji: profile.avatarEmoji,
-                    imagePath: profile.avatarImagePath,
-                    size: 52,
-                  ),
+    return Listener(
+      onPointerSignal: _onPointerSignal,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: ListView(
+          controller: _listCtrl,
+          // Overscroll at the top is what opens the profile header.
+          physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics()),
+          // Bottom clearance so the last settings item scrolls clear of the floating
+          // nav pill (extendBody makes this tab fill behind it in the new design).
+          padding: EdgeInsets.fromLTRB(
+            8,
+            12,
+            8,
+            settings.newDesign ? MediaQuery.paddingOf(context).bottom + 84 : 12,
+          ),
+          children: [
+            SettingsProfileHeader(pull: _pull),
+            if (profile != null)
+              Card(
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Icon(Icons.mood_rounded, color: cs.primary),
+                      title: const Text('Эмодзи-статус'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => quickChangeStatusEmoji(context),
+                    ),
+                    const Divider(height: 1, indent: 56),
+                    ListTile(
+                      leading: Icon(Icons.image_outlined, color: cs.primary),
+                      title: const Text('Изменить баннер'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => quickChangeBanner(context),
+                    ),
+                    const Divider(height: 1, indent: 56),
+                    ListTile(
+                      leading:
+                          Icon(Icons.photo_camera_outlined, color: cs.primary),
+                      title: const Text('Изменить фото профиля'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _showOwnAvatarMenu(context, profile),
+                    ),
+                  ],
                 ),
               ),
-              title: Text(
-                profile.nickname,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: profile.statusEmoji.isEmpty
-                  ? Text(AppL10n.t('menu_open_profile'))
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        StatusEmojiView(
-                          statusEmoji: profile.statusEmoji,
-                          fontSize: 16,
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(AppL10n.t('menu_open_profile')),
-                        ),
-                      ],
-                    ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.push(
-                context,
-                rlinkPushRoute(const ProfileScreen()),
-              ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(4, 4, 4, 28),
+              child: SettingsCategoryCards(),
             ),
-          ),
-        Card(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: ListTile(
-            leading: Icon(Icons.qr_code_2_rounded, color: cs.primary),
-            title: const Text('Знакомство по QR'),
-            subtitle: const Text('Показать свой код или отсканировать чужой'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => showAddByQrSheet(context),
-          ),
+          ],
         ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(4, 4, 4, 28),
-          child: SettingsCategoryCards(),
-        ),
-      ],
+      ),
     );
   }
 
@@ -1510,6 +1515,17 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
     super.dispose();
   }
 
+  /// Anchor for the floating mini player that ALSO reserves room for it —
+  /// it's an overlay, so without the gap it sat on top of the first chat row.
+  Widget _miniPlayerGap() => ValueListenableBuilder<VoicePlaybackSession?>(
+        valueListenable: VoiceService.instance.playbackSession,
+        builder: (_, session, __) => SizedBox(
+          key: _miniPlayerListAnchor,
+          // ponytail: fixed 60 — the player has no intrinsic height to read.
+          height: session == null ? 0 : 60,
+        ),
+      );
+
   void _layoutMiniPlayerAnchor() {
     if (!widget.layoutActive || widget.searchQuery.isNotEmpty) return;
     if (_miniPlayerAnchorCallbackPending) return;
@@ -1524,7 +1540,40 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
     });
   }
 
+  /// A failing web SQLite read used to abort the whole loader, leaving an
+  /// empty screen — even "Избранное", which needs no database at all. Degrade
+  /// to the saved-messages row instead of blanking the list.
   Future<void> _load() async {
+    try {
+      await _loadInner();
+    } catch (e, st) {
+      debugPrint('[ChatList] load failed, falling back: $e\n$st');
+      final myId = CryptoService.instance.publicKeyHex;
+      if (!mounted) return;
+      if (myId.isEmpty || AppSettings.instance.isLinkedChildDevice) {
+        setState(() => _items = []);
+        return;
+      }
+      setState(() => _items = [
+            _ChatItem(
+              isSavedMessages: true,
+              savedHasMessages: false,
+              id: myId,
+              nickname: AppL10n.t('chat_saved_messages'),
+              avatarColor: 0xFF26A69A,
+              avatarEmoji: '⭐',
+              avatarImagePath: null,
+              lastMessage: AppL10n.t('chat_saved_messages_empty'),
+              lastTime: DateTime.fromMillisecondsSinceEpoch(0),
+              isOnline: false,
+              onlineTransports: const [],
+              unreadCount: 0,
+            )
+          ]);
+    }
+  }
+
+  Future<void> _loadInner() async {
     final items = <_ChatItem>[];
     final settings = AppSettings.instance;
     final myId = CryptoService.instance.publicKeyHex;
@@ -2176,7 +2225,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
       final col = Column(children: [
         _StoriesStrip(chatItems: _storiesSource()),
         _buildPendingBanners(context),
-        SizedBox(height: 0, key: _miniPlayerListAnchor),
+        _miniPlayerGap(),
         Expanded(
           child: _EmptyChatsState(onFindNearby: widget.onGoNearby),
         ),
@@ -2192,7 +2241,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
             _StoriesStrip(chatItems: _storiesSource()),
             _buildFilterBar(context),
             _buildPendingBanners(context),
-            SizedBox(height: 0, key: _miniPlayerListAnchor),
+            _miniPlayerGap(),
             Expanded(
               child: Center(
                 child: Text(
@@ -2222,7 +2271,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
           ),
         ),
         _buildPendingBanners(context),
-        SizedBox(height: 0, key: _miniPlayerListAnchor),
+        _miniPlayerGap(),
         Expanded(
             child: ListView.separated(
           controller: _listController,
@@ -2613,7 +2662,8 @@ class _EmptyChatsStateState extends State<_EmptyChatsState>
           Text(
             AppL10n.t('empty_chats_sub'),
             textAlign: TextAlign.center,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14.5, height: 1.35),
+            style: TextStyle(
+                color: cs.onSurfaceVariant, fontSize: 14.5, height: 1.35),
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
@@ -2715,6 +2765,40 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
   List<Channel> _channelMatches = [];
   int _channelSearchGen = 0;
 
+  // Which result section to show; 'all' shows everything.
+  String _filter = 'all';
+  static const _filters = <List<String>>[
+    ['all', 'Все'],
+    ['chats', 'Чаты'],
+    ['contacts', 'Контакты'],
+    ['channels', 'Каналы'],
+    ['people', 'Люди'],
+    ['messages', 'Сообщения'],
+    ['addons', 'Дополнения'],
+    ['settings', 'Настройки'],
+  ];
+
+  bool _show(String key) => _filter == 'all' || _filter == key;
+
+  Widget _filterChips() => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+        child: Row(
+          children: [
+            for (final f in _filters)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Text(f[1], style: const TextStyle(fontSize: 12)),
+                  selected: _filter == f[0],
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) => setState(() => _filter = f[0]),
+                ),
+              ),
+          ],
+        ),
+      );
+
   @override
   void initState() {
     super.initState();
@@ -2762,6 +2846,12 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
             item.nickname.toLowerCase().contains(q) ||
             item.lastMessage.toLowerCase().contains(q))
         .toList();
+    final addonHits = addons().where((a) => a.matches(q)).toList();
+    final settingsHits = settingsSearchEntries()
+        .where((e) =>
+            e.title.toLowerCase().contains(q) ||
+            e.subtitle.toLowerCase().contains(q))
+        .toList();
 
     return ValueListenableBuilder<List<Contact>>(
       valueListenable: ChatStorageService.instance.contactsNotifier,
@@ -2797,178 +2887,247 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
             final hasAny = chatMatches.isNotEmpty ||
                 contactMatches.isNotEmpty ||
                 channels.isNotEmpty ||
-                relayPeople.isNotEmpty;
+                relayPeople.isNotEmpty ||
+                addonHits.isNotEmpty ||
+                settingsHits.isNotEmpty;
 
-            if (!hasAny) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.search_off,
-                          size: 56, color: Colors.grey.shade600),
-                      const SizedBox(height: 12),
-                      Text('Ничего не найдено',
-                          style: TextStyle(
-                              color: Colors.grey.shade400, fontSize: 15)),
-                      const SizedBox(height: 4),
-                      Text(
-                        RelayService.instance.isConnected
-                            ? 'Попробуй другой запрос'
-                            : 'Relay не подключён — поиск людей недоступен',
-                        style: TextStyle(
-                            color: Colors.grey.shade600, fontSize: 12),
-                        textAlign: TextAlign.center,
+            return FutureBuilder<List<ChatMessage>>(
+              future: ChatStorageService.instance.searchMessages(q),
+              builder: (context, msgSnap) {
+                final msgs = msgSnap.data ?? const <ChatMessage>[];
+                if (!hasAny && msgs.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.search_off,
+                              size: 56, color: Colors.grey.shade600),
+                          const SizedBox(height: 12),
+                          Text('Ничего не найдено',
+                              style: TextStyle(
+                                  color: Colors.grey.shade400, fontSize: 15)),
+                          const SizedBox(height: 4),
+                          Text(
+                            RelayService.instance.isConnected
+                                ? 'Попробуй другой запрос'
+                                : 'Relay не подключён — поиск людей недоступен',
+                            style: TextStyle(
+                                color: Colors.grey.shade600, fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
+                    ),
+                  );
+                }
+
+                return ListView(
+                  padding: const EdgeInsets.only(top: 4, bottom: 80),
+                  children: [
+                    _filterChips(),
+                    if (_show('chats') && chatMatches.isNotEmpty) ...[
+                      _searchSection('Чаты', chatMatches.length),
+                      for (final m in chatMatches)
+                        _TelegramChatRow(
+                          item: m,
+                          onTap: () => widget.onOpenItem(m),
+                          timeLabel: m.isSavedMessages && !m.savedHasMessages
+                              ? ''
+                              : _fmtTimeStatic(m.lastTime),
+                        ),
                     ],
-                  ),
-                ),
-              );
-            }
-
-            return ListView(
-              padding: const EdgeInsets.only(top: 4, bottom: 80),
-              children: [
-                if (chatMatches.isNotEmpty) ...[
-                  _searchSection('Чаты', chatMatches.length),
-                  for (final m in chatMatches)
-                    _TelegramChatRow(
-                      item: m,
-                      onTap: () => widget.onOpenItem(m),
-                      timeLabel: m.isSavedMessages && !m.savedHasMessages
-                          ? ''
-                          : _fmtTimeStatic(m.lastTime),
-                    ),
-                ],
-                if (contactMatches.isNotEmpty) ...[
-                  _searchSection('Контакты', contactMatches.length),
-                  for (final c in contactMatches)
-                    ListTile(
-                      leading: AvatarWidget(
-                        initials: c.nickname.isNotEmpty
-                            ? c.nickname[0].toUpperCase()
-                            : '?',
-                        color: c.avatarColor,
-                        emoji: c.avatarEmoji,
-                        imagePath: c.avatarImagePath,
-                        size: 44,
-                      ),
-                      title: Text(c.nickname),
-                      subtitle: Text(
-                        c.username.isNotEmpty ? '#${c.username}' : c.shortId,
-                        style: TextStyle(
-                            color: Colors.grey.shade500, fontSize: 11),
-                      ),
-                      onTap: () => Navigator.push(
-                        context,
-                        rlinkChatRoute(ChatScreen(
-                          peerId: c.publicKeyHex,
-                          peerNickname: c.nickname,
-                          peerAvatarColor: c.avatarColor,
-                          peerAvatarEmoji: c.avatarEmoji,
-                          peerAvatarImagePath: c.avatarImagePath,
-                        )),
-                      ),
-                    ),
-                ],
-                if (channels.isNotEmpty) ...[
-                  _searchSection('Каналы', channels.length),
-                  for (final ch in channels)
-                    ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Color(ch.avatarColor),
-                        child: Text(
-                          ch.avatarEmoji,
-                          style: const TextStyle(fontSize: 20),
+                    if (_show('contacts') && contactMatches.isNotEmpty) ...[
+                      _searchSection('Контакты', contactMatches.length),
+                      for (final c in contactMatches)
+                        ListTile(
+                          leading: AvatarWidget(
+                            initials: c.nickname.isNotEmpty
+                                ? c.nickname[0].toUpperCase()
+                                : '?',
+                            color: c.avatarColor,
+                            emoji: c.avatarEmoji,
+                            imagePath: c.avatarImagePath,
+                            size: 44,
+                          ),
+                          title: Text(c.nickname),
+                          subtitle: Text(
+                            c.username.isNotEmpty
+                                ? '#${c.username}'
+                                : c.shortId,
+                            style: TextStyle(
+                                color: Colors.grey.shade500, fontSize: 11),
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            rlinkChatRoute(ChatScreen(
+                              peerId: c.publicKeyHex,
+                              peerNickname: c.nickname,
+                              peerAvatarColor: c.avatarColor,
+                              peerAvatarEmoji: c.avatarEmoji,
+                              peerAvatarImagePath: c.avatarImagePath,
+                            )),
+                          ),
                         ),
-                      ),
-                      title: Row(children: [
-                        Expanded(
-                          child: Text(ch.name,
+                    ],
+                    if (_show('channels') && channels.isNotEmpty) ...[
+                      _searchSection('Каналы', channels.length),
+                      for (final ch in channels)
+                        ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Color(ch.avatarColor),
+                            child: Text(
+                              ch.avatarEmoji,
+                              style: const TextStyle(fontSize: 20),
+                            ),
+                          ),
+                          title: Row(children: [
+                            Expanded(
+                              child: Text(ch.name,
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ),
+                            if (ch.verified)
+                              const Icon(Icons.verified,
+                                  size: 16, color: Colors.blue),
+                          ]),
+                          subtitle: Text(
+                            ch.username.isNotEmpty
+                                ? '@${ch.username}'
+                                : (ch.description ?? ch.universalCode),
+                            style: TextStyle(
+                                color: Colors.grey.shade500, fontSize: 11),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            rlinkPushRoute(ChannelViewScreen(channel: ch)),
+                          ),
+                        ),
+                    ],
+                    if (_show('people') && relayPeople.isNotEmpty) ...[
+                      _searchSection('Люди в сети', relayPeople.length),
+                      for (final p in relayPeople)
+                        ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.15),
+                            child: Text(
+                              p.nick.isNotEmpty ? p.nick[0].toUpperCase() : '#',
+                              style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          title: Text(
+                            p.username.isNotEmpty
+                                ? '#${p.username}'
+                                : (p.nick.isNotEmpty ? p.nick : p.shortId),
+                          ),
+                          subtitle: Text(
+                            p.publicKey
+                                .substring(0, p.publicKey.length.clamp(0, 16)),
+                            style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 11,
+                                fontFamily: 'monospace'),
+                          ),
+                          trailing: const Icon(Icons.circle,
+                              size: 10, color: Color(0xFF4CAF50)),
+                          onTap: () {
+                            // Opening a search result must NOT send a pair
+                            // request — that only happens when the user presses
+                            // "Добавить" in the chat.
+                            final nick = p.nick.isNotEmpty ? p.nick : p.shortId;
+                            Navigator.push(
+                              context,
+                              rlinkChatRoute(ChatScreen(
+                                peerId: p.publicKey,
+                                peerNickname: nick,
+                                peerAvatarColor: 0xFF607D8B,
+                                peerAvatarEmoji: '',
+                                peerAvatarImagePath: null,
+                              )),
+                            );
+                          },
+                        ),
+                    ],
+                    // Installed add-ons matching the query.
+                    if (_show('addons') && addonHits.isNotEmpty) ...[
+                      _searchSection('Дополнения', addonHits.length),
+                      for (final a in addonHits)
+                        ListTile(
+                          leading: Icon(a.icon, color: a.color),
+                          title: Text(a.title),
+                          subtitle: Text(a.subtitle,
                               maxLines: 1, overflow: TextOverflow.ellipsis),
+                          onTap: () => Navigator.push(
+                              context, rlinkOpaquePushRoute(a.open())),
                         ),
-                        if (ch.verified)
-                          const Icon(Icons.verified,
-                              size: 16, color: Colors.blue),
-                      ]),
-                      subtitle: Text(
-                        ch.username.isNotEmpty
-                            ? '@${ch.username}'
-                            : (ch.description ?? ch.universalCode),
-                        style: TextStyle(
-                            color: Colors.grey.shade500, fontSize: 11),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onTap: () => Navigator.push(
-                        context,
-                        rlinkPushRoute(ChannelViewScreen(channel: ch)),
-                      ),
-                    ),
-                ],
-                if (relayPeople.isNotEmpty) ...[
-                  _searchSection('Люди в сети', relayPeople.length),
-                  for (final p in relayPeople)
-                    ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withValues(alpha: 0.15),
-                        child: Text(
-                          p.nick.isNotEmpty ? p.nick[0].toUpperCase() : '#',
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.bold),
+                    ],
+                    // Settings pages matching the query.
+                    if (_show('settings') && settingsHits.isNotEmpty) ...[
+                      _searchSection('Настройки', settingsHits.length),
+                      for (final e in settingsHits)
+                        ListTile(
+                          leading: Icon(e.icon),
+                          title: Text(e.title),
+                          subtitle: Text(
+                            e.subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: Colors.grey.shade500, fontSize: 12),
+                          ),
+                          onTap: () => Navigator.push(
+                              context, rlinkOpaquePushRoute(e.page())),
                         ),
-                      ),
-                      title: Text(
-                        p.username.isNotEmpty
-                            ? '#${p.username}'
-                            : (p.nick.isNotEmpty ? p.nick : p.shortId),
-                      ),
-                      subtitle: Text(
-                        p.publicKey
-                            .substring(0, p.publicKey.length.clamp(0, 16)),
-                        style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 11,
-                            fontFamily: 'monospace'),
-                      ),
-                      trailing: const Icon(Icons.circle,
-                          size: 10, color: Color(0xFF4CAF50)),
-                      onTap: () {
-                        final myProfile = ProfileService.instance.profile;
-                        if (myProfile != null) {
-                          GossipRouter.instance.sendPairRequest(
-                            publicKey: myProfile.publicKeyHex,
-                            nick: myProfile.nickname,
-                            username: myProfile.username,
-                            color: myProfile.avatarColor,
-                            emoji: myProfile.avatarEmoji,
-                            recipientId: p.publicKey,
-                            x25519Key:
-                                CryptoService.instance.x25519PublicKeyBase64,
-                            tags: myProfile.tags,
-                            statusEmoji: myProfile.statusEmoji,
-                          );
-                        }
-                        final nick = p.nick.isNotEmpty ? p.nick : p.shortId;
-                        Navigator.push(
-                          context,
-                          rlinkChatRoute(ChatScreen(
-                            peerId: p.publicKey,
-                            peerNickname: nick,
-                            peerAvatarColor: 0xFF607D8B,
-                            peerAvatarEmoji: '',
-                            peerAvatarImagePath: null,
-                          )),
-                        );
-                      },
-                    ),
-                ],
-              ],
+                    ],
+                    // Full-text hits across every conversation.
+                    if (_show('messages') && msgs.isNotEmpty) ...[
+                      _searchSection('Сообщения', msgs.length),
+                      for (final m in msgs)
+                        ListTile(
+                          leading: const Icon(Icons.chat_bubble_outline),
+                          title: Text(
+                            m.text,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            _fmtTimeStatic(m.timestamp),
+                            style: TextStyle(
+                                color: Colors.grey.shade500, fontSize: 11),
+                          ),
+                          onTap: () {
+                            final hits = widget.localItems
+                                .where((i) => i.id == m.peerId)
+                                .toList();
+                            if (hits.isNotEmpty) {
+                              widget.onOpenItem(hits.first);
+                              return;
+                            }
+                            Navigator.push(
+                              context,
+                              rlinkChatRoute(ChatScreen(
+                                peerId: m.peerId,
+                                peerNickname: m.peerId.length > 8
+                                    ? m.peerId.substring(0, 8)
+                                    : m.peerId,
+                                peerAvatarColor: 0xFF607D8B,
+                                peerAvatarEmoji: '',
+                                peerAvatarImagePath: null,
+                              )),
+                            );
+                          },
+                        ),
+                    ],
+                  ],
+                );
+              },
             );
           },
         );

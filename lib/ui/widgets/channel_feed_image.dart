@@ -24,13 +24,15 @@ void _cacheWebImg(String path, Uint8List b) {
 
 /// Web-safe image for a channel path that may be a `data:` URL, an OPFS web
 /// path, or a native file path. Never touches dart:io File on web.
-Widget _feedImg(String path,
+Widget storedImage(String path,
     {required BoxFit fit, double? width, double? height}) {
   Widget broken() => const SizedBox.shrink();
   // Reserve vertical space while loading so the post height stays stable.
   Widget loadingBox() =>
       SizedBox(width: width == double.infinity ? null : width, height: 200);
-  if (path.startsWith('data:')) {
+  if (path.startsWith('data:') ||
+      path.startsWith('http://') ||
+      path.startsWith('https://')) {
     return Image.network(path,
         width: width,
         height: height,
@@ -89,10 +91,18 @@ class ChannelFeedImage extends StatelessWidget {
     final pc = isDesktopShell();
     final sw = MediaQuery.sizeOf(context).width;
     if (isSticker && !pc) {
-      return _feedImg(resolvedPath, width: 132, height: 132, fit: BoxFit.cover);
+      return storedImage(resolvedPath, width: 132, height: 132, fit: BoxFit.cover);
     }
     if (!pc) {
-      return _feedImg(resolvedPath, width: double.infinity, fit: BoxFit.cover);
+      // Cap the height: an uncapped tall screenshot filled the whole comments
+      // screen and there was nothing left to scroll to. Cropped here, full
+      // size still available by tapping through to the viewer.
+      final maxH = MediaQuery.sizeOf(context).height * 0.55;
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
+        child: storedImage(resolvedPath,
+            width: double.infinity, fit: BoxFit.cover),
+      );
     }
     final maxW = isSticker ? 132.0 : (sw * 0.38).clamp(200.0, 360.0);
     final maxH = isSticker ? 132.0 : 280.0;
@@ -100,7 +110,7 @@ class ChannelFeedImage extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
-        child: _feedImg(resolvedPath,
+        child: storedImage(resolvedPath,
             fit: isSticker ? BoxFit.cover : BoxFit.contain),
       ),
     );
@@ -120,7 +130,7 @@ class ChannelCommentImage extends StatelessWidget {
     final maxH = pc ? 200.0 : 240.0;
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
-      child: _feedImg(resolvedPath, fit: BoxFit.contain),
+      child: storedImage(resolvedPath, fit: BoxFit.contain),
     );
   }
 }

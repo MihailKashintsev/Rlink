@@ -87,6 +87,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       await _showStoryReactionLimitHint();
       return;
     }
+    if (mounted) setState(() {}); // toggle is stored — show it
     await GossipRouter.instance.sendReactionExt(
       kind: 'story',
       targetId: story.id,
@@ -859,15 +860,30 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                             if (mounted) _resumeStory();
                           },
                           onLongPress: _openReactionPicker,
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.14),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.favorite_border_rounded,
-                                color: Colors.white, size: 22),
-                          ),
+                          child: Builder(builder: (_) {
+                            // Reflect our own reaction — the heart used to be
+                            // a fixed outline, so a registered like looked
+                            // like nothing had happened.
+                            final liked = story.reactionsBy(
+                                    CryptoService.instance.publicKeyHex) >
+                                0;
+                            return Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.14),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                liked
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                color: liked
+                                    ? const Color(0xFFFF4D6D)
+                                    : Colors.white,
+                                size: 22,
+                              ),
+                            );
+                          }),
                         ),
                       ],
                     ],

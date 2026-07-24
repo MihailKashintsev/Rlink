@@ -377,6 +377,8 @@ class VoiceService {
 
   bool _isPlayableMediaPath(String path) {
     if (path.isEmpty) return false;
+    // Remote tracks stream on every platform (catalog links, "Линия").
+    if (path.startsWith('http://') || path.startsWith('https://')) return true;
     if (kIsWeb &&
         (path.startsWith('blob:') ||
             path.startsWith('data:') ||
@@ -446,13 +448,15 @@ class VoiceService {
       debugPrint('[Voice] player error: $e');
       unawaited(_advanceQueue());
     });
-    final source = kIsWeb &&
+    // http(s) must stream on every platform, not just web — profile music can
+    // now be a catalog/shared link rather than a downloaded file.
+    final isRemote = playablePath.startsWith('http://') ||
+        playablePath.startsWith('https://') ||
+        (kIsWeb &&
             (playablePath.startsWith('blob:') ||
-                playablePath.startsWith('data:') ||
-                playablePath.startsWith('http://') ||
-                playablePath.startsWith('https://'))
-        ? UrlSource(playablePath)
-        : DeviceFileSource(playablePath);
+                playablePath.startsWith('data:')));
+    final source =
+        isRemote ? UrlSource(playablePath) : DeviceFileSource(playablePath);
     await _player!.play(source);
   }
 
@@ -552,10 +556,40 @@ class VoiceService {
     }
   }
 
+  /// Repeat the current track instead of advancing (music player toggle).
+  final ValueNotifier<bool> repeatOne = ValueNotifier(false);
+
+  bool get hasNextInQueue => _queuePos + 1 < _queue.length;
+  bool get hasPrevInQueue => _queuePos > 0;
+
+  /// Skip forward in the queue by hand.
+  Future<void> playNextInQueue() async {
+    if (!hasNextInQueue) return;
+    _queuePos++;
+    await _playCurrentItem();
+  }
+
+  /// Back a track; within the first 3 seconds of a track, otherwise restart it
+  /// — the behaviour every player has.
+  Future<void> playPrevInQueue() async {
+    final dur = playDuration.value.inMilliseconds;
+    final posMs = (dur * playProgress.value).round();
+    if (posMs > 3000 || !hasPrevInQueue) {
+      await seekTo(0);
+      return;
+    }
+    _queuePos--;
+    await _playCurrentItem();
+  }
+
   Future<void> _advanceQueue() async {
     if (_advanceInFlight) return;
     _advanceInFlight = true;
     try {
+      if (repeatOne.value && _queue.isNotEmpty) {
+        await _playCurrentItem();
+        return;
+      }
       _queuePos++;
       if (_queuePos >= _queue.length) {
         await stopPlayback();

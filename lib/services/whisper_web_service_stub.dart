@@ -19,6 +19,11 @@ class WhisperWebServiceImpl {
     throw StateError('Whisper is only supported on web platform');
   }
 
+  Future<String> transcribeSegments(String audioPath,
+      {String language = 'ru'}) async {
+    throw StateError('Whisper is only supported on web platform');
+  }
+
   void destroy() {
     _ready = false;
     _lastError = null;

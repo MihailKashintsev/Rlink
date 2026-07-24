@@ -71,7 +71,14 @@ class WhisperWebServiceImpl {
     throw StateError('Whisper init timed out');
   }
 
-  Future<String> transcribe(String audioPath, {String language = 'ru'}) async {
+  Future<String> transcribeSegments(String audioPath,
+          {String language = 'ru'}) =>
+      _call('transcribeSegments', audioPath, language);
+
+  Future<String> transcribe(String audioPath, {String language = 'ru'}) =>
+      _call('transcribe', audioPath, language);
+
+  Future<String> _call(String method, String audioPath, String language) async {
     if (!_ready)
       throw StateError('Whisper not initialized. Call init() first.');
 
@@ -80,7 +87,7 @@ class WhisperWebServiceImpl {
 
     final completer = Completer<String>();
     try {
-      final result = whisper.callMethod('transcribe', [audioPath, language]);
+      final result = whisper.callMethod(method, [audioPath, language]);
       if (result is String) return result;
 
       if (result != null) {

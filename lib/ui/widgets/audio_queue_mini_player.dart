@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../main.dart' show navigatorKey;
 import '../../services/voice_service.dart';
+import '../screens/music_player_screen.dart';
+import '../../services/audio_queue_mini_player_layout.dart';
 
 /// Панель очереди голосовых / аудио / квадратиков; вертикальная позиция задаётся
 /// [AudioQueueMiniPlayerLayout] (под шапкой чата или между фильтрами и списком на главном).
@@ -12,110 +15,131 @@ class AudioQueueMiniPlayer extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    return ValueListenableBuilder<VoicePlaybackSession?>(
-      valueListenable: VoiceService.instance.playbackSession,
-      builder: (_, session, __) {
-        if (session == null) return const SizedBox.shrink();
+    return ValueListenableBuilder<bool>(
+      valueListenable: AudioQueueMiniPlayerLayout.instance.suppressed,
+      builder: (context, suppressed, ___) {
+        if (suppressed) return const SizedBox.shrink();
+        return ValueListenableBuilder<VoicePlaybackSession?>(
+          valueListenable: VoiceService.instance.playbackSession,
+          builder: (_, session, __) {
+            if (session == null) return const SizedBox.shrink();
 
-        IconData kindIcon;
-        switch (session.kind) {
-          case PlaybackMediaKind.voice:
-            kindIcon = Icons.mic_none_rounded;
-            break;
-          case PlaybackMediaKind.audioFile:
-            kindIcon = Icons.audio_file_outlined;
-            break;
-          case PlaybackMediaKind.squareVideo:
-            kindIcon = Icons.videocam_outlined;
-            break;
-        }
+            IconData kindIcon;
+            switch (session.kind) {
+              case PlaybackMediaKind.voice:
+                kindIcon = Icons.mic_none_rounded;
+                break;
+              case PlaybackMediaKind.audioFile:
+                kindIcon = Icons.audio_file_outlined;
+                break;
+              case PlaybackMediaKind.squareVideo:
+                kindIcon = Icons.videocam_outlined;
+                break;
+            }
 
-        // Жёстко фиксируем ширину: MaterialApp.builder в Stack(fit: expand)
-        // на iPhone иногда даёт unbounded width → Row детей переполняет на 200000px.
-        final screenWidth = MediaQuery.of(context).size.width;
-        return SizedBox(
-          width: screenWidth,
-          child: Material(
-          elevation: 3,
-          color: cs.surfaceContainerHigh,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Icon(kindIcon, size: 20, color: cs.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+            // Жёстко фиксируем ширину: MaterialApp.builder в Stack(fit: expand)
+            // на iPhone иногда даёт unbounded width → Row детей переполняет на 200000px.
+            final screenWidth = MediaQuery.of(context).size.width;
+            return SizedBox(
+              width: screenWidth,
+              child: Material(
+                elevation: 3,
+                color: cs.surfaceContainerHigh,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
                         children: [
-                          Text(
-                            session.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (session.total > 1)
-                            Text(
-                              '${session.indexOneBased} из ${session.total}',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: cs.onSurfaceVariant,
+                          Icon(kindIcon, size: 20, color: cs.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            // Tap opens the full-screen player. This widget lives
+                            // ABOVE the Navigator (see the tooltip note below), so
+                            // it pushes through the global navigator key.
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => navigatorKey.currentState?.push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const MusicPlayerScreen(),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    session.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (session.total > 1)
+                                    Text(
+                                      '${session.indexOneBased} из ${session.total}',
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
+                                        color: cs.onSurfaceVariant,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
+                          ),
+                          // Tooltip убран намеренно: AudioQueueMiniPlayer сидит в
+                          // MaterialApp.builder выше Navigator, и RawTooltip
+                          // не может найти Overlay → красный экран.
+                          IconButton(
+                            icon: Icon(
+                              session.isPaused
+                                  ? Icons.play_arrow_rounded
+                                  : Icons.pause_rounded,
+                            ),
+                            onPressed: () async {
+                              if (session.isPaused) {
+                                await VoiceService.instance.resumePlayback();
+                              } else {
+                                await VoiceService.instance.pausePlayback();
+                              }
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () =>
+                                VoiceService.instance.stopPlayback(),
+                          ),
                         ],
                       ),
-                    ),
-                    // Tooltip убран намеренно: AudioQueueMiniPlayer сидит в
-                    // MaterialApp.builder выше Navigator, и RawTooltip
-                    // не может найти Overlay → красный экран.
-                    IconButton(
-                      icon: Icon(
-                        session.isPaused
-                            ? Icons.play_arrow_rounded
-                            : Icons.pause_rounded,
+                      const SizedBox(height: 4),
+                      ValueListenableBuilder<double>(
+                        valueListenable: VoiceService.instance.playProgress,
+                        builder: (_, progress, __) {
+                          final v = progress.isFinite
+                              ? progress.clamp(0.0, 1.0)
+                              : 0.0;
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: v,
+                              minHeight: 3,
+                              backgroundColor:
+                                  cs.onSurface.withValues(alpha: 0.12),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(cs.primary),
+                            ),
+                          );
+                        },
                       ),
-                      onPressed: () async {
-                        if (session.isPaused) {
-                          await VoiceService.instance.resumePlayback();
-                        } else {
-                          await VoiceService.instance.pausePlayback();
-                        }
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () =>
-                          VoiceService.instance.stopPlayback(),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 4),
-                ValueListenableBuilder<double>(
-                  valueListenable: VoiceService.instance.playProgress,
-                  builder: (_, progress, __) {
-                    final v = progress.isFinite ? progress.clamp(0.0, 1.0) : 0.0;
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: v,
-                        minHeight: 3,
-                        backgroundColor:
-                            cs.onSurface.withValues(alpha: 0.12),
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(cs.primary),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
