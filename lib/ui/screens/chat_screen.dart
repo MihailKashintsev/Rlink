@@ -129,6 +129,7 @@ import 'text_selection_view_screen.dart';
 import 'safety_number_screen.dart';
 import '../../models/user_profile.dart';
 import '../widgets/aurora_background.dart';
+import '../widgets/wheel_time_picker.dart';
 import '../widgets/settings_profile_header.dart' show ProfileCard;
 import '../widgets/composer_input_bar.dart';
 import '../widgets/message_actions_overlay.dart';
@@ -2895,7 +2896,7 @@ class _ChatScreenState extends State<ChatScreen> {
     unawaited(_send());
   }
 
-  Future<void> _send() async {
+  Future<void> _send({bool silent = false}) async {
     final text = _controller.text.trim();
     if (text.isEmpty || _isSending) return;
 
@@ -3021,6 +3022,7 @@ class _ChatScreenState extends State<ChatScreen> {
               latitude: isFirst ? lat : null,
               longitude: isFirst ? lng : null,
               replyToMessageId: isFirst ? _replyToMessageId : null,
+              silent: silent,
             );
             debugPrint('[RLINK][Chat] Sent ENCRYPTED msg $msgId');
           } else {
@@ -3413,24 +3415,48 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// Long-press on send: choose how to send (Telegram-style).
+  Future<void> _showSendOptions() async {
+    if (_editingMessageId != null) return;
+    if (_controller.text.trim().isEmpty) return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.notifications_off_outlined),
+              title: const Text('Отправить без звука'),
+              onTap: () => Navigator.pop(ctx, 'silent'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.schedule_outlined),
+              title: const Text('Отправить позже'),
+              onTap: () => Navigator.pop(ctx, 'schedule'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'schedule') {
+      await _scheduleSendDialog();
+    } else if (choice == 'silent') {
+      await _send(silent: true);
+    }
+  }
+
   Future<void> _scheduleSendDialog() async {
     if (_editingMessageId != null) return;
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     final now = DateTime.now();
-    final d = await showDatePicker(
-      context: context,
-      initialDate: now,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: now.add(const Duration(days: 365)),
+    final when = await showWheelDateTimeSheet(
+      context,
+      initial: now.add(const Duration(minutes: 30)),
     );
-    if (d == null || !mounted) return;
-    final t = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(now.add(const Duration(minutes: 1))),
-    );
-    if (t == null || !mounted) return;
-    final when = DateTime(d.year, d.month, d.day, t.hour, t.minute);
+    if (when == null || !mounted) return;
     if (!when.isAfter(now)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -8009,7 +8035,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         : null,
                     locationActive: _pendingLat != null,
                     onSend: _send,
-                    onLongPressSend: _scheduleSendDialog,
+                    onLongPressSend: _showSendOptions,
                     onPickTodo: _isDmBot ? null : _composeAndSendTodo,
                     onPickCalendar: _isDmBot ? null : _composeAndSendCalendar,
                     onOpenMediaGallery: _openMediaGallery,

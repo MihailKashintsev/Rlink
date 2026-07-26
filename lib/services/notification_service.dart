@@ -116,6 +116,8 @@ class NotificationService {
     int? avatarColor,
     String avatarEmoji = '',
     String? avatarImagePath,
+    // When the sender chose "без звука": show the notification, no sound.
+    bool silent = false,
   }) async {
     if (!AppSettings.instance.notificationsEnabled) return;
     if (!AppSettings.instance.notifyPersonal) return;
@@ -144,6 +146,7 @@ class NotificationService {
       body: body,
       payload: 'dm:$peerId',
       threadIdentifier: peerId,
+      silent: silent,
     );
   }
 
@@ -234,6 +237,7 @@ class NotificationService {
     required String body,
     required String payload,
     String? threadIdentifier,
+    bool silent = false,
   }) async {
     // Backstop: never raise an OS/web notification with no body (service/
     // presence packets). Applies to personal/group/channel alike.
@@ -255,12 +259,12 @@ class NotificationService {
         importance: Importance.high,
         priority: Priority.high,
         category: AndroidNotificationCategory.message,
-        playSound: AppSettings.instance.notifSound,
+        playSound: silent ? false : AppSettings.instance.notifSound,
       );
       final darwinDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
-        presentSound: AppSettings.instance.notifSound,
+        presentSound: silent ? false : AppSettings.instance.notifSound,
         threadIdentifier: threadIdentifier,
       );
       final WindowsNotificationDetails? windowsDetails =

@@ -456,6 +456,7 @@ class GossipRouter {
     String? forwardFromNick,
     String? forwardFromChannelId,
     String? emojiAutoPayloadJson,
+    bool silent = false,
   }) async {
     // Безопасность: включаем 8-символьный префикс публичного ключа получателя
     // как поле 'r' в payload. Это позволяет другим узлам отфильтровать пакеты,
@@ -568,6 +569,7 @@ class GossipRouter {
     String? forwardFromNick,
     String? forwardFromChannelId,
     String? emojiAutoPayloadJson,
+    bool silent = false,
   }) async {
     final rid8 = _rid8From(recipientId);
 
@@ -576,6 +578,8 @@ class GossipRouter {
       if (rid8 != null) 'r': rid8,
       if (latitude != null) 'lat': latitude,
       if (longitude != null) 'lng': longitude,
+      // Optional, additive: старые клиенты просто игнорируют ключ.
+      if (silent) 'silent': true,
     };
 
     String? ffnShort(String? n) {
