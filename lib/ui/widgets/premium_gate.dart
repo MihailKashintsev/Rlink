@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/channel_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/premium_service.dart';
-
-/// Where users read what Premium is and how much it costs.
-const _premiumInfoUrl = 'https://rendergames.ru/rlink_premium';
+import '../screens/premium_status_screen.dart';
 
 /// Shown instead of a paid screen when there's no active subscription.
 ///
@@ -57,11 +54,12 @@ class PremiumRequired extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
-                  onPressed: () => launchUrl(
-                    Uri.parse(_premiumInfoUrl),
-                    mode: LaunchMode.externalApplication,
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const PremiumStatusPage()),
                   ),
-                  icon: const Icon(Icons.open_in_new),
+                  icon: const Icon(Icons.workspace_premium_outlined),
                   label: const Text('Оформить — 50 ₽/мес или 500 ₽/год'),
                 ),
                 const SizedBox(height: 10),

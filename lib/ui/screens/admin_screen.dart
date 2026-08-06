@@ -175,10 +175,16 @@ class _AdminScreenState extends State<AdminScreen>
   String? _relayBotsError;
   Timer? _searchDebounce;
 
+  final _premiumIdCtrl = TextEditingController();
+  final _premiumDaysCtrl = TextEditingController(text: '30');
+  List<Map<String, dynamic>> _premiumSubs = const [];
+  bool _premiumLoading = false;
+  String? _premiumError;
+
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 4, vsync: this);
     ChannelService.instance.loadVerificationRequests();
     _searchCtrl.addListener(() {
       final q = _searchCtrl.text.trim().toLowerCase();
@@ -192,6 +198,7 @@ class _AdminScreenState extends State<AdminScreen>
       }
     });
     unawaited(_loadRelayBots());
+    unawaited(_loadPremiumSubs());
   }
 
   @override
@@ -199,6 +206,8 @@ class _AdminScreenState extends State<AdminScreen>
     _searchDebounce?.cancel();
     _tabs.dispose();
     _searchCtrl.dispose();
+    _premiumIdCtrl.dispose();
+    _premiumDaysCtrl.dispose();
     super.dispose();
   }
 
@@ -220,6 +229,7 @@ class _AdminScreenState extends State<AdminScreen>
             Tab(icon: Icon(Icons.verified_outlined), text: 'Заявки'),
             Tab(icon: Icon(Icons.tv_outlined), text: 'Каналы'),
             Tab(icon: Icon(Icons.smart_toy_outlined), text: 'Боты'),
+            Tab(icon: Icon(Icons.workspace_premium_outlined), text: 'Premium'),
           ],
         ),
       ),
@@ -254,6 +264,7 @@ class _AdminScreenState extends State<AdminScreen>
                 _buildRequestsTab(),
                 _buildChannelsTab(),
                 _buildBotsTab(),
+                _buildPremiumTab(),
               ],
             ),
           ),
@@ -663,6 +674,245 @@ class _AdminScreenState extends State<AdminScreen>
     if (mounted) setState(() {});
   }
 
+  // ── Tab 4: Premium ────────────────────────────────────────────
+  // Hands out subscriptions by user id without a payment. The relay stores
+  // them next to the paid ones, so a granted subscription behaves exactly like
+  // a bought one (and stacks with it).
+  Widget _buildPremiumTab() {
+    final cs = Theme.of(context).colorScheme;
+    final filtered = _query.isEmpty
+        ? _premiumSubs
+        : _premiumSubs
+            .where((s) => (s['user_id'] as String? ?? '').contains(_query))
+            .toList();
+    return RefreshIndicator(
+      onRefresh: _loadPremiumSubs,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 24),
+        children: [
+          Text(
+            'Выдача подписки вручную',
+            style: TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Полный ID пользователя (64 hex) — «Полный ID» в его профиле. '
+            'Дни добавляются к оставшемуся сроку.',
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _premiumIdCtrl,
+            decoration: InputDecoration(
+              labelText: 'ID пользователя',
+              hintText: '64 символа 0-9a-f',
+              isDense: true,
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              SizedBox(
+                width: 120,
+                child: TextField(
+                  controller: _premiumDaysCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Дней',
+                    isDense: true,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: _premiumLoading ? null : _grantPremium,
+                icon: const Icon(Icons.add),
+                label: const Text('Выдать'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: _premiumLoading
+                    ? null
+                    : () => _revokePremium(_premiumIdCtrl.text),
+                child: const Text('Снять'),
+              ),
+            ],
+          ),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final d in const [7, 30, 90, 365])
+                ActionChip(
+                  label: Text('$d дн.'),
+                  onPressed: () =>
+                      setState(() => _premiumDaysCtrl.text = '$d'),
+                ),
+            ],
+          ),
+          const Divider(height: 28),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Активные подписки (${_premiumSubs.length})',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700)),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _premiumLoading ? null : _loadPremiumSubs,
+              ),
+            ],
+          ),
+          if (_premiumLoading)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          if (_premiumError != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(_translateBotError(_premiumError!),
+                  style: TextStyle(color: cs.error, fontSize: 13)),
+            ),
+          if (!_premiumLoading && _premiumError == null && filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text('Пока никого',
+                    style: TextStyle(color: cs.onSurfaceVariant)),
+              ),
+            ),
+          for (final s in filtered) _premiumRow(s, cs),
+        ],
+      ),
+    );
+  }
+
+  Widget _premiumRow(Map<String, dynamic> s, ColorScheme cs) {
+    final id = s['user_id'] as String? ?? '';
+    final untilMs = (s['until_ms'] as num?)?.toInt() ?? 0;
+    final until = DateTime.fromMillisecondsSinceEpoch(untilMs);
+    final active = untilMs > DateTime.now().millisecondsSinceEpoch;
+    final left = until.difference(DateTime.now()).inDays;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        active ? Icons.workspace_premium : Icons.history_toggle_off,
+        color: active ? cs.primary : cs.onSurfaceVariant,
+      ),
+      title: Text('${id.substring(0, id.length.clamp(0, 16))}…',
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+      subtitle: Text(
+        '${active ? 'до' : 'истекла'} '
+        '${until.day.toString().padLeft(2, '0')}.'
+        '${until.month.toString().padLeft(2, '0')}.${until.year}'
+        '${active ? ' · $left дн.' : ''}'
+        '${s['source'] == 'admin' ? ' · выдана вручную' : ''}',
+        style: const TextStyle(fontSize: 11),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 20),
+            tooltip: 'Подставить ID в форму',
+            onPressed: () => setState(() => _premiumIdCtrl.text = id),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20),
+            tooltip: 'Снять подписку',
+            onPressed: _premiumLoading ? null : () => _revokePremium(id),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _loadPremiumSubs() async {
+    setState(() {
+      _premiumLoading = true;
+      _premiumError = null;
+    });
+    final data = await RelayService.instance.sendAdminPremium(
+      adminHash: AppSettings.instance.adminPasswordHash,
+      action: 'list',
+    );
+    if (!mounted) return;
+    setState(() {
+      _premiumLoading = false;
+      if (data['ok'] == true) {
+        final raw = data['subs'];
+        _premiumSubs = raw is List
+            ? raw
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : const [];
+      } else {
+        _premiumError = data['error']?.toString() ?? 'request_failed';
+      }
+    });
+  }
+
+  Future<void> _grantPremium() async {
+    final id = _premiumIdCtrl.text.trim().toLowerCase();
+    final days = int.tryParse(_premiumDaysCtrl.text.trim()) ?? 0;
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(id) || days <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Нужен полный ID (64 hex) и число дней больше нуля'),
+      ));
+      return;
+    }
+    setState(() => _premiumLoading = true);
+    final data = await RelayService.instance.sendAdminPremium(
+      adminHash: AppSettings.instance.adminPasswordHash,
+      action: 'grant',
+      userId: id,
+      days: days,
+    );
+    if (!mounted) return;
+    setState(() => _premiumLoading = false);
+    if (data['ok'] == true) {
+      _premiumIdCtrl.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Выдано $days дн.')),
+      );
+      await _loadPremiumSubs();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text(_translateBotError(data['error']?.toString() ?? 'ошибка')),
+      ));
+    }
+  }
+
+  Future<void> _revokePremium(String rawId) async {
+    final id = rawId.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(id)) return;
+    setState(() => _premiumLoading = true);
+    final data = await RelayService.instance.sendAdminPremium(
+      adminHash: AppSettings.instance.adminPasswordHash,
+      action: 'revoke',
+      userId: id,
+    );
+    if (!mounted) return;
+    setState(() => _premiumLoading = false);
+    if (data['ok'] == true) {
+      await _loadPremiumSubs();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text(_translateBotError(data['error']?.toString() ?? 'ошибка')),
+      ));
+    }
+  }
+
   String _translateBotError(String raw) {
     if (raw.contains('forbidden')) {
       return 'Доступ запрещён: убедитесь, что RELAY_ADMIN_HASH настроен на сервере и пароль в приложении совпадает';
@@ -671,6 +921,8 @@ class _AdminScreenState extends State<AdminScreen>
     if (raw.contains('timeout')) return 'Relay не ответил (timeout 20 с)';
     if (raw.contains('bad_admin_hash')) return 'Неверный формат хэша пароля';
     if (raw.contains('bad_bot_id')) return 'Неверный botId';
+    if (raw.contains('bad_user_id')) return 'Неверный ID пользователя (нужно 64 hex)';
+    if (raw.contains('bad_action')) return 'Неизвестное действие';
     if (raw.contains('not_found')) return 'Бот не найден';
     if (raw.contains('empty_patch')) return 'Нечего обновлять';
     return raw;

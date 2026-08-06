@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart'
@@ -781,6 +782,92 @@ class _ChatListScreenState extends State<ChatListScreen>
 
 // ── Animated bottom nav bar (5 tabs) ─────────────────────────────
 
+/// How a nav icon reacts when its tab is selected. One per tab, matched to
+/// what the icon is: the radar sweeps, the tower pulses, the gear turns.
+enum _NavMotion { pop, sweep, pulse, turn }
+
+/// Index -> motion, in the same order the tabs are built.
+const _navMotion = <_NavMotion>[
+  _NavMotion.pop, // чаты
+  _NavMotion.sweep, // рядом
+  _NavMotion.pulse, // эфир
+  _NavMotion.turn, // настройки
+];
+
+/// Plays a short one-shot animation whenever the tab becomes the selected one.
+class _NavIcon extends StatefulWidget {
+  final IconData icon;
+  final bool selected;
+  final Color color;
+  final _NavMotion motion;
+
+  const _NavIcon({
+    required this.icon,
+    required this.selected,
+    required this.color,
+    required this.motion,
+  });
+
+  @override
+  State<_NavIcon> createState() => _NavIconState();
+}
+
+class _NavIconState extends State<_NavIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 460),
+  );
+
+  @override
+  void didUpdateWidget(covariant _NavIcon old) {
+    super.didUpdateWidget(old);
+    if (widget.selected && !old.selected) _c.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Icon(widget.icon, size: 22, color: widget.color);
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        final t = _c.value;
+        if (t == 0 || t == 1) return child!;
+        switch (widget.motion) {
+          // Grows and settles back — a small "here I am".
+          case _NavMotion.pop:
+            return Transform.scale(
+                scale: 1 + 0.30 * math.sin(math.pi * t), child: child);
+          // One full sweep, like the radar it is.
+          case _NavMotion.sweep:
+            return Transform.rotate(
+                angle: 2 * math.pi * Curves.easeOutCubic.transform(t),
+                child: child);
+          // Two quick blips — a signal going out.
+          case _NavMotion.pulse:
+            return Transform.scale(
+                scale: 1 + 0.18 * math.sin(2 * math.pi * t).abs(),
+                child: child);
+          // Gear turns back the other way, overshooting before it settles.
+          // A full turn (not a partial one) so the end state matches the
+          // untransformed icon and nothing snaps when the animation stops.
+          case _NavMotion.turn:
+            return Transform.rotate(
+                angle: -2 * math.pi * Curves.easeOutBack.transform(t),
+                child: child);
+        }
+      },
+      child: icon,
+    );
+  }
+}
+
 class _AnimatedNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
@@ -929,7 +1016,12 @@ class _AnimatedNavBar extends StatelessWidget {
             selected ? cs.primary.withValues(alpha: 0.18) : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Icon(selected ? selectedIcon : icon, size: 22, color: tint),
+      child: _NavIcon(
+        icon: selected ? selectedIcon : icon,
+        selected: selected,
+        color: tint,
+        motion: _navMotion[index],
+      ),
     );
     if (badge != null) {
       iconWidget = ValueListenableBuilder<int>(

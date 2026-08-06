@@ -1282,6 +1282,7 @@ class RelayService with WidgetsBindingObserver {
         case 'admin_bot_list_ack':
         case 'admin_bot_update_ack':
         case 'admin_channel_verify_ack':
+        case 'admin_premium_ack':
           final adminRid = msg['reqId']?.toString() ?? '';
           if (adminRid.isNotEmpty) {
             final c = _adminBotAckCompleters.remove(adminRid);
@@ -1742,6 +1743,50 @@ class RelayService with WidgetsBindingObserver {
         if (verifiedBy.isNotEmpty) 'verifiedBy': verifiedBy,
         'reqId': reqId,
       }, context: 'admin_channel_verify');
+      return await c.future.timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {
+          _adminBotAckCompleters.remove(reqId);
+          return {'ok': false, 'error': 'timeout'};
+        },
+      );
+    } catch (e) {
+      _adminBotAckCompleters.remove(reqId);
+      return {'ok': false, 'error': e.toString()};
+    }
+  }
+
+  /// Relay-админ управляет подписками Premium вручную (без оплаты).
+  /// [action] — 'list' | 'grant' | 'revoke'. При 'grant' [days] добавляются
+  /// к оставшемуся сроку, а не заменяют его.
+  Future<Map<String, dynamic>> sendAdminPremium({
+    required String adminHash,
+    required String action,
+    String userId = '',
+    int days = 0,
+  }) async {
+    if (!isConnected) return {'ok': false, 'error': 'offline'};
+    final h = adminHash.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(h)) {
+      return {'ok': false, 'error': 'bad_admin_hash'};
+    }
+    final uid = userId.trim().toLowerCase();
+    if (action != 'list' && !RegExp(r'^[0-9a-f]{64}$').hasMatch(uid)) {
+      return {'ok': false, 'error': 'bad_user_id'};
+    }
+
+    final reqId = _newBotOwnerReqId();
+    final c = Completer<Map<String, dynamic>>();
+    _adminBotAckCompleters[reqId] = c;
+    try {
+      await _safeSend({
+        'type': 'admin_premium',
+        'adminHash': h,
+        'action': action,
+        if (uid.isNotEmpty) 'userId': uid,
+        if (days > 0) 'days': days,
+        'reqId': reqId,
+      }, context: 'admin_premium');
       return await c.future.timeout(
         const Duration(seconds: 20),
         onTimeout: () {

@@ -13,6 +13,7 @@ import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'oauth.dart';
+import 'premium.dart';
 
 /// ═══════════════════════════════════════════════════════════════════
 /// Rlink Relay Server — Zero-Knowledge WebSocket Relay
@@ -1556,6 +1557,56 @@ void _handleAdminChannelVerify(_User user, Map<String, dynamic> msg) {
   ack({'ok': true, 'channelId': channelId, 'verified': verified});
 }
 
+/// Relay-admin hands out (or revokes) Premium by user id, no payment involved.
+/// Granting stacks days onto whatever time is left, so topping someone up
+/// early never shortens their subscription.
+void _handleAdminPremium(_User user, Map<String, dynamic> msg) {
+  final reqId = _jsonString(msg['reqId']);
+  void ack(Map<String, dynamic> extra) {
+    try {
+      user.ws.sink.add(jsonEncode({
+        'type': 'admin_premium_ack',
+        if (reqId.isNotEmpty) 'reqId': reqId,
+        ...extra,
+      }));
+    } catch (_) {}
+  }
+
+  if (!_isAdminHashValid(_jsonString(msg['adminHash']))) {
+    ack({'ok': false, 'error': 'forbidden'});
+    return;
+  }
+
+  final action = _jsonString(msg['action']);
+  if (action == 'list') {
+    ack({'ok': true, 'subs': premiumAll()});
+    return;
+  }
+
+  final userId = _jsonString(msg['userId']).trim().toLowerCase();
+  if (action == 'revoke') {
+    if (!adminRevokePremium(userId)) {
+      ack({'ok': false, 'error': 'bad_user_id'});
+      return;
+    }
+    stdout.writeln('[RLINK][Relay] admin_premium revoke $userId');
+    ack({'ok': true, 'userId': userId, 'untilMs': 0});
+    return;
+  }
+  if (action == 'grant') {
+    final days = (msg['days'] as num?)?.toInt() ?? 0;
+    final until = adminGrantPremium(userId, days);
+    if (until < 0) {
+      ack({'ok': false, 'error': 'bad_user_id_or_days'});
+      return;
+    }
+    stdout.writeln('[RLINK][Relay] admin_premium grant $userId +${days}d');
+    ack({'ok': true, 'userId': userId, 'untilMs': until});
+    return;
+  }
+  ack({'ok': false, 'error': 'bad_action'});
+}
+
 Future<void> _handleChannelDirPutAsync(
   _User user,
   Map<String, dynamic> msg,
@@ -2025,6 +2076,9 @@ void _handleMessage(_User user, dynamic raw) {
       break;
     case 'admin_channel_verify':
       _handleAdminChannelVerify(user, msg);
+      break;
+    case 'admin_premium':
+      _handleAdminPremium(user, msg);
       break;
     case 'admin_password_update':
       _handleAdminPasswordUpdate(user, msg);
@@ -2698,6 +2752,9 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
   // Durable Google Drive linking: /oauth/google/{start,callback,token}.
   final oauthResp = await handleGoogleOauth(request);
   if (oauthResp != null) return oauthResp;
+  // Premium subscriptions: /premium/{create,check,webhook,status}.
+  final premiumResp = await handlePremium(request);
+  if (premiumResp != null) return premiumResp;
   if (request.url.path == 'push/public_key') {
     if (!_webPushConfigured) {
       return _jsonResponse({'enabled': false, 'publicKey': ''}, status: 503);
