@@ -783,14 +783,14 @@ class _ChatListScreenState extends State<ChatListScreen>
 // ── Animated bottom nav bar (5 tabs) ─────────────────────────────
 
 /// How a nav icon reacts when its tab is selected. One per tab, matched to
-/// what the icon is: the radar sweeps, the tower pulses, the gear turns.
-enum _NavMotion { pop, sweep, pulse, turn }
+/// what the icon is: the radar sweeps, the tower broadcasts, the gear turns.
+enum _NavMotion { pop, sweep, waves, turn }
 
 /// Index -> motion, in the same order the tabs are built.
 const _navMotion = <_NavMotion>[
   _NavMotion.pop, // чаты
   _NavMotion.sweep, // рядом
-  _NavMotion.pulse, // эфир
+  _NavMotion.waves, // эфир
   _NavMotion.turn, // настройки
 ];
 
@@ -816,7 +816,9 @@ class _NavIconState extends State<_NavIcon>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 460),
+    // Waves want a touch longer to read as a broadcast; the rest stay snappy.
+    duration: Duration(
+        milliseconds: widget.motion == _NavMotion.waves ? 1300 : 460),
   );
 
   @override
@@ -833,6 +835,22 @@ class _NavIconState extends State<_NavIcon>
 
   @override
   Widget build(BuildContext context) {
+    // Эфир is drawn from scratch (mast + animated side waves) so the waves
+    // radiate from the sides instead of the Material glyph's static ones.
+    if (widget.motion == _NavMotion.waves) {
+      return AnimatedBuilder(
+        animation: _c,
+        // Ease-out so the last wave decelerates into the resting icon instead
+        // of stopping dead at full speed — no abrupt cut at the end.
+        builder: (context, _) => CustomPaint(
+          size: const Size(22, 22),
+          painter: _TowerPainter(
+            progress: Curves.easeOutCubic.transform(_c.value),
+            color: widget.color,
+          ),
+        ),
+      );
+    }
     final icon = Icon(widget.icon, size: 22, color: widget.color);
     return AnimatedBuilder(
       animation: _c,
@@ -849,11 +867,6 @@ class _NavIconState extends State<_NavIcon>
             return Transform.rotate(
                 angle: 2 * math.pi * Curves.easeOutCubic.transform(t),
                 child: child);
-          // Two quick blips — a signal going out.
-          case _NavMotion.pulse:
-            return Transform.scale(
-                scale: 1 + 0.18 * math.sin(2 * math.pi * t).abs(),
-                child: child);
           // Gear turns back the other way, overshooting before it settles.
           // A full turn (not a partial one) so the end state matches the
           // untransformed icon and nothing snaps when the animation stops.
@@ -861,11 +874,82 @@ class _NavIconState extends State<_NavIcon>
             return Transform.rotate(
                 angle: -2 * math.pi * Curves.easeOutBack.transform(t),
                 child: child);
+          case _NavMotion.waves:
+            return child!; // handled above
         }
       },
       child: icon,
     );
   }
+}
+
+/// The Эфир icon: a broadcast mast whose signal arcs radiate outward from each
+/// side of the antenna. At rest ([progress] 0) two arcs sit close on each side
+/// like a normal tower; while selected they travel out and fade, new ones
+/// emerging behind — a broadcasting pulse. Ends exactly where it started
+/// (phase wraps on 1) so nothing snaps.
+class _TowerPainter extends CustomPainter {
+  final double progress; // 0 at rest, 0..1 while animating
+  final Color color;
+
+  _TowerPainter({required this.progress, required this.color});
+
+  static const _wavesPerSide = 2;
+  static const _sweep = 95 * math.pi / 180; // arc opening on each side
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final cx = w / 2;
+    final tip = Offset(cx, h * 0.24); // antenna top — waves emit from here
+    final footY = h * 0.82;
+    final legY = h * 0.34;
+    final fx = w * 0.16;
+
+    final line = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = w * 0.09
+      ..color = color;
+
+    // Mast: antenna dot, two splayed legs, one crossbar.
+    canvas.drawCircle(tip, w * 0.065, Paint()..color = color);
+    canvas.drawLine(Offset(cx, legY), Offset(cx - fx, footY), line);
+    canvas.drawLine(Offset(cx, legY), Offset(cx + fx, footY), line);
+    final barY = h * 0.60;
+    final barHalf = fx * (barY - legY) / (footY - legY);
+    canvas.drawLine(
+        Offset(cx - barHalf, barY), Offset(cx + barHalf, barY), line);
+
+    // Side waves: `)` on the right, `(` on the left, emitted from the tip.
+    final rInner = w * 0.18;
+    final rOuter = w * 0.46;
+    final wave = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = w * 0.075;
+    for (final side in const [-1, 1]) {
+      final centreAngle = side == 1 ? 0.0 : math.pi; // east / west
+      for (var k = 0; k < _wavesPerSide; k++) {
+        // *2 → two emission cycles per selection; wraps back to rest at 1.
+        final phase = (progress * 2 + k / _wavesPerSide) % 1.0;
+        final r = rInner + (rOuter - rInner) * phase;
+        wave.color = color.withValues(alpha: 1 - phase * 0.8);
+        canvas.drawArc(
+          Rect.fromCircle(center: tip, radius: r),
+          centreAngle - _sweep / 2,
+          _sweep,
+          false,
+          wave,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TowerPainter old) =>
+      old.progress != progress || old.color != color;
 }
 
 class _AnimatedNavBar extends StatelessWidget {
