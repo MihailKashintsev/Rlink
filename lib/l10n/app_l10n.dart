@@ -385,6 +385,9 @@ class AppL10n {
     'about_description':
         'Rlink — децентрализованный мессенджер на Bluetooth LE. Общайся без интернета и серверов, напрямую между устройствами.',
     'about_developer': 'Разработчик',
+    'about_legal': 'Правовая информация',
+    'about_privacy_policy': 'Политика конфиденциальности',
+    'about_offer': 'Публичная оферта',
     'about_website': 'Сайт',
     'about_telegram': 'Telegram-канал',
     'about_support': 'Поддержать проект',
@@ -897,6 +900,9 @@ class AppL10n {
     'about_description':
         'Rlink is a decentralized Bluetooth LE messenger. Chat without internet or servers, device-to-device.',
     'about_developer': 'Developer',
+    'about_legal': 'Legal',
+    'about_privacy_policy': 'Privacy Policy',
+    'about_offer': 'Public Offer',
     'about_website': 'Website',
     'about_telegram': 'Telegram Channel',
     'about_support': 'Support the project',
@@ -1405,6 +1411,9 @@ class AppL10n {
     'about_description':
         'Rlink es un mensajero Bluetooth LE descentralizado. Chatea sin internet ni servidores, de dispositivo a dispositivo.',
     'about_developer': 'Desarrollador',
+    'about_legal': 'Información legal',
+    'about_privacy_policy': 'Política de privacidad',
+    'about_offer': 'Oferta pública',
     'about_website': 'Sitio web',
     'about_telegram': 'Canal de Telegram',
     'about_support': 'Apoyar el proyecto',
@@ -1913,6 +1922,9 @@ class AppL10n {
     'about_description':
         'Rlink ist ein dezentraler Bluetooth-LE-Messenger. Chatten ohne Internet und Server, von Gerät zu Gerät.',
     'about_developer': 'Entwickler',
+    'about_legal': 'Rechtliches',
+    'about_privacy_policy': 'Datenschutzrichtlinie',
+    'about_offer': 'Öffentliches Angebot',
     'about_website': 'Website',
     'about_telegram': 'Telegram-Kanal',
     'about_support': 'Projekt unterstützen',
@@ -2421,6 +2433,9 @@ class AppL10n {
     'about_description':
         'Rlink est une messagerie Bluetooth LE décentralisée. Discutez sans Internet ni serveurs, d\'appareil à appareil.',
     'about_developer': 'Développeur',
+    'about_legal': 'Mentions légales',
+    'about_privacy_policy': 'Politique de confidentialité',
+    'about_offer': 'Offre publique',
     'about_website': 'Site web',
     'about_telegram': 'Chaîne Telegram',
     'about_support': 'Soutenir le projet',
@@ -2929,6 +2944,9 @@ class AppL10n {
     'about_description':
         'Rlink — децентралізований месенджер на Bluetooth LE. Спілкуйся без інтернету та серверів, напряму між пристроями.',
     'about_developer': 'Розробник',
+    'about_legal': 'Правова інформація',
+    'about_privacy_policy': 'Політика конфіденційності',
+    'about_offer': 'Публічна оферта',
     'about_website': 'Сайт',
     'about_telegram': 'Канал Telegram',
     'about_support': 'Підтримати проєкт',
@@ -3434,6 +3452,9 @@ class AppL10n {
     'about_description':
         'Rlink 是去中心化的蓝牙低功耗即时通讯。无需互联网和服务器，设备直连。',
     'about_developer': '开发者',
+    'about_legal': '法律信息',
+    'about_privacy_policy': '隐私政策',
+    'about_offer': '公开要约',
     'about_website': '网站',
     'about_telegram': 'Telegram 频道',
     'about_support': '支持项目',

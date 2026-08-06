@@ -24,6 +24,8 @@ class _AboutScreenState extends State<AboutScreen> {
   static const _boostyUrl =
       'https://boosty.to/rendergamesru/purchase/3242287?ssource=DIRECT&share=subscription_link';
   static const _githubUrl = 'https://github.com/MihailKashintsev/';
+  static const _privacyUrl = 'https://rendergames.ru/rlink_politic';
+  static const _offerUrl = 'https://rendergames.ru/offert';
 
   Future<void> _open(BuildContext context, String url) async {
     final uri = Uri.parse(url);
@@ -153,6 +155,23 @@ class _AboutScreenState extends State<AboutScreen> {
             title: AppL10n.t('about_github'),
             subtitle: 'github.com/MihailKashintsev',
             onTap: () => _open(context, _githubUrl),
+          ),
+
+          // ── Legal ────────────────────────────────────────────────
+          _SectionHeader(AppL10n.t('about_legal')),
+          _LinkTile(
+            icon: Icons.privacy_tip_outlined,
+            iconColor: const Color(0xFF4CAF50),
+            title: AppL10n.t('about_privacy_policy'),
+            subtitle: 'rendergames.ru/rlink_politic',
+            onTap: () => _open(context, _privacyUrl),
+          ),
+          _LinkTile(
+            icon: Icons.description_outlined,
+            iconColor: const Color(0xFF9C27B0),
+            title: AppL10n.t('about_offer'),
+            subtitle: 'rendergames.ru/offert',
+            onTap: () => _open(context, _offerUrl),
           ),
 
           // ── Developer (16× tap → пароль админ-панели) ─────────────
