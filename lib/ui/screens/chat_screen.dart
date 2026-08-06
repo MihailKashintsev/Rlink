@@ -129,6 +129,7 @@ import 'text_selection_view_screen.dart';
 import 'safety_number_screen.dart';
 import '../../models/user_profile.dart';
 import '../widgets/aurora_background.dart';
+import '../widgets/nick_text.dart';
 import '../widgets/wheel_time_picker.dart';
 import '../widgets/settings_profile_header.dart' show ProfileCard;
 import '../widgets/composer_input_bar.dart';
@@ -850,6 +851,18 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     return '';
+  }
+
+  /// Premium-цвет имени собеседника (пришёл с его профилем).
+  int? _peerNickColor() {
+    final contacts = ChatStorageService.instance.contactsNotifier.value;
+    for (final c in contacts) {
+      if (c.publicKeyHex == _resolvedPeerId ||
+          c.publicKeyHex == widget.peerId) {
+        return c.nickColor;
+      }
+    }
+    return null;
   }
 
   /// Квадратное видеосообщение (камера): только суффикс имени файла `_sq.mp4`.
@@ -6983,9 +6996,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                         child: GestureDetector(
                                           behavior: HitTestBehavior.opaque,
                                           onTap: _openPeerProfile,
-                                          child: Text(widget.peerNickname,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                          child: NickText(widget.peerNickname,
+                                              nickColor: _peerNickColor(),
                                               style: const TextStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w600)),
@@ -7493,6 +7505,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   CryptoService.instance.x25519PublicKeyBase64,
                               tags: myProfile.tags,
                               statusEmoji: myProfile.statusEmoji,
+                              nickColor: myProfile.nickColor,
                             );
                           }
                           if (context.mounted) {

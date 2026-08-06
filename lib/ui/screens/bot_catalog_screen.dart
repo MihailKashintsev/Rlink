@@ -8,6 +8,8 @@ import '../../services/bot_blueprint_store.dart';
 import '../../services/chat_storage_service.dart';
 import '../rlink_nav_routes.dart';
 import 'bot_builder_screen.dart';
+import '../../services/premium_service.dart';
+import '../widgets/premium_gate.dart';
 import 'bot_developer_guide_screen.dart';
 import 'chat_screen.dart';
 
@@ -37,7 +39,14 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
   Future<void> _openBuilder({BotBlueprint? existing}) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => BotBuilderScreen(existing: existing)),
+      MaterialPageRoute(
+          builder: (_) => PremiumGate(
+                feature: PremiumFeature.botBuilder,
+                title: 'Конструктор ботов',
+                description:
+                    'Создание ботов в no-code конструкторе входит в Rlink Premium.',
+                child: BotBuilderScreen(existing: existing),
+              )),
     );
     await _loadMyBots();
   }

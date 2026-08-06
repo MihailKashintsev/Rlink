@@ -1,0 +1,179 @@
+<!--
+  Rlink Premium — страница подписки для Tilda (RU + EN в одном коде,
+  переключатель языка и светлой/тёмной темы).
+
+  Как использовать:
+  1. В Tilda добавьте блок «T123» (HTML-код) или Zero Block → Embed и вставьте
+     ВЕСЬ этот файл.
+  2. Перед отправкой ссылки в ЮKassa подставьте свои: реквизиты продавца,
+     ссылку на оферту, e-mail поддержки. Цены и условия уже проставлены.
+  3. Опубликуйте страницу — её URL и есть ответ службе безопасности ЮKassa.
+-->
+<meta charset="utf-8">
+<div class="rlink-premium" id="rlink-premium" data-lang="ru">
+  <div class="rp-inner">
+  <div class="rp-toolbar">
+    <button type="button" class="rp-tgl" id="rp-lang">EN</button>
+    <button type="button" class="rp-tgl" id="rp-theme">🌙</button>
+  </div>
+
+  <div class="rp-head">
+    <div class="rp-badge">Rlink Premium</div>
+    <h2 class="rp-title"
+        data-ru="Подписка Rlink Premium"
+        data-en="Rlink Premium subscription">Подписка Rlink Premium</h2>
+    <p class="rp-sub"
+       data-ru="Несколько платных возможностей — всё остальное в Rlink бесплатно для всех. Оплата разовая за выбранный период."
+       data-en="A few paid features — everything else in Rlink is free for everyone. One-time payment for the chosen period."
+    >Несколько платных возможностей — всё остальное в Rlink бесплатно для всех. Оплата разовая за выбранный период.</p>
+  </div>
+
+  <div class="rp-plans">
+    <div class="rp-plan">
+      <div class="rp-plan-name" data-ru="Месяц" data-en="Monthly">Месяц</div>
+      <div class="rp-price"><span class="rp-amount">50</span> ₽<span class="rp-per" data-ru="/ мес" data-en="/ mo">/ мес</span></div>
+      <a class="rp-buy" href="#" data-ru="Оформить на месяц" data-en="Subscribe monthly">Оформить на месяц</a>
+    </div>
+    <div class="rp-plan rp-best">
+      <div class="rp-tag" data-ru="Выгоднее" data-en="Best value">Выгоднее</div>
+      <div class="rp-plan-name" data-ru="Год" data-en="Yearly">Год</div>
+      <div class="rp-price"><span class="rp-amount">500</span> ₽<span class="rp-per" data-ru="/ год" data-en="/ yr">/ год</span></div>
+      <div class="rp-note" data-ru="≈ 42 ₽ в месяц · экономия 100 ₽" data-en="≈ 42 ₽ per month · save 100 ₽">≈ 42 ₽ в месяц · экономия 100 ₽</div>
+      <a class="rp-buy rp-buy-primary" href="#" data-ru="Оформить на год" data-en="Subscribe yearly">Оформить на год</a>
+    </div>
+  </div>
+
+  <div class="rp-features">
+    <div class="rp-features-title" data-ru="Что даёт Premium" data-en="What Premium gives">Что даёт Premium</div>
+    <ul>
+      <li data-ru="Свой цвет ника — его видят все ваши собеседники"
+          data-en="A custom nickname colour — visible to everyone you chat with">Свой цвет ника — его видят все ваши собеседники</li>
+      <li data-ru="Возможность создавать больше двух каналов"
+          data-en="Create more than two channels">Возможность создавать больше двух каналов</li>
+      <li data-ru="Создание ботов в no-code конструкторе прямо в мессенджере"
+          data-en="Build bots in the no-code constructor right inside the messenger">Создание ботов в no-code конструкторе прямо в мессенджере</li>
+    </ul>
+    <p class="rp-free"
+       data-ru="Все остальные функции Rlink — бесплатны для всех пользователей."
+       data-en="Every other Rlink feature is free for all users.">Все остальные функции Rlink — бесплатны для всех пользователей.</p>
+  </div>
+
+  <div class="rp-legal">
+    <span data-ru="Продавец: самозанятый Кашинцев М. С., ИНН 504793745306. Оплата через ЮKassa."
+          data-en="Seller: M. S. Kashintsev (self-employed, NPD), INN 504793745306. Payments via YooKassa.">Продавец: самозанятый Кашинцев М. С., ИНН 504793745306. Оплата через ЮKassa.</span><br>
+    <a href="http://rendergames.ru/offert" data-ru="Публичная оферта" data-en="Public offer">Публичная оферта</a> ·
+    <a href="https://rendergames.ru/rlink_politic" data-ru="Политика конфиденциальности" data-en="Privacy policy">Политика конфиденциальности</a> ·
+    <span data-ru="Поддержка:" data-en="Support:">Поддержка:</span>
+    <a href="mailto:rendergamesru@vk.com">rendergamesru@vk.com</a>
+  </div>
+  </div>
+</div>
+
+<style>
+  #rlink-premium {
+    --bg: #ffffff;
+    --card: #f4f8f5;
+    --text: #10241a;
+    --muted: #6b7a72;
+    --sub: #4a5a52;
+    --border: #d7e2db;
+    --panel: #f4f8f5;
+    --accent: #1DB954;
+    --accent-ink: #128a3e;
+    /* Full-bleed: break out of Tilda's container so no page background shows
+       around the block; the content stays centred in .rp-inner. */
+    width: 100vw; margin-left: calc(50% - 50vw);
+    min-height: 100vh; box-sizing: border-box; padding: 28px 16px;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--text);
+  }
+  .rp-inner { max-width: 760px; margin: 0 auto; position: relative; }
+  @media (prefers-color-scheme: dark) {
+    #rlink-premium:not([data-theme="light"]) {
+      --bg: #0f1613; --card: #17211c; --text: #e6efe9; --muted: #9fb0a7;
+      --sub: #b7c6bd; --border: #2c3a32; --panel: #17211c;
+    }
+  }
+  #rlink-premium[data-theme="dark"] {
+    --bg: #0f1613; --card: #17211c; --text: #e6efe9; --muted: #9fb0a7;
+    --sub: #b7c6bd; --border: #2c3a32; --panel: #17211c;
+  }
+  .rp-toolbar { position: absolute; top: 6px; right: 8px; display: flex; gap: 6px; }
+  .rp-tgl {
+    border: 1px solid var(--border); background: var(--card); color: var(--text);
+    border-radius: 8px; padding: 4px 10px; font-size: 13px; font-weight: 700;
+    cursor: pointer; line-height: 1;
+  }
+  .rp-head { text-align: center; margin: 16px 0 22px; }
+  .rp-badge {
+    display: inline-block; padding: 4px 12px; border-radius: 999px;
+    background: rgba(29,185,84,.13); color: var(--accent-ink);
+    font-weight: 700; font-size: 13px; letter-spacing: .3px;
+  }
+  .rp-title { margin: 12px 0 6px; font-size: 28px; font-weight: 800; }
+  .rp-sub { margin: 0 auto; max-width: 540px; color: var(--sub); font-size: 15px; line-height: 1.5; }
+  .rp-plans { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin: 8px 0 24px; }
+  .rp-plan {
+    position: relative; flex: 1 1 240px; max-width: 320px;
+    border: 1px solid var(--border); border-radius: 18px; padding: 22px 20px;
+    text-align: center; background: var(--card);
+  }
+  .rp-best { border-color: var(--accent); box-shadow: 0 8px 24px rgba(29,185,84,.13); }
+  .rp-tag {
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: #fff; font-size: 12px; font-weight: 700;
+    padding: 3px 12px; border-radius: 999px;
+  }
+  .rp-plan-name { font-size: 15px; color: var(--muted); font-weight: 600; }
+  .rp-price { margin: 10px 0; font-size: 20px; color: var(--text); }
+  .rp-amount { font-size: 40px; font-weight: 800; }
+  .rp-per { font-size: 15px; color: var(--muted); }
+  .rp-note { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .rp-buy {
+    display: inline-block; width: 100%; box-sizing: border-box; padding: 12px 0;
+    border-radius: 12px; text-decoration: none; font-weight: 700; font-size: 15px;
+    margin-top: 8px; border: 1px solid var(--accent); color: var(--accent-ink);
+  }
+  .rp-buy-primary { background: var(--accent); color: #fff; }
+  .rp-features { max-width: 520px; margin: 0 auto 20px; padding: 20px 22px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; }
+  .rp-features-title { font-weight: 800; font-size: 16px; margin-bottom: 10px; }
+  .rp-features ul { margin: 0; padding-left: 20px; line-height: 1.8; color: var(--text); }
+  .rp-free { margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+  .rp-legal { max-width: 640px; margin: 0 auto; text-align: center; font-size: 12px; color: var(--muted); line-height: 1.8; }
+  .rp-legal a { color: var(--accent-ink); }
+</style>
+
+<script>
+  (function () {
+    var root = document.getElementById('rlink-premium');
+    if (!root) return;
+    var langBtn = root.querySelector('#rp-lang');
+    var themeBtn = root.querySelector('#rp-theme');
+
+    function setLang(l) {
+      root.setAttribute('data-lang', l);
+      root.querySelectorAll('[data-' + l + ']').forEach(function (el) {
+        el.textContent = el.getAttribute('data-' + l);
+      });
+      langBtn.textContent = l === 'ru' ? 'EN' : 'RU';
+    }
+    function setTheme(t) {
+      root.setAttribute('data-theme', t);
+      themeBtn.textContent = t === 'dark' ? '☀' : '🌙';
+    }
+
+    langBtn.addEventListener('click', function () {
+      setLang(root.getAttribute('data-lang') === 'ru' ? 'en' : 'ru');
+    });
+    themeBtn.addEventListener('click', function () {
+      setTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+
+    // Initial theme follows the visitor's OS preference.
+    var prefersDark = window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setTheme(prefersDark ? 'dark' : 'light');
+    setLang('ru');
+  })();
+</script>

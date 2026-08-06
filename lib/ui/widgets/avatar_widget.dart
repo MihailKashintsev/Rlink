@@ -94,7 +94,12 @@ class AvatarWidget extends StatelessWidget {
     // decode при заезде строки в список и раздутый image-cache (GC-фризы) —
     // главная причина лагов при скролле списка чатов.
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final decodeSide = (innerSize * dpr).round().clamp(1, 4096);
+    // Quantise the decode size: while the profile header animates, innerSize
+    // changes every frame, and a fresh cacheWidth per frame re-decodes the
+    // image each time — that was the flicker and the jank. Rounding to 64px
+    // steps keeps one cached decode for the whole animation.
+    final rawSide = innerSize * dpr;
+    final decodeSide = ((rawSide / 64).ceil() * 64).clamp(1, 4096);
 
     final radius = BorderRadius.circular(cornerRadius ?? innerSize / 2);
     Widget avatar = Container(
@@ -112,6 +117,7 @@ class AvatarWidget extends StatelessWidget {
                 width: innerSize,
                 height: innerSize,
                 fit: BoxFit.cover,
+                gaplessPlayback: true,
                 cacheWidth: decodeSide,
                 cacheHeight: decodeSide,
                 errorBuilder: (_, __, ___) => Center(
@@ -124,6 +130,7 @@ class AvatarWidget extends StatelessWidget {
                     width: innerSize,
                     height: innerSize,
                     fit: BoxFit.cover,
+                    gaplessPlayback: true,
                     cacheWidth: decodeSide,
                     cacheHeight: decodeSide,
                     errorBuilder: (_, __, ___) => Center(

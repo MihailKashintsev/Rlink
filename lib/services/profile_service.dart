@@ -179,6 +179,9 @@ class ProfileService {
     String? bannerImagePath,
     String? profileMusicPath,
     String? statusEmoji,
+    /// true — записать [nickColor] (в т.ч. null, чтобы сбросить цвет).
+    bool setNickColor = false,
+    int? nickColor,
   }) async {
     if (_profile == null) throw StateError('No profile');
     // Always use the current CryptoService key to prevent divergence
@@ -200,6 +203,7 @@ class ProfileService {
       bannerImagePath: bannerImagePath ?? _profile!.bannerImagePath,
       profileMusicPath: profileMusicPath ?? _profile!.profileMusicPath,
       statusEmoji: nextStatus,
+      nickColor: setNickColor ? nickColor : _profile!.nickColor,
     );
     await _write(updated.encode());
     _profile = updated;

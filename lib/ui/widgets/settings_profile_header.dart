@@ -78,14 +78,12 @@ class ProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final listenable = pull;
     if (listenable == null) return _build(context, 0);
+    // Follow the drag value directly. A TweenAnimationBuilder here restarted
+    // its animation on every scroll event, which made the avatar stutter and
+    // the image flicker as it was rebuilt mid-tween.
     return ValueListenableBuilder<double>(
       valueListenable: listenable,
-      builder: (context, target, _) => TweenAnimationBuilder<double>(
-        tween: Tween<double>(end: target),
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOut,
-        builder: (context, t, __) => _build(context, t),
-      ),
+      builder: (context, t, _) => _build(context, t),
     );
   }
 

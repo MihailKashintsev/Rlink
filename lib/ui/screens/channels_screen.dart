@@ -24,6 +24,7 @@ import '../../utils/channel_mentions.dart';
 import '../../utils/external_message_share.dart';
 import '../../utils/rlink_deep_link.dart';
 import '../../services/app_settings.dart';
+import '../widgets/premium_gate.dart';
 import '../../services/broadcast_outbox_service.dart';
 import '../../services/channel_backup_service.dart';
 import '../../services/google_drive_channel_backup.dart';
@@ -551,7 +552,9 @@ class _ChannelsScreenState extends State<ChannelsScreen>
     );
   }
 
-  void _createChannel() {
+  void _createChannel() async {
+    if (!await allowNewChannel(context)) return;
+    if (!mounted) return;
     if (AppSettings.instance.isLinkedChildDevice) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

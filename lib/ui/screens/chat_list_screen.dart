@@ -34,12 +34,14 @@ import '../../services/audio_queue_mini_player_layout.dart';
 import '../../services/platform_capabilities.dart';
 import '../../services/wifi_direct_service.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/nick_text.dart';
 import '../widgets/avatar_viewer.dart';
 import '../widgets/profile_quick_edit.dart';
 import '../widgets/settings_profile_header.dart';
 import '../widgets/profile_photo_actions.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/mesh_radar_widget.dart';
+import '../widgets/premium_gate.dart';
 import '../widgets/status_emoji_view.dart';
 import '../widgets/update_available_banner.dart';
 import '../../utils/message_preview_formatter.dart'
@@ -166,7 +168,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     });
   }
 
-  void _createChannel() {
+  void _createChannel() async {
     if (!AppSettings.instance.channelsEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -175,6 +177,8 @@ class _ChatListScreenState extends State<ChatListScreen>
       );
       return;
     }
+    if (!await allowNewChannel(context)) return;
+    if (!mounted) return;
     final nameCtrl = TextEditingController();
     final usernameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
@@ -1063,30 +1067,52 @@ class _MeTabState extends State<_MeTab> {
   // and (on desktop) by the wheel once the list sits at the top.
   final _pull = ValueNotifier<double>(0);
   final _listCtrl = ScrollController();
-  Timer? _snapTimer;
   static const double _pullSpan = 130;
 
   @override
   void dispose() {
-    _snapTimer?.cancel();
     _listCtrl.dispose();
     _pull.dispose();
     super.dispose();
   }
 
-  void _snap() => _pull.value = _pull.value > 0.4 ? 1 : 0; // magnet
+  // Sticky: once opened the header STAYS open until the user scrolls down.
+  // Snapping on scroll-end used to slam it shut the instant the gesture ended.
+  bool _open = false;
+
+  void _setPull(double v) {
+    final next = v.clamp(0.0, 1.0);
+    if ((next - _pull.value).abs() < 0.002) return;
+    _pull.value = next;
+  }
 
   bool _onScroll(ScrollNotification n) {
     if (n.depth != 0) return false;
-    if (n is ScrollEndNotification) {
-      _snap();
+    final px = n.metrics.pixels;
+    if (px > 4) {
+      // Scrolling down the list is the ONLY thing that closes it.
+      if (_open || _pull.value != 0) {
+        _open = false;
+        _setPull(0);
+      }
       return false;
     }
-    final px = n.metrics.pixels;
-    if (px <= 0) {
-      _pull.value = (-px / _pullSpan).clamp(0.0, 1.0);
-    } else if (_pull.value != 0) {
-      _pull.value = 0; // scrolled down → collapse
+    if (px < 0) {
+      final t = -px / _pullSpan;
+      if (t >= 1) _open = true;
+      _setPull(_open ? 1 : t);
+      return false;
+    }
+    if (n is ScrollEndNotification) {
+      if (!_open && _pull.value > 0.45) {
+        _open = true; // released past the threshold — latch open
+        _setPull(1);
+      } else if (!_open) {
+        _setPull(0);
+      }
+    } else if (_open) {
+      // Bouncing physics springs pixels back to 0; keep the latched state.
+      _setPull(1);
     }
     return false;
   }
@@ -1098,15 +1124,16 @@ class _MeTabState extends State<_MeTab> {
     final dy = e.scrollDelta.dy;
     final atTop = !_listCtrl.hasClients || _listCtrl.position.pixels <= 0;
     if (dy < 0 && atTop) {
-      _pull.value = (_pull.value + -dy / _pullSpan).clamp(0.0, 1.0);
+      final next = _pull.value + -dy / _pullSpan;
+      _setPull(next);
+      if (next >= 1) _open = true;
     } else if (dy > 0 && _pull.value > 0) {
-      _pull.value = (_pull.value - dy / _pullSpan).clamp(0.0, 1.0);
-    } else {
-      return;
+      final next = _pull.value - dy / _pullSpan;
+      _setPull(next);
+      if (next <= 0) _open = false;
     }
-    // No "finger up" with a wheel — settle shortly after it stops.
-    _snapTimer?.cancel();
-    _snapTimer = Timer(const Duration(milliseconds: 180), _snap);
+    // No settle timer: the header holds where the wheel left it. The old timer
+    // made it flick shut on its own right after the gesture.
   }
 
   @override
@@ -1643,6 +1670,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
             ? c.nickname
             : '${c.publicKeyHex.substring(0, 8)}...',
         avatarColor: c.avatarColor,
+        nickColor: c.nickColor,
         avatarEmoji: c.avatarEmoji,
         avatarImagePath: c.avatarImagePath,
         statusEmoji: c.statusEmoji,
@@ -2483,15 +2511,14 @@ class _TelegramChatRow extends StatelessWidget {
                           child: Row(
                             children: [
                               Flexible(
-                                child: Text(
+                                child: NickText(
                                   item.nickname,
+                                  nickColor: item.nickColor,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 16,
                                     height: 1.2,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               if (showVerifiedMark) ...[
@@ -2689,6 +2716,8 @@ class _ChatItem {
       id; // peerId for personal, groupId for group, channelId for channel
   final String nickname, lastMessage, avatarEmoji, statusEmoji;
   final int avatarColor;
+  /// Premium-цвет имени собеседника (из его профиля); null — цвет темы.
+  final int? nickColor;
   final String? avatarImagePath;
   final DateTime lastTime;
   final bool isOnline;
@@ -2710,6 +2739,7 @@ class _ChatItem {
     this.type = _ChatItemType.personal,
     required this.id,
     required this.nickname,
+    this.nickColor,
     required this.avatarColor,
     required this.avatarEmoji,
     this.avatarImagePath,
@@ -3659,6 +3689,7 @@ class _PendingDeviceTile extends StatelessWidget {
         x25519Key: CryptoService.instance.x25519PublicKeyBase64,
         tags: profile.tags,
         statusEmoji: profile.statusEmoji,
+        nickColor: profile.nickColor,
       );
     }
 
@@ -3891,6 +3922,7 @@ class _PairRequestScreenState extends State<_PairRequestScreen>
       x25519Key: CryptoService.instance.x25519PublicKeyBase64,
       tags: profile.tags,
       statusEmoji: profile.statusEmoji,
+      nickColor: profile.nickColor,
     );
     // Send full profile (avatar + banner) directly to the paired peer
     final pairedKey = widget.info['publicKey'] as String? ?? '';

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../../services/relay_service.dart';
 import 'bot_builder_screen.dart';
+import '../../services/premium_service.dart';
+import '../widgets/premium_gate.dart';
 
 /// Справка для разработчиков сторонних ботов: как создать, развернуть,
 /// зарегистрировать бота Rlink и отправить заявку на галочку.
@@ -49,7 +51,14 @@ class _BotDeveloperGuideScreenState extends State<BotDeveloperGuideScreen> {
           FilledButton.icon(
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const BotBuilderScreen()),
+              MaterialPageRoute(
+                  builder: (_) => PremiumGate(
+                feature: PremiumFeature.botBuilder,
+                title: 'Конструктор ботов',
+                description:
+                    'Создание ботов в no-code конструкторе входит в Rlink Premium.',
+                child: BotBuilderScreen(),
+              )),
             ),
             icon: const Icon(Icons.smart_toy_outlined),
             label: const Text('Открыть конструктор'),

@@ -68,6 +68,7 @@ void _broadcastMeta(UserProfile p) {
     x25519Key: CryptoService.instance.x25519PublicKeyBase64,
     tags: p.tags,
     statusEmoji: p.statusEmoji,
+    nickColor: p.nickColor,
   );
 }
 

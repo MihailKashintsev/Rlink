@@ -42,6 +42,8 @@ import '../../utils/web_file_store.dart';
 import '../screens/stickers_hub_screen.dart';
 import '../screens/emoji_hub_screen.dart';
 import '../screens/music_screen.dart';
+import '../screens/premium_status_screen.dart';
+import '../../services/premium_service.dart';
 import '../screens/chat_screen.dart';
 import '../screens/diagnostics_screen.dart';
 import '../widgets/avatar_widget.dart';
@@ -491,6 +493,15 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             title: 'Панель ввода',
             subtitle: 'Порядок кнопок',
             onTap: () => _open(context, const InputBarButtonOrderSettings()),
+          ),
+          _CategoryItem(
+            icon: Icons.workspace_premium_outlined,
+            color: const Color(0xFFFFB300),
+            title: 'Rlink Premium',
+            subtitle: PremiumService.instance.isActive
+                ? 'Подписка активна'
+                : 'Цвет ника, каналы, конструктор ботов',
+            onTap: () => _open(context, const PremiumStatusPage()),
           ),
           _CategoryItem(
             icon: Icons.library_music_outlined,

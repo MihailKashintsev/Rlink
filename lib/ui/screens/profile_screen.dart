@@ -33,6 +33,9 @@ import '../widgets/music_picker_sheet.dart';
 import '../widgets/desktop_image_picker.dart';
 import '../widgets/profile_photo_actions.dart';
 import '../widgets/status_emoji_view.dart';
+import '../widgets/nick_text.dart';
+import '../../services/premium_service.dart';
+import 'premium_status_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   /// Open straight in edit mode (from the pencil in the Settings header).
@@ -58,6 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late int _selectedColor;
   late String _selectedEmoji;
   late String _statusEmoji;
+  int? _nickColor;
   String? _selectedImagePath;
   String? _bannerImagePath;
   String? _profileMusicPath;
@@ -106,6 +110,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _selectedColor = p.avatarColor;
     _selectedEmoji = p.avatarEmoji;
     _statusEmoji = p.statusEmoji;
+    _nickColor = p.nickColor;
     _selectedImagePath = p.avatarImagePath;
     _bannerImagePath = p.bannerImagePath;
     _profileMusicPath = p.profileMusicPath;
@@ -327,6 +332,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         bannerImagePath: _bannerImagePath,
         profileMusicPath: _profileMusicPath,
         statusEmoji: _statusEmoji,
+        setNickColor: true,
+        nickColor: _nickColor,
       );
       setState(() {
         _editing = false;
@@ -346,6 +353,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         x25519Key: x25519,
         tags: updated.tags,
         statusEmoji: updated.statusEmoji,
+        nickColor: updated.nickColor,
       );
       // Если аватар/баннер реально изменились — перешлём изображения контактам,
       // чтобы у них обновилась картинка (а не только метаданные профиля).
@@ -766,6 +774,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           : null,
                     ),
               const SizedBox(height: 12),
+
+              // Premium: цвет ника — его видят все собеседники.
+              if (_editing) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.palette_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Цвет имени',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 8),
+                    if (!PremiumService.instance.has(PremiumFeature.nickColor))
+                      const _PremiumChip(),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _NickSwatch(
+                      color: null,
+                      selected: _nickColor == null,
+                      onTap: () => setState(() => _nickColor = null),
+                    ),
+                    for (final c in kNickColors)
+                      _NickSwatch(
+                        color: Color(c),
+                        selected: _nickColor == c,
+                        onTap: () {
+                          if (!PremiumService.instance
+                              .has(PremiumFeature.nickColor)) {
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const PremiumStatusPage()));
+                            return;
+                          }
+                          setState(() => _nickColor = c);
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Цвет увидят все ваши собеседники.',
+                  style: TextStyle(
+                      fontSize: 12, color: Theme.of(context).hintColor),
+                ),
+                const SizedBox(height: 8),
+              ],
 
               // Музыка в профиле (контакты получат файл при связи)
               Builder(builder: (context) {
@@ -1204,6 +1263,59 @@ class _PressableScaleState extends State<_PressableScale> {
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOut,
         child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Small "Premium" badge next to a locked feature.
+class _PremiumChip extends StatelessWidget {
+  const _PremiumChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text('Premium',
+          style: TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w800, color: cs.primary)),
+    );
+  }
+}
+
+/// One colour swatch; `color: null` is the "default theme colour" option.
+class _NickSwatch extends StatelessWidget {
+  final Color? color;
+  final bool selected;
+  final VoidCallback onTap;
+  const _NickSwatch(
+      {required this.color, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: color ?? cs.surfaceContainerHighest,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? cs.primary : cs.outlineVariant,
+            width: selected ? 3 : 1,
+          ),
+        ),
+        child: color == null
+            ? Icon(Icons.format_color_reset_outlined,
+                size: 16, color: cs.onSurfaceVariant)
+            : null,
       ),
     );
   }

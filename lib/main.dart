@@ -31,6 +31,7 @@ import 'models/user_profile.dart';
 import 'models/shared_collab.dart';
 import 'app_version.dart';
 import 'services/app_settings.dart';
+import 'services/premium_service.dart';
 import 'services/app_lock_service.dart';
 import 'services/motion_controller.dart';
 import 'services/google_drive_channel_backup.dart';
@@ -678,6 +679,7 @@ Future<void> initServices() async {
     await ImageService.instance.init();
     await CryptoService.instance.init();
     await AppSettings.instance.init();
+    unawaited(PremiumService.instance.load());
     unawaited(AppVersion.init());
     unawaited(MotionController.instance.init());
     // Await so the linked Google account is ready before channel settings /
@@ -1322,6 +1324,7 @@ Future<void> initServices() async {
             x25519Key: CryptoService.instance.x25519PublicKeyBase64,
             tags: myProfile.tags,
             statusEmoji: myProfile.statusEmoji,
+            nickColor: myProfile.nickColor,
           );
           // Show celebration screen on sender side
           final myKey = CryptoService.instance.publicKeyHex;
@@ -1678,7 +1681,8 @@ Future<void> initServices() async {
       // publicKey — Ed25519 ключ из payload профиля
       // x25519Key — X25519 ключ base64 для E2E шифрования (пустая строка у старых версий)
       onProfile: (bleId, publicKey, nick, username, color, emoji, x25519Key,
-          tags, statusEmojiPayload, statusEmojiAutoPayloadJson) async {
+          tags, statusEmojiPayload, statusEmojiAutoPayloadJson,
+          nickColorPayload) async {
         if (statusEmojiAutoPayloadJson != null &&
             statusEmojiAutoPayloadJson.isNotEmpty) {
           try {
@@ -1773,6 +1777,7 @@ Future<void> initServices() async {
                 tags: tags.isNotEmpty ? tags : oldContact.tags,
                 bannerImagePath: oldContact.bannerImagePath,
                 statusEmoji: resolvedStatus(null, oldContact),
+                nickColor: nickColorPayload ?? oldContact.nickColor,
               ));
               await ChatStorageService.instance
                   .deleteContact(oldContact.publicKeyHex);
@@ -1797,6 +1802,7 @@ Future<void> initServices() async {
               bannerImagePath: existing.bannerImagePath,
               profileMusicPath: existing.profileMusicPath,
               statusEmoji: resolvedStatus(existing, null),
+              nickColor: nickColorPayload ?? existing.nickColor,
             ));
             // Если нашли ник-дубликат или стаб с другим ключом — переносим историю и удаляем
             if (oldContact != null) {
@@ -2863,6 +2869,7 @@ Future<void> initServices() async {
           x25519Key: CryptoService.instance.x25519PublicKeyBase64,
           tags: myProfile.tags,
           statusEmoji: myProfile.statusEmoji,
+          nickColor: myProfile.nickColor,
         );
       }
       // Request stories from newly connected BLE peer
@@ -3004,7 +3011,8 @@ void _bindGossipFallbackHandlersIfMissing() {
       x25519Key,
       tags,
       statusEmojiPayload,
-      statusEmojiAutoPayloadJson) {
+      statusEmojiAutoPayloadJson,
+      nickColorPayload) {
     debugPrint('[RLINK][Fallback] Bind onProfileReceived from $nick');
     // Register the peer's key mapping
     BleService.instance.registerPeerKey(bleId, publicKey);
@@ -3024,6 +3032,7 @@ void _bindGossipFallbackHandlersIfMissing() {
         x25519Key: CryptoService.instance.x25519PublicKeyBase64,
         tags: myProfile.tags,
         statusEmoji: myProfile.statusEmoji,
+        nickColor: myProfile.nickColor,
       ));
     }
   };
@@ -3257,6 +3266,7 @@ Future<void> sendProfileToAllContacts() async {
       x25519Key: CryptoService.instance.x25519PublicKeyBase64,
       tags: myProfile.tags,
       statusEmoji: myProfile.statusEmoji,
+      nickColor: myProfile.nickColor,
     );
     debugPrint('[RLINK][Profile] Gossip-broadcast profile');
   } catch (e) {

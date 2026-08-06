@@ -18,6 +18,10 @@ class UserProfile {
   /// Эмодзи-статус (до нескольких эмодзи), показывается рядом с именем.
   final String statusEmoji;
 
+  /// Premium: цвет отображаемого имени. null — обычный цвет темы.
+  /// Едет вместе с профилем, поэтому виден всем собеседникам.
+  final int? nickColor;
+
   const UserProfile({
     required this.publicKeyHex,
     required this.nickname,
@@ -29,6 +33,7 @@ class UserProfile {
     this.bannerImagePath,
     this.profileMusicPath,
     this.statusEmoji = '',
+    this.nickColor,
   });
 
   /// Обрезка и нормализация строки статуса (графемы, не сырые code units).
@@ -61,6 +66,7 @@ class UserProfile {
         if (bannerImagePath != null) 'bannerPath': bannerImagePath,
         if (profileMusicPath != null) 'musicPath': profileMusicPath,
         if (statusEmoji.isNotEmpty) 'st': statusEmoji,
+        if (nickColor != null) 'nc': nickColor,
       };
 
   static String _jsonString(Object? v) {
@@ -97,6 +103,9 @@ class UserProfile {
       profileMusicPath: ImageService.instance.resolveStoredPath(
           j['musicPath'] == null ? null : _jsonString(j['musicPath'])),
       statusEmoji: normalizeStatusEmoji(_jsonString(j['st'])),
+      nickColor: j['nc'] is num
+          ? (j['nc'] as num).toInt()
+          : int.tryParse(_jsonString(j['nc'])),
     );
   }
 

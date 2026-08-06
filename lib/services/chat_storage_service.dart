@@ -265,7 +265,7 @@ class ChatStorageService {
     Future<Database> open() async {
       final db = await openDatabase(
         path,
-        version: 22,
+        version: 23,
         onCreate: (db, v) async {
           try {
             await db.rawQuery('PRAGMA journal_mode = WAL');
@@ -284,7 +284,8 @@ class ChatStorageService {
             tags              TEXT,
             banner_img_path   TEXT,
             profile_music_path TEXT,
-            status_emoji       TEXT
+            status_emoji       TEXT,
+            nick_color         INTEGER
           )
         ''');
           await db.execute('''
@@ -536,6 +537,12 @@ class ChatStorageService {
                   'ALTER TABLE messages ADD COLUMN is_sticker INTEGER NOT NULL DEFAULT 0');
             } catch (_) {}
           }
+          if (oldVersion < 23) {
+            try {
+              await db
+                  .execute('ALTER TABLE contacts ADD COLUMN nick_color INTEGER');
+            } catch (_) {}
+          }
           if (oldVersion < 21) {
             await db.execute('''
             CREATE TABLE IF NOT EXISTS local_profile_cache (
@@ -653,6 +660,7 @@ class ChatStorageService {
         'profile_music_path': contact.profileMusicPath,
         'status_emoji':
             contact.statusEmoji.isEmpty ? null : contact.statusEmoji,
+        'nick_color': contact.nickColor,
       },
       where: 'id = ?',
       whereArgs: [normalizeDmPeerId(contact.publicKeyHex)],

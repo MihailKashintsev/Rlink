@@ -1,7 +1,11 @@
 import 'package:flutter/services.dart';
 
-/// Native tick: a haptic bump plus the OS click. On web this file isn't used.
+import '../../services/sound_effects_service.dart';
+
+/// Native tick: haptic (always, so it's felt even with sound off) + a short
+/// click via the audio service. SystemSound.play was inaudible on Android and
+/// the haptic needs the VIBRATE permission (added to the manifest).
 void playTick() {
   HapticFeedback.selectionClick();
-  SystemSound.play(SystemSoundType.click);
+  SoundEffectsService.instance.playTick();
 }

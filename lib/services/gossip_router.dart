@@ -168,6 +168,7 @@ typedef OnProfileReceived = void Function(
   List<String> tags,
   String? statusEmojiPayload,
   String? statusEmojiAutoPayloadJson,
+  int? nickColor,
 );
 
 typedef OnEditReceived = Future<void> Function(
@@ -1162,6 +1163,7 @@ class GossipRouter {
     List<String> tags = const [],
     String statusEmoji = '',
     String? statusEmojiAutoPayloadJson,
+    int? nickColor,
   }) async {
     final rid8 = _rid8From(recipientId) ?? '';
     final packet = GossipPacket(
@@ -1462,6 +1464,7 @@ class GossipRouter {
     List<String> tags = const [],
     String statusEmoji = '',
     String? statusEmojiAutoPayloadJson,
+    int? nickColor,
   }) async {
     final payload = <String, dynamic>{
       'id': id,
@@ -1475,6 +1478,7 @@ class GossipRouter {
       if (statusEmojiAutoPayloadJson != null &&
           statusEmojiAutoPayloadJson.isNotEmpty)
         'stp': statusEmojiAutoPayloadJson,
+      if (nickColor != null) 'nc': nickColor,
     };
     final packet = GossipPacket(
       id: _uuid.v4(),
@@ -1631,6 +1635,7 @@ class GossipRouter {
             packet.payload.containsKey('stp')
                 ? (packet.payload['stp'] as String? ?? '')
                 : null;
+        final int? nickColorPayload = _jsonIntLoose(packet.payload['nc']);
 
         // Валидация: публичный ключ Ed25519 = 64 hex символа
         final isValidKey = publicKey != null &&
@@ -1651,7 +1656,8 @@ class GossipRouter {
               x25519Key,
               tags,
               statusEmojiPayload,
-              statusEmojiAutoPayloadJson);
+              statusEmojiAutoPayloadJson,
+              nickColorPayload);
         } else {
           debugPrint(
               '[RLINK][Gossip] Invalid profile packet: key=$publicKey nick=$nick');

@@ -37,6 +37,11 @@ class SoundEffectsService {
   final AudioPlayer _ringtonePlayer = AudioPlayer(playerId: 'rlink_ringtone');
   final AudioPlayer _outgoingCallPlayer =
       AudioPlayer(playerId: 'rlink_outgoing_call');
+  // Dedicated low-latency player for the picker "tick" — it fires many times a
+  // second on a fast spin, so it must not fight the effect player.
+  final AudioPlayer _tickPlayer = AudioPlayer(playerId: 'rlink_tick');
+  Uint8List? _tickBytes;
+  int _lastTickMs = 0;
 
   bool get _enabled => AppSettings.instance.notifSound;
   bool get _supportedPlatform =>
@@ -44,6 +49,25 @@ class SoundEffectsService {
       RuntimePlatform.isIos ||
       RuntimePlatform.isDesktop ||
       RuntimePlatform.isWeb;
+
+  /// Short click for the spinning date/time picker (native side; web uses
+  /// WebAudio). Throttled so a hard flick doesn't queue hundreds of plays.
+  Future<void> playTick() async {
+    if (!_enabled || !_supportedPlatform) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastTickMs < 45) return;
+    _lastTickMs = now;
+    try {
+      _tickBytes ??= _buildToneBytes(
+        notes: const [1500],
+        stepMs: 12,
+        sampleRate: 16000,
+        amplitude: 0.28,
+      );
+      await _tickPlayer.stop();
+      await _tickPlayer.play(BytesSource(_tickBytes!), volume: 1);
+    } catch (_) {}
+  }
 
   Future<void> playAction(ActionSound sound) async {
     if (!_enabled || !_supportedPlatform) return;
