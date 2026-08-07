@@ -3158,58 +3158,59 @@ class _PostCardState extends State<_PostCard> {
 
     return RepaintBoundary(
       key: _postKey,
-      child: GestureDetector(
-      onLongPress: () => _showPostActions(context),
-      child: Container(
-        margin: RlinkDesign.on
-            ? const EdgeInsets.symmetric(horizontal: 14, vertical: 7)
-            : const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        clipBehavior: Clip.antiAlias,
-        decoration: RlinkDesign.on
-            ? RlinkDesign.floatCard(cs)
-            : BoxDecoration(
-                color: cs.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(18),
-              ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header — shows channel name as the author (Telegram-style)
-              Row(children: [
-                Text(senderLabel,
-                    style: TextStyle(
-                        fontSize: RlinkDesign.on ? 15 : 14,
-                        fontWeight:
-                            RlinkDesign.on ? FontWeight.w800 : FontWeight.w700,
-                        letterSpacing: RlinkDesign.on ? 0.2 : 0,
-                        color: cs.primary)),
-                const Spacer(),
-                Text(
-                  '${dt.day}.${dt.month.toString().padLeft(2, '0')} '
-                  '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(
-                      fontSize: 11, color: cs.onSurface.withValues(alpha: 0.4)),
+      child: LayoutBuilder(builder: (context, box) {
+        // Telegram-style: the bubble hugs its content and sits to the left
+        // instead of a full-width centred card. Cap the width so long text
+        // stays readable while short posts stay compact.
+        final maxW = box.maxWidth.isFinite
+            ? (box.maxWidth * 0.86).clamp(240.0, 560.0)
+            : 560.0;
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxW),
+            child: GestureDetector(
+              onLongPress: () => _showPostActions(context),
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(10, 5, 10, 5),
+                clipBehavior: Clip.antiAlias,
+                decoration: RlinkDesign.on
+                    ? RlinkDesign.floatCard(cs)
+                    : BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+              // Header — channel name as the author (Telegram-style). Compact,
+              // just the name; time + forwards moved to the muted footer.
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Flexible(
+                  child: Text(senderLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: RlinkDesign.on ? 15 : 14,
+                          fontWeight: RlinkDesign.on
+                              ? FontWeight.w800
+                              : FontWeight.w700,
+                          letterSpacing: RlinkDesign.on ? 0.2 : 0,
+                          color: cs.primary)),
                 ),
                 if (post.forwardCount > 0) ...[
                   const SizedBox(width: 8),
-                  Tooltip(
-                    message: 'Пересылок',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.forward,
-                            size: 12,
-                            color: cs.onSurface.withValues(alpha: 0.45)),
-                        Text(
-                          '${post.forwardCount}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: cs.onSurface.withValues(alpha: 0.45),
-                          ),
-                        ),
-                      ],
+                  Icon(Icons.forward,
+                      size: 12, color: cs.onSurface.withValues(alpha: 0.45)),
+                  const SizedBox(width: 2),
+                  Text(
+                    '${post.forwardCount}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: cs.onSurface.withValues(alpha: 0.45),
                     ),
                   ),
                 ],
@@ -3316,7 +3317,15 @@ class _PostCardState extends State<_PostCard> {
                 ),
                 const SizedBox(height: 6),
               ],
-              Row(children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                // Muted timestamp at the foot of the bubble (Telegram-style).
+                Text(
+                  '${dt.day}.${dt.month.toString().padLeft(2, '0')} '
+                  '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                      fontSize: 11, color: cs.onSurface.withValues(alpha: 0.4)),
+                ),
+                const SizedBox(width: 12),
                 // React button
                 InkWell(
                   borderRadius: BorderRadius.circular(12),
@@ -3324,7 +3333,7 @@ class _PostCardState extends State<_PostCard> {
                   child: Padding(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    child: Row(children: [
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.add_reaction_outlined,
                           size: 14,
                           color: cs.onSurface.withValues(alpha: 0.55)),
@@ -3348,7 +3357,7 @@ class _PostCardState extends State<_PostCard> {
                 const SizedBox(width: 12),
                 // Comments button — navigates to PostCommentsScreen
                 if (widget.commentsEnabled)
-                  Expanded(
+                  Flexible(
                     child: GestureDetector(
                       onTap: () {
                         Navigator.push(
@@ -3364,18 +3373,22 @@ class _PostCardState extends State<_PostCard> {
                           ),
                         );
                       },
-                      child: Row(children: [
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.comment_outlined,
                             size: 14,
                             color: cs.onSurface.withValues(alpha: 0.4)),
                         const SizedBox(width: 4),
-                        Text(
-                          post.comments.isEmpty
-                              ? 'Комментировать'
-                              : '${post.comments.length} комментариев',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurface.withValues(alpha: 0.5)),
+                        Flexible(
+                          child: Text(
+                            post.comments.isEmpty
+                                ? 'Комментировать'
+                                : '${post.comments.length} комментариев',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurface.withValues(alpha: 0.5)),
+                          ),
                         ),
                         const SizedBox(width: 4),
                         Icon(Icons.chevron_right,
@@ -3385,11 +3398,15 @@ class _PostCardState extends State<_PostCard> {
                     ),
                   ),
               ]),
-            ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
-    ));
+        );
+      }),
+    );
   }
 }
 

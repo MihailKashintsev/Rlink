@@ -1370,10 +1370,6 @@ class RelayService with WidgetsBindingObserver {
       }
     } catch (e, st) {
       debugPrint('[RLINK][Relay] _onMessage error: $e\n$st');
-      if (kIsWeb) {
-        // ignore: avoid_print
-        print('[RLINK][Relay] _onMessage error: $e');
-      }
     }
   }
 
