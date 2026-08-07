@@ -1913,10 +1913,21 @@ Future<void> _notifyRecipientQueued({
         req.headers.set('Content-Type', 'application/json');
         req.add(payload);
         final resp = await req.close();
-        if (resp.statusCode == 404 || resp.statusCode == 410) {
+        // 403 = the subscription's VAPID key no longer matches ours; like
+        // 404/410 it can never succeed, so drop it and let the client
+        // re-subscribe fresh on its next sync.
+        if (resp.statusCode == 403 ||
+            resp.statusCode == 404 ||
+            resp.statusCode == 410) {
           toRemoveEndpoints.add(endpoint);
         }
-      } catch (_) {}
+        stdout.writeln('[RLINK][Push] ${resp.statusCode} '
+            '${Uri.parse(endpoint).host} → '
+            '${recipientKey.substring(0, recipientKey.length.clamp(0, 8))}');
+      } catch (e) {
+        stdout.writeln('[RLINK][Push] send error '
+            '${Uri.parse(endpoint).host}: $e');
+      }
     }
   } finally {
     client.close(force: true);
@@ -2840,11 +2851,15 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
             req.headers.set('Authorization', _vapidAuthHeader(endpoint));
             req.headers.set('Urgency', 'high');
             final resp = await req.close();
-            if (resp.statusCode == 404 || resp.statusCode == 410) {
+            if (resp.statusCode == 403 ||
+                resp.statusCode == 404 ||
+                resp.statusCode == 410) {
               toRemove.add(endpoint);
             } else if (resp.statusCode >= 200 && resp.statusCode < 300) {
               sent++;
             }
+            stdout.writeln(
+                '[RLINK][Push][test] ${resp.statusCode} ${Uri.parse(endpoint).host}');
           } catch (_) {}
         }
       } finally {

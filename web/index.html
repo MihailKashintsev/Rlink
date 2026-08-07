@@ -90,7 +90,7 @@
 
     // Bump on every deploy that changes Dart code — busts the cached bootstrap
     // AND main.dart.js (see web/flutter_bootstrap.js).
-    window.__rlinkBuildV = '20260807-glyphs4';
+    window.__rlinkBuildV = '20260807-pushfix';
     function _rlinkLoadFlutter() {
       const script = document.createElement('script');
       script.src = 'flutter_bootstrap.js?v=' + window.__rlinkBuildV;
@@ -119,6 +119,31 @@
       let bin = '';
       for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
       return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    // Return a subscription bound to the CURRENT VAPID key. If an existing sub
+    // was created with a different key (VAPID rotated), the push service
+    // silently drops our sends — so drop it and re-subscribe. This is what
+    // made pushes "just stop": the old sub stuck around and never healed.
+    async function _rlinkEnsureSub(reg, vapid) {
+      const wanted = _rlinkB64ToU8(vapid);
+      let sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        let same = false;
+        try {
+          const cur = sub.options && sub.options.applicationServerKey;
+          same = cur &&
+            _rlinkU8ToB64Url(new Uint8Array(cur)) === _rlinkU8ToB64Url(wanted);
+        } catch (_) {}
+        if (!same) { try { await sub.unsubscribe(); } catch (_) {} sub = null; }
+      }
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: wanted,
+        });
+      }
+      return sub;
     }
 
     window.rlinkSyncPushSubscription = async function(relayUrl, publicKey, nick) {
@@ -158,13 +183,7 @@
         if (Notification.permission !== 'granted') return;
 
         const reg = await navigator.serviceWorker.register('push_sw.js');
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: _rlinkB64ToU8(vapid),
-          });
-        }
+        const sub = await _rlinkEnsureSub(reg, vapid);
         if (!sub) return;
         const p256 = sub.getKey('p256dh');
         const auth = sub.getKey('auth');
@@ -229,13 +248,7 @@
 
         const reg = await navigator.serviceWorker.register('push_sw.js');
         try { await navigator.serviceWorker.ready; } catch (_) {}
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: _rlinkB64ToU8(vapid),
-          });
-        }
+        const sub = await _rlinkEnsureSub(reg, vapid);
         if (!sub) return { ok: false, reason: 'no_subscription' };
         const p256 = sub.getKey('p256dh');
         const auth = sub.getKey('auth');
