@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'account_kv_store.dart';
 import 'runtime_platform.dart';
+import 'web_secret_box.dart';
 import 'web_state_store.dart';
 
 /// Single JSON blob for web/Tilda iframe: reduces torn writes and survives
@@ -46,20 +47,49 @@ class WebAccountBundle {
     } catch (_) {}
   }
 
+  /// Decrypt a stored value. Legacy plaintext passes through; ciphertext that
+  /// can't be decrypted (e.g. key evicted) comes back null so the caller falls
+  /// through to another store rather than treating garbage as the value.
+  static Future<String?> _decode(String? raw) async {
+    if (raw == null || raw.isEmpty) return null;
+    return decryptSecret(raw);
+  }
+
+  /// Legacy plaintext found on disk → rewrite it encrypted so it stops showing
+  /// up in DevTools. No-op if the value is already encrypted or WebCrypto isn't
+  /// available (encryptSecret returns null → we leave the plaintext untouched).
+  static Future<void> _migrateIfPlaintext(
+      String logicalKey, String raw, String plain) async {
+    if (secretBoxLooksEncrypted(raw)) return;
+    final enc = await encryptSecret(plain);
+    if (enc == null) return;
+    await writeWebState(logicalKey, enc);
+    await AccountKvStore.write(logicalKey, enc);
+    await _prefsWrite(logicalKey, enc);
+  }
+
   /// One-shot read: web bridge/localStorage → prefs mirror → durable KV.
   static Future<String?> layeredRead(String logicalKey) async {
     if (!RuntimePlatform.isWeb) return null;
-    final w = await readWebState(logicalKey);
-    if (w != null && w.isNotEmpty) return w;
-    final p = await _prefsRead(logicalKey);
+    final wRaw = await readWebState(logicalKey);
+    final w = await _decode(wRaw);
+    if (w != null && w.isNotEmpty) {
+      await _migrateIfPlaintext(logicalKey, wRaw!, w);
+      return w;
+    }
+    final pRaw = await _prefsRead(logicalKey);
+    final p = await _decode(pRaw);
     if (p != null && p.isNotEmpty) {
-      await writeWebState(logicalKey, p);
+      await writeWebState(logicalKey, pRaw!);
+      await _migrateIfPlaintext(logicalKey, pRaw, p);
       return p;
     }
-    final d = await AccountKvStore.read(logicalKey);
+    final dRaw = await AccountKvStore.read(logicalKey);
+    final d = await _decode(dRaw);
     if (d != null && d.isNotEmpty) {
-      await writeWebState(logicalKey, d);
-      await _prefsWrite(logicalKey, d);
+      await writeWebState(logicalKey, dRaw!);
+      await _prefsWrite(logicalKey, dRaw);
+      await _migrateIfPlaintext(logicalKey, dRaw, d);
       return d;
     }
     return null;
@@ -67,9 +97,12 @@ class WebAccountBundle {
 
   static Future<void> layeredWrite(String logicalKey, String value) async {
     if (!RuntimePlatform.isWeb) return;
-    await writeWebState(logicalKey, value);
-    await AccountKvStore.write(logicalKey, value);
-    await _prefsWrite(logicalKey, value);
+    // Store ciphertext when WebCrypto is available; fall back to plaintext so a
+    // browser without it keeps working exactly as before.
+    final stored = (await encryptSecret(value)) ?? value;
+    await writeWebState(logicalKey, stored);
+    await AccountKvStore.write(logicalKey, stored);
+    await _prefsWrite(logicalKey, stored);
   }
 
   static Map<String, dynamic>? _tryDecodeBundle(String raw) {
@@ -135,10 +168,17 @@ class WebAccountBundle {
   }
 
   static Future<String?> _readRawBundleAllSources() async {
-    String? raw = await readWebState(_bundleLogicalKey);
-    raw ??= await _prefsRead(_bundleLogicalKey);
-    raw ??= await AccountKvStore.read(_bundleLogicalKey);
-    return (raw != null && raw.isNotEmpty) ? raw : null;
+    // Returns decrypted plaintext JSON (callers jsonDecode it). Try each store
+    // and skip any copy that can't be decrypted.
+    for (final raw in [
+      await readWebState(_bundleLogicalKey),
+      await _prefsRead(_bundleLogicalKey),
+      await AccountKvStore.read(_bundleLogicalKey),
+    ]) {
+      final dec = await _decode(raw);
+      if (dec != null && dec.isNotEmpty) return dec;
+    }
+    return null;
   }
 
   /// Cold start in iframe: bridge can answer late — retry before giving up.
@@ -187,9 +227,10 @@ class WebAccountBundle {
       if (prof != null && prof.isNotEmpty) 'prof': prof,
     };
     final raw = jsonEncode(j);
-    await writeWebState(_bundleLogicalKey, raw);
-    await AccountKvStore.write(_bundleLogicalKey, raw);
-    await _prefsWrite(_bundleLogicalKey, raw);
+    final stored = (await encryptSecret(raw)) ?? raw;
+    await writeWebState(_bundleLogicalKey, stored);
+    await AccountKvStore.write(_bundleLogicalKey, stored);
+    await _prefsWrite(_bundleLogicalKey, stored);
   }
 
   static Future<String?> profileJsonFromBundle() async {
