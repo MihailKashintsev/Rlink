@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart'
@@ -42,6 +41,7 @@ import '../widgets/settings_profile_header.dart';
 import '../widgets/profile_photo_actions.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/mesh_radar_widget.dart';
+import '../widgets/nav_glyph.dart';
 import '../widgets/premium_gate.dart';
 import '../widgets/status_emoji_view.dart';
 import '../widgets/update_available_banner.dart';
@@ -782,176 +782,6 @@ class _ChatListScreenState extends State<ChatListScreen>
 
 // ── Animated bottom nav bar (5 tabs) ─────────────────────────────
 
-/// How a nav icon reacts when its tab is selected. One per tab, matched to
-/// what the icon is: the radar sweeps, the tower broadcasts, the gear turns.
-enum _NavMotion { pop, sweep, waves, turn }
-
-/// Index -> motion, in the same order the tabs are built.
-const _navMotion = <_NavMotion>[
-  _NavMotion.pop, // чаты
-  _NavMotion.sweep, // рядом
-  _NavMotion.waves, // эфир
-  _NavMotion.turn, // настройки
-];
-
-/// Plays a short one-shot animation whenever the tab becomes the selected one.
-class _NavIcon extends StatefulWidget {
-  final IconData icon;
-  final bool selected;
-  final Color color;
-  final _NavMotion motion;
-
-  const _NavIcon({
-    required this.icon,
-    required this.selected,
-    required this.color,
-    required this.motion,
-  });
-
-  @override
-  State<_NavIcon> createState() => _NavIconState();
-}
-
-class _NavIconState extends State<_NavIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    // Waves want a touch longer to read as a broadcast; the rest stay snappy.
-    duration: Duration(
-        milliseconds: widget.motion == _NavMotion.waves ? 1300 : 460),
-  );
-
-  @override
-  void didUpdateWidget(covariant _NavIcon old) {
-    super.didUpdateWidget(old);
-    if (widget.selected && !old.selected) _c.forward(from: 0);
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Эфир is drawn from scratch (mast + animated side waves) so the waves
-    // radiate from the sides instead of the Material glyph's static ones.
-    if (widget.motion == _NavMotion.waves) {
-      return AnimatedBuilder(
-        animation: _c,
-        // Ease-out so the last wave decelerates into the resting icon instead
-        // of stopping dead at full speed — no abrupt cut at the end.
-        builder: (context, _) => CustomPaint(
-          size: const Size(22, 22),
-          painter: _TowerPainter(
-            progress: Curves.easeOutCubic.transform(_c.value),
-            color: widget.color,
-          ),
-        ),
-      );
-    }
-    final icon = Icon(widget.icon, size: 22, color: widget.color);
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, child) {
-        final t = _c.value;
-        if (t == 0 || t == 1) return child!;
-        switch (widget.motion) {
-          // Grows and settles back — a small "here I am".
-          case _NavMotion.pop:
-            return Transform.scale(
-                scale: 1 + 0.30 * math.sin(math.pi * t), child: child);
-          // One full sweep, like the radar it is.
-          case _NavMotion.sweep:
-            return Transform.rotate(
-                angle: 2 * math.pi * Curves.easeOutCubic.transform(t),
-                child: child);
-          // Gear turns back the other way, overshooting before it settles.
-          // A full turn (not a partial one) so the end state matches the
-          // untransformed icon and nothing snaps when the animation stops.
-          case _NavMotion.turn:
-            return Transform.rotate(
-                angle: -2 * math.pi * Curves.easeOutBack.transform(t),
-                child: child);
-          case _NavMotion.waves:
-            return child!; // handled above
-        }
-      },
-      child: icon,
-    );
-  }
-}
-
-/// The Эфир icon: a broadcast mast whose signal arcs radiate outward from each
-/// side of the antenna. At rest ([progress] 0) two arcs sit close on each side
-/// like a normal tower; while selected they travel out and fade, new ones
-/// emerging behind — a broadcasting pulse. Ends exactly where it started
-/// (phase wraps on 1) so nothing snaps.
-class _TowerPainter extends CustomPainter {
-  final double progress; // 0 at rest, 0..1 while animating
-  final Color color;
-
-  _TowerPainter({required this.progress, required this.color});
-
-  static const _wavesPerSide = 2;
-  static const _sweep = 95 * math.pi / 180; // arc opening on each side
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width, h = size.height;
-    final cx = w / 2;
-    final tip = Offset(cx, h * 0.24); // antenna top — waves emit from here
-    final footY = h * 0.82;
-    final legY = h * 0.34;
-    final fx = w * 0.16;
-
-    final line = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..strokeWidth = w * 0.09
-      ..color = color;
-
-    // Mast: antenna dot, two splayed legs, one crossbar.
-    canvas.drawCircle(tip, w * 0.065, Paint()..color = color);
-    canvas.drawLine(Offset(cx, legY), Offset(cx - fx, footY), line);
-    canvas.drawLine(Offset(cx, legY), Offset(cx + fx, footY), line);
-    final barY = h * 0.60;
-    final barHalf = fx * (barY - legY) / (footY - legY);
-    canvas.drawLine(
-        Offset(cx - barHalf, barY), Offset(cx + barHalf, barY), line);
-
-    // Side waves: `)` on the right, `(` on the left, emitted from the tip.
-    final rInner = w * 0.18;
-    final rOuter = w * 0.46;
-    final wave = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = w * 0.075;
-    for (final side in const [-1, 1]) {
-      final centreAngle = side == 1 ? 0.0 : math.pi; // east / west
-      for (var k = 0; k < _wavesPerSide; k++) {
-        // *2 → two emission cycles per selection; wraps back to rest at 1.
-        final phase = (progress * 2 + k / _wavesPerSide) % 1.0;
-        final r = rInner + (rOuter - rInner) * phase;
-        wave.color = color.withValues(alpha: 1 - phase * 0.8);
-        canvas.drawArc(
-          Rect.fromCircle(center: tip, radius: r),
-          centreAngle - _sweep / 2,
-          _sweep,
-          false,
-          wave,
-        );
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_TowerPainter old) =>
-      old.progress != progress || old.color != color;
-}
-
 class _AnimatedNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
@@ -1022,26 +852,22 @@ class _AnimatedNavBar extends StatelessWidget {
             children: [
               _navItem(context,
                   index: 0,
-                  icon: Icons.chat_bubble_outline,
-                  selectedIcon: Icons.chat_bubble,
+                  glyph: NavGlyph.chats,
                   label: AppL10n.t('nav_chats')),
               _navItem(context,
                   index: 1,
-                  icon: Icons.radar_outlined,
-                  selectedIcon: Icons.radar,
+                  glyph: NavGlyph.nearby,
                   label: AppL10n.t('nav_nearby'),
                   badge: BleService.instance.peersCount,
                   badgeGate: () => AppSettings.instance.connectionMode != 1),
               _navItem(context,
                   index: 2,
-                  icon: Icons.cell_tower,
-                  selectedIcon: Icons.cell_tower,
+                  glyph: NavGlyph.ether,
                   label: AppL10n.t('nav_ether'),
                   badge: EtherService.instance.unreadCount),
               _navItem(context,
                   index: 3,
-                  icon: Icons.settings_outlined,
-                  selectedIcon: Icons.settings,
+                  glyph: NavGlyph.settings,
                   label: AppL10n.t('settings')),
             ],
           ),
@@ -1082,8 +908,7 @@ class _AnimatedNavBar extends StatelessWidget {
   Widget _navItem(
     BuildContext context, {
     required int index,
-    required IconData icon,
-    required IconData selectedIcon,
+    required NavGlyph glyph,
     required String label,
     ValueNotifier<int>? badge,
     bool Function()? badgeGate,
@@ -1100,11 +925,11 @@ class _AnimatedNavBar extends StatelessWidget {
             selected ? cs.primary.withValues(alpha: 0.18) : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: _NavIcon(
-        icon: selected ? selectedIcon : icon,
+      child: AnimatedNavGlyph(
+        glyph: glyph,
         selected: selected,
         color: tint,
-        motion: _navMotion[index],
+        size: 24,
       ),
     );
     if (badge != null) {
@@ -1145,9 +970,10 @@ class _AnimatedNavBar extends StatelessWidget {
   Widget _searchItem(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final circleRadius = BorderRadius.circular(26);
-    return InkWell(
+    // Action button, not a tab — so it gets press feedback (scale-down on
+    // press) rather than a select accent.
+    return _PressScale(
       onTap: onSearch,
-      borderRadius: circleRadius,
       child: _floatShadow(
         circleRadius,
         RlinkDesign.frosted(
@@ -1161,9 +987,54 @@ class _AnimatedNavBar extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.all(11),
-            child: Icon(Icons.search, size: 22, color: cs.onSurfaceVariant),
+            child: AnimatedNavGlyph(
+              glyph: NavGlyph.search,
+              selected: false,
+              color: cs.onSurfaceVariant,
+              size: 22,
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Press feedback for tap targets that aren't tabs (the search circle): a quick
+/// scale-down on press, back on release. 120ms, ease-out, reduce-motion aware.
+class _PressScale extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _PressScale({required this.child, required this.onTap});
+
+  @override
+  State<_PressScale> createState() => _PressScaleState();
+}
+
+class _PressScaleState extends State<_PressScale> {
+  bool _down = false;
+
+  void _set(bool v) {
+    if (_down != v) setState(() => _down = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduce = MediaQuery.of(context).disableAnimations;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _set(true),
+      onTapUp: (_) {
+        _set(false);
+        widget.onTap();
+      },
+      onTapCancel: () => _set(false),
+      child: AnimatedScale(
+        scale: (_down && !reduce) ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: const Cubic(0.23, 1, 0.32, 1), // strong ease-out
+        child: widget.child,
       ),
     );
   }
