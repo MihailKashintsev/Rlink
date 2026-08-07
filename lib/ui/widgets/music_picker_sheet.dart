@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../services/music_catalog_service.dart';
+import '../../services/music_library_service.dart';
+import '../../services/my_tracks_service.dart';
 
 /// Pick profile music without storing a file anywhere: search the open
 /// catalog, or paste a link someone shared. Returns the URL to play.
@@ -35,6 +37,41 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
   bool _searched = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Your own library — uploaded to Drive + liked — shown before any search.
+    MyTracksService.instance.load().then((_) {
+      if (mounted) setState(() {});
+    });
+    MusicLibraryService.instance.load().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// Uploaded tracks first, then liked; de-duplicated by URL.
+  List<CatalogTrack> get _library {
+    final seen = <String>{};
+    final out = <CatalogTrack>[];
+    for (final t in MyTracksService.instance.tracks.value) {
+      final c = t.toCatalogTrack();
+      if (seen.add(c.streamUrl)) out.add(c);
+    }
+    for (final ref in MusicLibraryService.instance.liked.value) {
+      final r = parseMusicRef(ref);
+      if (r.url.isNotEmpty && seen.add(r.url)) {
+        out.add(CatalogTrack(
+          title: r.title,
+          artist: r.artist,
+          streamUrl: r.url,
+          artworkUrl: r.artwork,
+          source: r.source,
+        ));
+      }
+    }
+    return out;
+  }
+
+  @override
   void dispose() {
     _debounce?.cancel();
     _searchCtrl.dispose();
@@ -63,6 +100,68 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
       _loading = false;
       _searched = true;
     });
+  }
+
+  Widget _tile(CatalogTrack t, {bool mine = false}) => ListTile(
+        leading: t.artworkUrl != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(t.artworkUrl!,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.album)),
+              )
+            : Icon(mine ? Icons.library_music_outlined : Icons.album),
+        title: Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(t.artist,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12)),
+        onTap: () => Navigator.pop(context, encodeMusicRef(t)),
+      );
+
+  Widget _body(ColorScheme cs) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    // Active search → catalog results.
+    if (_searched) {
+      if (_results.isEmpty) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text('Ничего не нашлось',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant)),
+          ),
+        );
+      }
+      return ListView(children: [for (final t in _results) _tile(t)]);
+    }
+    // No search yet → your own library first.
+    final lib = _library;
+    if (lib.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Найдите трек, вставьте ссылку выше или загрузите свой в разделе Музыка',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: cs.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+    return ListView(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+        child: Text('Моя библиотека',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurfaceVariant)),
+      ),
+      for (final t in lib) _tile(t, mine: true),
+    ]);
   }
 
   @override
@@ -170,52 +269,7 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
                 ),
               ),
             ),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _results.isEmpty
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Text(
-                              _searched
-                                  ? 'Ничего не нашлось'
-                                  : 'Найдите трек или вставьте ссылку выше',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: cs.onSurfaceVariant),
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: _results.length,
-                          itemBuilder: (_, i) {
-                            final t = _results[i];
-                            return ListTile(
-                              leading: t.artworkUrl != null
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(6),
-                                      child: Image.network(
-                                        t.artworkUrl!,
-                                        width: 44,
-                                        height: 44,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) =>
-                                            const Icon(Icons.album),
-                                      ),
-                                    )
-                                  : const Icon(Icons.album),
-                              title: Text(t.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                              subtitle: Text(t.artist,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 12)),
-                              onTap: () => Navigator.pop(context, encodeMusicRef(t)),
-                            );
-                          },
-                        ),
-            ),
+            Expanded(child: _body(cs)),
           ],
         ),
       ),

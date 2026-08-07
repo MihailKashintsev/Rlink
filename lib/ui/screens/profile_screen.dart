@@ -686,7 +686,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       textCapitalization: TextCapitalization.words,
                       onChanged: (_) => setState(() {}),
                     )
-                  : _InfoTile(label: 'Имя', value: profile.nickname),
+                  : _InfoTile(
+                      label: 'Имя',
+                      value: profile.nickname,
+                      valueWidget: NickText(
+                        profile.nickname,
+                        nickColor: profile.nickColor,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
 
               const SizedBox(height: 12),
 

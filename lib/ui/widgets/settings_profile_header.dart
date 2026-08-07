@@ -16,6 +16,7 @@ import '../../services/music_catalog_service.dart'
     show parseMusicRef, rememberTrackRef;
 import '../../services/voice_service.dart';
 import 'channel_feed_image.dart' show storedImage;
+import 'nick_text.dart';
 import 'status_emoji_view.dart';
 
 /// Rich profile header for the Settings tab: banner background, centred avatar,
@@ -123,7 +124,11 @@ class ProfileCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: lerpDouble(21, 19, t),
                     fontWeight: FontWeight.w700,
-                    color: t > 0.5 ? Colors.white : null,
+                    // Premium nick colour applies here too — but keep it white
+                    // once the header is pulled open over the banner.
+                    color: t > 0.5
+                        ? Colors.white
+                        : NickText.resolve(context, p.nickColor),
                   ),
                 ),
               ),
