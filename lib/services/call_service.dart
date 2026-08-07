@@ -78,6 +78,9 @@ class CallService {
   int _remoteHostCount = 0;
   DateTime _phaseSince = DateTime.now();
   final Map<String, DateTime> _recentlyHandledCallIds = {};
+  // A call can be torn down by both the local hangup and the remote's hangup
+  // signal; record its history/chat-message only once.
+  final Set<String> _recordedCallIds = {};
   final Map<String, DateTime> _recentInviteNotifiedAt = {};
   static const _recentCallTtl = Duration(seconds: 30);
   static final RegExp _pubKeyHex64 = RegExp(r'^[0-9a-f]{64}$');
@@ -1105,7 +1108,10 @@ class CallService {
     _remoteSrflxCount = 0;
     _remoteHostCount = 0;
     _setPhase(endPhase);
-    if (peerForHistory != null && endPhase != CallPhase.idle) {
+    if (peerForHistory != null &&
+        endPhase != CallPhase.idle &&
+        (callIdForRecent == null || _recordedCallIds.add(callIdForRecent))) {
+      if (_recordedCallIds.length > 100) _recordedCallIds.clear();
       unawaited(
         CallHistoryService.instance.recordCallEnded(
           peerId: peerForHistory,
