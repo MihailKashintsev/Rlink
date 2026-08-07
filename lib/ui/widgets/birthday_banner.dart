@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/contact.dart';
 import '../../services/premium_service.dart';
+import '../screens/birthday_card_editor.dart';
+import '../screens/chat_screen.dart';
 
 /// Shown above the chat list and inside a DM on the contact's birthday.
 /// "<name> празднует день рождения! Поздравьте" + a Поздравить button.
@@ -120,17 +124,44 @@ class _GiftSheetState extends State<_GiftSheet> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (recipient != null) {
-      // Gift went through → let them write the card (v1: the DM composer).
-      Navigator.pop(context);
-      widget.onWrite?.call();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Подписка подарена! Напишите поздравление 🎉'),
+      // Gift went through → decorate a card by hand and send it along.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Подписка подарена! Украсьте открытку 🎉'),
       ));
+      await _composeAndSendCard();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Оплата пока не подтверждена. Попробуйте через минуту.'),
       ));
     }
+  }
+
+  /// Open the card editor, then deliver the finished card to the recipient's
+  /// DM (it auto-sends on open). Works standalone and after a Premium gift.
+  Future<void> _composeAndSendCard() async {
+    final rootNav = Navigator.of(context, rootNavigator: true);
+    final bytes = await rootNav.push<Uint8List>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => BirthdayCardEditor(recipientName: widget.contact.nickname),
+      ),
+    );
+    if (bytes == null || !mounted) return;
+    final c = widget.contact;
+    Navigator.of(context).pop(); // close the gift sheet
+    rootNav.push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          peerId: c.publicKeyHex,
+          peerNickname: c.nickname,
+          peerAvatarColor: c.avatarColor,
+          peerAvatarEmoji: c.avatarEmoji,
+          peerAvatarImagePath: c.avatarImagePath,
+          peerBannerImagePath: c.bannerImagePath,
+          initialCardBytes: bytes,
+        ),
+      ),
+    );
   }
 
   @override
@@ -194,9 +225,21 @@ class _GiftSheetState extends State<_GiftSheet> {
               ),
             ] else ...[
               FilledButton.icon(
+                onPressed: _busy ? null : _composeAndSendCard,
+                icon: const Icon(Icons.brush_outlined),
+                label: const Text('Собрать открытку своими руками'),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '— или подарить подписку —',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.tonalIcon(
                 onPressed: _busy ? null : () => _gift('month'),
                 icon: const Icon(Icons.workspace_premium_outlined),
-                label: const Text('Подарить Premium на месяц — 50 ₽'),
+                label: const Text('Premium на месяц — 50 ₽'),
               ),
               const SizedBox(height: 8),
               OutlinedButton(

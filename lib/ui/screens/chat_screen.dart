@@ -270,6 +270,10 @@ class ChatScreen extends StatefulWidget {
   final String? peerBannerImagePath;
   final DmForwardDraft? forwardDraft;
 
+  /// A finished greeting-card PNG to deliver automatically on open (birthday
+  /// gift). Sent as a normal image message once the chat is ready.
+  final Uint8List? initialCardBytes;
+
   const ChatScreen({
     super.key,
     required this.peerId,
@@ -279,6 +283,7 @@ class ChatScreen extends StatefulWidget {
     this.peerAvatarImagePath,
     this.peerBannerImagePath,
     this.forwardDraft,
+    this.initialCardBytes,
   });
 
   @override
@@ -991,6 +996,12 @@ class _ChatScreenState extends State<ChatScreen> {
         if (_forwardStarted || !mounted) return;
         _forwardStarted = true;
         unawaited(_runPendingForward());
+      });
+    }
+    if (widget.initialCardBytes != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_deliverCardImage(widget.initialCardBytes!));
       });
     }
     _controller.addListener(_onTyping);
@@ -4940,6 +4951,67 @@ class _ChatScreenState extends State<ChatScreen> {
         imagePath: p,
       );
       await _saveAndTrack(imgMsg, wasQueued: wasQueued);
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  /// Send a pre-composed greeting-card PNG as an image message (no preview /
+  /// picker). Used to auto-deliver a birthday card when the chat opens.
+  Future<void> _deliverCardImage(Uint8List bytes) async {
+    final myId = CryptoService.instance.publicKeyHex;
+    if (myId.isEmpty || bytes.isEmpty) return;
+    const caption = '🎉 С Днём Рождения!';
+    if (kIsWeb) {
+      await _sendWebBytesAsFile(
+        bytes: bytes,
+        fileName: 'card_${DateTime.now().millisecondsSinceEpoch}.png',
+        myId: myId,
+        textFallback: '',
+        caption: caption,
+        asImage: true,
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _isSending = true);
+    try {
+      final tmpDir = await getTemporaryDirectory();
+      final tmpFile = File(
+          '${tmpDir.path}/card_${DateTime.now().millisecondsSinceEpoch}.png');
+      await tmpFile.writeAsBytes(bytes);
+      final path = await ImageService.instance.compressAndSave(tmpFile.path);
+      final saved = await File(path).readAsBytes();
+      final msgId = _uuid.v4();
+      final targetPeerId = _looksLikePublicKey(_resolvedPeerId)
+          ? _resolvedPeerId
+          : widget.peerId;
+      final wasQueued = await _sendMedia(
+        bytes: saved,
+        msgId: msgId,
+        myId: myId,
+        filePath: path,
+        caption: caption,
+      );
+      await _saveAndTrack(
+        ChatMessage(
+          id: msgId,
+          peerId: targetPeerId,
+          text: caption,
+          isOutgoing: true,
+          timestamp: DateTime.now(),
+          status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
+          imagePath: path,
+        ),
+        wasQueued: wasQueued,
+      );
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка открытки: $e'), backgroundColor: Colors.red),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
