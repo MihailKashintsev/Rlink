@@ -393,9 +393,27 @@ Future<String?> resolvePlayableUrl(String url) async {
 /// unreachable from Russia — measured 6/8 playable, and a retry never helps
 /// because the node is fixed per track. So dead tracks are filtered out of
 /// the list instead of being offered and failing.
+/// Is archive.org reachable from here? It's blocked by RKN in Russia, so its
+/// tracks only play over a VPN. Probed once and cached for the session.
+bool? _archiveHostOk;
+Future<bool> _archiveReachable() async {
+  if (_archiveHostOk != null) return _archiveHostOk!;
+  try {
+    final r = await http
+        .head(Uri.parse('https://archive.org/'))
+        .timeout(const Duration(seconds: 5));
+    _archiveHostOk = r.statusCode < 500;
+  } catch (_) {
+    _archiveHostOk = false;
+  }
+  return _archiveHostOk!;
+}
+
 Future<bool> isStreamReachable(String url) async {
   if (!url.startsWith('http')) return true;
-  if (url.contains('_rlink_first_audio')) return true; // resolved on play
+  // Archive links are resolved to a real file on play; gate them on whether
+  // archive.org itself is reachable (blocked in Russia → drop them).
+  if (url.contains('_rlink_first_audio')) return _archiveReachable();
   try {
     final req = http.Request('GET', Uri.parse(url))
       ..headers['Range'] = 'bytes=0-1';

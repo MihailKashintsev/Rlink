@@ -204,7 +204,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _pickProfileMusic() async {
     final r = await FilePicker.platform.pickFiles(
-      type: FileType.audio,
+      // On mobile web FileType.audio -> accept="audio/*", which hides .mp3s
+      // that the OS tags application/octet-stream. Pick any file on web and
+      // validate the extension below; native keeps the audio filter.
+      type: kIsWeb ? FileType.any : FileType.audio,
       allowMultiple: false,
       withData: false,
       withReadStream: kIsWeb,
@@ -214,6 +217,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final fileName =
         picked.name.trim().isNotEmpty ? picked.name.trim() : 'music.m4a';
     if (kIsWeb) {
+      const audioExts = {
+        'mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus',
+        'flac', 'weba', 'webm', 'aiff', 'aif', 'mp4', 'caf', 'wma'
+      };
+      final dot = fileName.lastIndexOf('.');
+      final ext = dot >= 0 ? fileName.substring(dot + 1).toLowerCase() : '';
+      if (!audioExts.contains(ext)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Выберите аудиофайл (mp3, m4a, wav, ogg, flac…)')),
+          );
+        }
+        return;
+      }
       final bytes = await _readPickedPlatformFileBytes(picked);
       if (bytes == null || bytes.isEmpty) {
         if (mounted) {

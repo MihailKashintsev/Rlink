@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
@@ -56,17 +57,34 @@ class _TrackUploadSheetState extends State<_TrackUploadSheet> {
     super.dispose();
   }
 
+  static const _audioExts = {
+    'mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus',
+    'flac', 'weba', 'webm', 'aiff', 'aif', 'mp4', 'caf', 'wma'
+  };
+
   Future<void> _pickAudio() async {
-    final r = await FilePicker.platform
-        .pickFiles(type: FileType.audio, withData: true);
+    // On mobile web `FileType.audio` becomes accept="audio/*"; Android reports
+    // many .mp3s as application/octet-stream and greys them out. So on web pick
+    // any file and validate by extension instead; native keeps the audio filter.
+    final r = await FilePicker.platform.pickFiles(
+      type: kIsWeb ? FileType.any : FileType.audio,
+      withData: true,
+    );
     final f = r?.files.single;
     if (f?.bytes == null) return;
+    final name = f!.name;
+    final dot = name.lastIndexOf('.');
+    final ext = dot >= 0 ? name.substring(dot + 1).toLowerCase() : '';
+    if (kIsWeb && !_audioExts.contains(ext)) {
+      setState(() => _error = 'Выберите аудиофайл (mp3, m4a, wav, ogg, flac…)');
+      return;
+    }
     setState(() {
-      _audio = f!.bytes;
-      _audioName = f.name;
+      _error = null;
+      _audio = f.bytes;
+      _audioName = name;
       if (_title.text.trim().isEmpty) {
-        final dot = f.name.lastIndexOf('.');
-        _title.text = dot > 0 ? f.name.substring(0, dot) : f.name;
+        _title.text = dot > 0 ? name.substring(0, dot) : name;
       }
     });
   }

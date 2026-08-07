@@ -109,8 +109,12 @@ class _MusicScreenState extends State<MusicScreen>
     }
     setState(() => _loading = true);
     final r = await MusicCatalogService.instance.search(v);
+    // Drop catalog hits that won't actually play from here (archive.org blocked
+    // in RU, dead Audius nodes) — otherwise search offers VPN-only results.
+    final playable = await filterReachable(r);
     if (!mounted) return;
-    // Uploaded tracks are part of the same library — match them first.
+    // Uploaded tracks are part of the same library — match them first, and
+    // never filter them (they're the user's own Drive links).
     final q = v.trim().toLowerCase();
     final mine = MyTracksService.instance.tracks.value
         .where((t) =>
@@ -118,7 +122,7 @@ class _MusicScreenState extends State<MusicScreen>
             t.artist.toLowerCase().contains(q))
         .map((t) => t.toCatalogTrack());
     setState(() {
-      _results = [...mine, ...r];
+      _results = [...mine, ...playable];
       _loading = false;
       _searched = true;
     });
