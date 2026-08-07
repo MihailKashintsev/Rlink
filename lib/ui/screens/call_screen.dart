@@ -269,26 +269,6 @@ class _CallScreenState extends State<CallScreen>
     );
   }
 
-  Widget _recordControl() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: CallService.instance.localRecording,
-      builder: (_, rec, __) {
-        return IconButton.filled(
-          tooltip: rec ? 'Остановить запись' : 'Записать звонок',
-          style: IconButton.styleFrom(
-            backgroundColor: rec ? Colors.red.shade800 : null,
-          ),
-          onPressed: () async {
-            await CallService.instance.setCallRecording(!rec);
-            if (mounted) setState(() {});
-          },
-          icon: Icon(
-              rec ? Icons.stop_circle_outlined : Icons.fiber_manual_record),
-        );
-      },
-    );
-  }
-
   @override
   void dispose() {
     if (_phaseListener != null) {
@@ -619,36 +599,25 @@ class _CallScreenState extends State<CallScreen>
     final hasRemote = _remoteRenderer.srcObject != null;
     final mainRemote = _mainShowsPeer;
 
-    Widget bigTile(RTCVideoRenderer r, {bool mirror = false}) {
+    Widget surface(RTCVideoRenderer r, {required bool mirror}) {
       final isLocal = identical(r, _localRenderer);
-      final showVideo = isLocal || hasRemote;
-      final child = showVideo
-          ? RTCVideoView(r, mirror: mirror)
-          : Center(
-              child: Text(
-                'Соединение с ${widget.peerName}...',
-                style: const TextStyle(color: Colors.white70),
-              ),
-            );
-      return Material(
-        color: Colors.black,
-        child: InkWell(
-          onTap: () => setState(() => _mainShowsPeer = !_mainShowsPeer),
-          child: SizedBox.expand(child: child),
-        ),
+      if (!(isLocal || hasRemote)) {
+        return Center(
+          child: Text(
+            'Соединение с ${widget.peerName}...',
+            style: const TextStyle(color: Colors.white70),
+          ),
+        );
+      }
+      return RTCVideoView(
+        r,
+        mirror: mirror,
+        objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
       );
     }
 
-    final bigRemote = bigTile(_remoteRenderer, mirror: false);
-    final smallRemote = ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: bigTile(_remoteRenderer, mirror: false),
-    );
-    final bigLocal = bigTile(_localRenderer, mirror: true);
-    final smallLocal = ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: bigTile(_localRenderer, mirror: true),
-    );
+    final mainRenderer = mainRemote ? _remoteRenderer : _localRenderer;
+    final thumbRenderer = mainRemote ? _localRenderer : _remoteRenderer;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -656,69 +625,159 @@ class _CallScreenState extends State<CallScreen>
         child: Stack(
           children: [
             Positioned.fill(
-              child: mainRemote ? bigRemote : bigLocal,
+              child: Container(
+                color: Colors.black,
+                child: surface(mainRenderer, mirror: !mainRemote),
+              ),
             ),
+            // Self/other preview — tap to swap which feed is fullscreen.
             Positioned(
               right: 12,
               top: 12,
-              width: 120,
-              height: 180,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white24),
+              width: 116,
+              height: 168,
+              child: GestureDetector(
+                onTap: () => setState(() => _mainShowsPeer = !_mainShowsPeer),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white38, width: 1.5),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black54, blurRadius: 8),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      surface(thumbRenderer, mirror: mainRemote),
+                      Positioned(
+                        right: 5,
+                        bottom: 5,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.black45,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.swap_horiz_rounded,
+                              size: 15, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: mainRemote ? smallLocal : smallRemote,
               ),
             ),
             _callTopOverlay(),
             Positioned(
               left: 0,
               right: 0,
-              bottom: 24,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton.filled(
-                    onPressed: () async {
-                      _micOn = !_micOn;
-                      await CallService.instance.toggleMic(_micOn);
-                      if (mounted) setState(() {});
-                    },
-                    icon: Icon(_micOn ? Icons.mic : Icons.mic_off),
+              bottom: 22,
+              child: Center(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.42),
+                    borderRadius: BorderRadius.circular(30),
                   ),
-                  const SizedBox(width: 12),
-                  IconButton.filled(
-                    onPressed: () async {
-                      _camOn = !_camOn;
-                      await CallService.instance.toggleCamera(_camOn);
-                      if (mounted) setState(() {});
-                    },
-                    icon: Icon(_camOn ? Icons.videocam : Icons.videocam_off),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _videoCtl(
+                        _micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
+                        active: !_micOn,
+                        onTap: () async {
+                          _micOn = !_micOn;
+                          await CallService.instance.toggleMic(_micOn);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      const SizedBox(width: 12),
+                      _videoCtl(
+                        _camOn
+                            ? Icons.videocam_rounded
+                            : Icons.videocam_off_rounded,
+                        active: !_camOn,
+                        onTap: () async {
+                          _camOn = !_camOn;
+                          await CallService.instance.toggleCamera(_camOn);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      const SizedBox(width: 12),
+                      _videoCtl(
+                        Icons.flip_camera_ios_rounded,
+                        onTap: _camOn
+                            ? () => CallService.instance.switchCamera()
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: CallService.instance.localRecording,
+                        builder: (_, rec, __) => _videoCtl(
+                          rec
+                              ? Icons.stop_rounded
+                              : Icons.fiber_manual_record_rounded,
+                          active: rec,
+                          activeColor: Colors.red,
+                          onTap: () async {
+                            await CallService.instance.setCallRecording(!rec);
+                            if (mounted) setState(() {});
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _videoCtl(
+                        Icons.call_end_rounded,
+                        background: Colors.red,
+                        foreground: Colors.white,
+                        onTap: _end,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  IconButton.filled(
-                    tooltip: 'Сменить камеру',
-                    onPressed: _camOn
-                        ? () async {
-                            await CallService.instance.switchCamera();
-                          }
-                        : null,
-                    icon: const Icon(Icons.flip_camera_ios_outlined),
-                  ),
-                  const SizedBox(width: 12),
-                  _recordControl(),
-                  const SizedBox(width: 12),
-                  IconButton.filled(
-                    style: IconButton.styleFrom(backgroundColor: Colors.red),
-                    onPressed: _end,
-                    icon: const Icon(Icons.call_end),
-                  ),
-                ],
+                ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Compact circular call control for the video-call bar (icon only, with a
+  /// pressed-in feel and an active/toggled-off state).
+  Widget _videoCtl(
+    IconData icon, {
+    required VoidCallback? onTap,
+    bool active = false,
+    Color? activeColor,
+    Color? background,
+    Color? foreground,
+  }) {
+    final bg = background ??
+        (active
+            ? (activeColor ?? Colors.white).withValues(alpha: 0.95)
+            : Colors.white.withValues(alpha: 0.16));
+    final fg = foreground ??
+        (active
+            ? (activeColor != null ? Colors.white : Colors.black)
+            : Colors.white);
+    return Material(
+      color: bg,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 52,
+          height: 52,
+          child: Icon(
+            icon,
+            size: 24,
+            color: onTap == null ? fg.withValues(alpha: 0.4) : fg,
+          ),
         ),
       ),
     );
