@@ -2220,16 +2220,43 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() => _isSending = true);
     try {
-      final isWebInlineVideo = kIsWeb && _isInlineWebUri(rawVideoPath);
-      final path = isWebInlineVideo
-          ? (rawVideoPath.contains('#rlink_square')
-              ? rawVideoPath
-              : '$rawVideoPath#rlink_square')
-          : await ImageService.instance.saveVideo(
-              rawVideoPath,
-              isSquare: true,
-            );
       final msgId = _uuid.v4();
+      final String path;
+      if (!kIsWeb) {
+        path = await ImageService.instance.saveVideo(
+          rawVideoPath,
+          isSquare: true,
+        );
+      } else if (_isInlineWebUri(rawVideoPath) &&
+          !rawVideoPath.startsWith('opfs://rlink/')) {
+        // The recorder hands back a session-only blob:/data: URL; it dies on
+        // reload, so the square goes black and can't replay. Persist the bytes
+        // to OPFS (same trick as voice) and keep the #rlink_square marker.
+        final bytes =
+            await _readLocalOrWebMediaBytes(rawVideoPath.split('#').first);
+        if (bytes == null || bytes.isEmpty) {
+          throw StateError('video_bytes_empty');
+        }
+        final isWebm = bytes.length >= 4 &&
+            bytes[0] == 0x1A &&
+            bytes[1] == 0x45 &&
+            bytes[2] == 0xDF &&
+            bytes[3] == 0xA3;
+        final stored = await writeWebStoredFile(
+          fileName: '${msgId}_square.${isWebm ? 'webm' : 'mp4'}',
+          bytes: bytes,
+          mimeType: isWebm ? 'video/webm' : 'video/mp4',
+        );
+        path = stored != null
+            ? '$stored#rlink_square'
+            : (rawVideoPath.contains('#rlink_square')
+                ? rawVideoPath
+                : '$rawVideoPath#rlink_square');
+      } else {
+        path = rawVideoPath.contains('#rlink_square')
+            ? rawVideoPath
+            : '$rawVideoPath#rlink_square';
+      }
       final targetPeerId = _looksLikePublicKey(_resolvedPeerId)
           ? _resolvedPeerId
           : widget.peerId;
@@ -10468,8 +10495,8 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   bool get _squareUsesQueue =>
       _isSquare && widget.onPlaySquareWithQueue != null;
 
-  Size _videoPaintSize({double fallbackWidth = 1280}) {
-    final value = _ctrl?.value;
+  Size _videoPaintSize({double fallbackWidth = 1280, VideoPlayerController? of}) {
+    final value = (of ?? _ctrl)?.value;
     final size = value?.size ?? Size.zero;
     if (size.width > 0 && size.height > 0) return size;
     final aspect = value?.aspectRatio ?? 0;
@@ -10477,6 +10504,14 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
       return Size(fallbackWidth, fallbackWidth / aspect);
     }
     return Size(fallbackWidth, fallbackWidth * 9 / 16);
+  }
+
+  // VoiceService swapped/created the live square controller — rebuild so a
+  // square bubble that borrows it (bug: audio played but frame stayed frozen)
+  // repaints with the playing controller instead of our idle one.
+  void _onSquarePreviewCtrlChanged() {
+    if (!mounted || !_squareUsesQueue) return;
+    setState(() {});
   }
 
   void _onEmbedPauseBus() {
@@ -10611,6 +10646,8 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         .addListener(_onSquarePausePulse);
     VoiceService.instance.squareVideoUiResumePulse
         .addListener(_onSquareResumePulse);
+    VoiceService.instance.squareQueueVideoPreview
+        .addListener(_onSquarePreviewCtrlChanged);
     final mediaExists =
         (kIsWeb && _ChatScreenState._isInlineWebUri(widget.videoPath)) ||
             (!kIsWeb && File(widget.videoPath).existsSync());
@@ -10866,6 +10903,10 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
           await ctrl.play();
         } else if (_isSquare) {
           ctrl.setLooping(!_squareUsesQueue);
+          // In queue mode VoiceService's own controller carries the audio;
+          // keep this bubble's controller silent so the two never double up
+          // (it only ever serves as a fallback video surface).
+          if (_squareUsesQueue) await ctrl.setVolume(0);
         } else {
           // Seek to first frame so it shows as a thumbnail; don't auto-play.
           await ctrl.seekTo(Duration.zero);
@@ -10916,6 +10957,8 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         .removeListener(_onSquarePausePulse);
     VoiceService.instance.squareVideoUiResumePulse
         .removeListener(_onSquareResumePulse);
+    VoiceService.instance.squareQueueVideoPreview
+        .removeListener(_onSquarePreviewCtrlChanged);
     if (_queueDriveActive && _ctrl != null) {
       try {
         _ctrl!.removeListener(_onSquareQueueTick);
@@ -11039,7 +11082,20 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     final exists = kIsWeb
         ? _ChatScreenState._isInlineWebUri(widget.videoPath)
         : File(widget.videoPath).existsSync();
-    final ctrl = _ctrl;
+    // When the square plays through the voice queue, VoiceService owns a live
+    // controller (audio + video). Painting our own idle `_ctrl` here would show
+    // a frozen frame while its audio plays — so borrow VoiceService's playing
+    // controller whenever the floating PiP isn't already displaying it (they're
+    // mutually exclusive on the same platform view).
+    final vs = VoiceService.instance;
+    final vsCtrl = (_squareUsesQueue &&
+            vs.isCurrentQueueSquareAtPath(widget.videoPath) &&
+            vs.hasSquareQueueVideoController &&
+            !vs.shouldDisplaySquareQueuePip())
+        ? vs.squareQueueVideoPreview.value
+        : null;
+    final localReady = _initialized && _ctrl != null;
+    final ctrl = vsCtrl ?? (localReady ? _ctrl : null);
 
     return GestureDetector(
       onTap: exists ? _togglePlay : null,
@@ -11057,13 +11113,13 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _initialized && ctrl != null
+              ctrl != null
                   ? FittedBox(
                       fit: BoxFit.cover,
                       clipBehavior: Clip.hardEdge,
                       child: SizedBox(
-                        width: _videoPaintSize().width,
-                        height: _videoPaintSize().height,
+                        width: _videoPaintSize(of: ctrl).width,
+                        height: _videoPaintSize(of: ctrl).height,
                         child: VideoPlayer(ctrl),
                       ),
                     )
@@ -11107,8 +11163,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                       children: [
                         const Icon(Icons.play_circle_fill,
                             color: Colors.white, size: 52),
-                        if (_initialized &&
-                            ctrl != null &&
+                        if (ctrl != null &&
                             ctrl.value.duration.inSeconds > 0) ...[
                           const SizedBox(height: 4),
                           Container(
@@ -11132,7 +11187,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                     ),
                   ),
                 ),
-              if (_playing && _initialized && ctrl != null)
+              if (_playing && ctrl != null)
                 Positioned(
                   left: 0,
                   right: 0,

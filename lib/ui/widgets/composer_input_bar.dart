@@ -351,6 +351,34 @@ class ComposerInputBarState extends State<ComposerInputBar> {
     super.dispose();
   }
 
+  /// «Супер-режим»: текст перерос поле — предлагаем открыть его на весь экран.
+  bool get _isLongText {
+    final t = widget.controller.text;
+    if (t.isEmpty) return false;
+    return '\n'.allMatches(t).length >= 3 || t.length > 140;
+  }
+
+  /// Полноэкранный редактор для длинного сообщения. Делит тот же контроллер,
+  /// поэтому текст остаётся синхронным; сверху — кнопка отправки.
+  Future<void> _openFullscreenEditor() async {
+    _focusNode.unfocus();
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => _FullscreenComposerEditor(
+          controller: widget.controller,
+          hintText: widget.hintText ?? 'Сообщение...',
+          isSending: widget.isSending,
+          onSend: () {
+            Navigator.of(ctx).pop();
+            widget.onSend();
+          },
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
   @override
   void didUpdateWidget(covariant ComposerInputBar oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -726,6 +754,30 @@ class ComposerInputBarState extends State<ComposerInputBar> {
                                       ),
                                     ),
                                   ),
+                                if (!sendOnEnter &&
+                                    !widget.isRecording &&
+                                    _isLongText)
+                                  Positioned(
+                                    top: 2,
+                                    right: 2,
+                                    child: Material(
+                                      color: cs.surfaceContainerHighest
+                                          .withValues(alpha: 0.9),
+                                      shape: const CircleBorder(),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: InkWell(
+                                        onTap: _openFullscreenEditor,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(5),
+                                          child: Icon(
+                                            Icons.open_in_full_rounded,
+                                            size: 16,
+                                            color: cs.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                               ],
                             );
                           },
@@ -881,5 +933,96 @@ class _LiveRecordingWaveformPainter extends CustomPainter {
   }
 }
 
+
+/// Полноэкранный редактор длинного сообщения. Шарит контроллер с композером,
+/// поэтому текст остаётся синхронным; кнопка отправки — сверху справа.
+class _FullscreenComposerEditor extends StatefulWidget {
+  final TextEditingController controller;
+  final String hintText;
+  final bool isSending;
+  final VoidCallback onSend;
+
+  const _FullscreenComposerEditor({
+    required this.controller,
+    required this.hintText,
+    required this.isSending,
+    required this.onSend,
+  });
+
+  @override
+  State<_FullscreenComposerEditor> createState() =>
+      _FullscreenComposerEditorState();
+}
+
+class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
+  final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onChanged);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final canSend =
+        widget.controller.text.trim().isNotEmpty && !widget.isSending;
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text('Сообщение'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilledButton.icon(
+              onPressed: canSend ? widget.onSend : null,
+              icon: const Icon(Icons.send_rounded, size: 18),
+              label: const Text('Отправить'),
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: TextField(
+            controller: widget.controller,
+            focusNode: _focusNode,
+            autofocus: true,
+            maxLines: null,
+            expands: true,
+            keyboardType: TextInputType.multiline,
+            textAlignVertical: TextAlignVertical.top,
+            style: TextStyle(fontSize: 16, color: cs.onSurface, height: 1.35),
+            decoration: InputDecoration(
+              hintText: widget.hintText,
+              hintStyle:
+                  TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+              border: InputBorder.none,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 // ── Stranger Banner Action Button ─────────────────────────────
