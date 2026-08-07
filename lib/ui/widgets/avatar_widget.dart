@@ -98,6 +98,11 @@ class AvatarWidget extends StatelessWidget {
     // changes every frame, and a fresh cacheWidth per frame re-decodes the
     // image each time — that was the flicker and the jank. Rounding to 64px
     // steps keeps one cached decode for the whole animation.
+    //
+    // Only cacheWidth is set (never both): giving both cacheWidth AND
+    // cacheHeight resizes the image to that exact square, squashing non-square
+    // avatars before BoxFit.cover can crop them. With only the width fixed,
+    // Flutter scales the height proportionally and cover crops cleanly.
     final rawSide = innerSize * dpr;
     final decodeSide = ((rawSide / 64).ceil() * 64).clamp(1, 4096);
 
@@ -119,7 +124,6 @@ class AvatarWidget extends StatelessWidget {
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
                 cacheWidth: decodeSide,
-                cacheHeight: decodeSide,
                 errorBuilder: (_, __, ___) => Center(
                   child: _buildEmojiOrInitials(innerSize),
                 ),
@@ -132,7 +136,6 @@ class AvatarWidget extends StatelessWidget {
                     fit: BoxFit.cover,
                     gaplessPlayback: true,
                     cacheWidth: decodeSide,
-                    cacheHeight: decodeSide,
                     errorBuilder: (_, __, ___) => Center(
                       child: _buildEmojiOrInitials(innerSize),
                     ),
@@ -152,7 +155,6 @@ class AvatarWidget extends StatelessWidget {
                             height: innerSize,
                             fit: BoxFit.cover,
                             cacheWidth: decodeSide,
-                            cacheHeight: decodeSide,
                             errorBuilder: (_, __, ___) => Center(
                               child: _buildEmojiOrInitials(innerSize),
                             ),
