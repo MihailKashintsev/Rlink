@@ -3120,6 +3120,11 @@ Future<void> _sendProfileDirectToPeer(String peerKey) async {
       'x': CryptoService.instance.x25519PublicKeyBase64,
       if (myProfile.tags.isNotEmpty) 'tags': myProfile.tags,
       'st': myProfile.statusEmoji,
+      // These reach BLE peers via gossip, but online contacts only get this
+      // relay-direct packet — so they must ride here too or they never arrive.
+      if (myProfile.nickColor != null) 'nc': myProfile.nickColor,
+      if (myProfile.birthday != null && myProfile.birthday!.isNotEmpty)
+        'bd': myProfile.birthday,
     },
   );
   try {
