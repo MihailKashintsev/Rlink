@@ -67,8 +67,38 @@ class _MusicScreenState extends State<MusicScreen>
       _linePage++;
       final seen = _line.map((t) => t.streamUrl).toSet();
       _line.addAll(more.where((t) => !seen.contains(t.streamUrl)));
+      // First page came back empty (catalog often blocked in RU without a VPN)
+      // — seed the stream from the user's own library so it's never dead.
+      if (_line.isEmpty && _linePage == 1) {
+        for (final c in _myLibraryTracks()) {
+          if (seen.add(c.streamUrl)) _line.add(c);
+        }
+      }
       _lineLoading = false;
     });
+  }
+
+  /// The user's own tracks — uploaded to Drive + liked.
+  List<CatalogTrack> _myLibraryTracks() {
+    final seen = <String>{};
+    final out = <CatalogTrack>[];
+    for (final t in MyTracksService.instance.tracks.value) {
+      final c = t.toCatalogTrack();
+      if (seen.add(c.streamUrl)) out.add(c);
+    }
+    for (final ref in MusicLibraryService.instance.liked.value) {
+      final r = parseMusicRef(ref);
+      if (r.url.isNotEmpty && seen.add(r.url)) {
+        out.add(CatalogTrack(
+          title: r.title,
+          artist: r.artist,
+          streamUrl: r.url,
+          artworkUrl: r.artwork,
+          source: r.source,
+        ));
+      }
+    }
+    return out;
   }
 
   void _playLineFrom(int index) {
@@ -174,7 +204,10 @@ class _MusicScreenState extends State<MusicScreen>
     if (_line.isEmpty) {
       return _lineLoading
           ? const Center(child: CircularProgressIndicator())
-          : _hint(cs, 'Не удалось получить поток — проверьте интернет');
+          : _hint(
+              cs,
+              'Пусто. Каталог может быть недоступен без VPN — загрузите свой '
+              'трек или лайкните, и он появится здесь.');
     }
     return NotificationListener<ScrollNotification>(
       onNotification: (n) {
