@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import 'crypto_service.dart';
 import 'diagnostics_log_service.dart';
+import 'profile_privacy_service.dart';
 import '../utils/reaction_emoji_key.dart';
 
 const _kDefaultTtl = 7;
@@ -959,6 +960,8 @@ class GossipRouter {
     List<Map<String, dynamic>> overlays = const [],
     List<Map<String, dynamic>> strokes = const [],
   }) async {
+    // Stories kept private → never broadcast.
+    if (!ProfilePrivacyService.instance.showStories) return;
     final packet = GossipPacket(
       id: storyId,
       type: 'story',
@@ -1468,6 +1471,10 @@ class GossipRouter {
     int? nickColor,
     String? birthday,
   }) async {
+    // Per-field privacy: hidden fields are stripped so they never leave the
+    // device. Status emoji and birthday are sent as an explicit empty when
+    // hidden, so peers that already have them clear it on this broadcast.
+    final privacy = ProfilePrivacyService.instance;
     final payload = <String, dynamic>{
       'id': id,
       'nick': nick,
@@ -1475,13 +1482,17 @@ class GossipRouter {
       'color': color,
       'emoji': emoji,
       if (x25519Key.isNotEmpty) 'x': x25519Key,
-      if (tags.isNotEmpty) 'tags': tags,
-      'st': statusEmoji,
-      if (statusEmojiAutoPayloadJson != null &&
+      if (privacy.showTags && tags.isNotEmpty) 'tags': tags,
+      'st': privacy.showStatusEmoji ? statusEmoji : '',
+      if (privacy.showStatusEmoji &&
+          statusEmojiAutoPayloadJson != null &&
           statusEmojiAutoPayloadJson.isNotEmpty)
         'stp': statusEmojiAutoPayloadJson,
       if (nickColor != null) 'nc': nickColor,
-      if (birthday != null && birthday.isNotEmpty) 'bd': birthday,
+      if (!privacy.showBirthday)
+        'bd': ''
+      else if (birthday != null && birthday.isNotEmpty)
+        'bd': birthday,
     };
     final packet = GossipPacket(
       id: _uuid.v4(),

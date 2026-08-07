@@ -21,6 +21,7 @@ import '../../models/user_profile.dart';
 import '../../services/app_settings.dart';
 import '../../services/app_lock_service.dart';
 import 'device_security_screen.dart';
+import 'profile_privacy_screen.dart';
 import '../../services/app_icon_service.dart';
 import '../../services/google_drive_channel_backup.dart';
 import '../../services/transcription_engine.dart';
@@ -2392,6 +2393,15 @@ class _PrivacyPageState extends State<_PrivacyPage> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context)
                 .push(rlinkOpaquePushRoute(const DeviceSecurityScreen())),
+          ),
+          ListTile(
+            leading: Icon(Icons.visibility_off_outlined, color: cs.primary),
+            title: const Text('Приватность профиля'),
+            subtitle: Text('Что видят другие: аватар, баннер, теги, др…',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context)
+                .push(rlinkOpaquePushRoute(const ProfilePrivacyScreen())),
           ),
           SwitchListTile(
             secondary: Icon(Icons.done_all_rounded,

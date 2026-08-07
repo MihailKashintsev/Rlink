@@ -56,6 +56,7 @@ import 'services/emoji_pack_dm_service.dart';
 import 'services/sticker_pack_dm_service.dart';
 import 'services/name_filter.dart';
 import 'services/profile_service.dart';
+import 'services/profile_privacy_service.dart';
 import 'services/broadcast_outbox_service.dart';
 import 'services/media_upload_queue.dart';
 import 'services/notification_service.dart';
@@ -246,9 +247,12 @@ Future<void> _notifyIncomingDirectEvent({
   );
 }
 
+ProfilePrivacyService get _priv => ProfilePrivacyService.instance;
+
 Future<void> broadcastMyAvatar() async {
   final myProfile = ProfileService.instance.profile;
   if (myProfile == null) return;
+  if (!_priv.showAvatar) return;
   final raw = myProfile.avatarImagePath;
   if (raw == null || raw.isEmpty) return;
   // Fall back to the raw path so web data: URLs (resolveStoredPath may null them)
@@ -261,6 +265,7 @@ Future<void> broadcastMyAvatar() async {
 Future<void> broadcastMyBanner() async {
   final myProfile = ProfileService.instance.profile;
   if (myProfile == null) return;
+  if (!_priv.showBanner) return;
   final raw = myProfile.bannerImagePath;
   if (raw == null || raw.isEmpty) return;
   final bannerPath = ImageService.instance.resolveStoredPath(raw) ?? raw;
@@ -271,6 +276,7 @@ Future<void> broadcastMyBanner() async {
 Future<void> broadcastMyProfileMusic() async {
   final myProfile = ProfileService.instance.profile;
   if (myProfile == null) return;
+  if (!_priv.showMusic) return;
   final musicPath = myProfile.profileMusicPath;
   final bytes = await _readProfileMediaBytes(musicPath);
   if (bytes != null && bytes.isNotEmpty) {
@@ -299,6 +305,7 @@ Future<Uint8List?> _sealServiceMediaForPeer(
 
 Future<void> _broadcastProfileMusic(
     String myPublicKey, String musicPath) async {
+  if (!_priv.showMusic) return;
   try {
     await Future.delayed(const Duration(milliseconds: 900));
     final bytes = await _readProfileMediaBytes(musicPath);
@@ -679,6 +686,8 @@ Future<void> initServices() async {
     await ImageService.instance.init();
     await CryptoService.instance.init();
     await AppSettings.instance.init();
+    // Before any profile broadcast, so a hidden field is never sent even once.
+    await ProfilePrivacyService.instance.load();
     unawaited(PremiumService.instance.load());
     unawaited(AppVersion.init());
     unawaited(MotionController.instance.init());
@@ -2455,6 +2464,7 @@ Future<void> initServices() async {
 
     // Отвечает на story_req: переотправляет свои активные истории и их картинки
     GossipRouter.instance.onStoryRequest = (fromId) async {
+      if (!_priv.showStories) return;
       final myKey = CryptoService.instance.publicKeyHex;
       if (myKey.isEmpty) return;
       final myStories = StoryService.instance.storiesFor(myKey);
@@ -3118,12 +3128,15 @@ Future<void> _sendProfileDirectToPeer(String peerKey) async {
       'color': myProfile.avatarColor,
       'emoji': myProfile.avatarEmoji,
       'x': CryptoService.instance.x25519PublicKeyBase64,
-      if (myProfile.tags.isNotEmpty) 'tags': myProfile.tags,
-      'st': myProfile.statusEmoji,
+      // Per-field privacy (same rules as the gossip broadcast).
+      if (_priv.showTags && myProfile.tags.isNotEmpty) 'tags': myProfile.tags,
+      'st': _priv.showStatusEmoji ? myProfile.statusEmoji : '',
       // These reach BLE peers via gossip, but online contacts only get this
       // relay-direct packet — so they must ride here too or they never arrive.
       if (myProfile.nickColor != null) 'nc': myProfile.nickColor,
-      if (myProfile.birthday != null && myProfile.birthday!.isNotEmpty)
+      if (!_priv.showBirthday)
+        'bd': ''
+      else if (myProfile.birthday != null && myProfile.birthday!.isNotEmpty)
         'bd': myProfile.birthday,
     },
   );
@@ -3142,8 +3155,9 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
 
   final myProfile = ProfileService.instance.profile;
   if (myProfile == null) return;
-  final autoStatusPayload =
-      await EmojiPackDmService.buildPayloadForStatus(myProfile.statusEmoji);
+  final autoStatusPayload = _priv.showStatusEmoji
+      ? await EmojiPackDmService.buildPayloadForStatus(myProfile.statusEmoji)
+      : null;
   if (autoStatusPayload != null && RelayService.instance.isConnected) {
     try {
       await EmojiPackDmService.sendAutoPayloadToPeer(
@@ -3157,7 +3171,9 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
   }
 
   // Send avatar blob
-  final avatarBytes = await _readProfileMediaBytes(myProfile.avatarImagePath);
+  final avatarBytes = _priv.showAvatar
+      ? await _readProfileMediaBytes(myProfile.avatarImagePath)
+      : null;
   if (avatarBytes != null && avatarBytes.isNotEmpty) {
     try {
       await Future.delayed(const Duration(milliseconds: 500));
@@ -3184,7 +3200,9 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
   }
 
   // Send banner blob
-  final bannerBytes = await _readProfileMediaBytes(myProfile.bannerImagePath);
+  final bannerBytes = _priv.showBanner
+      ? await _readProfileMediaBytes(myProfile.bannerImagePath)
+      : null;
   if (bannerBytes != null && bannerBytes.isNotEmpty) {
     try {
       await Future.delayed(const Duration(milliseconds: 500));
@@ -3210,7 +3228,9 @@ Future<void> _sendFullProfileToPeer(String peerKey) async {
     }
   }
 
-  final musicBytes = await _readProfileMediaBytes(myProfile.profileMusicPath);
+  final musicBytes = _priv.showMusic
+      ? await _readProfileMediaBytes(myProfile.profileMusicPath)
+      : null;
   if (musicBytes != null && musicBytes.isNotEmpty) {
     try {
       await Future.delayed(const Duration(milliseconds: 500));
@@ -3458,6 +3478,7 @@ void _onRelayPeerOnline(String peerPublicKey) {
 
 /// Отправляет аватар-изображение по BLE + relay (fire-and-forget).
 Future<void> _broadcastAvatar(String myPublicKey, String imagePath) async {
+  if (!_priv.showAvatar) return;
   try {
     // Wait for profile packets and BLE stack to settle after pair exchange.
     await Future.delayed(const Duration(milliseconds: 1500));
@@ -3551,6 +3572,7 @@ Future<void> _broadcastAvatar(String myPublicKey, String imagePath) async {
 
 /// Отправляет баннер профиля по BLE+relay после обмена контактами.
 Future<void> _broadcastBanner(String myPublicKey, String bannerPath) async {
+  if (!_priv.showBanner) return;
   try {
     // Небольшая пауза, чтобы не забивать канал если сразу после аватара.
     await Future.delayed(const Duration(milliseconds: 800));
