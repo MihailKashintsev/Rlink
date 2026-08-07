@@ -7506,6 +7506,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               tags: myProfile.tags,
                               statusEmoji: myProfile.statusEmoji,
                               nickColor: myProfile.nickColor,
+                              birthday: myProfile.birthday,
                             );
                           }
                           if (context.mounted) {

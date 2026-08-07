@@ -41,6 +41,7 @@ import '../widgets/settings_profile_header.dart';
 import '../widgets/profile_photo_actions.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/mesh_radar_widget.dart';
+import '../widgets/birthday_banner.dart';
 import '../widgets/nav_glyph.dart';
 import '../widgets/premium_gate.dart';
 import '../widgets/status_emoji_view.dart';
@@ -1457,6 +1458,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
   }
 
   List<_ChatItem> _items = [];
+  Contact? _birthdayContact; // a contact whose birthday is today, if any
   StreamSubscription<IncomingMessage>? _sub;
   Timer? _loadDebounce;
   VoidCallback? _groupListener;
@@ -1672,6 +1674,14 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
     final contactById = <String, Contact>{
       for (final c in contacts) c.publicKeyHex: c,
     };
+    Contact? bd;
+    for (final c in contacts) {
+      if (UserProfile.isToday(c.birthday)) {
+        bd = c;
+        break;
+      }
+    }
+    _birthdayContact = bd;
 
     // 1) Личные чаты
     final summaries = await ChatStorageService.instance.getChatSummaries();
@@ -2346,6 +2356,20 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
           ),
         ),
         _buildPendingBanners(context),
+        if (_birthdayContact != null)
+          BirthdayBanner(
+            contact: _birthdayContact!,
+            onWrite: () => Navigator.push(
+              context,
+              rlinkChatRoute(ChatScreen(
+                peerId: _birthdayContact!.publicKeyHex,
+                peerNickname: _birthdayContact!.nickname,
+                peerAvatarColor: _birthdayContact!.avatarColor,
+                peerAvatarEmoji: _birthdayContact!.avatarEmoji,
+                peerAvatarImagePath: _birthdayContact!.avatarImagePath,
+              )),
+            ),
+          ),
         _miniPlayerGap(),
         Expanded(
             child: ListView.separated(
@@ -3737,6 +3761,7 @@ class _PendingDeviceTile extends StatelessWidget {
         tags: profile.tags,
         statusEmoji: profile.statusEmoji,
         nickColor: profile.nickColor,
+        birthday: profile.birthday,
       );
     }
 
@@ -3970,6 +3995,7 @@ class _PairRequestScreenState extends State<_PairRequestScreen>
       tags: profile.tags,
       statusEmoji: profile.statusEmoji,
       nickColor: profile.nickColor,
+      birthday: profile.birthday,
     );
     // Send full profile (avatar + banner) directly to the paired peer
     final pairedKey = widget.info['publicKey'] as String? ?? '';

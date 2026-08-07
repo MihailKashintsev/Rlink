@@ -29,6 +29,8 @@ class PremiumService extends ChangeNotifier {
 
   static const _keyUntil = 'premium_active_until_ms';
   static const _keyPendingPayment = 'premium_pending_payment_id';
+  static const _keyGiftPayment = 'premium_gift_payment_id';
+  static const _keyGiftRecipient = 'premium_gift_recipient';
 
   /// Channels anyone can create without paying.
   static const int freeChannelLimit = 2;
@@ -133,6 +135,70 @@ class PremiumService extends ChangeNotifier {
           await prefs.setString(_keyPendingPayment, paymentId);
           return url;
         }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Gift Premium to [recipientId] (a birthday present): the payer funds it,
+  /// the days land on the recipient. Returns the YooKassa page URL, or null.
+  Future<String?> giftPremium(String plan, String recipientId) async {
+    final id = CryptoService.instance.publicKeyHex;
+    if (id.isEmpty || recipientId.length != 64) return null;
+    try {
+      final resp = await _dio.post<dynamic>(
+        '${_httpBase()}/premium/create',
+        data: {'user_id': id, 'plan': plan, 'gift_to': recipientId},
+      );
+      final data = resp.data;
+      if (data is Map && data['ok'] == true) {
+        final paymentId = data['payment_id'] as String?;
+        final url = data['confirmation_url'] as String?;
+        if (paymentId != null && url != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_keyGiftPayment, paymentId);
+          await prefs.setString(_keyGiftRecipient, recipientId);
+          return url;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Recipient id of the gift we're waiting on, or null.
+  Future<String?> pendingGiftRecipient() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final pid = prefs.getString(_keyGiftPayment);
+      if (pid == null || pid.isEmpty) return null;
+      return prefs.getString(_keyGiftRecipient);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Settle a pending gift. Returns the recipient id once the payment went
+  /// through (so the caller can open the greeting card), else null. Never
+  /// grants the payer premium.
+  Future<String?> settleGiftPending() async {
+    String? paymentId, recipient;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      paymentId = prefs.getString(_keyGiftPayment);
+      recipient = prefs.getString(_keyGiftRecipient);
+    } catch (_) {}
+    if (paymentId == null || paymentId.isEmpty) return null;
+    try {
+      final resp = await _dio.post<dynamic>(
+        '${_httpBase()}/premium/check',
+        data: {'payment_id': paymentId},
+      );
+      final data = resp.data;
+      if (data is Map && data['ok'] == true && data['applied'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_keyGiftPayment);
+        await prefs.remove(_keyGiftRecipient);
+        return recipient;
       }
     } catch (_) {}
     return null;

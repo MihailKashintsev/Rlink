@@ -1325,6 +1325,7 @@ Future<void> initServices() async {
             tags: myProfile.tags,
             statusEmoji: myProfile.statusEmoji,
             nickColor: myProfile.nickColor,
+            birthday: myProfile.birthday,
           );
           // Show celebration screen on sender side
           final myKey = CryptoService.instance.publicKeyHex;
@@ -1682,7 +1683,7 @@ Future<void> initServices() async {
       // x25519Key — X25519 ключ base64 для E2E шифрования (пустая строка у старых версий)
       onProfile: (bleId, publicKey, nick, username, color, emoji, x25519Key,
           tags, statusEmojiPayload, statusEmojiAutoPayloadJson,
-          nickColorPayload) async {
+          nickColorPayload, birthdayPayload) async {
         if (statusEmojiAutoPayloadJson != null &&
             statusEmojiAutoPayloadJson.isNotEmpty) {
           try {
@@ -1778,6 +1779,7 @@ Future<void> initServices() async {
                 bannerImagePath: oldContact.bannerImagePath,
                 statusEmoji: resolvedStatus(null, oldContact),
                 nickColor: nickColorPayload ?? oldContact.nickColor,
+                birthday: birthdayPayload ?? oldContact.birthday,
               ));
               await ChatStorageService.instance
                   .deleteContact(oldContact.publicKeyHex);
@@ -1803,6 +1805,7 @@ Future<void> initServices() async {
               profileMusicPath: existing.profileMusicPath,
               statusEmoji: resolvedStatus(existing, null),
               nickColor: nickColorPayload ?? existing.nickColor,
+              birthday: birthdayPayload ?? existing.birthday,
             ));
             // Если нашли ник-дубликат или стаб с другим ключом — переносим историю и удаляем
             if (oldContact != null) {
@@ -2870,6 +2873,7 @@ Future<void> initServices() async {
           tags: myProfile.tags,
           statusEmoji: myProfile.statusEmoji,
           nickColor: myProfile.nickColor,
+          birthday: myProfile.birthday,
         );
       }
       // Request stories from newly connected BLE peer
@@ -3012,7 +3016,8 @@ void _bindGossipFallbackHandlersIfMissing() {
       tags,
       statusEmojiPayload,
       statusEmojiAutoPayloadJson,
-      nickColorPayload) {
+      nickColorPayload,
+      birthdayPayload) {
     debugPrint('[RLINK][Fallback] Bind onProfileReceived from $nick');
     // Register the peer's key mapping
     BleService.instance.registerPeerKey(bleId, publicKey);
@@ -3033,6 +3038,7 @@ void _bindGossipFallbackHandlersIfMissing() {
         tags: myProfile.tags,
         statusEmoji: myProfile.statusEmoji,
         nickColor: myProfile.nickColor,
+        birthday: myProfile.birthday,
       ));
     }
   };
@@ -3267,6 +3273,7 @@ Future<void> sendProfileToAllContacts() async {
       tags: myProfile.tags,
       statusEmoji: myProfile.statusEmoji,
       nickColor: myProfile.nickColor,
+      birthday: myProfile.birthday,
     );
     debugPrint('[RLINK][Profile] Gossip-broadcast profile');
   } catch (e) {

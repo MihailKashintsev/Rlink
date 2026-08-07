@@ -265,7 +265,7 @@ class ChatStorageService {
     Future<Database> open() async {
       final db = await openDatabase(
         path,
-        version: 23,
+        version: 24,
         onCreate: (db, v) async {
           try {
             await db.rawQuery('PRAGMA journal_mode = WAL');
@@ -285,7 +285,8 @@ class ChatStorageService {
             banner_img_path   TEXT,
             profile_music_path TEXT,
             status_emoji       TEXT,
-            nick_color         INTEGER
+            nick_color         INTEGER,
+            birthday           TEXT
           )
         ''');
           await db.execute('''
@@ -541,6 +542,12 @@ class ChatStorageService {
             try {
               await db
                   .execute('ALTER TABLE contacts ADD COLUMN nick_color INTEGER');
+            } catch (_) {}
+          }
+          if (oldVersion < 24) {
+            try {
+              await db
+                  .execute('ALTER TABLE contacts ADD COLUMN birthday TEXT');
             } catch (_) {}
           }
           if (oldVersion < 21) {

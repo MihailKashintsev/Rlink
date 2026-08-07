@@ -69,6 +69,7 @@ void _broadcastMeta(UserProfile p) {
     tags: p.tags,
     statusEmoji: p.statusEmoji,
     nickColor: p.nickColor,
+    birthday: p.birthday,
   );
 }
 

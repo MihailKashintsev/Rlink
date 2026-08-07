@@ -178,17 +178,21 @@ Future<Map<String, dynamic>?> _yooKassa(
 int _applyPayment(Map<String, dynamic> store, String paymentId) {
   final rec = _payments(store)[paymentId] as Map<String, dynamic>?;
   if (rec == null) return 0;
-  final userId = rec['user_id'] as String? ?? '';
+  // A gift funds someone else's subscription: the payer created the payment,
+  // but the days land on gift_to.
+  final giftTo = (rec['gift_to'] as String? ?? '').trim();
+  final beneficiary = giftTo.isNotEmpty ? giftTo : (rec['user_id'] as String? ?? '');
   final plan = _plans[rec['plan'] as String? ?? ''];
-  if (userId.isEmpty || plan == null) return 0;
-  if (rec['applied'] == true) return _untilMsFor(store, userId);
+  if (beneficiary.isEmpty || plan == null) return 0;
+  if (rec['applied'] == true) return _untilMsFor(store, beneficiary);
 
   final now = DateTime.now().millisecondsSinceEpoch;
-  final base = max(now, _untilMsFor(store, userId));
+  final base = max(now, _untilMsFor(store, beneficiary));
   final until = base + plan.days * 86400000;
-  _subs(store)[userId] = {
+  _subs(store)[beneficiary] = {
     'until_ms': until,
     'updated': DateTime.now().toIso8601String(),
+    if (giftTo.isNotEmpty) 'gifted_by': rec['user_id'],
   };
   rec['applied'] = true;
   rec['applied_at'] = DateTime.now().toIso8601String();
@@ -245,8 +249,13 @@ Future<shelf.Response?> handlePremium(shelf.Request request) async {
     final userId = (body['user_id'] as String? ?? '').trim().toLowerCase();
     final planKey = (body['plan'] as String? ?? '').trim();
     final plan = _plans[planKey];
+    // Gift: the days go to gift_to instead of the payer (birthday present).
+    final giftTo = (body['gift_to'] as String? ?? '').trim().toLowerCase();
     if (!_validUserId(userId)) {
       return _json({'ok': false, 'error': 'bad_user_id'}, status: 400);
+    }
+    if (giftTo.isNotEmpty && !_validUserId(giftTo)) {
+      return _json({'ok': false, 'error': 'bad_gift_to'}, status: 400);
     }
     if (plan == null) {
       return _json({'ok': false, 'error': 'bad_plan'}, status: 400);
@@ -256,8 +265,12 @@ Future<shelf.Response?> handlePremium(shelf.Request request) async {
       'amount': {'value': plan.amount, 'currency': 'RUB'},
       'capture': true,
       'confirmation': {'type': 'redirect', 'return_url': _returnUrl},
-      'description': plan.title,
-      'metadata': {'user_id': userId, 'plan': planKey},
+      'description': giftTo.isNotEmpty ? '${plan.title} (подарок)' : plan.title,
+      'metadata': {
+        'user_id': userId,
+        'plan': planKey,
+        if (giftTo.isNotEmpty) 'gift_to': giftTo,
+      },
     };
     // 54-ФЗ receipt, only when the buyer gave an email to send it to.
     final email = (body['email'] as String? ?? '').trim();
@@ -293,6 +306,7 @@ Future<shelf.Response?> handlePremium(shelf.Request request) async {
     _payments(store)[paymentId] = {
       'user_id': userId,
       'plan': planKey,
+      if (giftTo.isNotEmpty) 'gift_to': giftTo,
       'applied': false,
       'created': DateTime.now().toIso8601String(),
     };
@@ -314,11 +328,21 @@ Future<shelf.Response?> handlePremium(shelf.Request request) async {
     if (paymentId.isEmpty) {
       return _json({'ok': false, 'error': 'no_payment_id'}, status: 400);
     }
-    final until = await _settle(paymentId);
+    await _settle(paymentId);
+    // Report the PAYER's own subscription (a gift doesn't change it) plus
+    // whether this payment went through and whether it was a gift, so the
+    // app can send the card without granting the payer premium.
+    final store = _load();
+    final rec = _payments(store)[paymentId] as Map<String, dynamic>?;
+    final gift = (rec?['gift_to'] as String? ?? '').isNotEmpty;
+    final applied = rec?['applied'] == true;
+    final payerUntil = _untilMsFor(store, rec?['user_id'] as String? ?? '');
     return _json({
       'ok': true,
-      'active': until > DateTime.now().millisecondsSinceEpoch,
-      'until_ms': until,
+      'applied': applied,
+      'gift': gift,
+      'active': payerUntil > DateTime.now().millisecondsSinceEpoch,
+      'until_ms': payerUntil,
     });
   }
 

@@ -182,6 +182,9 @@ class ProfileService {
     /// true — записать [nickColor] (в т.ч. null, чтобы сбросить цвет).
     bool setNickColor = false,
     int? nickColor,
+    /// true — записать [birthday] (в т.ч. null, чтобы убрать).
+    bool setBirthday = false,
+    String? birthday,
   }) async {
     if (_profile == null) throw StateError('No profile');
     // Always use the current CryptoService key to prevent divergence
@@ -204,6 +207,7 @@ class ProfileService {
       profileMusicPath: profileMusicPath ?? _profile!.profileMusicPath,
       statusEmoji: nextStatus,
       nickColor: setNickColor ? nickColor : _profile!.nickColor,
+      birthday: setBirthday ? birthday : _profile!.birthday,
     );
     await _write(updated.encode());
     _profile = updated;

@@ -22,6 +22,10 @@ class UserProfile {
   /// Едет вместе с профилем, поэтому виден всем собеседникам.
   final int? nickColor;
 
+  /// День рождения в формате "MM-DD" (год необязателен — "YYYY-MM-DD").
+  /// Едет вместе с профилем; контакты видят плашку в этот день.
+  final String? birthday;
+
   const UserProfile({
     required this.publicKeyHex,
     required this.nickname,
@@ -34,7 +38,25 @@ class UserProfile {
     this.profileMusicPath,
     this.statusEmoji = '',
     this.nickColor,
+    this.birthday,
   });
+
+  /// month-day ("MM-DD") extracted from [birthday], or null.
+  static String? monthDay(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final m = RegExp(r'(\d{2})-(\d{2})$').firstMatch(raw.trim());
+    return m == null ? null : '${m.group(1)}-${m.group(2)}';
+  }
+
+  /// Is [birthday] today (local time)? Compares month + day only.
+  static bool isToday(String? raw) {
+    final md = monthDay(raw);
+    if (md == null) return false;
+    final now = DateTime.now();
+    final today =
+        '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    return md == today;
+  }
 
   /// Обрезка и нормализация строки статуса (графемы, не сырые code units).
   static String normalizeStatusEmoji(String raw) {
@@ -67,6 +89,7 @@ class UserProfile {
         if (profileMusicPath != null) 'musicPath': profileMusicPath,
         if (statusEmoji.isNotEmpty) 'st': statusEmoji,
         if (nickColor != null) 'nc': nickColor,
+        if (birthday != null && birthday!.isNotEmpty) 'bd': birthday,
       };
 
   static String _jsonString(Object? v) {
@@ -106,6 +129,7 @@ class UserProfile {
       nickColor: j['nc'] is num
           ? (j['nc'] as num).toInt()
           : int.tryParse(_jsonString(j['nc'])),
+      birthday: _jsonString(j['bd']).isEmpty ? null : _jsonString(j['bd']),
     );
   }
 

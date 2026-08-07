@@ -62,6 +62,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late String _selectedEmoji;
   late String _statusEmoji;
   int? _nickColor;
+  String? _birthday; // "MM-DD" or "YYYY-MM-DD"
   String? _selectedImagePath;
   String? _bannerImagePath;
   String? _profileMusicPath;
@@ -111,6 +112,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _selectedEmoji = p.avatarEmoji;
     _statusEmoji = p.statusEmoji;
     _nickColor = p.nickColor;
+    _birthday = p.birthday;
     _selectedImagePath = p.avatarImagePath;
     _bannerImagePath = p.bannerImagePath;
     _profileMusicPath = p.profileMusicPath;
@@ -326,6 +328,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  static const _ruMonths = [
+    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля',
+    'августа', 'сентября', 'октября', 'ноября', 'декабря'
+  ];
+
+  /// "15 марта" from a stored "MM-DD"/"YYYY-MM-DD".
+  String _birthdayLabel(String raw) {
+    final md = UserProfile.monthDay(raw);
+    if (md == null) return raw;
+    final p = md.split('-');
+    final mo = int.tryParse(p[0]) ?? 1;
+    final day = int.tryParse(p[1]) ?? 1;
+    return '$day ${_ruMonths[(mo - 1).clamp(0, 11)]}';
+  }
+
+  Future<void> _pickBirthday() async {
+    final now = DateTime.now();
+    var initial = DateTime(now.year - 20, now.month, now.day);
+    final md = UserProfile.monthDay(_birthday);
+    if (md != null) {
+      final p = md.split('-');
+      initial = DateTime(now.year, int.tryParse(p[0]) ?? 1, int.tryParse(p[1]) ?? 1);
+    }
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1900),
+      lastDate: now,
+      helpText: 'День рождения',
+    );
+    if (picked != null) {
+      setState(() => _birthday = '${picked.year}-'
+          '${picked.month.toString().padLeft(2, '0')}-'
+          '${picked.day.toString().padLeft(2, '0')}');
+    }
+  }
+
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
@@ -352,6 +391,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         statusEmoji: _statusEmoji,
         setNickColor: true,
         nickColor: _nickColor,
+        setBirthday: true,
+        birthday: _birthday,
       );
       setState(() {
         _editing = false;
@@ -372,6 +413,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         tags: updated.tags,
         statusEmoji: updated.statusEmoji,
         nickColor: updated.nickColor,
+        birthday: updated.birthday,
       );
       // Если аватар/баннер реально изменились — перешлём изображения контактам,
       // чтобы у них обновилась картинка (а не только метаданные профиля).
@@ -905,6 +947,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 );
               }),
               const SizedBox(height: 8),
+
+              // День рождения
+              if (_editing || _birthday != null)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.cake_outlined,
+                      color: Theme.of(context).colorScheme.primary),
+                  title: const Text('День рождения'),
+                  subtitle: Text(
+                    _birthday == null
+                        ? 'Контакты увидят поздравление в этот день'
+                        : _birthdayLabel(_birthday!),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: !_editing
+                      ? null
+                      : (_birthday == null
+                          ? const Icon(Icons.chevron_right)
+                          : IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => setState(() => _birthday = null),
+                            )),
+                  onTap: _editing ? _pickBirthday : null,
+                ),
 
               // Теги
               if (_editing) ...[

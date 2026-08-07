@@ -21,6 +21,9 @@ class Contact {
   /// Premium-цвет имени контакта (gossip `nc`); null — обычный цвет темы.
   final int? nickColor;
 
+  /// День рождения контакта (gossip `bd`), формат "MM-DD"/"YYYY-MM-DD".
+  final String? birthday;
+
   const Contact({
     required this.publicKeyHex,
     required this.nickname,
@@ -36,6 +39,7 @@ class Contact {
     this.profileMusicPath,
     this.statusEmoji = '',
     this.nickColor,
+    this.birthday,
   });
 
   String get initials {
@@ -61,6 +65,8 @@ class Contact {
     bool setProfileMusicPath = false,
     String? statusEmoji,
     int? nickColor,
+    String? birthday,
+    bool setBirthday = false,
     int? avatarColor,
     String? avatarEmoji,
   }) =>
@@ -82,6 +88,7 @@ class Contact {
             setProfileMusicPath ? profileMusicPath : this.profileMusicPath,
         statusEmoji: statusEmoji ?? this.statusEmoji,
         nickColor: nickColor ?? this.nickColor,
+        birthday: setBirthday ? birthday : this.birthday,
       );
 
   Map<String, dynamic> toMap() => {
@@ -99,6 +106,7 @@ class Contact {
         'profile_music_path': profileMusicPath,
         'status_emoji': statusEmoji.isEmpty ? null : statusEmoji,
         'nick_color': nickColor,
+        'birthday': birthday,
       };
 
   factory Contact.fromMap(Map<String, dynamic> m) => Contact(
@@ -127,5 +135,6 @@ class Contact {
         statusEmoji: UserProfile.normalizeStatusEmoji(
             (m['status_emoji'] as String?) ?? ''),
         nickColor: m['nick_color'] as int?,
+        birthday: m['birthday'] as String?,
       );
 }
