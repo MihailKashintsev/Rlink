@@ -28,6 +28,7 @@ import '../../main.dart'
         broadcastMyProfileMusic,
         sendProfileToAllContacts;
 import '../widgets/avatar_widget.dart';
+import '../widgets/wheel_time_picker.dart';
 import '../../services/music_catalog_service.dart' show parseMusicRef;
 import '../widgets/music_picker_sheet.dart';
 import '../widgets/desktop_image_picker.dart';
@@ -344,25 +345,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _pickBirthday() async {
-    final now = DateTime.now();
-    var initial = DateTime(now.year - 20, now.month, now.day);
-    final md = UserProfile.monthDay(_birthday);
-    if (md != null) {
-      final p = md.split('-');
-      initial = DateTime(now.year, int.tryParse(p[0]) ?? 1, int.tryParse(p[1]) ?? 1);
-    }
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(1900),
-      lastDate: now,
-      helpText: 'День рождения',
+    final md = await showWheelBirthdaySheet(
+      context,
+      initialMonthDay: UserProfile.monthDay(_birthday),
     );
-    if (picked != null) {
-      setState(() => _birthday = '${picked.year}-'
-          '${picked.month.toString().padLeft(2, '0')}-'
-          '${picked.day.toString().padLeft(2, '0')}');
-    }
+    if (md != null) setState(() => _birthday = md);
   }
 
   Future<void> _save() async {

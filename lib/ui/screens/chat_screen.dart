@@ -91,6 +91,7 @@ import '../../utils/web_object_url.dart';
 import '../../utils/external_message_share.dart';
 import '../../utils/invite_dm_codec.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/birthday_banner.dart';
 import '../widgets/markdown_editing_controller.dart';
 import '../widgets/voice_wave_line.dart';
 import '../widgets/animated_transitions.dart';
@@ -298,6 +299,7 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription<IncomingMessage>? _msgSub;
   // Резолвленный публичный ключ пира (может отличаться от widget.peerId если тот BLE UUID)
   late String _resolvedPeerId;
+  Contact? _peerContact; // for the birthday banner
   String? _replyToMessageId;
   String? _replyPreviewText;
   String? _editingMessageId;
@@ -964,6 +966,13 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     _syncHeaderPathsFromWidgetAndRelay();
+    unawaited(ChatStorageService.instance
+        .getContact(_looksLikePublicKey(_resolvedPeerId)
+            ? _resolvedPeerId
+            : widget.peerId)
+        .then((c) {
+      if (mounted && c != null) setState(() => _peerContact = c);
+    }));
     unawaited(_loadAndMarkRead());
     unawaited(CallHistoryService.instance.ensureLoaded());
     unawaited((() async {
@@ -7307,6 +7316,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: AuroraBackground(child: SizedBox.expand())),
               Column(children: [
                 SizedBox(height: 0, key: _audioQueueMiniPlayerAnchor),
+                if (_peerContact != null &&
+                    UserProfile.isToday(_peerContact!.birthday))
+                  BirthdayBanner(contact: _peerContact!),
                 // Sending / uploading status bar
                 if (_aiThinking)
                   Container(

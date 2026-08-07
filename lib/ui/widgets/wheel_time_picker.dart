@@ -20,6 +20,165 @@ Future<DateTime?> showWheelDateTimeSheet(
   );
 }
 
+/// iPhone-style spinning day + month picker for a birthday. Returns "MM-DD"
+/// (year isn't asked — a birthday only needs the day) or null on cancel.
+Future<String?> showWheelBirthdaySheet(
+  BuildContext context, {
+  String? initialMonthDay,
+}) {
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _BirthdayWheelSheet(initial: initialMonthDay),
+  );
+}
+
+class _BirthdayWheelSheet extends StatefulWidget {
+  final String? initial;
+  const _BirthdayWheelSheet({this.initial});
+
+  @override
+  State<_BirthdayWheelSheet> createState() => _BirthdayWheelSheetState();
+}
+
+class _BirthdayWheelSheetState extends State<_BirthdayWheelSheet> {
+  static const _nom = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль',
+    'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ];
+  static const _gen = [
+    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля',
+    'августа', 'сентября', 'октября', 'ноября', 'декабря'
+  ];
+  static const _maxDay = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  int _dayIdx = 0; // 0..30
+  int _monthIdx = 0; // 0..11
+
+  @override
+  void initState() {
+    super.initState();
+    final m = RegExp(r'(\d{2})-(\d{2})$').firstMatch(widget.initial ?? '');
+    if (m != null) {
+      _monthIdx = ((int.tryParse(m.group(1)!) ?? 1) - 1).clamp(0, 11);
+      _dayIdx = ((int.tryParse(m.group(2)!) ?? 1) - 1).clamp(0, 30);
+    } else {
+      final now = DateTime.now();
+      _monthIdx = now.month - 1;
+      _dayIdx = now.day - 1;
+    }
+  }
+
+  int get _day => (_dayIdx + 1).clamp(1, _maxDay[_monthIdx]);
+  String get _summary => '$_day ${_gen[_monthIdx]}';
+
+  void _commit() {
+    final md = '${(_monthIdx + 1).toString().padLeft(2, '0')}-'
+        '${_day.toString().padLeft(2, '0')}';
+    Navigator.pop(context, md);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 2),
+              child: Row(
+                children: [
+                  const Text('День рождения',
+                      style:
+                          TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(AppL10n.t('common_cancel')),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 216,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  IgnorePointer(
+                    child: Container(
+                      height: 40,
+                      margin: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      _Wheel(
+                        count: 31,
+                        loop: true,
+                        initialIndex: _dayIdx,
+                        width: 88,
+                        onChanged: (i) => setState(() => _dayIdx = i),
+                        builder: (i) => Text('${i + 1}'),
+                      ),
+                      Expanded(
+                        child: _Wheel(
+                          count: 12,
+                          loop: true,
+                          initialIndex: _monthIdx,
+                          onChanged: (i) => setState(() => _monthIdx = i),
+                          builder: (i) => Text(
+                            _nom[i],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _commit,
+                  child: Text('${AppL10n.t('common_done')} · $_summary'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Scroll physics that keeps spinning on a hard flick — the "крутанул сильно,
 /// долго крутится" feel — while leaving gentle drags precise.
 class _MomentumWheelPhysics extends FixedExtentScrollPhysics {
