@@ -249,7 +249,10 @@ class ComposerInputBarState extends State<ComposerInputBar> {
 
       switch (buttonId) {
         case 'voice_video_square':
-          if (widget.allowMediaRecord) {
+          // Hide the record button once there's text — the send button takes
+          // its place and the field gets the freed width.
+          if (widget.allowMediaRecord &&
+              widget.controller.text.trim().isEmpty) {
             buttons.add(_buildVoiceVideoButton(cs));
           }
           break;
@@ -733,7 +736,8 @@ class ComposerInputBarState extends State<ComposerInputBar> {
               ..._buildButtonsInOrder(cs, leftSide: false),
               if (!widget.aiTextOnlyComposer &&
                   widget.allowMediaRecord &&
-                  !_hasConfiguredRecordButton) ...[
+                  !_hasConfiguredRecordButton &&
+                  !hasText) ...[
                 TelegramMediaRecordButton(
                   isSending: widget.isSending,
                   isRecording: widget.isRecording,
