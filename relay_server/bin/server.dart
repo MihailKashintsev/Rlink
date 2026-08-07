@@ -2748,6 +2748,28 @@ String? _botIdFromBearerApiToken(String authHeader) {
   return null;
 }
 
+/// Reused for streaming proxies (drive-audio): a per-request client can't be
+/// closed until its stream drains, so share one for the server's lifetime.
+final HttpClient _proxyClient = HttpClient()
+  ..connectionTimeout = const Duration(seconds: 15)
+  ..idleTimeout = const Duration(seconds: 30);
+
+/// Extract a Drive file id from a raw id or any Drive URL.
+String? _driveFileId(String raw) {
+  final v = raw.trim();
+  if (v.isEmpty) return null;
+  if (RegExp(r'^[A-Za-z0-9_-]{10,}$').hasMatch(v)) return v; // already an id
+  for (final re in [
+    RegExp(r'[?&]id=([A-Za-z0-9_-]+)'),
+    RegExp(r'/d/([A-Za-z0-9_-]+)'),
+    RegExp(r'/file/d/([A-Za-z0-9_-]+)'),
+  ]) {
+    final m = re.firstMatch(v);
+    if (m != null) return m.group(1);
+  }
+  return null;
+}
+
 Future<shelf.Response> _infoHandler(shelf.Request request) async {
   if (request.method == 'OPTIONS') {
     return shelf.Response(
@@ -2766,6 +2788,52 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
   // Premium subscriptions: /premium/{create,check,webhook,status}.
   final premiumResp = await handlePremium(request);
   if (premiumResp != null) return premiumResp;
+  // Stream a public Google Drive audio file with range + CORS so the browser's
+  // <audio> element can play it. Drive's own download endpoint redirects and
+  // omits CORS, so a profile/uploaded track sticks at 0s on web.
+  if (request.url.path == 'drive-audio') {
+    final id = _driveFileId(request.url.queryParameters['id'] ??
+        request.url.queryParameters['u'] ??
+        '');
+    if (id == null) {
+      return _jsonResponse({'ok': false, 'error': 'bad_id'}, status: 400);
+    }
+    final upstream = Uri.parse(
+        'https://drive.usercontent.google.com/download?id=$id&export=download&confirm=t');
+    try {
+      final req = await _proxyClient.getUrl(upstream);
+      final range = request.headers['range'];
+      if (range != null) req.headers.set('range', range);
+      req.headers.set('user-agent', 'Mozilla/5.0 (compatible; RlinkRelay)');
+      final resp = await req.close();
+      if (resp.statusCode >= 400) {
+        await resp.drain<void>();
+        return _jsonResponse(
+            {'ok': false, 'error': 'upstream_${resp.statusCode}'},
+            status: 502);
+      }
+      var ct = resp.headers.contentType?.mimeType ?? '';
+      if (ct.isEmpty || ct == 'application/octet-stream' ||
+          ct.startsWith('text/')) {
+        ct = 'audio/mpeg';
+      }
+      final headers = <String, String>{
+        'content-type': ct,
+        'accept-ranges': 'bytes',
+        'access-control-allow-origin': '*',
+        'cache-control': 'public, max-age=3600',
+      };
+      final cr = resp.headers.value('content-range');
+      if (cr != null) headers['content-range'] = cr;
+      if (resp.contentLength >= 0) {
+        headers['content-length'] = '${resp.contentLength}';
+      }
+      return shelf.Response(resp.statusCode, body: resp, headers: headers);
+    } catch (e) {
+      return _jsonResponse(
+          {'ok': false, 'error': 'proxy_failed', 'detail': '$e'}, status: 502);
+    }
+  }
   if (request.url.path == 'push/public_key') {
     if (!_webPushConfigured) {
       return _jsonResponse({'enabled': false, 'publicKey': ''}, status: 503);

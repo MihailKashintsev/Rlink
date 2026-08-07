@@ -10,6 +10,7 @@ import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 
 import 'embedded_video_pause_bus.dart';
+import 'music_catalog_service.dart' show drivePlayableUrl;
 import '../utils/web_file_store.dart';
 
 /// Тип элемента очереди (квадратик в очереди идёт как видео с дорожкой).
@@ -426,6 +427,9 @@ class VoiceService {
           ) ??
           playablePath;
     }
+    // Google Drive links can't be streamed by <audio> directly (redirect + no
+    // CORS) — route them through the relay audio proxy.
+    playablePath = drivePlayableUrl(playablePath);
     _player = AudioPlayer();
     playDuration.value = Duration.zero;
     _audioDurSub = _player!.onDurationChanged.listen((dur) {

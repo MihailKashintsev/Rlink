@@ -3,6 +3,40 @@ import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
+import 'relay_service.dart';
+
+String? _driveFileId(String url) {
+  for (final re in [
+    RegExp(r'[?&]id=([A-Za-z0-9_-]+)'),
+    RegExp(r'/file/d/([A-Za-z0-9_-]+)'),
+    RegExp(r'/d/([A-Za-z0-9_-]+)'),
+  ]) {
+    final m = re.firstMatch(url);
+    if (m != null) return m.group(1);
+  }
+  return null;
+}
+
+/// Rewrite a Google Drive URL to the relay audio proxy so the browser can
+/// actually stream it (Drive's download endpoint redirects and omits CORS, so
+/// an <audio> element sticks at 0s). Non-Drive URLs pass through unchanged.
+String drivePlayableUrl(String url) {
+  if (url.contains('/drive-audio?')) return url; // already proxied
+  if (!url.contains('drive.google.com') &&
+      !url.contains('drive.usercontent.google.com')) {
+    return url;
+  }
+  final id = _driveFileId(url);
+  if (id == null || id.isEmpty) return url;
+  final base = RelayService.instance.serverUrl ?? RelayService.defaultServerUrl;
+  final httpBase = base.startsWith('wss://')
+      ? base.replaceFirst('wss://', 'https://')
+      : base.startsWith('ws://')
+          ? base.replaceFirst('ws://', 'http://')
+          : base;
+  return '$httpBase/drive-audio?id=$id';
+}
+
 /// A track we can reference by URL — nothing is stored on our servers and
 /// listeners stream it instead of downloading a file.
 class CatalogTrack {

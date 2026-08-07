@@ -109,12 +109,13 @@ class MyTracksService {
         return null;
       }
       // webContentLink points at drive.google.com, which sends no CORS header
-      // and 403s on the virus-scan interstitial — normalise it.
+      // and 403s on the virus-scan interstitial — normalise it, then route it
+      // through the relay audio proxy so it actually streams in a browser.
       final direct = GoogleDriveChannelBackup.directDownloadUrl(link);
       final track = MyTrack(
         title: title.trim().isEmpty ? fileName : title.trim(),
         artist: artist.trim(),
-        url: direct,
+        url: drivePlayableUrl(direct),
         artwork: artworkDataUrl,
       );
       tracks.value = [track, ...tracks.value];
