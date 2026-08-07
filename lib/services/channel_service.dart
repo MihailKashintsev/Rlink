@@ -1821,30 +1821,45 @@ class ChannelService {
       }
     }
 
+    final myId = CryptoService.instance.publicKeyHex;
+
     await _db!.transaction((txn) async {
       final snapshotPostIds = <String>{};
+      var snapshotMaxTs = 0;
       for (final item in posts) {
         final m = item as Map<String, dynamic>;
         final pmap = Map<String, dynamic>.from(m['post'] as Map);
         if (pmap['channel_id'] != channelId) continue;
         snapshotPostIds.add(pmap['id'] as String);
+        final ts = (pmap['timestamp'] as num?)?.toInt() ?? 0;
+        if (ts > snapshotMaxTs) snapshotMaxTs = ts;
       }
 
       final localRows = await txn.query(
         'channel_posts',
-        columns: ['id'],
+        columns: ['id', 'author_id', 'timestamp'],
         where: 'channel_id = ?',
         whereArgs: [channelId],
       );
       for (final r in localRows) {
         final id = r['id'] as String;
-        if (!snapshotPostIds.contains(id)) {
-          await txn.delete('channel_post_viewers',
-              where: 'post_id = ?', whereArgs: [id]);
-          await txn.delete('channel_comments',
-              where: 'post_id = ?', whereArgs: [id]);
-          await txn.delete('channel_posts', where: 'id = ?', whereArgs: [id]);
+        if (snapshotPostIds.contains(id)) continue;
+        // Keep my own posts newer than this snapshot: the snapshot (from the
+        // channel admin's Drive) simply hasn't caught up to a post I just made
+        // as a co-admin — deleting it here is what made fresh posts vanish.
+        final author = r['author_id'] as String?;
+        final ts = (r['timestamp'] as num?)?.toInt() ?? 0;
+        if (author != null &&
+            author == myId &&
+            myId.isNotEmpty &&
+            ts >= snapshotMaxTs) {
+          continue;
         }
+        await txn.delete('channel_post_viewers',
+            where: 'post_id = ?', whereArgs: [id]);
+        await txn.delete('channel_comments',
+            where: 'post_id = ?', whereArgs: [id]);
+        await txn.delete('channel_posts', where: 'id = ?', whereArgs: [id]);
       }
 
       for (final item in posts) {
