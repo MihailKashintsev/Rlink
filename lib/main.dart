@@ -2041,12 +2041,32 @@ Future<void> initServices() async {
             ? await ChannelService.instance.getChannel(channelId)
             : null;
         final wasMod = before?.moderatorIds.contains(myId) ?? false;
+        final wasAdmin = before?.adminId == myId;
         await ChannelService.instance.applyChannelMetaFromPayload(payload);
         final after = channelId != null
             ? await ChannelService.instance.getChannel(channelId)
             : null;
         final nowMod = after?.moderatorIds.contains(myId) ?? false;
-        if (!wasMod && nowMod && myId.isNotEmpty && after != null) {
+        final nowAdmin = after?.adminId == myId;
+        if (!wasAdmin && nowAdmin && myId.isNotEmpty && after != null) {
+          // Ownership was transferred to me — assert it: re-broadcast the meta
+          // and (re)publish the public directory entry from my authority, so
+          // the change sticks instead of the old admin's stale directory record
+          // pushing the previous owner back. Also take over Drive backup.
+          InAppNotificationService.instance.show(
+            title: 'Вы — владелец канала',
+            body: 'Вам передали владение «${after.name}»',
+            payload: 'channel:$channelId',
+            color: after.avatarColor,
+            emoji: after.avatarEmoji.isNotEmpty ? after.avatarEmoji : '👑',
+            imagePath: after.avatarImagePath,
+          );
+          unawaited(after.broadcastGossipMeta());
+          if (after.driveBackupEnabled) {
+            unawaited(ChannelBackupService.instance
+                .publishBackupIfAdminDriveEnabled(channelId!));
+          }
+        } else if (!wasMod && nowMod && myId.isNotEmpty && after != null) {
           InAppNotificationService.instance.show(
             title: 'Модератор канала',
             body: 'Вас назначили модератором «${after.name}»',

@@ -1316,14 +1316,17 @@ class ChannelService {
 
     final subs = List<String>.from(ch.subscriberIds);
     if (!subs.contains(currentAdminId)) subs.add(currentAdminId);
+    if (!subs.contains(newAdminId)) subs.add(newAdminId);
 
     var mods = List<String>.from(ch.moderatorIds);
     mods.remove(newAdminId);
     mods.remove(currentAdminId);
 
+    // The previous owner stays on as a co-admin (link-admin) so they keep
+    // posting rights — "передал владение → стал дочерним админом".
     var links = List<String>.from(ch.linkAdminIds);
     links.remove(newAdminId);
-    links.remove(currentAdminId);
+    if (!links.contains(currentAdminId)) links.add(currentAdminId);
 
     final staffLabels = Map<String, String>.from(ch.staffLabels);
     staffLabels.remove(newAdminId);
@@ -1337,6 +1340,11 @@ class ChannelService {
     );
     await updateChannel(updated);
     unawaited(updated.broadcastGossipMeta());
+    // Directed copy so the new owner learns of the handover even if they're
+    // offline now (relay queues it) or out of gossip range — they then assert
+    // ownership in the public directory themselves (only they can: the relay
+    // requires the directory put to be signed by the payload's adminId).
+    unawaited(updated.broadcastGossipMeta(recipientId: newAdminId));
     unawaited(publishAccountChannelSubscriptions());
     return updated;
   }

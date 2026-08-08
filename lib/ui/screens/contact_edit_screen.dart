@@ -5,10 +5,12 @@ import '../../l10n/app_l10n.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../models/contact.dart';
+import '../../models/user_profile.dart';
 import '../../services/chat_storage_service.dart';
 import '../../services/image_service.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/desktop_image_picker.dart';
+import '../widgets/wheel_time_picker.dart';
 
 /// Локальное редактирование контакта: имя, фото, баннер, цвет и эмодзи аватара.
 /// Не отправляется в сеть — только у вас в адресной книге.
@@ -27,6 +29,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
   late String _emoji;
   String? _avatarPath;
   String? _bannerPath;
+  String? _birthday; // "MM-DD"
   bool _showEmojiPicker = false;
   bool _saving = false;
   final _picker = ImagePicker();
@@ -41,6 +44,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
     _emoji = _c.avatarEmoji;
     _avatarPath = _c.avatarImagePath;
     _bannerPath = _c.bannerImagePath;
+    _birthday = _c.birthday;
   }
 
   @override
@@ -88,6 +92,8 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
           setAvatarImagePath: true,
           bannerImagePath: _bannerPath,
           setBannerImagePath: true,
+          birthday: _birthday,
+          setBirthday: true,
         ),
       );
       if (mounted) Navigator.pop(context);
@@ -276,6 +282,31 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           ],
+          const SizedBox(height: 8),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.cake_outlined),
+            title: const Text('День рождения'),
+            subtitle: Text(
+              _birthday == null || _birthday!.isEmpty
+                  ? 'Не указан'
+                  : UserProfile.birthdayLabel(_birthday),
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+            trailing: _birthday == null || _birthday!.isEmpty
+                ? const Icon(Icons.chevron_right)
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => setState(() => _birthday = null),
+                  ),
+            onTap: () async {
+              final md = await showWheelBirthdaySheet(
+                context,
+                initialMonthDay: UserProfile.monthDay(_birthday),
+              );
+              if (md != null) setState(() => _birthday = md);
+            },
+          ),
         ],
       ),
     );

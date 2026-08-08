@@ -48,6 +48,22 @@ class UserProfile {
     return m == null ? null : '${m.group(1)}-${m.group(2)}';
   }
 
+  static const _ruMonthsGen = [
+    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля',
+    'августа', 'сентября', 'октября', 'ноября', 'декабря'
+  ];
+
+  /// Human "D месяца" label for a stored birthday, or the raw string on parse
+  /// failure.
+  static String birthdayLabel(String? raw) {
+    final md = monthDay(raw);
+    if (md == null) return raw ?? '';
+    final p = md.split('-');
+    final mo = int.tryParse(p[0]) ?? 1;
+    final day = int.tryParse(p[1]) ?? 1;
+    return '$day ${_ruMonthsGen[(mo - 1).clamp(0, 11)]}';
+  }
+
   /// Is [birthday] today (local time)? Compares month + day only.
   static bool isToday(String? raw) {
     final md = monthDay(raw);
