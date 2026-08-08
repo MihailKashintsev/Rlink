@@ -740,107 +740,6 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
     }
   }
 
-  Future<void> _linkGis() async {
-    setState(() => _busy = true);
-    try {
-      final acc =
-          await GoogleDriveChannelBackup.ensureUserSignedIn(interactive: true);
-      if (!mounted) return;
-      if (acc == null) {
-        final reason = GoogleDriveChannelBackup.lastSignInError;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            duration: const Duration(seconds: 7),
-            content: Text(reason?.isNotEmpty == true
-                ? reason!
-                : 'Не удалось войти в Google. На iPhone используйте «Привязать через Safari».'),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-    await _load(interactive: false);
-  }
-
-  Future<void> _linkSafari() async {
-    final tokenCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Привязка через Safari'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '1. Нажмите «Открыть вход» — откроется Safari со входом Google.\n'
-                '2. Разрешите доступ к Google Drive.\n'
-                '3. На странице нажмите «Скопировать код».\n'
-                '4. Вернитесь сюда и вставьте код ниже.',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.open_in_browser),
-                label: const Text('Открыть вход Google'),
-                onPressed: () {
-                  final uri =
-                      Uri.parse(GoogleDriveChannelBackup.buildManualAuthUrl());
-                  if (kIsWeb) {
-                    launchUrl(uri);
-                  } else {
-                    launchUrl(uri, mode: LaunchMode.externalApplication);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: tokenCtrl,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Вставьте код доступа',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(AppL10n.t('common_cancel')),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final linked = await GoogleDriveChannelBackup.linkWithPastedToken(
-                  tokenCtrl.text);
-              if (ctx.mounted) Navigator.pop(ctx, linked);
-            },
-            child: const Text('Привязать'),
-          ),
-        ],
-      ),
-    );
-    tokenCtrl.dispose();
-    if (!mounted) return;
-    if (ok == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google Drive привязан')),
-      );
-      await _load(interactive: false);
-    } else if (ok == false) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(GoogleDriveChannelBackup.lastSignInError ??
-              'Не удалось привязать. Получите новый код.'),
-        ),
-      );
-    }
-  }
-
   /// Durable server-side linking: the relay holds the refresh token, so the
   /// account survives re-login (unlike the ~1h implicit token). Works on web
   /// and native alike once the relay OAuth backend is deployed.
@@ -1005,18 +904,19 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
           if (!linked) ...[
             const _SectionHeader('Привязка'),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
               child: GoogleSignInButton(
                 busy: _busy,
-                onPressed: _busy ? null : (kIsWeb ? _linkSafari : _linkGis),
+                // Only the server (relay) OAuth flow — the direct in-app
+                // Google sign-in loops/forgets on web and isn't durable.
+                onPressed: _busy ? null : _linkRelay,
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-              child: TextButton.icon(
-                onPressed: _busy ? null : _linkRelay,
-                icon: const Icon(Icons.cloud_sync_outlined, size: 18),
-                label: const Text('Привязать навсегда (через сервер)'),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+              child: Text(
+                'Вход через сервер — привязка не слетает после перезахода.',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ),
           ],
