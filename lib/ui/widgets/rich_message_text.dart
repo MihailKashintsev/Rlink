@@ -1276,41 +1276,58 @@ class _SpoilerText extends StatefulWidget {
 }
 
 class _SpoilerTextState extends State<_SpoilerText>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _revealed = false;
-  late final AnimationController _ctrl;
+  late final AnimationController _twinkle; // idle shimmer while hidden
+  late final AnimationController _reveal; // 0 = covered … 1 = dots scattered
+
+  bool get _reduce => MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
+    _twinkle = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2200),
+    );
+    _reveal = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
     );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (!_revealed && !reduce && !_ctrl.isAnimating) {
-      _ctrl.repeat();
+    if (!_revealed && !_reduce && !_twinkle.isAnimating) {
+      _twinkle.repeat();
     }
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _twinkle.dispose();
+    _reveal.dispose();
     super.dispose();
   }
 
   void _toggle() {
-    setState(() => _revealed = !_revealed);
-    if (_revealed) {
-      _ctrl.stop();
-    } else if ((MediaQuery.maybeOf(context)?.disableAnimations ?? false) ==
-        false) {
-      _ctrl.repeat();
+    if (!_revealed) {
+      setState(() => _revealed = true);
+      _twinkle.stop();
+      if (_reduce) {
+        _reveal.value = 1;
+      } else {
+        _reveal.forward(from: 0); // dots fly apart
+      }
+    } else {
+      setState(() => _revealed = false);
+      if (_reduce) {
+        _reveal.value = 0;
+      } else {
+        _reveal.reverse();
+        _twinkle.repeat();
+      }
     }
   }
 
@@ -1319,28 +1336,35 @@ class _SpoilerTextState extends State<_SpoilerText>
     final color = widget.style.color ?? const Color(0xFF888888);
     return GestureDetector(
       onTap: _toggle,
-      child: Stack(
-        children: [
-          // Keep the real text in the tree so the covered area is exactly the
-          // text's size; hide it (transparent) until revealed.
-          Text(
-            widget.text,
-            style: widget.style.copyWith(
-              color: _revealed ? widget.style.color : Colors.transparent,
-            ),
-          ),
-          if (!_revealed)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: _ctrl,
-                  builder: (_, __) => CustomPaint(
-                    painter: _SpoilerParticles(t: _ctrl.value, color: color),
-                  ),
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_twinkle, _reveal]),
+        builder: (_, __) {
+          final rv = _reveal.value;
+          return Stack(
+            children: [
+              // Real text underneath; fades in as the dots scatter.
+              Text(
+                widget.text,
+                style: widget.style.copyWith(
+                  color: (widget.style.color ?? const Color(0xFF000000))
+                      .withValues(alpha: rv),
                 ),
               ),
-            ),
-        ],
+              if (rv < 1)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _SpoilerParticles(
+                        t: _twinkle.value,
+                        reveal: rv,
+                        color: color,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1349,34 +1373,48 @@ class _SpoilerTextState extends State<_SpoilerText>
 /// A shimmering cloud of tiny dots that covers spoiler text and twinkles /
 /// jitters in place ("капошатся"), Telegram-style, until tapped to reveal.
 class _SpoilerParticles extends CustomPainter {
-  final double t; // 0..1 animation phase
+  final double t; // 0..1 twinkle phase
+  final double reveal; // 0 = covered, 1 = fully scattered
   final Color color;
-  const _SpoilerParticles({required this.t, required this.color});
+  const _SpoilerParticles(
+      {required this.t, required this.color, this.reveal = 0});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
     final rng = math.Random(1337); // deterministic base positions
     final paint = Paint()..style = PaintingStyle.fill;
-    final count =
-        ((size.width * size.height) / 18).clamp(16, 600).toInt();
+    final count = ((size.width * size.height) / 18).clamp(16, 600).toInt();
     final tau = t * 2 * math.pi;
+    final cx = size.width / 2, cy = size.height / 2;
+    // Ease-out so the scatter bursts fast then settles.
+    final rv = 1 - math.pow(1 - reveal, 2).toDouble();
+    final spread = (size.width + size.height) * 0.6;
     for (var i = 0; i < count; i++) {
       final bx = rng.nextDouble() * size.width;
       final by = rng.nextDouble() * size.height;
       final phase = rng.nextDouble() * math.pi * 2;
-      // Twinkle opacity + a sub-pixel jitter so the field feels alive.
-      final a = (0.28 + 0.5 * (0.5 + 0.5 * math.sin(phase + tau * 2)))
+      // Twinkle opacity + a sub-pixel jitter (fades out as dots scatter).
+      final tw = (0.28 + 0.5 * (0.5 + 0.5 * math.sin(phase + tau * 2)))
           .clamp(0.0, 1.0);
-      final jx = math.sin(phase + tau) * 0.9;
-      final jy = math.cos(phase * 1.3 + tau) * 0.9;
-      final r = 0.7 + 0.55 * (0.5 + 0.5 * math.sin(phase * 1.7 + tau * 3));
+      final a = (tw * (1 - reveal)).clamp(0.0, 1.0);
+      if (a <= 0.01) continue;
+      final jitter = 0.9 * (1 - reveal);
+      final jx = math.sin(phase + tau) * jitter;
+      final jy = math.cos(phase * 1.3 + tau) * jitter;
+      // Fly outward from the centre (plus a little upward drift).
+      final dx = bx - cx, dy = by - cy;
+      final len = math.sqrt(dx * dx + dy * dy) + 0.001;
+      final ox = (dx / len) * spread * rv;
+      final oy = (dy / len) * spread * rv - spread * 0.15 * rv;
+      final r = (0.7 + 0.55 * (0.5 + 0.5 * math.sin(phase * 1.7 + tau * 3))) *
+          (1 - 0.4 * reveal);
       paint.color = color.withValues(alpha: a);
-      canvas.drawCircle(Offset(bx + jx, by + jy), r, paint);
+      canvas.drawCircle(Offset(bx + jx + ox, by + jy + oy), r, paint);
     }
   }
 
   @override
   bool shouldRepaint(_SpoilerParticles old) =>
-      old.t != t || old.color != color;
+      old.t != t || old.reveal != reveal || old.color != color;
 }
