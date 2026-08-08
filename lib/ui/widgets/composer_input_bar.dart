@@ -11,6 +11,7 @@ import 'avatar_widget.dart';
 import 'status_emoji_view.dart';
 import 'telegram_media_record_button.dart';
 import 'translate_action.dart';
+import 'unified_emoji_picker.dart';
 
 /// A person suggested in the @-mention picker. [id] is the public-key hex that
 /// gets inserted into the text as the `&hex` mention token.
@@ -957,32 +958,144 @@ class _FullscreenComposerEditor extends StatefulWidget {
 class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
   final _focusNode = FocusNode();
 
+  // Lightweight undo/redo over the shared controller's value.
+  final _undo = <TextEditingValue>[];
+  final _redo = <TextEditingValue>[];
+  late TextEditingValue _last;
+  bool _applyingHistory = false;
+  bool _showEmoji = false;
+
+  TextEditingController get _c => widget.controller;
+
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_onChanged);
+    _last = _c.value;
+    _c.addListener(_onChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
     });
   }
 
   void _onChanged() {
+    if (!_applyingHistory && _c.text != _last.text) {
+      _undo.add(_last);
+      if (_undo.length > 200) _undo.removeAt(0);
+      _redo.clear();
+    }
+    _last = _c.value;
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_onChanged);
+    _c.removeListener(_onChanged);
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _apply(String text, int caret) {
+    _applyingHistory = false;
+    _c.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: caret.clamp(0, text.length)),
+    );
+    _focusNode.requestFocus();
+  }
+
+  void _undoAction() {
+    if (_undo.isEmpty) return;
+    _applyingHistory = true;
+    _redo.add(_c.value);
+    final v = _undo.removeLast();
+    _c.value = v;
+    _last = v;
+    _applyingHistory = false;
+    if (mounted) setState(() {});
+  }
+
+  void _redoAction() {
+    if (_redo.isEmpty) return;
+    _applyingHistory = true;
+    _undo.add(_c.value);
+    final v = _redo.removeLast();
+    _c.value = v;
+    _last = v;
+    _applyingHistory = false;
+    if (mounted) setState(() {});
+  }
+
+  /// Wrap the selection, or drop paired markers at the caret and land between
+  /// them so the next typing is formatted (tap the same tool again / move past
+  /// the marker to stop — "нажать жирный → жирный, продолжить без").
+  void _wrap(String prefix, String suffix) {
+    final sel = _c.selection;
+    final text = _c.text;
+    if (sel.isValid && !sel.isCollapsed) {
+      final inner = text.substring(sel.start, sel.end);
+      _apply(text.replaceRange(sel.start, sel.end, '$prefix$inner$suffix'),
+          sel.end + prefix.length + suffix.length);
+    } else {
+      final at = sel.isValid ? sel.start : text.length;
+      _apply(text.replaceRange(at, at, '$prefix$suffix'), at + prefix.length);
+    }
+  }
+
+  void _insert(String s, {int caretBack = 0}) {
+    final sel = _c.selection;
+    final text = _c.text;
+    final at = sel.isValid ? sel.start : text.length;
+    final end = sel.isValid && !sel.isCollapsed ? sel.end : at;
+    _apply(text.replaceRange(at, end, s), at + s.length - caretBack);
+  }
+
+  void _insertLinePrefix(String prefix) {
+    final sel = _c.selection;
+    final text = _c.text;
+    final at = sel.isValid ? sel.start : text.length;
+    var lineStart = at;
+    while (lineStart > 0 && text[lineStart - 1] != '\n') {
+      lineStart--;
+    }
+    _apply(text.replaceRange(lineStart, lineStart, prefix),
+        at + prefix.length);
+  }
+
+  void _insertTable() {
+    final needsNl = _c.selection.baseOffset > 0 &&
+        _c.text.isNotEmpty &&
+        !_c.text
+            .substring(0, _c.selection.baseOffset.clamp(0, _c.text.length))
+            .endsWith('\n');
+    const table = '| Колонка | Колонка |\n| --- | --- |\n|  |  |\n';
+    _insert('${needsNl ? '\n' : ''}$table');
+  }
+
+  /// Strip common markdown markers from the selection (or the whole text).
+  void _clearFormatting() {
+    final sel = _c.selection;
+    final full = _c.text;
+    final start = (sel.isValid && !sel.isCollapsed) ? sel.start : 0;
+    final end = (sel.isValid && !sel.isCollapsed) ? sel.end : full.length;
+    var seg = full.substring(start, end);
+    for (final m in ['**', '__', '~~', '||', '`']) {
+      seg = seg.replaceAll(m, '');
+    }
+    seg = seg.replaceAll(RegExp(r'(^|\n)> ?'), r'$1');
+    _apply(full.replaceRange(start, end, seg), start + seg.length);
+  }
+
+  void _openEmoji() {
+    FocusScope.of(context).unfocus();
+    setState(() => _showEmoji = true);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final canSend =
-        widget.controller.text.trim().isNotEmpty && !widget.isSending;
+    final canSend = _c.text.trim().isNotEmpty && !widget.isSending;
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
@@ -1000,29 +1113,125 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: TextField(
-            controller: widget.controller,
-            focusNode: _focusNode,
-            autofocus: true,
-            maxLines: null,
-            expands: true,
-            keyboardType: TextInputType.multiline,
-            textAlignVertical: TextAlignVertical.top,
-            style: TextStyle(fontSize: 16, color: cs.onSurface, height: 1.35),
-            decoration: InputDecoration(
-              hintText: widget.hintText,
-              hintStyle:
-                  TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
-              border: InputBorder.none,
+      body: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _c,
+                focusNode: _focusNode,
+                autofocus: true,
+                maxLines: null,
+                expands: true,
+                keyboardType: TextInputType.multiline,
+                textAlignVertical: TextAlignVertical.top,
+                style:
+                    TextStyle(fontSize: 16, color: cs.onSurface, height: 1.35),
+                decoration: InputDecoration(
+                  hintText: widget.hintText,
+                  hintStyle: TextStyle(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+                  border: InputBorder.none,
+                ),
+                onTap: () {
+                  if (_showEmoji) setState(() => _showEmoji = false);
+                },
+              ),
             ),
+          ),
+          _toolbar(cs),
+          if (_showEmoji)
+            SizedBox(
+              height: 280,
+              child: UnifiedEmojiPicker(
+                onSelected: (v) => _insert(v),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _toolbar(ColorScheme cs) {
+    Widget btn(IconData icon, VoidCallback? onTap, {String? tip}) {
+      final w = IconButton(
+        visualDensity: VisualDensity.compact,
+        icon: Icon(icon, size: 21),
+        color: onTap == null ? cs.onSurfaceVariant.withValues(alpha: 0.35) : null,
+        onPressed: onTap,
+      );
+      return tip == null ? w : Tooltip(message: tip, child: w);
+    }
+
+    Widget textBtn(String label, VoidCallback onTap,
+        {FontWeight? weight, FontStyle? style, bool strike = false}) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 40,
+          alignment: Alignment.center,
+          child: Text(label,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: weight,
+                fontStyle: style,
+                decoration:
+                    strike ? TextDecoration.lineThrough : TextDecoration.none,
+                color: cs.onSurface,
+              )),
+        ),
+      );
+    }
+
+    return Material(
+      color: cs.surfaceContainerHigh,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 48,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            children: [
+              btn(Icons.undo_rounded, _undo.isEmpty ? null : _undoAction,
+                  tip: 'Отменить'),
+              btn(Icons.redo_rounded, _redo.isEmpty ? null : _redoAction,
+                  tip: 'Вернуть'),
+              _sep(cs),
+              textBtn('B', () => _wrap('**', '**'), weight: FontWeight.w800),
+              textBtn('I', () => _wrap('_', '_'), style: FontStyle.italic),
+              textBtn('U', () => _wrap('__', '__')),
+              textBtn('S', () => _wrap('~~', '~~'), strike: true),
+              btn(Icons.code_rounded, () => _wrap('`', '`'), tip: 'Моно'),
+              btn(Icons.visibility_off_outlined, () => _wrap('||', '||'),
+                  tip: 'Спойлер'),
+              btn(Icons.format_quote_rounded, () => _insertLinePrefix('> '),
+                  tip: 'Цитата'),
+              btn(Icons.format_list_bulleted_rounded,
+                  () => _insertLinePrefix('• '),
+                  tip: 'Список'),
+              btn(Icons.table_chart_outlined, _insertTable, tip: 'Таблица'),
+              btn(Icons.emoji_emotions_outlined, _openEmoji, tip: 'Эмодзи'),
+              _sep(cs),
+              btn(Icons.format_clear_rounded, _clearFormatting,
+                  tip: 'Убрать форматирование'),
+            ],
           ),
         ),
       ),
     );
   }
+
+  Widget _sep(ColorScheme cs) => Center(
+        child: Container(
+          width: 1,
+          height: 22,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          color: cs.outlineVariant,
+        ),
+      );
 }
 
 // ── Stranger Banner Action Button ─────────────────────────────
