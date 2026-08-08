@@ -1056,6 +1056,57 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
     if (mounted) setState(() {});
   }
 
+  // Same markers RichMessageText / the controller render. Group → format id.
+  static final _fmtRe = RegExp(
+    r'\*\*([\s\S]*?)\*\*|__([\s\S]*?)__|~~([\s\S]*?)~~|`([\s\S]*?)`|_([\s\S]*?)_|\|\|([\s\S]*?)\|\|',
+  );
+
+  static (String, int)? _fmtOf(RegExpMatch m) {
+    if (m.group(1) != null) return ('b', 2);
+    if (m.group(2) != null) return ('u', 2);
+    if (m.group(3) != null) return ('s', 2);
+    if (m.group(4) != null) return ('code', 1);
+    if (m.group(5) != null) return ('i', 1);
+    if (m.group(6) != null) return ('sp', 2);
+    return null;
+  }
+
+  /// Which formats currently enclose the caret — drives toolbar highlighting.
+  Set<String> _activeFmts() {
+    final sel = _c.selection;
+    if (!sel.isValid) return const {};
+    final pos = sel.baseOffset;
+    final text = _c.text;
+    final out = <String>{};
+    for (final m in _fmtRe.allMatches(text)) {
+      final f = _fmtOf(m);
+      if (f == null) continue;
+      if (pos >= m.start + f.$2 && pos <= m.end - f.$2) out.add(f.$1);
+    }
+    return out;
+  }
+
+  /// "Reset formatting": don't strip the text — move the caret out past the
+  /// closing markers of the format(s) it sits inside, so you continue plain.
+  void _exitFmts() {
+    final sel = _c.selection;
+    if (!sel.isValid) return;
+    final pos = sel.baseOffset;
+    final text = _c.text;
+    var target = -1;
+    for (final m in _fmtRe.allMatches(text)) {
+      final f = _fmtOf(m);
+      if (f == null) continue;
+      if (pos >= m.start + f.$2 && pos <= m.end - f.$2) {
+        if (m.end > target) target = m.end;
+      }
+    }
+    if (target < 0) return;
+    _c.selection = TextSelection.collapsed(offset: target);
+    _focusNode.requestFocus();
+    if (mounted) setState(() {});
+  }
+
   /// Wrap the selection, or drop paired markers at the caret and land between
   /// them so the next typing is formatted (tap the same tool again / move past
   /// the marker to stop — "нажать жирный → жирный, продолжить без").
@@ -1108,20 +1159,6 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
     final off = _c.selection.baseOffset.clamp(0, _c.text.length);
     final needsNl = off > 0 && _c.text.isNotEmpty && !_c.text.substring(0, off).endsWith('\n');
     _insert('${needsNl ? '\n' : ''}$buf');
-  }
-
-  /// Strip common markdown markers from the selection (or the whole text).
-  void _clearFormatting() {
-    final sel = _c.selection;
-    final full = _c.text;
-    final start = (sel.isValid && !sel.isCollapsed) ? sel.start : 0;
-    final end = (sel.isValid && !sel.isCollapsed) ? sel.end : full.length;
-    var seg = full.substring(start, end);
-    for (final m in ['**', '__', '~~', '||', '`']) {
-      seg = seg.replaceAll(m, '');
-    }
-    seg = seg.replaceAll(RegExp(r'(^|\n)> ?'), r'$1');
-    _apply(full.replaceRange(start, end, seg), start + seg.length);
   }
 
   void _openEmoji() {
@@ -1388,34 +1425,53 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
   }
 
   Widget _toolbar(ColorScheme cs) {
-    Widget btn(IconData icon, VoidCallback? onTap, {String? tip}) {
+    final active = _activeFmts();
+
+    Widget wrap(Widget child, bool on) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 1),
+          decoration: on
+              ? BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(8),
+                )
+              : null,
+          child: child,
+        );
+
+    Widget btn(IconData icon, VoidCallback? onTap, {String? tip, bool on = false}) {
       final w = IconButton(
         visualDensity: VisualDensity.compact,
         icon: Icon(icon, size: 21),
-        color: onTap == null ? cs.onSurfaceVariant.withValues(alpha: 0.35) : null,
+        color: onTap == null
+            ? cs.onSurfaceVariant.withValues(alpha: 0.35)
+            : (on ? cs.primary : null),
         onPressed: onTap,
       );
-      return tip == null ? w : Tooltip(message: tip, child: w);
+      return wrap(tip == null ? w : Tooltip(message: tip, child: w), on);
     }
 
     Widget textBtn(String label, VoidCallback onTap,
-        {FontWeight? weight, FontStyle? style, bool strike = false}) {
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          width: 40,
-          alignment: Alignment.center,
-          child: Text(label,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: weight,
-                fontStyle: style,
-                decoration:
-                    strike ? TextDecoration.lineThrough : TextDecoration.none,
-                color: cs.onSurface,
-              )),
+        {FontWeight? weight, FontStyle? style, bool strike = false, bool on = false}) {
+      return wrap(
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            child: Text(label,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: weight,
+                  fontStyle: style,
+                  decoration:
+                      strike ? TextDecoration.lineThrough : TextDecoration.none,
+                  color: on ? cs.primary : cs.onSurface,
+                )),
+          ),
         ),
+        on,
       );
     }
 
@@ -1434,13 +1490,17 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
               btn(Icons.redo_rounded, _redo.isEmpty ? null : _redoAction,
                   tip: 'Вернуть'),
               _sep(cs),
-              textBtn('B', () => _wrap('**', '**'), weight: FontWeight.w800),
-              textBtn('I', () => _wrap('_', '_'), style: FontStyle.italic),
-              textBtn('U', () => _wrap('__', '__')),
-              textBtn('S', () => _wrap('~~', '~~'), strike: true),
-              btn(Icons.code_rounded, () => _wrap('`', '`'), tip: 'Моно'),
+              textBtn('B', () => _wrap('**', '**'),
+                  weight: FontWeight.w800, on: active.contains('b')),
+              textBtn('I', () => _wrap('_', '_'),
+                  style: FontStyle.italic, on: active.contains('i')),
+              textBtn('U', () => _wrap('__', '__'), on: active.contains('u')),
+              textBtn('S', () => _wrap('~~', '~~'),
+                  strike: true, on: active.contains('s')),
+              btn(Icons.code_rounded, () => _wrap('`', '`'),
+                  tip: 'Моно', on: active.contains('code')),
               btn(Icons.visibility_off_outlined, () => _wrap('||', '||'),
-                  tip: 'Спойлер'),
+                  tip: 'Спойлер', on: active.contains('sp')),
               btn(Icons.format_quote_rounded, () => _insertLinePrefix('> '),
                   tip: 'Цитата'),
               btn(Icons.format_list_bulleted_rounded,
@@ -1452,8 +1512,9 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
                 btn(Icons.add_photo_alternate_outlined, _pickPhotos,
                     tip: 'Фото (коллаж)'),
               _sep(cs),
-              btn(Icons.format_clear_rounded, _clearFormatting,
-                  tip: 'Убрать форматирование'),
+              btn(Icons.format_clear_rounded,
+                  active.isEmpty ? null : _exitFmts,
+                  tip: 'Сбросить оформление'),
             ],
           ),
         ),

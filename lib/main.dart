@@ -2482,6 +2482,12 @@ Future<void> initServices() async {
       StoryService.instance.addViewer(storyId, viewerId);
     };
 
+    // Отвечает на profile_req: переотправляет наш полный профиль + медиа
+    // (аватар/баннер/музыка) запросившему — так «Обменяться профилями повторно»
+    // реально подтягивает данные собеседника, а не только пушит наши.
+    GossipRouter.instance.onProfileRequest = (fromId) {
+      unawaited(_sendFullProfileToPeer(fromId));
+    };
     // Отвечает на story_req: переотправляет свои активные истории и их картинки
     GossipRouter.instance.onStoryRequest = (fromId) async {
       if (!_priv.showStories) return;

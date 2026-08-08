@@ -32,21 +32,26 @@ class MarkdownEditingController extends TextEditingController {
           .buildTextSpan(context: context, style: style, withComposing: withComposing);
     }
 
-    // Hide the marker characters entirely (transparent + collapsed width) so
-    // the field is WYSIWYG — you see the formatted result, not the `**`/`~~`
-    // syntax. The characters stay in `text` for cursor/selection math.
+    return TextSpan(style: base, children: _spans(src, base));
+  }
+
+  /// Recursively builds styled spans for [src], hiding every marker (at any
+  /// nesting level) and merging styles — so `**_bold italic_**` shows with no
+  /// `**`/`_` symbols, not just the outer pair.
+  List<InlineSpan> _spans(String src, TextStyle base) {
+    // Markers hidden: transparent + collapsed width. Kept in text for cursor math.
     final markerStyle = base.copyWith(
       color: const Color(0x00000000),
       fontSize: 0.01,
       letterSpacing: -0.5,
     );
-    final spoilerBg = (base.color ?? const Color(0xFF888888)).withValues(
-      alpha: 0.18,
-    );
+    final spoilerBg =
+        (base.color ?? const Color(0xFF888888)).withValues(alpha: 0.18);
 
     final spans = <InlineSpan>[];
     var pos = 0;
     for (final m in _fmtRegex.allMatches(src)) {
+      if (m.start < pos) continue; // inside an already-consumed outer match
       if (m.start > pos) {
         spans.add(TextSpan(text: src.substring(pos, m.start), style: base));
       }
@@ -67,7 +72,12 @@ class MarkdownEditingController extends TextEditingController {
         markerLen = 2;
         content = m.group(3);
       } else if (m.group(4) != null) {
-        inner = base.copyWith(fontFamily: 'monospace');
+        // Monospace + a code-chip background so `code` reads as formatted.
+        inner = base.copyWith(
+          fontFamily: 'monospace',
+          backgroundColor:
+              (base.color ?? const Color(0xFF888888)).withValues(alpha: 0.14),
+        );
         markerLen = 1;
         content = m.group(4);
       } else if (m.group(5) != null) {
@@ -82,7 +92,7 @@ class MarkdownEditingController extends TextEditingController {
       if (content != null && markerLen > 0 && full.length >= markerLen * 2) {
         spans.add(
             TextSpan(text: full.substring(0, markerLen), style: markerStyle));
-        spans.add(TextSpan(text: content, style: inner));
+        spans.addAll(_spans(content, inner)); // recurse for nested markers
         spans.add(TextSpan(
             text: full.substring(full.length - markerLen), style: markerStyle));
       } else {
@@ -93,6 +103,6 @@ class MarkdownEditingController extends TextEditingController {
     if (pos < src.length) {
       spans.add(TextSpan(text: src.substring(pos), style: base));
     }
-    return TextSpan(style: base, children: spans);
+    return spans;
   }
 }

@@ -6636,6 +6636,13 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     await sendFullProfileToPeer(_resolvedPeerId);
+    // Also pull THEIR full profile + media (birthday/music/avatar/banner), not
+    // just push ours — the peer resends everything on this request.
+    final myId = CryptoService.instance.publicKeyHex;
+    if (myId.isNotEmpty) {
+      unawaited(GossipRouter.instance
+          .sendProfileRequest(fromId: myId, toId: _resolvedPeerId));
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(AppL10n.t('cm_profile_resent'))),

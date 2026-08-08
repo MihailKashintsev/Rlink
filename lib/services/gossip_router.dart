@@ -213,6 +213,7 @@ typedef OnStoryReceived = void Function(
 
 /// Вызывается при получении запроса историй от пира.
 typedef OnStoryRequest = void Function(String fromId);
+typedef OnProfileRequest = void Function(String fromId);
 
 //// Pair request: device wants to exchange profiles.
 typedef OnPairRequest = void Function(
@@ -341,6 +342,9 @@ class GossipRouter {
   OnEtherReceived? onEtherReceived;
   OnStoryReceived? onStoryReceived;
   OnStoryRequest? onStoryRequest;
+
+  /// A peer asked us to (re)send our full profile + media to them.
+  OnProfileRequest? onProfileRequest;
   void Function(String storyId, String authorId)? onStoryDelete;
   void Function(String storyId, String viewerId)? onStoryView;
   void Function(Map<String, dynamic> payload)? onAdminConfig;
@@ -1055,6 +1059,22 @@ class GossipRouter {
       ttl: 3,
       timestamp: DateTime.now().millisecondsSinceEpoch,
       payload: {'from': fromId},
+    );
+    _markSeen(packet.id);
+    await _forward(packet);
+  }
+
+  /// Ask [toId] to (re)send their full profile + media to us. Used by
+  /// "Обменяться профилями повторно" so a contact's birthday / music / avatar
+  /// / banner is pulled, not just our own pushed.
+  Future<void> sendProfileRequest(
+      {required String fromId, required String toId}) async {
+    final packet = GossipPacket(
+      id: _uuid.v4(),
+      type: 'profile_req',
+      ttl: 3,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: {'from': fromId, 'to': toId},
     );
     _markSeen(packet.id);
     await _forward(packet);
@@ -1818,6 +1838,18 @@ class GossipRouter {
         final from = packet.payload['from'] as String?;
         if (from != null && from != myPublicKey) {
           onStoryRequest?.call(from);
+        }
+        return;
+      }
+
+      if (packet.type == 'profile_req') {
+        final from = packet.payload['from'] as String?;
+        final to = packet.payload['to'] as String?;
+        // Only the addressed peer responds (avoids mesh-wide resend storms).
+        if (from != null &&
+            from != myPublicKey &&
+            (to == null || to == myPublicKey)) {
+          onProfileRequest?.call(from);
         }
         return;
       }
