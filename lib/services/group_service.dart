@@ -190,6 +190,9 @@ class GroupService {
         }
       },
     );
+    // Notify listeners the DB is ready so a chat list rendered before init
+    // finished (slow migration after an update) reloads groups.
+    _bump();
   }
 
   Future<void> _ensureDbReady() async {

@@ -1103,8 +1103,8 @@ class _DesktopNavRail extends StatelessWidget {
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       destinations: [
         NavigationRailDestination(
-          icon: const Icon(Icons.chat_bubble_outline),
-          selectedIcon: const Icon(Icons.chat_bubble),
+          icon: _railGlyph(theme, NavGlyph.chats, false),
+          selectedIcon: _railGlyph(theme, NavGlyph.chats, true),
           label: Text(AppL10n.t('nav_chats')),
         ),
         NavigationRailDestination(
@@ -1112,10 +1112,12 @@ class _DesktopNavRail extends StatelessWidget {
             valueListenable: BleService.instance.peersCount,
             builder: (_, count, __) => count > 0 &&
                     AppSettings.instance.connectionMode != 1
-                ? Badge(label: Text('$count'), child: const Icon(Icons.radar))
-                : const Icon(Icons.radar_outlined),
+                ? Badge(
+                    label: Text('$count'),
+                    child: _railGlyph(theme, NavGlyph.nearby, false))
+                : _railGlyph(theme, NavGlyph.nearby, false),
           ),
-          selectedIcon: const Icon(Icons.radar),
+          selectedIcon: _railGlyph(theme, NavGlyph.nearby, true),
           label: Text(AppL10n.t('nav_nearby')),
         ),
         NavigationRailDestination(
@@ -1123,20 +1125,30 @@ class _DesktopNavRail extends StatelessWidget {
             valueListenable: EtherService.instance.unreadCount,
             builder: (_, count, __) => count > 0
                 ? Badge(
-                    label: Text('$count'), child: const Icon(Icons.cell_tower))
-                : const Icon(Icons.cell_tower),
+                    label: Text('$count'),
+                    child: _railGlyph(theme, NavGlyph.ether, false))
+                : _railGlyph(theme, NavGlyph.ether, false),
           ),
-          selectedIcon: const Icon(Icons.cell_tower),
+          selectedIcon: _railGlyph(theme, NavGlyph.ether, true),
           label: Text(AppL10n.t('nav_ether')),
         ),
         NavigationRailDestination(
-          icon: const Icon(Icons.settings_outlined),
-          selectedIcon: const Icon(Icons.settings),
+          icon: _railGlyph(theme, NavGlyph.settings, false),
+          selectedIcon: _railGlyph(theme, NavGlyph.settings, true),
           label: Text(AppL10n.t('settings')),
         ),
       ],
     );
   }
+
+  Widget _railGlyph(ThemeData theme, NavGlyph glyph, bool selected) =>
+      AnimatedNavGlyph(
+        glyph: glyph,
+        selected: selected,
+        color: selected
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurfaceVariant,
+      );
 }
 
 class _MeTab extends StatefulWidget {

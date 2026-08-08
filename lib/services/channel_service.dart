@@ -435,6 +435,10 @@ class ChannelService {
     );
     await _ensureChannelSchema(_db!);
     unawaited(_loadVerificationRequests());
+    // Tell listeners (the chat list) the DB is ready — otherwise a first render
+    // that ran before init finished (e.g. slow migration after an update) shows
+    // no channels until the app is reopened.
+    _bump();
   }
 
   Future<void> _ensureChannelSchema(Database db) async {
