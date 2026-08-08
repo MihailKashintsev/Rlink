@@ -996,23 +996,24 @@ class ChannelService {
     final existing = await getChannel(channelId);
 
     List<String> subs() {
-      List<String> computed;
-      if (p.containsKey('subscriberIds')) {
-        final raw = p['subscriberIds'] as List<dynamic>?;
-        computed = raw?.cast<String>() ?? [adminId];
-      } else {
-        computed = existing?.subscriberIds ?? [adminId];
-      }
-      // Never evict my own subscription through a remote directory merge.
-      // The relay directory only carries a subset of subscribers and can
-      // overwrite the local list, silently dropping me on web page reload.
+      final incoming = p.containsKey('subscriberIds')
+          ? ((p['subscriberIds'] as List<dynamic>?)?.cast<String>() ??
+              const <String>[])
+          : const <String>[];
+      // UNION with the existing list — an incoming meta (relay directory, or a
+      // non-admin peer) frequently carries only a SUBSET of subscribers, and
+      // replacing silently dropped real ones ("подписчики пропадают"). Never
+      // shrink here; leaving is handled by an explicit unsubscribe path.
+      final merged = <String>{
+        ...(existing?.subscriberIds ?? const <String>[]),
+        ...incoming,
+      };
       final me = CryptoService.instance.publicKeyHex;
-      if (me.isNotEmpty &&
-          !computed.contains(me) &&
-          (existing?.subscriberIds.contains(me) ?? false)) {
-        computed = [...computed, me];
+      if (me.isNotEmpty && (existing?.subscriberIds.contains(me) ?? false)) {
+        merged.add(me);
       }
-      return computed;
+      if (merged.isEmpty) merged.add(adminId);
+      return merged.toList();
     }
 
     List<String> mods() {
