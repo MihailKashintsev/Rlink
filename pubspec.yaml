@@ -168,6 +168,7 @@ flutter:
 
   assets:
     - assets/branding/rlink_mark.png
+    - assets/branding/rlink_mark.ico
     - assets/branding/rlink_icon_ai.png
     - assets/branding/logo.svg
     - assets/animated_emoji/

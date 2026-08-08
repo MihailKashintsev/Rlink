@@ -21,7 +21,10 @@ class DesktopTrayService with WindowListener, TrayListener {
     await windowManager.setPreventClose(true);
     windowManager.addListener(this);
 
-    await trayManager.setIcon('assets/branding/rlink_mark.png');
+    // Windows needs a .ico for the tray; a .png shows no icon there.
+    await trayManager.setIcon(Platform.isWindows
+        ? 'assets/branding/rlink_mark.ico'
+        : 'assets/branding/rlink_mark.png');
     await trayManager.setToolTip('Rlink');
     await trayManager.setContextMenu(Menu(
       items: [
@@ -29,6 +32,11 @@ class DesktopTrayService with WindowListener, TrayListener {
           key: 'open',
           label: 'Открыть Rlink',
           onClick: (_) => unawaited(showWindow()),
+        ),
+        MenuItem(
+          key: 'hide',
+          label: 'Свернуть в трей',
+          onClick: (_) => unawaited(hideWindow()),
         ),
         MenuItem.separator(),
         MenuItem(
@@ -46,6 +54,11 @@ class DesktopTrayService with WindowListener, TrayListener {
     await windowManager.show();
     await windowManager.setSkipTaskbar(false);
     await windowManager.focus();
+  }
+
+  Future<void> hideWindow() async {
+    if (!_isDesktopPlatform) return;
+    await windowManager.hide();
   }
 
   Future<void> quitCompletely() async {
@@ -75,6 +88,9 @@ class DesktopTrayService with WindowListener, TrayListener {
     switch (menuItem.key) {
       case 'open':
         unawaited(showWindow());
+        break;
+      case 'hide':
+        unawaited(hideWindow());
         break;
       case 'quit':
         unawaited(quitCompletely());
