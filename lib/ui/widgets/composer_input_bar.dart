@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../services/app_settings.dart';
 import '../design/rlink_design.dart';
@@ -56,6 +58,13 @@ class ComposerInputBar extends StatefulWidget {
   final bool allowGallery;
   final bool locationActive;
   final VoidCallback onSend;
+
+  /// When provided, the fullscreen (super-mode) editor can attach photos and
+  /// send them as a collage image with the typed text; [mediaOnTop] chooses
+  /// whether the photo block sits above or below the text.
+  final Future<void> Function(Uint8List collageBytes, {required bool mediaOnTop})?
+      onSendComposedImage;
+
   final VoidCallback? onLongPressSend;
   final VoidCallback? onPickTodo;
   final VoidCallback? onPickCalendar;
@@ -97,6 +106,7 @@ class ComposerInputBar extends StatefulWidget {
     this.allowGallery = true,
     required this.locationActive,
     required this.onSend,
+    this.onSendComposedImage,
     this.onLongPressSend,
     this.onPickTodo,
     this.onPickCalendar,
@@ -374,6 +384,13 @@ class ComposerInputBarState extends State<ComposerInputBar> {
             Navigator.of(ctx).pop();
             widget.onSend();
           },
+          onSendComposedImage: widget.onSendComposedImage == null
+              ? null
+              : (bytes, {required bool mediaOnTop}) {
+                  Navigator.of(ctx).pop();
+                  return widget.onSendComposedImage!(bytes,
+                      mediaOnTop: mediaOnTop);
+                },
         ),
       ),
     );
@@ -935,6 +952,8 @@ class _LiveRecordingWaveformPainter extends CustomPainter {
 }
 
 
+enum _CollageLayout { column, grid }
+
 /// Полноэкранный редактор длинного сообщения. Шарит контроллер с композером,
 /// поэтому текст остаётся синхронным; кнопка отправки — сверху справа.
 class _FullscreenComposerEditor extends StatefulWidget {
@@ -942,12 +961,15 @@ class _FullscreenComposerEditor extends StatefulWidget {
   final String hintText;
   final bool isSending;
   final VoidCallback onSend;
+  final Future<void> Function(Uint8List collageBytes, {required bool mediaOnTop})?
+      onSendComposedImage;
 
   const _FullscreenComposerEditor({
     required this.controller,
     required this.hintText,
     required this.isSending,
     required this.onSend,
+    this.onSendComposedImage,
   });
 
   @override
@@ -964,6 +986,12 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
   late TextEditingValue _last;
   bool _applyingHistory = false;
   bool _showEmoji = false;
+
+  final _picker = ImagePicker();
+  final List<ui.Image> _photos = [];
+  bool _mediaOnTop = true; // photo block above the text
+  _CollageLayout _layout = _CollageLayout.column;
+  bool _composing = false;
 
   TextEditingController get _c => widget.controller;
 
@@ -991,6 +1019,9 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
   void dispose() {
     _c.removeListener(_onChanged);
     _focusNode.dispose();
+    for (final im in _photos) {
+      im.dispose();
+    }
     super.dispose();
   }
 
@@ -1090,10 +1121,130 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
     setState(() => _showEmoji = true);
   }
 
+  Future<void> _pickPhotos() async {
+    try {
+      final picked = await _picker.pickMultiImage(
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 82,
+      );
+      if (picked.isEmpty) return;
+      for (final x in picked) {
+        final bytes = await x.readAsBytes();
+        if (bytes.isEmpty) continue;
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frame = await codec.getNextFrame();
+        _photos.add(frame.image);
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  void _removePhoto(int i) {
+    if (i < 0 || i >= _photos.length) return;
+    setState(() => _photos.removeAt(i).dispose());
+  }
+
+  /// Composite the attached photos into one PNG: a vertical column (each photo
+  /// full width, stacked) or a 2-column grid. Web-safe (dart:ui, never
+  /// RepaintBoundary.toImage).
+  Future<Uint8List?> _composeCollage() async {
+    if (_photos.isEmpty) return null;
+    const w = 1080.0;
+    const gap = 6.0;
+    final recorder = ui.PictureRecorder();
+    final paint = Paint()..filterQuality = FilterQuality.high;
+
+    double totalH;
+    Canvas canvas;
+    if (_layout == _CollageLayout.column || _photos.length == 1) {
+      // Each photo scaled to full width, stacked with gaps.
+      final heights = _photos
+          .map((im) => w * im.height / im.width)
+          .toList(growable: false);
+      totalH = heights.fold(0.0, (a, b) => a + b) + gap * (_photos.length - 1);
+      canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, totalH));
+      var y = 0.0;
+      for (var i = 0; i < _photos.length; i++) {
+        final im = _photos[i];
+        final dst = Rect.fromLTWH(0, y, w, heights[i]);
+        canvas.drawImageRect(
+            im,
+            Rect.fromLTWH(0, 0, im.width.toDouble(), im.height.toDouble()),
+            dst,
+            paint);
+        y += heights[i] + gap;
+      }
+    } else {
+      // 2-column grid, each cell square (cover-cropped).
+      const cols = 2;
+      final cell = (w - gap) / cols;
+      final rows = (_photos.length / cols).ceil();
+      totalH = rows * cell + gap * (rows - 1);
+      canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, totalH));
+      for (var i = 0; i < _photos.length; i++) {
+        final im = _photos[i];
+        final r = i ~/ cols, c = i % cols;
+        final dst =
+            Rect.fromLTWH(c * (cell + gap), r * (cell + gap), cell, cell);
+        // cover crop
+        final s = im.width < im.height ? im.width : im.height;
+        final src = Rect.fromLTWH((im.width - s) / 2, (im.height - s) / 2,
+            s.toDouble(), s.toDouble());
+        canvas.drawImageRect(im, src, dst, paint);
+      }
+    }
+
+    final pic = recorder.endRecording();
+    final img = await pic.toImage(w.round(), totalH.round());
+    final data = await img.toByteData(format: ui.ImageByteFormat.png);
+    img.dispose();
+    pic.dispose();
+    return data?.buffer.asUint8List();
+  }
+
+  Future<void> _sendNow() async {
+    if (_photos.isNotEmpty && widget.onSendComposedImage != null) {
+      setState(() => _composing = true);
+      final bytes = await _composeCollage();
+      if (bytes != null) {
+        await widget.onSendComposedImage!(bytes, mediaOnTop: _mediaOnTop);
+        return; // editor route already popped by the caller wrapper
+      }
+      if (mounted) setState(() => _composing = false);
+      return;
+    }
+    widget.onSend();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final canSend = _c.text.trim().isNotEmpty && !widget.isSending;
+    final canSend = (_c.text.trim().isNotEmpty || _photos.isNotEmpty) &&
+        !widget.isSending &&
+        !_composing;
+    final field = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: TextField(
+        controller: _c,
+        focusNode: _focusNode,
+        autofocus: true,
+        maxLines: null,
+        expands: true,
+        keyboardType: TextInputType.multiline,
+        textAlignVertical: TextAlignVertical.top,
+        style: TextStyle(fontSize: 16, color: cs.onSurface, height: 1.35),
+        decoration: InputDecoration(
+          hintText: widget.hintText,
+          hintStyle:
+              TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+          border: InputBorder.none,
+        ),
+        onTap: () {
+          if (_showEmoji) setState(() => _showEmoji = false);
+        },
+      ),
+    );
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
@@ -1106,8 +1257,14 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton.icon(
-              onPressed: canSend ? widget.onSend : null,
-              icon: const Icon(Icons.send_rounded, size: 18),
+              onPressed: canSend ? _sendNow : null,
+              icon: _composing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.send_rounded, size: 18),
               label: const Text('Отправить'),
             ),
           ),
@@ -1115,31 +1272,9 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
       ),
       body: Column(
         children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextField(
-                controller: _c,
-                focusNode: _focusNode,
-                autofocus: true,
-                maxLines: null,
-                expands: true,
-                keyboardType: TextInputType.multiline,
-                textAlignVertical: TextAlignVertical.top,
-                style:
-                    TextStyle(fontSize: 16, color: cs.onSurface, height: 1.35),
-                decoration: InputDecoration(
-                  hintText: widget.hintText,
-                  hintStyle: TextStyle(
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
-                  border: InputBorder.none,
-                ),
-                onTap: () {
-                  if (_showEmoji) setState(() => _showEmoji = false);
-                },
-              ),
-            ),
-          ),
+          if (_photos.isNotEmpty && _mediaOnTop) _photoTray(cs),
+          Expanded(child: field),
+          if (_photos.isNotEmpty && !_mediaOnTop) _photoTray(cs),
           _toolbar(cs),
           if (_showEmoji)
             SizedBox(
@@ -1148,6 +1283,97 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
                 onSelected: (v) => _insert(v),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _photoTray(ColorScheme cs) {
+    return Container(
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 62,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _photos.length + 1,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (_, i) {
+                if (i == _photos.length) {
+                  return InkWell(
+                    onTap: _pickPhotos,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: 62,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: cs.outlineVariant),
+                      ),
+                      child: const Icon(Icons.add_rounded),
+                    ),
+                  );
+                }
+                return Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: SizedBox(
+                        width: 62,
+                        height: 62,
+                        child: RawImage(image: _photos[i], fit: BoxFit.cover),
+                      ),
+                    ),
+                    Positioned(
+                      right: -6,
+                      top: -6,
+                      child: IconButton(
+                        iconSize: 16,
+                        visualDensity: VisualDensity.compact,
+                        icon: const CircleAvatar(
+                          radius: 9,
+                          backgroundColor: Colors.black54,
+                          child: Icon(Icons.close, size: 12, color: Colors.white),
+                        ),
+                        onPressed: () => _removePhoto(i),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ChoiceChip(
+                label: const Text('Столбец'),
+                selected: _layout == _CollageLayout.column,
+                onSelected: (_) =>
+                    setState(() => _layout = _CollageLayout.column),
+              ),
+              ChoiceChip(
+                label: const Text('Сетка'),
+                selected: _layout == _CollageLayout.grid,
+                onSelected: (_) => setState(() => _layout = _CollageLayout.grid),
+              ),
+              const SizedBox(width: 6),
+              ActionChip(
+                avatar: Icon(
+                    _mediaOnTop
+                        ? Icons.vertical_align_top_rounded
+                        : Icons.vertical_align_bottom_rounded,
+                    size: 18),
+                label: Text(_mediaOnTop ? 'Фото сверху' : 'Фото снизу'),
+                onPressed: () => setState(() => _mediaOnTop = !_mediaOnTop),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1214,6 +1440,9 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
                   tip: 'Список'),
               btn(Icons.table_chart_outlined, _insertTable, tip: 'Таблица'),
               btn(Icons.emoji_emotions_outlined, _openEmoji, tip: 'Эмодзи'),
+              if (widget.onSendComposedImage != null)
+                btn(Icons.add_photo_alternate_outlined, _pickPhotos,
+                    tip: 'Фото (коллаж)'),
               _sep(cs),
               btn(Icons.format_clear_rounded, _clearFormatting,
                   tip: 'Убрать форматирование'),

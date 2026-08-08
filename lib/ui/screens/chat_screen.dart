@@ -4958,14 +4958,35 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Send a pre-composed greeting-card PNG as an image message (no preview /
   /// picker). Used to auto-deliver a birthday card when the chat opens.
-  Future<void> _deliverCardImage(Uint8List bytes) async {
+  Future<void> _deliverCardImage(Uint8List bytes) =>
+      _sendImageBytesWithCaption(bytes, caption: '🎉 С Днём Рождения!');
+
+  /// Send a composed image (collage) from the fullscreen editor, honoring the
+  /// chosen text position: media-on-top → one image message with the text as
+  /// caption; media-on-bottom → the text goes as its own message first, then a
+  /// caption-less image below it.
+  Future<void> _sendComposedImage(Uint8List bytes,
+      {required bool mediaOnTop}) async {
+    final text = _controller.text.trim();
+    if (mediaOnTop) {
+      await _sendImageBytesWithCaption(bytes, caption: text);
+      _controller.clear();
+    } else {
+      if (text.isNotEmpty) {
+        await _send(); // sends _controller text and clears it
+      }
+      await _sendImageBytesWithCaption(bytes, caption: '');
+    }
+  }
+
+  Future<void> _sendImageBytesWithCaption(Uint8List bytes,
+      {required String caption}) async {
     final myId = CryptoService.instance.publicKeyHex;
     if (myId.isEmpty || bytes.isEmpty) return;
-    const caption = '🎉 С Днём Рождения!';
     if (kIsWeb) {
       await _sendWebBytesAsFile(
         bytes: bytes,
-        fileName: 'card_${DateTime.now().millisecondsSinceEpoch}.png',
+        fileName: 'img_${DateTime.now().millisecondsSinceEpoch}.png',
         myId: myId,
         textFallback: '',
         caption: caption,
@@ -4978,7 +4999,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final tmpDir = await getTemporaryDirectory();
       final tmpFile = File(
-          '${tmpDir.path}/card_${DateTime.now().millisecondsSinceEpoch}.png');
+          '${tmpDir.path}/img_${DateTime.now().millisecondsSinceEpoch}.png');
       await tmpFile.writeAsBytes(bytes);
       final path = await ImageService.instance.compressAndSave(tmpFile.path);
       final saved = await File(path).readAsBytes();
@@ -5009,7 +5030,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка открытки: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Ошибка изображения: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -8113,6 +8134,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ComposerInputBar(
                     controller: _controller,
                     isSending: _isSending,
+                    onSendComposedImage: _sendComposedImage,
                     isRecording: _isRecording,
                     isVoiceRecordingMode:
                         _isRecording && _dmHoldVideoCam == null,
