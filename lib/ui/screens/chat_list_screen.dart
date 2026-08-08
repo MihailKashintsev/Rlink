@@ -719,7 +719,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   });
                 }
               },
-              child: IndexedStack(
+              child: _AnimatedTabStack(
                 index: _currentTab,
                 children: [
                   _UnifiedChatsTab(
@@ -780,6 +780,42 @@ class _ChatListScreenState extends State<ChatListScreen>
 }
 
 // ── Аватар в нижнем меню (вкладка «Я») ────────────────────────────
+
+/// Like an IndexedStack (all tabs stay built → state preserved) but cross-fades
+/// and gently rises the active tab on switch, and pauses off-screen tickers so
+/// hidden tabs don't animate/repaint in the background.
+class _AnimatedTabStack extends StatelessWidget {
+  final int index;
+  final List<Widget> children;
+  const _AnimatedTabStack({required this.index, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (var i = 0; i < children.length; i++)
+          IgnorePointer(
+            ignoring: index != i,
+            child: AnimatedOpacity(
+              opacity: index == i ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              child: AnimatedSlide(
+                offset: index == i ? Offset.zero : const Offset(0, 0.02),
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                child: TickerMode(
+                  enabled: index == i,
+                  child: children[i],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
 
 // ── Animated bottom nav bar (5 tabs) ─────────────────────────────
 

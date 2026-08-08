@@ -19,6 +19,17 @@ import '../../services/sticker_collection_service.dart';
 enum AvatarPresenceTransport { bluetooth, internet, wifiDirect }
 
 class AvatarWidget extends StatelessWidget {
+  // Memoized web-stored avatar reads, keyed by path, so rebuilds reuse the same
+  // (completed) future instead of re-reading and flashing the fallback.
+  static final Map<String, Future<Uint8List?>> _webAvatarCache = {};
+
+  static Future<Uint8List?> _webAvatarBytes(String path) {
+    final cached = _webAvatarCache[path];
+    if (cached != null) return cached;
+    if (_webAvatarCache.length > 300) _webAvatarCache.clear();
+    return _webAvatarCache[path] = readWebStoredFile(path);
+  }
+
   final String initials;
   final int color;
   final String emoji; // если не пустой — показываем эмодзи вместо инициалов
@@ -142,7 +153,10 @@ class AvatarWidget extends StatelessWidget {
                   )
                 : webStoredPath != null
                     ? FutureBuilder<Uint8List?>(
-                        future: readWebStoredFile(webStoredPath),
+                        // Memoize the read so a rebuild doesn't restart the
+                        // future and flash the fallback → the avatar was
+                        // blinking on web on every list rebuild.
+                        future: _webAvatarBytes(webStoredPath),
                         builder: (_, snap) {
                           final b = snap.data;
                           if (b == null || b.isEmpty) {
@@ -154,6 +168,7 @@ class AvatarWidget extends StatelessWidget {
                             width: innerSize,
                             height: innerSize,
                             fit: BoxFit.cover,
+                            gaplessPlayback: true,
                             cacheWidth: decodeSide,
                             errorBuilder: (_, __, ___) => Center(
                               child: _buildEmojiOrInitials(innerSize),

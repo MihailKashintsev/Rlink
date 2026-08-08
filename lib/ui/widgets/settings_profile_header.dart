@@ -336,6 +336,25 @@ class ProfileCard extends StatelessWidget {
                   ),
                 ),
               ],
+              // ── Birthday (only if set) ───────────────────────────────
+              if ((p.birthday ?? '').isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Padding(
+                  padding: pad,
+                  child: Row(
+                    mainAxisAlignment:
+                        t > 0.5 ? MainAxisAlignment.start : MainAxisAlignment.center,
+                    children: [
+                      const Text('🎂', style: TextStyle(fontSize: 16)),
+                      const SizedBox(width: 6),
+                      Text(
+                        UserProfile.birthdayLabel(p.birthday),
+                        style: TextStyle(fontSize: 14, color: cs.onSurface),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               // ── Profile music (only if set) ──────────────────────────
               if (showMusic && (p.profileMusicPath ?? '').isNotEmpty) ...[
                 const SizedBox(height: 12),

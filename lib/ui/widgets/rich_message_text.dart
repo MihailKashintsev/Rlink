@@ -385,13 +385,19 @@ List<InlineSpan> _spansForPlain(
           baseline: TextBaseline.alphabetic,
           child: GestureDetector(
             onTap: onCustomEmojiTap == null ? null : () => onCustomEmojiTap(h.raw),
-            child: Image(
-              image: provider,
-              width: 18,
-              height: 18,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  Text(':${h.raw}:', style: baseStyle),
+            child: RepaintBoundary(
+              child: Image(
+                key: ValueKey('cemoji_${h.raw}'),
+                image: provider,
+                width: 18,
+                height: 18,
+                fit: BoxFit.cover,
+                // Hold the last frame across rebuilds/reloads instead of
+                // flashing empty — stops the constant blinking.
+                gaplessPlayback: true,
+                errorBuilder: (_, __, ___) =>
+                    Text(':${h.raw}:', style: baseStyle),
+              ),
             ),
           ),
         ));

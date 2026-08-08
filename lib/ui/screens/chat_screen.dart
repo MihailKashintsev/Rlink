@@ -11749,6 +11749,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
   String? _bannerPath;
   List<String> _tags = const [];
   String? _musicPath;
+  String? _birthday;
   bool _isOwnedRelayBot = false;
   Map<String, dynamic>? _ownedRelayBotRow;
 
@@ -11806,6 +11807,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       _bannerPath = newBanner;
       _musicPath = newMusic;
       _tags = c.tags;
+      _birthday = c.birthday;
     });
   }
 
@@ -11842,6 +11844,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
         _musicPath =
             ImageService.instance.resolveStoredPath(contact.profileMusicPath);
         _tags = contact.tags;
+        _birthday = contact.birthday;
       } else {
         _musicPath = null;
         _avatarPath =
@@ -12611,6 +12614,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                       tags: _tags,
                       bannerImagePath: _bannerPath,
                       profileMusicPath: _musicPath,
+                      birthday: _birthday,
                     ),
                     // Shared player, same as our own profile — only when the
                     // track is actually playable here.
