@@ -10808,14 +10808,17 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
       Uint8List? bytes;
       if (kIsWeb) {
         String? url;
-        if (_ChatScreenState._isInlineWebUri(widget.videoPath)) {
-          url = widget.videoPath;
-        } else if (widget.videoPath.startsWith('opfs://rlink/')) {
+        // Resolve opfs:// to a blob URL FIRST — it also passes _isInlineWebUri,
+        // so checking that first would hand the raw opfs:// path to <video> and
+        // fail with ERR_UNKNOWN_URL_SCHEME.
+        if (widget.videoPath.startsWith('opfs://rlink/')) {
           final clean = widget.videoPath.split('#').first;
           for (final mime in webVideoMimeCandidatesForPath(widget.videoPath)) {
             url = await webStoredFileObjectUrl(clean, mimeType: mime);
             if (url != null) break;
           }
+        } else if (_ChatScreenState._isInlineWebUri(widget.videoPath)) {
+          url = widget.videoPath;
         }
         if (url != null) {
           bytes = await webVideoPoster(url);
