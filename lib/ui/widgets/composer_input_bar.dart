@@ -1092,14 +1092,22 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
         at + prefix.length);
   }
 
-  void _insertTable() {
-    final needsNl = _c.selection.baseOffset > 0 &&
-        _c.text.isNotEmpty &&
-        !_c.text
-            .substring(0, _c.selection.baseOffset.clamp(0, _c.text.length))
-            .endsWith('\n');
-    const table = '| Колонка | Колонка |\n| --- | --- |\n|  |  |\n';
-    _insert('${needsNl ? '\n' : ''}$table');
+  Future<void> _insertTable() async {
+    final size = await showDialog<(int, int)>(
+      context: context,
+      builder: (ctx) => const _TableSizeDialog(),
+    );
+    if (size == null || !mounted) return;
+    final (rows, cols) = size;
+    final buf = StringBuffer();
+    buf.write('| ${List.filled(cols, '   ').join(' | ')} |\n');
+    buf.write('| ${List.filled(cols, '---').join(' | ')} |\n');
+    for (var r = 0; r < rows; r++) {
+      buf.write('| ${List.filled(cols, '   ').join(' | ')} |\n');
+    }
+    final off = _c.selection.baseOffset.clamp(0, _c.text.length);
+    final needsNl = off > 0 && _c.text.isNotEmpty && !_c.text.substring(0, off).endsWith('\n');
+    _insert('${needsNl ? '\n' : ''}$buf');
   }
 
   /// Strip common markdown markers from the selection (or the whole text).
@@ -1461,6 +1469,71 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
           color: cs.outlineVariant,
         ),
       );
+}
+
+/// Asks for the table size (rows × columns) before inserting it.
+class _TableSizeDialog extends StatefulWidget {
+  const _TableSizeDialog();
+
+  @override
+  State<_TableSizeDialog> createState() => _TableSizeDialogState();
+}
+
+class _TableSizeDialogState extends State<_TableSizeDialog> {
+  int _rows = 2;
+  int _cols = 2;
+
+  Widget _stepper(String label, int value, ValueChanged<int> onChanged) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label),
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.remove_circle_outline),
+              onPressed: value > 1 ? () => onChanged(value - 1) : null,
+            ),
+            SizedBox(
+              width: 28,
+              child: Text('$value',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700)),
+            ),
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline),
+              onPressed: value < 8 ? () => onChanged(value + 1) : null,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Таблица'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _stepper('Строк', _rows, (v) => setState(() => _rows = v)),
+          _stepper('Столбцов', _cols, (v) => setState(() => _cols = v)),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, (_rows, _cols)),
+          child: const Text('Создать'),
+        ),
+      ],
+    );
+  }
 }
 
 // ── Stranger Banner Action Button ─────────────────────────────

@@ -1,4 +1,6 @@
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:highlight/highlight.dart' show highlight, Node;
@@ -648,7 +650,7 @@ class RichMessageText extends StatelessWidget {
       switch (seg) {
         case _RichTextSegment():
           if (seg.value.text.isEmpty) continue;
-          widgets.add(_buildInlineRichText(context, seg.value.text));
+          widgets.add(_buildTextBlock(context, seg.value.text));
         case _RichCodeSegment():
           widgets.add(
             Padding(
@@ -673,6 +675,115 @@ class RichMessageText extends StatelessWidget {
       widgets.add(_buildInlineRichText(context, text));
     }
     return widgets;
+  }
+
+  static bool _isTableRow(String l) {
+    final t = l.trim();
+    return t.length >= 2 && t.startsWith('|') && t.endsWith('|');
+  }
+
+  static bool _isTableSeparator(String l) {
+    final t = l.trim();
+    return _isTableRow(t) &&
+        t.contains('-') &&
+        RegExp(r'^\|[\s:\-|]+\|$').hasMatch(t);
+  }
+
+  static List<String> _tableCells(String row) {
+    var t = row.trim();
+    if (t.startsWith('|')) t = t.substring(1);
+    if (t.endsWith('|')) t = t.substring(0, t.length - 1);
+    return t.split('|').map((c) => c.trim()).toList();
+  }
+
+  /// Splits a text block into inline-rich paragraphs and any markdown tables,
+  /// rendering the latter as real [Table] widgets.
+  Widget _buildTextBlock(BuildContext context, String text) {
+    if (!text.contains('|')) return _buildInlineRichText(context, text);
+    final lines = text.split('\n');
+    final children = <Widget>[];
+    final buf = <String>[];
+    void flush() {
+      if (buf.isNotEmpty) {
+        children.add(_buildInlineRichText(context, buf.join('\n')));
+        buf.clear();
+      }
+    }
+
+    var i = 0;
+    while (i < lines.length) {
+      if (_isTableRow(lines[i]) &&
+          i + 1 < lines.length &&
+          _isTableSeparator(lines[i + 1])) {
+        flush();
+        final rows = <List<String>>[_tableCells(lines[i])];
+        var j = i + 2;
+        while (j < lines.length && _isTableRow(lines[j])) {
+          rows.add(_tableCells(lines[j]));
+          j++;
+        }
+        children.add(_buildTable(context, rows));
+        i = j;
+      } else {
+        buf.add(lines[i]);
+        i++;
+      }
+    }
+    flush();
+    if (children.length == 1) return children.first;
+    return Column(
+      crossAxisAlignment:
+          isOut ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: children,
+    );
+  }
+
+  static bool _isSeparatorCells(List<String> cells) =>
+      cells.isNotEmpty &&
+      cells.every((c) => RegExp(r'^:?-{1,}:?$').hasMatch(c.trim()));
+
+  Widget _buildTable(BuildContext context, List<List<String>> rowsRaw) {
+    final cs = Theme.of(context).colorScheme;
+    // Drop any markdown separator rows (| --- | --- |) that slipped in.
+    final rows = rowsRaw.where((r) => !_isSeparatorCells(r)).toList();
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final cols = rows.fold<int>(0, (m, r) => r.length > m ? r.length : m);
+    final border = cs.outlineVariant.withValues(alpha: 0.6);
+    TableRow buildRow(List<String> cells, {required bool header}) {
+      return TableRow(
+        decoration: header
+            ? BoxDecoration(color: cs.surfaceContainerHighest.withValues(alpha: 0.5))
+            : null,
+        children: [
+          for (var c = 0; c < cols; c++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              child: RichMessageText(
+                text: c < cells.length ? cells[c] : '',
+                textColor: header
+                    ? textColor
+                    : textColor.withValues(alpha: 0.92),
+                isOut: isOut,
+              ),
+            ),
+        ],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Table(
+          border: TableBorder.all(color: border, width: 1),
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          children: [
+            for (var r = 0; r < rows.length; r++)
+              buildRow(rows[r], header: r == 0),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildInlineRichText(BuildContext context, String sourceText) {
@@ -1164,22 +1275,108 @@ class _SpoilerText extends StatefulWidget {
   State<_SpoilerText> createState() => _SpoilerTextState();
 }
 
-class _SpoilerTextState extends State<_SpoilerText> {
+class _SpoilerTextState extends State<_SpoilerText>
+    with SingleTickerProviderStateMixin {
   bool _revealed = false;
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (!_revealed && !reduce && !_ctrl.isAnimating) {
+      _ctrl.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() => _revealed = !_revealed);
+    if (_revealed) {
+      _ctrl.stop();
+    } else if ((MediaQuery.maybeOf(context)?.disableAnimations ?? false) ==
+        false) {
+      _ctrl.repeat();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final color = widget.style.color ?? const Color(0xFF888888);
     return GestureDetector(
-      onTap: () => setState(() => _revealed = !_revealed),
-      child: _revealed
-          ? Text(widget.text, style: widget.style)
-          : Text(
-              '▓' * widget.text.length.clamp(1, 20),
-              style: widget.style.copyWith(
-                color: widget.style.color?.withValues(alpha: 0.5),
-                letterSpacing: 1,
+      onTap: _toggle,
+      child: Stack(
+        children: [
+          // Keep the real text in the tree so the covered area is exactly the
+          // text's size; hide it (transparent) until revealed.
+          Text(
+            widget.text,
+            style: widget.style.copyWith(
+              color: _revealed ? widget.style.color : Colors.transparent,
+            ),
+          ),
+          if (!_revealed)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _ctrl,
+                  builder: (_, __) => CustomPaint(
+                    painter: _SpoilerParticles(t: _ctrl.value, color: color),
+                  ),
+                ),
               ),
             ),
+        ],
+      ),
     );
   }
+}
+
+/// A shimmering cloud of tiny dots that covers spoiler text and twinkles /
+/// jitters in place ("капошатся"), Telegram-style, until tapped to reveal.
+class _SpoilerParticles extends CustomPainter {
+  final double t; // 0..1 animation phase
+  final Color color;
+  const _SpoilerParticles({required this.t, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final rng = math.Random(1337); // deterministic base positions
+    final paint = Paint()..style = PaintingStyle.fill;
+    final count =
+        ((size.width * size.height) / 18).clamp(16, 600).toInt();
+    final tau = t * 2 * math.pi;
+    for (var i = 0; i < count; i++) {
+      final bx = rng.nextDouble() * size.width;
+      final by = rng.nextDouble() * size.height;
+      final phase = rng.nextDouble() * math.pi * 2;
+      // Twinkle opacity + a sub-pixel jitter so the field feels alive.
+      final a = (0.28 + 0.5 * (0.5 + 0.5 * math.sin(phase + tau * 2)))
+          .clamp(0.0, 1.0);
+      final jx = math.sin(phase + tau) * 0.9;
+      final jy = math.cos(phase * 1.3 + tau) * 0.9;
+      final r = 0.7 + 0.55 * (0.5 + 0.5 * math.sin(phase * 1.7 + tau * 3));
+      paint.color = color.withValues(alpha: a);
+      canvas.drawCircle(Offset(bx + jx, by + jy), r, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SpoilerParticles old) =>
+      old.t != t || old.color != color;
 }

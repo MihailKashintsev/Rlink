@@ -32,10 +32,14 @@ class MarkdownEditingController extends TextEditingController {
           .buildTextSpan(context: context, style: style, withComposing: withComposing);
     }
 
-    final markerColor = (base.color ?? const Color(0xFF888888)).withValues(
-      alpha: 0.30,
+    // Hide the marker characters entirely (transparent + collapsed width) so
+    // the field is WYSIWYG — you see the formatted result, not the `**`/`~~`
+    // syntax. The characters stay in `text` for cursor/selection math.
+    final markerStyle = base.copyWith(
+      color: const Color(0x00000000),
+      fontSize: 0.01,
+      letterSpacing: -0.5,
     );
-    final markerStyle = base.copyWith(color: markerColor);
     final spoilerBg = (base.color ?? const Color(0xFF888888)).withValues(
       alpha: 0.18,
     );
