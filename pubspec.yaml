@@ -30,6 +30,9 @@ dependencies:
   sqflite_common_ffi_web: ^0.4.2
   # Keep sqlite3 on 2.x: sqflite_common_ffi_web currently ships a 2.x wasm binary.
   sqlite3: 2.4.6
+  # Bundles the native sqlite3 library into desktop builds. Without it Windows
+  # has no system sqlite3.dll → "Failed to load dynamic library 'sqlite3.dll'".
+  sqlite3_flutter_libs: ^0.5.0
   path_provider: ^2.1.3
   path: ^1.9.0
   characters: ^1.3.0

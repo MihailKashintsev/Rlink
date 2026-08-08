@@ -122,6 +122,13 @@ class _IntroPromoScreenState extends State<IntroPromoScreen>
     if (mounted) Navigator.of(context).maybePop();
   }
 
+  /// "Пропустить" ends the whole onboarding — mark it seen so the launcher's
+  /// sequence (which otherwise pushes the guide next) stops here.
+  Future<void> _skipAll() async {
+    await AppSettings.instance.setHasSeenIntro(true);
+    if (mounted) Navigator.of(context).maybePop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -204,7 +211,7 @@ class _IntroPromoScreenState extends State<IntroPromoScreen>
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 TextButton(
-                                  onPressed: _finish,
+                                  onPressed: _skipAll,
                                   child: Text(
                                     AppL10n.t('intro_skip'),
                                     style: TextStyle(

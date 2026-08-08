@@ -978,6 +978,15 @@ class _ChatScreenState extends State<ChatScreen> {
         .then((c) {
       if (mounted && c != null) setState(() => _peerContact = c);
     }));
+    // Ask the peer for their full profile (birthday / music / avatar / banner)
+    // so those pull automatically on open, not only via the manual re-exchange.
+    if (!_savedMessagesLocalOnly && _looksLikePublicKey(_resolvedPeerId)) {
+      final myId = CryptoService.instance.publicKeyHex;
+      if (myId.isNotEmpty && myId != _resolvedPeerId) {
+        unawaited(GossipRouter.instance
+            .sendProfileRequest(fromId: myId, toId: _resolvedPeerId));
+      }
+    }
     unawaited(_loadAndMarkRead());
     unawaited(CallHistoryService.instance.ensureLoaded());
     unawaited((() async {
@@ -11757,6 +11766,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
   List<String> _tags = const [];
   String? _musicPath;
   String? _birthday;
+  int? _nickColor;
   bool _isOwnedRelayBot = false;
   Map<String, dynamic>? _ownedRelayBotRow;
 
@@ -11815,6 +11825,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       _musicPath = newMusic;
       _tags = c.tags;
       _birthday = c.birthday;
+      _nickColor = c.nickColor;
     });
   }
 
@@ -11852,6 +11863,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
             ImageService.instance.resolveStoredPath(contact.profileMusicPath);
         _tags = contact.tags;
         _birthday = contact.birthday;
+        _nickColor = contact.nickColor;
       } else {
         _musicPath = null;
         _avatarPath =
@@ -12622,6 +12634,7 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                       bannerImagePath: _bannerPath,
                       profileMusicPath: _musicPath,
                       birthday: _birthday,
+                      nickColor: _nickColor,
                     ),
                     // Shared player, same as our own profile — only when the
                     // track is actually playable here.
