@@ -73,7 +73,10 @@ class ProfileCard extends StatelessWidget {
 
   static const double _bannerH = 132;
   static const double _avatar = 92;
-  static const double _open = 210; // expanded (square) avatar side
+  // Cap for the expanded square photo. High enough that on phones the card
+  // width is the limit → the photo fills the width and covers the banner;
+  // only very wide desktop cards clamp to this.
+  static const double _open = 460;
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +109,8 @@ class ProfileCard extends StatelessWidget {
         builder: (context, box) {
           final w = box.maxWidth;
           final collapsedH = _bannerH + _avatar / 2;
+          // Expanded photo fills the card width (capped on wide desktops) so it
+          // fully covers the banner behind it — Telegram-style big square photo.
           final openSide = w < _open ? w : _open;
           final headerH = lerpDouble(collapsedH, openSide, t)!;
           final aSize = lerpDouble(_avatar, openSide, t)!;
