@@ -1966,6 +1966,23 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                 ? () => _pickRingtone(context, settings)
                 : null,
           ),
+          SwitchListTile(
+            secondary: Icon(
+              Icons.piano_outlined,
+              color: settings.notifSound && settings.notificationsEnabled
+                  ? cs.primary
+                  : Theme.of(context).hintColor,
+            ),
+            title: const Text('Тема «Баян»'),
+            subtitle: Text(
+              'Те же мелодии, но в тембре аккордеона вместо чистого тона',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            value: settings.soundTheme == 1,
+            onChanged: settings.notificationsEnabled
+                ? (v) => unawaited(settings.setSoundTheme(v ? 1 : 0))
+                : null,
+          ),
           _SectionHeader('Звуки приложения'),
           for (final slot in AppSoundSlot.values)
             ListTile(

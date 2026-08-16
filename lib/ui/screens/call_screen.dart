@@ -6,6 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../services/call_service.dart';
 import '../../services/call_proximity_service.dart';
+import '../../services/sound_effects_service.dart' show CallFxSound;
 import '../widgets/avatar_widget.dart';
 import '../widgets/wave_line.dart';
 
@@ -364,9 +365,8 @@ class _CallScreenState extends State<CallScreen>
                               seed: widget.peerName.hashCode,
                               progress: 1.0,
                               animating: live,
-                              level: live
-                                  ? CallService.instance.audioLevel
-                                  : null,
+                              level:
+                                  live ? CallService.instance.audioLevel : null,
                               activeColor: Colors.white.withValues(alpha: 0.95),
                               inactiveColor: Colors.white24,
                               strokeWidth: 2.8,
@@ -533,65 +533,123 @@ class _CallScreenState extends State<CallScreen>
     );
   }
 
+  /// Meet-style reaction sheet: tap an emoji, both sides hear the sound.
+  void _openFxSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1C1C1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text('Звуковой эффект',
+                  style: TextStyle(color: Colors.white70, fontSize: 13)),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  for (final fx in CallFxSound.values)
+                    _FxButton(
+                      fx: fx,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        unawaited(CallService.instance.sendCallFx(fx));
+                      },
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _audioControls() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _CallButton(
-          icon: _micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
-          label: _micOn ? 'Микрофон' : 'Без звука',
-          active: !_micOn,
-          onTap: () async {
-            _micOn = !_micOn;
-            await CallService.instance.toggleMic(_micOn);
-            if (mounted) setState(() {});
-          },
-        ),
-        const SizedBox(width: 18),
-        ValueListenableBuilder<bool>(
-          valueListenable: CallService.instance.speakerOn,
-          builder: (_, speaker, __) {
-            return _CallButton(
-              icon: speaker
-                  ? Icons.volume_up_rounded
-                  : Icons.volume_down_rounded,
-              label: 'Динамик',
-              active: speaker,
-              onTap: () async {
-                await CallService.instance.setSpeakerphone(!speaker);
-                await _syncProximityMonitoring();
-              },
-            );
-          },
-        ),
-        const SizedBox(width: 18),
-        ValueListenableBuilder<bool>(
-          valueListenable: CallService.instance.localRecording,
-          builder: (_, rec, __) {
-            return _CallButton(
-              icon: rec
-                  ? Icons.stop_rounded
-                  : Icons.fiber_manual_record_rounded,
-              label: rec ? 'Стоп' : 'Запись',
-              active: rec,
-              activeColor: Colors.red,
-              onTap: () async {
-                await CallService.instance.setCallRecording(!rec);
-                if (mounted) setState(() {});
-              },
-            );
-          },
-        ),
-        const SizedBox(width: 18),
-        _CallButton(
-          icon: Icons.call_end_rounded,
-          label: 'Завершить',
-          onTap: _end,
-          background: Colors.red,
-          foreground: Colors.white,
-        ),
-      ],
+    // Horizontally scrollable: with the FX button this row can run past a
+    // narrow phone's width, and scrolling is a much smaller regression than
+    // an overflow clip would be.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CallButton(
+            icon: _micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
+            label: _micOn ? 'Микрофон' : 'Без звука',
+            active: !_micOn,
+            onTap: () async {
+              _micOn = !_micOn;
+              await CallService.instance.toggleMic(_micOn);
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(width: 18),
+          _CallButton(
+            icon: Icons.theater_comedy_rounded,
+            label: 'Эффект',
+            onTap: _openFxSheet,
+          ),
+          const SizedBox(width: 18),
+          ValueListenableBuilder<bool>(
+            valueListenable: CallService.instance.speakerOn,
+            builder: (_, speaker, __) {
+              return _CallButton(
+                icon: speaker
+                    ? Icons.volume_up_rounded
+                    : Icons.volume_down_rounded,
+                label: 'Динамик',
+                active: speaker,
+                onTap: () async {
+                  await CallService.instance.setSpeakerphone(!speaker);
+                  await _syncProximityMonitoring();
+                },
+              );
+            },
+          ),
+          const SizedBox(width: 18),
+          ValueListenableBuilder<bool>(
+            valueListenable: CallService.instance.localRecording,
+            builder: (_, rec, __) {
+              return _CallButton(
+                icon: rec
+                    ? Icons.stop_rounded
+                    : Icons.fiber_manual_record_rounded,
+                label: rec ? 'Стоп' : 'Запись',
+                active: rec,
+                activeColor: Colors.red,
+                onTap: () async {
+                  await CallService.instance.setCallRecording(!rec);
+                  if (mounted) setState(() {});
+                },
+              );
+            },
+          ),
+          const SizedBox(width: 18),
+          _CallButton(
+            icon: Icons.call_end_rounded,
+            label: 'Завершить',
+            onTap: _end,
+            background: Colors.red,
+            foreground: Colors.white,
+          ),
+        ],
+      ),
     );
   }
 
@@ -675,67 +733,78 @@ class _CallScreenState extends State<CallScreen>
               right: 0,
               bottom: 22,
               child: Center(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.42),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _videoCtl(
-                        _micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
-                        active: !_micOn,
-                        onTap: () async {
-                          _micOn = !_micOn;
-                          await CallService.instance.toggleMic(_micOn);
-                          if (mounted) setState(() {});
-                        },
-                      ),
-                      const SizedBox(width: 12),
-                      _videoCtl(
-                        _camOn
-                            ? Icons.videocam_rounded
-                            : Icons.videocam_off_rounded,
-                        active: !_camOn,
-                        onTap: () async {
-                          _camOn = !_camOn;
-                          await CallService.instance.toggleCamera(_camOn);
-                          if (mounted) setState(() {});
-                        },
-                      ),
-                      const SizedBox(width: 12),
-                      _videoCtl(
-                        Icons.flip_camera_ios_rounded,
-                        onTap: _camOn
-                            ? () => CallService.instance.switchCamera()
-                            : null,
-                      ),
-                      const SizedBox(width: 12),
-                      ValueListenableBuilder<bool>(
-                        valueListenable: CallService.instance.localRecording,
-                        builder: (_, rec, __) => _videoCtl(
-                          rec
-                              ? Icons.stop_rounded
-                              : Icons.fiber_manual_record_rounded,
-                          active: rec,
-                          activeColor: Colors.red,
+                child: SingleChildScrollView(
+                  // Six controls in a fixed-width pill risks overflow on a
+                  // narrow phone — scrolling degrades gracefully, an overflow
+                  // clip doesn't.
+                  scrollDirection: Axis.horizontal,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.42),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _videoCtl(
+                          _micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
+                          active: !_micOn,
                           onTap: () async {
-                            await CallService.instance.setCallRecording(!rec);
+                            _micOn = !_micOn;
+                            await CallService.instance.toggleMic(_micOn);
                             if (mounted) setState(() {});
                           },
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      _videoCtl(
-                        Icons.call_end_rounded,
-                        background: Colors.red,
-                        foreground: Colors.white,
-                        onTap: _end,
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        _videoCtl(
+                          Icons.theater_comedy_rounded,
+                          onTap: _openFxSheet,
+                        ),
+                        const SizedBox(width: 12),
+                        _videoCtl(
+                          _camOn
+                              ? Icons.videocam_rounded
+                              : Icons.videocam_off_rounded,
+                          active: !_camOn,
+                          onTap: () async {
+                            _camOn = !_camOn;
+                            await CallService.instance.toggleCamera(_camOn);
+                            if (mounted) setState(() {});
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        _videoCtl(
+                          Icons.flip_camera_ios_rounded,
+                          onTap: _camOn
+                              ? () => CallService.instance.switchCamera()
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: CallService.instance.localRecording,
+                          builder: (_, rec, __) => _videoCtl(
+                            rec
+                                ? Icons.stop_rounded
+                                : Icons.fiber_manual_record_rounded,
+                            active: rec,
+                            activeColor: Colors.red,
+                            onTap: () async {
+                              await CallService.instance.setCallRecording(!rec);
+                              if (mounted) setState(() {});
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        _videoCtl(
+                          Icons.call_end_rounded,
+                          background: Colors.red,
+                          foreground: Colors.white,
+                          onTap: _end,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -852,6 +921,58 @@ class _CallButtonState extends State<_CallButton> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One emoji tile in the reaction sheet — big emoji, label under it, scales
+/// down on press so it reads as a real button and not a decorative sticker.
+class _FxButton extends StatefulWidget {
+  final CallFxSound fx;
+  final VoidCallback onTap;
+
+  const _FxButton({required this.fx, required this.onTap});
+
+  @override
+  State<_FxButton> createState() => _FxButtonState();
+}
+
+class _FxButtonState extends State<_FxButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child:
+                  Text(widget.fx.emoji, style: const TextStyle(fontSize: 28)),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              widget.fx.label,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ],
+        ),
       ),
     );
   }

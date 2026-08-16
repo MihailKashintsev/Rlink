@@ -54,6 +54,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyNotifyGroups = 'notify_groups';
   static const _keyNotifyChannels = 'notify_channels';
   static const _keyCallRingtone = 'call_ringtone'; // 0=classic,1=digital,2=soft
+  static const _keySoundTheme = 'sound_theme'; // 0=classic (sine), 1=bayan (accordion)
   static const _keyCustomSoundPaths = 'custom_sound_paths_v1';
   static const _keyAppIconVariant = 'app_icon_variant'; // 0=classic,1=mono,2=ai
   static const _keyUseIosStyleEmoji =
@@ -136,6 +137,7 @@ class AppSettings extends ChangeNotifier {
       'notifyGroups': _notifyGroups,
       'notifyChannels': _notifyChannels,
       'callRingtone': _callRingtone,
+      'soundTheme': _soundTheme,
       'transcriptionEngine': _transcriptionEngine,
       'transcriptionModelSize': _transcriptionModelSize,
       'customSoundPaths': _customSoundPaths,
@@ -183,6 +185,7 @@ class AppSettings extends ChangeNotifier {
   bool _notifyGroups = true;
   bool _notifyChannels = true;
   int _callRingtone = 0;
+  int _soundTheme = 0;
   int _transcriptionEngine = 0; // 0=onDevice, 1=cloud
   int _transcriptionModelSize = 0; // 0=tiny, 1=base, 2=small
   int _appPalette = 0;
@@ -242,6 +245,7 @@ class AppSettings extends ChangeNotifier {
   bool get notifyGroups => _notifyGroups;
   bool get notifyChannels => _notifyChannels;
   int get callRingtone => _callRingtone.clamp(0, 2);
+  int get soundTheme => _soundTheme.clamp(0, 1);
 
   int get appPalette => _appPalette;
   bool get animatedGradient => _animatedGradient;
@@ -470,6 +474,7 @@ class AppSettings extends ChangeNotifier {
     _notifyGroups = _prefs.getBool(_keyNotifyGroups) ?? true;
     _notifyChannels = _prefs.getBool(_keyNotifyChannels) ?? true;
     _callRingtone = (_prefs.getInt(_keyCallRingtone) ?? 0).clamp(0, 2);
+    _soundTheme = (_prefs.getInt(_keySoundTheme) ?? 0).clamp(0, 1);
     _transcriptionEngine =
         (_prefs.getInt(_keyTranscriptionEngine) ?? 0).clamp(0, 1);
     _transcriptionModelSize =
@@ -622,6 +627,8 @@ class AppSettings extends ChangeNotifier {
       _notifyChannels = m['notifyChannels'] as bool? ?? _notifyChannels;
       _callRingtone =
           ((m['callRingtone'] as num?)?.toInt() ?? _callRingtone).clamp(0, 2);
+      _soundTheme =
+          ((m['soundTheme'] as num?)?.toInt() ?? _soundTheme).clamp(0, 1);
       _transcriptionEngine =
           ((m['transcriptionEngine'] as num?)?.toInt() ?? _transcriptionEngine)
               .clamp(0, 1);
@@ -696,6 +703,12 @@ class AppSettings extends ChangeNotifier {
   Future<void> setCallRingtone(int v) async {
     _callRingtone = v.clamp(0, 2);
     await _runPrefsWrite((p) => p.setInt(_keyCallRingtone, _callRingtone));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setSoundTheme(int v) async {
+    _soundTheme = v.clamp(0, 1);
+    await _runPrefsWrite((p) => p.setInt(_keySoundTheme, _soundTheme));
     _notifySettingsChanged();
   }
 

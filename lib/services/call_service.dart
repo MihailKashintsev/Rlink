@@ -1026,7 +1026,28 @@ class CallService {
         _recentlyHandledCallIds[callId] = DateTime.now();
         await _cleanup(CallPhase.ended);
         break;
+      case 'fx':
+        if (_activeCallId != callId || _activePeerId != fromId) break;
+        final name = payload['fx'] as String?;
+        CallFxSound? fx;
+        try {
+          fx = name == null ? null : CallFxSound.values.byName(name);
+        } catch (_) {
+          fx = null;
+        }
+        if (fx != null) unawaited(SoundEffectsService.instance.playCallFx(fx));
+        break;
     }
+  }
+
+  /// Triggers an in-call reaction sound (Meet-style) — plays it locally right
+  /// away and tells the peer to play the same one, so both sides hear it.
+  Future<void> sendCallFx(CallFxSound fx) async {
+    unawaited(SoundEffectsService.instance.playCallFx(fx));
+    final peerId = _activePeerId;
+    final callId = _activeCallId;
+    if (peerId == null || callId == null) return;
+    await _sendSignal(peerId, callId, 'fx', {'fx': fx.name});
   }
 
   Future<void> _sendSignal(
