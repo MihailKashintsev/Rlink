@@ -152,6 +152,9 @@ dependencies:
   # On-device OCR for image editor (Android + iOS only; web-gated)
   google_mlkit_text_recognition: ^0.13.0
 
+  # Copy an image (not just text) to the system clipboard — media viewer "..." menu
+  super_clipboard: ^0.1.7+6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

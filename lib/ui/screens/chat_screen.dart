@@ -138,10 +138,48 @@ import '../widgets/settings_profile_header.dart' show ProfileCard;
 import '../widgets/composer_input_bar.dart';
 import '../widgets/message_actions_overlay.dart';
 import '../mention_nav.dart';
+import 'package:super_clipboard/super_clipboard.dart';
 
 bool _dmVideoPathIsSquare(String path) {
   final lower = p.basename(path).toLowerCase();
   return lower.endsWith('_sq.mp4') || path.contains('#rlink_square');
+}
+
+/// Are [a] and [b] two photos from the same "send N photos at once" batch?
+/// Pure inference from already-saved fields — no group id anywhere, no wire
+/// protocol change: same sender, both bare images with no caption/reply,
+/// sent within a tight window of each other. Used to render a multi-select
+/// send as one visually chained block instead of N separately-spaced
+/// bubbles, without touching how each bubble is stored or interacted with.
+bool isGroupablePhotoPair(ChatMessage a, ChatMessage b) {
+  if (a.isOutgoing != b.isOutgoing) return false;
+  if (a.imagePath == null || b.imagePath == null) return false;
+  if (a.videoPath != null || b.videoPath != null) return false;
+  if (a.isSticker || b.isSticker) return false;
+  if (p.basename(a.imagePath!).startsWith('stk_') ||
+      p.basename(b.imagePath!).startsWith('stk_')) {
+    return false;
+  }
+  if (a.text.trim().isNotEmpty || b.text.trim().isNotEmpty) return false;
+  if (a.replyToMessageId != null || b.replyToMessageId != null) return false;
+  return b.timestamp.difference(a.timestamp).abs() <=
+      const Duration(seconds: 20);
+}
+
+/// Resolves any ref shape a chat media path can take (native file, web
+/// data:/opfs:// ref) to its raw bytes. Top-level (not a _ChatScreenState
+/// method) so the media gallery viewer — a separate widget — can use it too.
+Future<Uint8List?> readBytesFromStoredPath(String path) async {
+  if (kIsWeb) {
+    if (isWebStoredFile(path)) return readWebStoredFile(path.split('#').first);
+    if (path.startsWith('data:')) return _ChatScreenState._bytesFromDataUri(path);
+    return null;
+  }
+  try {
+    final f = File(path);
+    if (f.existsSync()) return f.readAsBytes();
+  } catch (_) {}
+  return null;
 }
 
 bool _dmPlaybackFileNameIsAudio(String fileName) {
@@ -3573,6 +3611,7 @@ class _ChatScreenState extends State<ChatScreen> {
     await showMediaGallerySendSheet(
       context,
       onPhotoPath: (path) => _handlePickedChatImage(XFile(path)),
+      onMultiplePhotoPaths: _sendMultiplePhotosCompressed,
       onGifPath: (path) => _sendGifFromPath(path, myId),
       onVideoPath: (path) => _sendVideoFile(XFile(path), myId),
       onStickerCropped: _sendStickerFromCroppedBytes,
@@ -4708,6 +4747,58 @@ class _ChatScreenState extends State<ChatScreen> {
     } else {
       await _sendImageAsFile(picked, myId);
     }
+  }
+
+  /// Batch send for a multi-photo pick (2+ selected in the gallery sheet).
+  /// Deliberately skips the per-photo compressed/file choice and the crop
+  /// editor that _handlePickedChatImage shows for a single photo — asking
+  /// that N times in a row (once per photo) was the actual complaint, and
+  /// Telegram itself doesn't offer per-photo editing on a multi-select
+  /// either. Always compressed; original-quality stays a single-photo-only
+  /// option via "Отправить как файл". Sent close together in time and with
+  /// no caption, so isGroupablePhotoPair chains them into one visual block.
+  Future<void> _sendMultiplePhotosCompressed(List<String> paths) async {
+    if (_isSending || paths.isEmpty) return;
+    if (!await _ensureReadyForMediaSend()) return;
+    if (!mounted) return;
+    final myId = CryptoService.instance.publicKeyHex;
+    final targetPeerId =
+        _looksLikePublicKey(_resolvedPeerId) ? _resolvedPeerId : widget.peerId;
+
+    setState(() => _isSending = true);
+    try {
+      for (final srcPath in paths) {
+        try {
+          final path = await ImageService.instance.compressAndSave(srcPath);
+          final bytes = await File(path).readAsBytes();
+          final msgId = _uuid.v4();
+          final wasQueued = await _sendMedia(
+            bytes: bytes,
+            msgId: msgId,
+            myId: myId,
+            filePath: path,
+          );
+          final imgMsg = ChatMessage(
+            id: msgId,
+            peerId: targetPeerId,
+            text: '',
+            isOutgoing: true,
+            timestamp: DateTime.now(),
+            status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
+            imagePath: path,
+          );
+          await _saveAndTrack(imgMsg, wasQueued: wasQueued);
+          if (targetPeerId == kEmojiBotPeerId) {
+            unawaited(_pokeEmojiBotAfterOutgoingMedia(imgMsg));
+          }
+        } catch (e) {
+          debugPrint('[RLINK][MultiPhoto] $srcPath failed: $e');
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+    if (mounted) _scrollToBottom();
   }
 
   /// GIF из галереи — без редактора, с сохранением анимации.
@@ -5922,19 +6013,8 @@ class _ChatScreenState extends State<ChatScreen> {
     return humanizeCustomEmojiCodes(lines.join('\n').trim());
   }
 
-  Future<Uint8List?> _readBytesFromStoredPath(String path) async {
-    if (kIsWeb) {
-      if (isWebStoredFile(path))
-        return readWebStoredFile(path.split('#').first);
-      if (path.startsWith('data:')) return _bytesFromDataUri(path);
-      return null;
-    }
-    try {
-      final f = File(path);
-      if (f.existsSync()) return f.readAsBytes();
-    } catch (_) {}
-    return null;
-  }
+  Future<Uint8List?> _readBytesFromStoredPath(String path) =>
+      readBytesFromStoredPath(path);
 
   /// When several Drive accounts are linked, ask which to use. Returns the
   /// chosen pairing, or null to use the active account.
@@ -6940,11 +7020,12 @@ class _ChatScreenState extends State<ChatScreen> {
         path: hasImage ? m.imagePath! : m.videoPath!,
         isVideo: hasVideo,
         caption: m.text.isNotEmpty ? m.text : null,
+        msgId: m.id,
       ));
     }
     if (items.isEmpty) return;
     if (!mounted) return;
-    await Navigator.push(
+    final action = await Navigator.push<_GalleryExitAction>(
       context,
       MaterialPageRoute(
         builder: (_) => _MediaGalleryViewer(
@@ -6956,6 +7037,19 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+    if (!mounted || action == null) return;
+    if (action.jumpToMessageId != null) {
+      _jumpToMessageById(action.jumpToMessageId!);
+    } else if (action.forwardMessageId != null) {
+      ChatMessage? m;
+      for (final x in messages) {
+        if (x.id == action.forwardMessageId) {
+          m = x;
+          break;
+        }
+      }
+      if (m != null) await _pickForwardTargetAndNavigate(m);
+    }
   }
 
   Future<void> _saveImageToGallery(String imagePath) async {
@@ -8034,6 +8128,16 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                       msg: msg,
                                                                       bulkSelectMode:
                                                                           _bulkSelectMode,
+                                                                      groupedWithPrev: i > 0 &&
+                                                                          isGroupablePhotoPair(
+                                                                              messages[i - 1],
+                                                                              msg),
+                                                                      groupedWithNext: i <
+                                                                              messages.length -
+                                                                                  1 &&
+                                                                          isGroupablePhotoPair(
+                                                                              msg,
+                                                                              messages[i + 1]),
                                                                       replyPreviewText: msg.replyToMessageId ==
                                                                               null
                                                                           ? null
@@ -8983,6 +9087,11 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessage msg;
   final String? replyPreviewText;
   final bool bulkSelectMode;
+  /// Chained-bubble spacing for a detected multi-photo batch (see
+  /// isGroupablePhotoPair) — purely visual (margin + corner radius), no
+  /// change to this bubble's own content or gesture handling.
+  final bool groupedWithPrev;
+  final bool groupedWithNext;
   final Function(String)? onDownloadImage;
   final Future<void> Function(String path)? onEditImage;
   final VoidCallback? onOpenMediaGallery;
@@ -9016,6 +9125,8 @@ class _MessageBubble extends StatelessWidget {
     required this.msg,
     this.replyPreviewText,
     this.bulkSelectMode = false,
+    this.groupedWithPrev = false,
+    this.groupedWithNext = false,
     this.onDownloadImage,
     this.onEditImage,
     this.onOpenMediaGallery,
@@ -9084,13 +9195,32 @@ class _MessageBubble extends StatelessWidget {
             (p.basename(msg.imagePath!).startsWith('stk_') ||
                 p.basename(msg.imagePath!).startsWith('stk_downloaded_')));
 
+    // A detected multi-photo batch chains its bubbles into one visual block:
+    // near-zero gap between them, and the touching corners flattened so it
+    // reads as one rounded strip instead of N stacked pills.
+    final baseRadius = settings.bubbleRadius(isMe: isOut);
+    final bubbleRadius = (groupedWithPrev || groupedWithNext)
+        ? BorderRadius.only(
+            topLeft:
+                groupedWithPrev ? const Radius.circular(6) : baseRadius.topLeft,
+            topRight: groupedWithPrev
+                ? const Radius.circular(6)
+                : baseRadius.topRight,
+            bottomLeft: groupedWithNext
+                ? const Radius.circular(6)
+                : baseRadius.bottomLeft,
+            bottomRight: groupedWithNext
+                ? const Radius.circular(6)
+                : baseRadius.bottomRight,
+          )
+        : baseRadius;
     return Align(
       alignment: isOut ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: EdgeInsets.only(
           left: isOut ? (compact ? 56 : 64) : (compact ? 8 : 12),
           right: isOut ? (compact ? 8 : 12) : (compact ? 56 : 64),
-          bottom: settings.messageBubbleBottomMargin,
+          bottom: groupedWithNext ? 2 : settings.messageBubbleBottomMargin,
         ),
         padding: EdgeInsets.symmetric(
           horizontal: compact ? 12 : 14,
@@ -9100,13 +9230,11 @@ class _MessageBubble extends StatelessWidget {
             ? null
             : RlinkDesign.on
                 ? (isOut
-                    ? RlinkDesign.bubbleOut(
-                        cs, settings.bubbleRadius(isMe: true))
-                    : RlinkDesign.bubbleIn(
-                        cs, settings.bubbleRadius(isMe: false)))
+                    ? RlinkDesign.bubbleOut(cs, bubbleRadius)
+                    : RlinkDesign.bubbleIn(cs, bubbleRadius))
                 : BoxDecoration(
                     color: isOut ? cs.primary : cs.surfaceContainerHigh,
-                    borderRadius: settings.bubbleRadius(isMe: isOut),
+                    borderRadius: bubbleRadius,
                   ),
         child: Column(
           crossAxisAlignment:
@@ -13405,11 +13533,26 @@ class GalleryMediaItem {
   final String path;
   final bool isVideo;
   final String? caption;
+  /// Source chat message id — powers the "..." menu's forward / jump-to-
+  /// message actions. Null for callers that don't have one yet (channel/
+  /// group galleries aren't wired to those actions).
+  final String? msgId;
   const GalleryMediaItem({
     required this.path,
     required this.isVideo,
     this.caption,
+    this.msgId,
   });
+}
+
+/// What the media viewer wants the caller to do after it closes — at most
+/// one of these is set. Returned via Navigator.pop instead of invoking
+/// chat-message-lookup callbacks directly, since the viewer only knows the
+/// [GalleryMediaItem.msgId], not how to resolve it (channel vs DM vs group).
+class _GalleryExitAction {
+  final String? jumpToMessageId;
+  final String? forwardMessageId;
+  const _GalleryExitAction({this.jumpToMessageId, this.forwardMessageId});
 }
 
 /// Redesigned media viewer: swipe left/right through every image/video in the
@@ -13453,6 +13596,98 @@ class _MediaGalleryViewerState extends State<_MediaGalleryViewer> {
   }
 
   void _toggleChrome() => setState(() => _chromeVisible = !_chromeVisible);
+
+  /// "..." menu next to Save: forward / copy / jump-to-message. Forward and
+  /// jump both close the whole viewer (via _GalleryExitAction, handled by
+  /// the caller that pushed it) — copy stays, it doesn't need to leave.
+  void _openMoreSheet(GalleryMediaItem item) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.forward_rounded),
+              title: const Text('Переслать'),
+              enabled: item.msgId != null,
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                Navigator.of(context).pop(
+                  _GalleryExitAction(forwardMessageId: item.msgId),
+                );
+              },
+            ),
+            if (!item.isVideo)
+              ListTile(
+                leading: const Icon(Icons.copy_all_outlined),
+                title: const Text('Скопировать'),
+                onTap: () async {
+                  Navigator.pop(sheetCtx);
+                  await _copyImageToClipboard(item);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline_rounded),
+              title: const Text('Перейти к сообщению в чате'),
+              enabled: item.msgId != null,
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                Navigator.of(context).pop(
+                  _GalleryExitAction(jumpToMessageId: item.msgId),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Sniffs the actual encoding from magic bytes rather than trusting a file
+  /// extension (data:/opfs: refs don't reliably have one) — a mislabeled
+  /// clipboard entry can fail to paste in the receiving app.
+  static SimpleDataFormat<Uint8List>? _sniffImageFormat(Uint8List b) {
+    if (b.length < 12) return null;
+    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) {
+      return Formats.png;
+    }
+    if (b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return Formats.jpeg;
+    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return Formats.gif;
+    if (b[0] == 0x52 &&
+        b[1] == 0x49 &&
+        b[2] == 0x46 &&
+        b[3] == 0x46 &&
+        b[8] == 0x57 &&
+        b[9] == 0x45 &&
+        b[10] == 0x42 &&
+        b[11] == 0x50) {
+      return Formats.webp;
+    }
+    return null;
+  }
+
+  Future<void> _copyImageToClipboard(GalleryMediaItem item) async {
+    try {
+      final bytes = await readBytesFromStoredPath(item.path);
+      if (bytes == null || bytes.isEmpty) {
+        throw StateError('empty');
+      }
+      final format = _sniffImageFormat(bytes) ?? Formats.png;
+      final writerItem = DataWriterItem();
+      writerItem.add(format(bytes));
+      await ClipboardWriter.instance.write([writerItem]);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Скопировано')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось скопировать: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13550,11 +13785,20 @@ class _MediaGalleryViewerState extends State<_MediaGalleryViewer> {
                               ),
                             ),
                           if (widget.onSaveToGallery != null)
-                            _ViewerCircleButton(
-                              icon: Icons.download_rounded,
-                              tooltip: 'Сохранить',
-                              onTap: () async => widget.onSaveToGallery!(item),
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _ViewerCircleButton(
+                                icon: Icons.download_rounded,
+                                tooltip: 'Сохранить',
+                                onTap: () async =>
+                                    widget.onSaveToGallery!(item),
+                              ),
                             ),
+                          _ViewerCircleButton(
+                            icon: Icons.more_vert_rounded,
+                            tooltip: 'Ещё',
+                            onTap: () => _openMoreSheet(item),
+                          ),
                         ],
                       ),
                     ),

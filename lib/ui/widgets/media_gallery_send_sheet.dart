@@ -168,6 +168,7 @@ Future<void> showTabbedGallerySheet(
 Future<void> showMediaGallerySendSheet(
   BuildContext context, {
   required Future<void> Function(String filePath) onPhotoPath,
+  Future<void> Function(List<String> filePaths)? onMultiplePhotoPaths,
   required Future<void> Function(String filePath) onGifPath,
   required Future<void> Function(String filePath) onVideoPath,
   required Future<void> Function(Uint8List croppedBytes) onStickerCropped,
@@ -189,6 +190,7 @@ Future<void> showMediaGallerySendSheet(
     builder: (ctx) => _TelegramMediaGallerySheet(
       sheetContext: ctx,
       onPhotoPath: onPhotoPath,
+      onMultiplePhotoPaths: onMultiplePhotoPaths,
       onGifPath: onGifPath,
       onVideoPath: onVideoPath,
       onStickerCropped: onStickerCropped,
@@ -207,6 +209,7 @@ Future<void> showMediaGallerySendSheet(
 class _TelegramMediaGallerySheet extends StatefulWidget {
   final BuildContext sheetContext;
   final Future<void> Function(String filePath) onPhotoPath;
+  final Future<void> Function(List<String> filePaths)? onMultiplePhotoPaths;
   final Future<void> Function(String filePath) onGifPath;
   final Future<void> Function(String filePath) onVideoPath;
   final Future<void> Function(Uint8List croppedBytes) onStickerCropped;
@@ -224,6 +227,7 @@ class _TelegramMediaGallerySheet extends StatefulWidget {
     super.key,
     required this.sheetContext,
     required this.onPhotoPath,
+    this.onMultiplePhotoPaths,
     required this.onGifPath,
     required this.onVideoPath,
     required this.onStickerCropped,
@@ -292,7 +296,10 @@ class _TelegramMediaGallerySheetState extends State<_TelegramMediaGallerySheet>
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    _PhotoTab(onPhotoPath: widget.onPhotoPath),
+                    _PhotoTab(
+                      onPhotoPath: widget.onPhotoPath,
+                      onMultiplePhotoPaths: widget.onMultiplePhotoPaths,
+                    ),
                     _VideoTab(onVideoPath: widget.onVideoPath),
                     _GalleryFilesTab(onFilePath: widget.onFilePath),
                     _OtherTab(
@@ -320,8 +327,13 @@ class _TelegramMediaGallerySheetState extends State<_TelegramMediaGallerySheet>
 
 class _PhotoTab extends StatelessWidget {
   final Future<void> Function(String filePath) onPhotoPath;
+  final Future<void> Function(List<String> filePaths)? onMultiplePhotoPaths;
 
-  const _PhotoTab({super.key, required this.onPhotoPath});
+  const _PhotoTab({
+    super.key,
+    required this.onPhotoPath,
+    this.onMultiplePhotoPaths,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -331,6 +343,7 @@ class _PhotoTab extends StatelessWidget {
       onGifPath: (_) async {},
       onVideoPath: (_) async {},
       sheetContext: context,
+      onMultiplePhotoPaths: onMultiplePhotoPaths,
     );
   }
 }
@@ -2008,6 +2021,13 @@ class _GalleryTab extends StatefulWidget {
   final Future<void> Function(String filePath) onGifPath;
   final Future<void> Function(String filePath) onVideoPath;
   final BuildContext sheetContext;
+  /// Multi-select send (2+ photos picked). When given, used instead of
+  /// looping onPhotoPath once per photo — a per-photo compress/file prompt
+  /// and crop editor for each of N picks was the actual complaint, not the
+  /// picker itself. Falls back to the onPhotoPath loop when null, so a
+  /// single photo (or a caller that hasn't wired this yet) behaves exactly
+  /// as before.
+  final Future<void> Function(List<String> filePaths)? onMultiplePhotoPaths;
 
   const _GalleryTab({
     required this.mode,
@@ -2015,6 +2035,7 @@ class _GalleryTab extends StatefulWidget {
     required this.onGifPath,
     required this.onVideoPath,
     required this.sheetContext,
+    this.onMultiplePhotoPaths,
   });
 
   @override
@@ -2197,10 +2218,17 @@ class _GalleryTabState extends State<_GalleryTab> {
     final ordered = List<AssetEntity>.from(_selected);
     final sheetNav = Navigator.of(widget.sheetContext);
     try {
+      final paths = <String>[];
       for (final asset in ordered) {
         final file = await asset.file;
-        if (file == null) continue;
-        await widget.onPhotoPath(file.path);
+        if (file != null) paths.add(file.path);
+      }
+      if (paths.length > 1 && widget.onMultiplePhotoPaths != null) {
+        await widget.onMultiplePhotoPaths!(paths);
+      } else {
+        for (final path in paths) {
+          await widget.onPhotoPath(path);
+        }
       }
     } finally {
       if (mounted) setState(() => _sending = false);
