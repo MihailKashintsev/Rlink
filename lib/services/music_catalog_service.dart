@@ -76,7 +76,12 @@ class MusicCatalogService {
   static final instance = MusicCatalogService._();
 
   static const _appName = 'Rlink';
-  static const _jamendoClientId = '';
+
+  /// Jamendo's public application id. It is designed to be sent with every API
+  /// request from the client, so shipping it is expected — unlike the account's
+  /// client *secret*, which is only for OAuth login and must never reach a
+  /// client build.
+  static const _jamendoClientId = 'fa443567';
   String? _host; // discovery node, resolved once
 
   /// Deezer's search API sends no CORS header, so the browser can't call it
@@ -157,13 +162,15 @@ class MusicCatalogService {
   Future<List<CatalogTrack>> _searchJamendo(String q) async {
     if (_jamendoClientId.isEmpty) return const [];
     try {
-      final direct = Uri.parse(
+      // Not proxied: Jamendo answers with `access-control-allow-origin: *`, and
+      // its audio host sends CORS + range too, so web talks to it directly and
+      // doesn't depend on the relay being up.
+      final uri = Uri.parse(
         'https://api.jamendo.com/v3.0/tracks/?client_id=$_jamendoClientId'
         '&format=json&limit=12&search=${Uri.encodeQueryComponent(q)}'
         '&audioformat=mp32',
       );
-      final r =
-          await http.get(_catalogUri(direct)).timeout(const Duration(seconds: 12));
+      final r = await http.get(uri).timeout(const Duration(seconds: 12));
       if (r.statusCode != 200) return const [];
       final list = (jsonDecode(r.body) as Map)['results'] as List?;
       if (list == null) return const [];
