@@ -1,12 +1,13 @@
 import 'dart:async';
-import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../services/sticker_collection_service.dart';
+import '../widgets/channel_feed_image.dart';
 
 /// Создание набора ([packId] == null) или редактирование.
 class StickerPackEditorScreen extends StatefulWidget {
@@ -22,7 +23,7 @@ class StickerPackEditorScreen extends StatefulWidget {
 class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
   final _titleCtrl = TextEditingController();
   List<String> _selectedRels = [];
-  List<File> _allLibraryFiles = [];
+  List<String> _allLibraryFiles = [];
   bool _loading = true;
 
   bool get _isEdit => widget.packId != null;
@@ -63,9 +64,10 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
     }
   }
 
-  Future<String?> _relForFile(File f) async {
+  Future<String?> _relForRef(String ref) async {
+    if (kIsWeb || StickerCollectionService.isDataOrRemote(ref)) return ref;
     final docs = await getApplicationDocumentsDirectory();
-    final norm = p.normalize(f.path);
+    final norm = p.normalize(ref);
     if (!norm.startsWith(docs.path)) return null;
     return p.relative(norm, from: docs.path);
   }
@@ -73,8 +75,8 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
   Future<void> _openMultiPicker() async {
     final relByFile = <String, String>{};
     for (final f in _allLibraryFiles) {
-      final r = await _relForFile(f);
-      if (r != null) relByFile[f.path] = r;
+      final r = await _relForRef(f);
+      if (r != null) relByFile[f] = r;
     }
     if (!mounted) return;
     final chosen = await showModalBottomSheet<Set<String>>(
@@ -121,7 +123,7 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
                         itemCount: _allLibraryFiles.length,
                         itemBuilder: (context, i) {
                           final f = _allLibraryFiles[i];
-                          final rel = relByFile[f.path];
+                          final rel = relByFile[f];
                           if (rel == null) {
                             return const SizedBox.shrink();
                           }
@@ -141,7 +143,7 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
                               children: [
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(f, fit: BoxFit.cover),
+                                  child: storedImage(f, fit: BoxFit.cover),
                                 ),
                                 if (on)
                                   Container(
@@ -174,7 +176,7 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
     if (chosen != null && mounted) {
       final ordered = <String>[];
       for (final f in _allLibraryFiles) {
-        final r = relByFile[f.path];
+        final r = relByFile[f];
         if (r != null && chosen.contains(r)) ordered.add(r);
       }
       setState(() => _selectedRels = ordered);

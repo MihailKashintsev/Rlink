@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
 
@@ -8,6 +9,7 @@ import '../../models/chat_message.dart';
 import '../../services/chat_storage_service.dart';
 import '../../services/image_service.dart';
 import '../../services/sticker_collection_service.dart';
+import '../widgets/channel_feed_image.dart';
 
 /// Стикеры из переписки с контактом: просмотр и добавление к себе набором.
 class PeerStickersScreen extends StatefulWidget {
@@ -53,7 +55,10 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
       final ip = m.imagePath;
       if (ip == null) continue;
       final resolved = ImageService.instance.resolveStoredPath(ip) ?? ip;
-      if (!File(resolved).existsSync()) continue;
+      final valid = kIsWeb
+          ? StickerCollectionService.isDataOrRemote(resolved)
+          : File(resolved).existsSync();
+      if (!valid) continue;
       if (seen.contains(resolved)) continue;
       seen.add(resolved);
       out.add(resolved);
@@ -122,12 +127,21 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
       return;
     }
     try {
-      await StickerCollectionService.instance.importPackFromAbsolutePaths(
-        title: title,
-        absPaths: _selectedAbs.toList(),
-        sourcePeerId: widget.peerId,
-        sourcePeerLabel: widget.peerName,
-      );
+      if (kIsWeb) {
+        await StickerCollectionService.instance.createPack(
+          title: title,
+          relPaths: _selectedAbs.toList(),
+          sourcePeerId: widget.peerId,
+          sourcePeerLabel: widget.peerName,
+        );
+      } else {
+        await StickerCollectionService.instance.importPackFromAbsolutePaths(
+          title: title,
+          absPaths: _selectedAbs.toList(),
+          sourcePeerId: widget.peerId,
+          sourcePeerLabel: widget.peerName,
+        );
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Набор «$title» добавлен')),
@@ -232,10 +246,7 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
                               children: [
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(
-                                    File(path),
-                                    fit: BoxFit.cover,
-                                  ),
+                                  child: storedImage(path, fit: BoxFit.cover),
                                 ),
                                 if (on)
                                   Container(

@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../../models/sticker_pack.dart';
 import '../../services/sticker_collection_service.dart';
+import 'channel_feed_image.dart';
 
 /// Нижняя панель выбора стикера: паки — рядом маленьких иконок сверху (как в
 /// пикере эмодзи), сетка выбранного пака под ним.
@@ -161,18 +160,12 @@ class _PackThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<File?>(
+    return FutureBuilder<String?>(
       future: StickerCollectionService.instance.absoluteFileForRel(relPath),
       builder: (context, snap) {
         final f = snap.data;
         if (f == null) return const Icon(Icons.image_outlined, size: 18);
-        return Image.file(
-          f,
-          width: 26,
-          height: 26,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Icon(Icons.image_outlined, size: 18),
-        );
+        return storedImage(f, width: 26, height: 26, fit: BoxFit.cover);
       },
     );
   }
@@ -190,13 +183,13 @@ class _StickerPackPickerGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<File>>(
+    return FutureBuilder<List<String>>(
       future: StickerCollectionService.instance.stickerFilesForPack(packId),
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
-        final files = snap.data ?? const <File>[];
+        final files = snap.data ?? const <String>[];
         if (files.isEmpty) {
           return Center(
             child: Text(
@@ -222,14 +215,8 @@ class _StickerPackPickerGrid extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
-                onTap: () => onPicked(f.path),
-                child: Image.file(
-                  f,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Center(
-                    child: Icon(Icons.broken_image_outlined),
-                  ),
-                ),
+                onTap: () => onPicked(f),
+                child: storedImage(f, fit: BoxFit.cover),
               ),
             );
           },

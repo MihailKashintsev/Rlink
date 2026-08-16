@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
@@ -7,6 +6,7 @@ import '../../l10n/app_l10n.dart';
 import '../../models/sticker_pack.dart';
 import '../../services/sticker_collection_service.dart';
 import '../../services/sticker_pack_dm_service.dart';
+import '../widgets/channel_feed_image.dart';
 import '../widgets/forward_target_sheet.dart';
 import 'sticker_pack_editor_screen.dart';
 
@@ -22,7 +22,7 @@ class StickerPackDetailScreen extends StatefulWidget {
 
 class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
   StickerPack? _pack;
-  List<File> _files = [];
+  List<String> _files = [];
   bool _loading = true;
 
   @override
@@ -164,7 +164,7 @@ class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
                 final f = _files[i];
                 return ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.file(f, fit: BoxFit.cover),
+                  child: storedImage(f, fit: BoxFit.cover),
                 );
               },
             ),

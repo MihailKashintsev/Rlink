@@ -4568,6 +4568,29 @@ class _ChatScreenState extends State<ChatScreen> {
       await _sendWebStickerAsset(absPath, myId);
       return;
     }
+    if (kIsWeb && absPath.startsWith('data:')) {
+      final myId = CryptoService.instance.publicKeyHex;
+      if (myId.isEmpty) return;
+      final data = Uri.parse(absPath).data;
+      if (data == null) return;
+      final mime = data.mimeType;
+      final ext = mime == 'image/gif'
+          ? 'gif'
+          : mime == 'image/webp'
+              ? 'webp'
+              : mime == 'application/octet-stream'
+                  ? rlsFileExtension.substring(1)
+                  : 'png';
+      await _sendWebBytesAsFile(
+        bytes: data.contentAsBytes(),
+        fileName: 'sticker.$ext',
+        myId: myId,
+        textFallback: '',
+        asImage: true,
+        isSticker: true,
+      );
+      return;
+    }
     if (!File(absPath).existsSync()) {
       debugPrint('[RLINK][Sticker] File does not exist: $absPath');
       return;
@@ -4766,6 +4789,21 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!await _ensureReadyForMediaSend()) return;
     if (!mounted) return;
     final myId = CryptoService.instance.publicKeyHex;
+    if (myId.isEmpty) return;
+
+    if (kIsWeb) {
+      unawaited(StickerCollectionService.instance
+          .registerStickerBytes(bytes: bytes, ext: '.png'));
+      await _sendWebBytesAsFile(
+        bytes: bytes,
+        fileName: 'sticker.png',
+        myId: myId,
+        textFallback: '',
+        asImage: true,
+        isSticker: true,
+      );
+      return;
+    }
 
     setState(() => _isSending = true);
     try {
@@ -6483,22 +6521,31 @@ class _ChatScreenState extends State<ChatScreen> {
     final packs = await StickerCollectionService.instance.loadPacks();
     String? targetPackId;
 
-    // Try to find by absolute path comparison (normalized)
-    final resolvedNorm = File(resolved).absolute.path;
-    for (final pack in packs) {
-      for (final rel in pack.stickerRelPaths) {
-        final docs = await getApplicationDocumentsDirectory();
-        final abs = File(p.join(docs.path, rel)).absolute.path;
-        if (abs == resolvedNorm) {
+    if (kIsWeb) {
+      for (final pack in packs) {
+        if (pack.stickerRelPaths.contains(resolved)) {
           targetPackId = pack.id;
           break;
         }
       }
-      if (targetPackId != null) break;
+    } else {
+      // Try to find by absolute path comparison (normalized)
+      final resolvedNorm = File(resolved).absolute.path;
+      for (final pack in packs) {
+        for (final rel in pack.stickerRelPaths) {
+          final docs = await getApplicationDocumentsDirectory();
+          final abs = File(p.join(docs.path, rel)).absolute.path;
+          if (abs == resolvedNorm) {
+            targetPackId = pack.id;
+            break;
+          }
+        }
+        if (targetPackId != null) break;
+      }
     }
 
     // If not found by path, try by basename (for default stickers)
-    if (targetPackId == null) {
+    if (targetPackId == null && !kIsWeb) {
       final basename = p.basename(resolved);
       for (final pack in packs) {
         for (final rel in pack.stickerRelPaths) {

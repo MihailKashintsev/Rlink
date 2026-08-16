@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -13,6 +14,7 @@ import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'image_service.dart';
 import 'relay_service.dart';
+import 'sticker_collection_service.dart';
 
 /// Отправка карточки набора стикеров в ЛС (payload в [ChatMessage.stickerPackPayload],
 /// по сети — сжатый JSON через relay blob, id сообщения с префиксом `stickerpack_`).
@@ -51,15 +53,20 @@ class StickerPackDmService {
   static Future<Map<String, dynamic>> buildStickerPackPayload(
     StickerPack pack,
   ) async {
-    final docs = await getApplicationDocumentsDirectory();
+    final docs = kIsWeb ? null : await getApplicationDocumentsDirectory();
     final previewPaths = <String>[];
     final stickers = <Map<String, dynamic>>[];
     for (var i = 0; i < pack.stickerRelPaths.length; i++) {
       final rel = pack.stickerRelPaths[i];
       if (i < 4) previewPaths.add(rel);
-      final f = File(p.join(docs.path, rel));
-      if (!await f.exists()) continue;
-      final bytes = await f.readAsBytes();
+      Uint8List? bytes;
+      if (kIsWeb || StickerCollectionService.isDataOrRemote(rel)) {
+        if (rel.startsWith('data:')) bytes = Uri.parse(rel).data?.contentAsBytes();
+      } else {
+        final f = File(p.join(docs!.path, rel));
+        if (await f.exists()) bytes = await f.readAsBytes();
+      }
+      if (bytes == null) continue;
       stickers.add({
         'rel': rel,
         'bytes': base64Encode(bytes),
@@ -300,9 +307,12 @@ class StickerPackDmService {
     // Auto-download sticker files
     final stickers = payload['stickers'] as List?;
     if (stickers != null) {
-      final docs = await getApplicationDocumentsDirectory();
-      final imgDir = Directory(p.join(docs.path, 'images'));
-      if (!imgDir.existsSync()) imgDir.createSync(recursive: true);
+      Directory? imgDir;
+      if (!kIsWeb) {
+        final docs = await getApplicationDocumentsDirectory();
+        imgDir = Directory(p.join(docs.path, 'images'));
+        if (!imgDir.existsSync()) imgDir.createSync(recursive: true);
+      }
 
       final downloadedPaths = <String>[];
       for (var i = 0; i < stickers.length; i++) {
@@ -313,11 +323,15 @@ class StickerPackDmService {
           if (b64 == null || b64.isEmpty) continue;
 
           final bytes = base64Decode(b64);
-          final safeExt = '.png';
-          final destName = 'stk_downloaded_${msgId}_$i$safeExt';
-          final dest = File(p.join(imgDir.path, destName));
-          await dest.writeAsBytes(bytes);
-          downloadedPaths.add(p.join('images', destName));
+          if (kIsWeb) {
+            downloadedPaths.add('data:image/png;base64,$b64');
+          } else {
+            const safeExt = '.png';
+            final destName = 'stk_downloaded_${msgId}_$i$safeExt';
+            final dest = File(p.join(imgDir!.path, destName));
+            await dest.writeAsBytes(bytes);
+            downloadedPaths.add(p.join('images', destName));
+          }
         } catch (e) {
           debugPrint('[StickerPackDm] download sticker $i failed: $e');
         }

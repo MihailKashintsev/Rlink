@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,6 +18,7 @@ import '../../services/runtime_platform.dart';
 import '../../services/sticker_collection_service.dart';
 import '../../utils/web_object_url.dart';
 import '../../services/app_settings.dart';
+import 'channel_feed_image.dart';
 import 'desktop_image_picker.dart';
 import 'sticker_crop_screen.dart';
 
@@ -1410,7 +1410,7 @@ class _StickerLibraryTab extends StatefulWidget {
 }
 
 class _StickerLibraryTabState extends State<_StickerLibraryTab> {
-  List<File> _files = [];
+  List<String> _files = [];
   List<StickerPack> _packs = [];
   int _allStickerCount = 0;
   String? _filterPackId;
@@ -1457,19 +1457,8 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
     }
   }
 
-  Future<File?> _getStickerFile(String relPath) async {
-    try {
-      final docs = await getApplicationDocumentsDirectory();
-      final absPath = p.join(docs.path, relPath);
-      final file = File(absPath);
-      if (await file.exists()) {
-        return file;
-      }
-      return null;
-    } catch (e) {
-      return null;
-    }
-  }
+  Future<String?> _getStickerFile(String relPath) =>
+      StickerCollectionService.instance.absoluteFileForRel(relPath);
 
   Future<void> _createFromPhoto() async {
     final nav = Navigator.of(context);
@@ -1482,7 +1471,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
       );
       return;
     }
-    final bytes = await File(picked.path).readAsBytes();
+    final bytes = await picked.readAsBytes();
     if (!mounted) return;
     final cropped = await nav.push<Uint8List>(
       MaterialPageRoute(
@@ -1625,7 +1614,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
                           child: firstStickerRel != null
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(6),
-                                  child: FutureBuilder<File?>(
+                                  child: FutureBuilder<String?>(
                                     future: _getStickerFile(firstStickerRel),
                                     builder: (context, snapshot) {
                                       if (!snapshot.hasData ||
@@ -1633,7 +1622,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
                                         return const Icon(Icons.sticky_note_2,
                                             size: 24);
                                       }
-                                      return Image.file(
+                                      return storedImage(
                                         snapshot.data!,
                                         fit: BoxFit.cover,
                                       );
@@ -1781,7 +1770,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
                           child: firstStickerRel != null
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(6),
-                                  child: FutureBuilder<File?>(
+                                  child: FutureBuilder<String?>(
                                     future: _getStickerFile(firstStickerRel),
                                     builder: (context, snapshot) {
                                       if (!snapshot.hasData ||
@@ -1789,7 +1778,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
                                         return const Icon(Icons.sticky_note_2,
                                             size: 24);
                                       }
-                                      return Image.file(
+                                      return storedImage(
                                         snapshot.data!,
                                         fit: BoxFit.cover,
                                       );
@@ -1849,11 +1838,11 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
                 onTap: () async {
                   final sheetNav = Navigator.of(widget.sheetContext);
                   sheetNav.pop();
-                  await widget.onStickerFromLibrary(f.path);
+                  await widget.onStickerFromLibrary(f);
                 },
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.file(f, fit: BoxFit.cover),
+                  child: storedImage(f, fit: BoxFit.cover),
                 ),
               );
             },

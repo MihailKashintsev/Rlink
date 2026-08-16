@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -100,25 +102,39 @@ class StickerPackCardBubble extends StatelessWidget {
     final downloadedPathsRaw = payload['downloadedPaths'] as List?;
     if (downloadedPathsRaw != null && downloadedPathsRaw.isNotEmpty) {
       try {
-        final docs = await getApplicationDocumentsDirectory();
-        final absPaths = <String>[];
-        for (final relPath in downloadedPathsRaw) {
-          if (relPath is! String) continue;
-          final absPath = File(p.join(docs.path, relPath));
-          if (await absPath.exists()) {
-            absPaths.add(absPath.path);
+        if (kIsWeb) {
+          final rels = downloadedPathsRaw.whereType<String>().toList();
+          if (rels.isEmpty) {
+            _snack(context, 'Файлы не найдены');
+            return;
           }
+          await StickerCollectionService.instance.createPack(
+            title: _title,
+            relPaths: rels,
+            sourcePeerId: sourcePeerId,
+            sourcePeerLabel: sourcePeerLabel,
+          );
+        } else {
+          final docs = await getApplicationDocumentsDirectory();
+          final absPaths = <String>[];
+          for (final relPath in downloadedPathsRaw) {
+            if (relPath is! String) continue;
+            final absPath = File(p.join(docs.path, relPath));
+            if (await absPath.exists()) {
+              absPaths.add(absPath.path);
+            }
+          }
+          if (absPaths.isEmpty) {
+            _snack(context, 'Файлы не найдены');
+            return;
+          }
+          await StickerCollectionService.instance.importPackFromAbsolutePaths(
+            title: _title,
+            absPaths: absPaths,
+            sourcePeerId: sourcePeerId,
+            sourcePeerLabel: sourcePeerLabel,
+          );
         }
-        if (absPaths.isEmpty) {
-          _snack(context, 'Файлы не найдены');
-          return;
-        }
-        await StickerCollectionService.instance.importPackFromAbsolutePaths(
-          title: _title,
-          absPaths: absPaths,
-          sourcePeerId: sourcePeerId,
-          sourcePeerLabel: sourcePeerLabel,
-        );
         if (!context.mounted) return;
         _snack(context, 'Набор добавлен');
       } catch (e) {
@@ -127,11 +143,37 @@ class StickerPackCardBubble extends StatelessWidget {
       }
       return;
     }
-    
+
     // Fallback to decoding from base64 (old behavior)
-    final tmp = await getTemporaryDirectory();
-    final absPaths = <String>[];
     try {
+      if (kIsWeb) {
+        final bytesList = <Uint8List>[];
+        final exts = <String>[];
+        for (final e in entries) {
+          final b64 = e['bytes'] as String?;
+          if (b64 == null || b64.isEmpty) continue;
+          final rel = (e['rel'] as String?) ?? '';
+          final ext = p.extension(rel);
+          bytesList.add(base64Decode(b64));
+          exts.add(ext.isNotEmpty && ext.length <= 6 ? ext.toLowerCase() : '.png');
+        }
+        if (bytesList.isEmpty) {
+          _snack(context, 'Не удалось прочитать стикеры');
+          return;
+        }
+        await StickerCollectionService.instance.importPackFromBytesList(
+          title: _title,
+          bytesList: bytesList,
+          exts: exts,
+          sourcePeerId: sourcePeerId,
+          sourcePeerLabel: sourcePeerLabel,
+        );
+        if (!context.mounted) return;
+        _snack(context, 'Набор добавлен');
+        return;
+      }
+      final tmp = await getTemporaryDirectory();
+      final absPaths = <String>[];
       for (var i = 0; i < entries.length; i++) {
         final e = entries[i];
         final b64 = e['bytes'] as String?;

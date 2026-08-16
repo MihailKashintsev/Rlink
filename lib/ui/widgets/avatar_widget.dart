@@ -5,8 +5,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../../models/sticker_pack.dart';
 import '../../utils/web_file_store.dart';
@@ -15,6 +13,7 @@ import '../../services/emoji_pack_service.dart';
 import 'unified_emoji_picker.dart';
 import '../../services/image_service.dart';
 import '../../services/sticker_collection_service.dart';
+import 'channel_feed_image.dart';
 
 enum AvatarPresenceTransport { bluetooth, internet, wifiDirect }
 
@@ -331,7 +330,7 @@ class AvatarEmojiPicker extends StatefulWidget {
 }
 
 class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
-  List<File> _stickerFiles = [];
+  List<String> _stickerFiles = [];
   List<StickerPack> _stickerPacks = [];
   String? _filterStickerPackId;
   List<String> _gifUrls = [];
@@ -489,7 +488,7 @@ class _StickerGrid extends StatelessWidget {
     'Woah!.png',
   ];
 
-  final List<File> stickerFiles;
+  final List<String> stickerFiles;
   final List<StickerPack> stickerPacks;
   final String? filterPackId;
   final void Function(String? packId) onPackSelected;
@@ -594,7 +593,7 @@ class _StickerGrid extends StatelessWidget {
                                 : null,
                           ),
                           child: firstStickerRel != null
-                              ? FutureBuilder<File?>(
+                              ? FutureBuilder<String?>(
                                   future: _getStickerFile(firstStickerRel),
                                   builder: (context, snapshot) {
                                     if (!snapshot.hasData ||
@@ -604,7 +603,7 @@ class _StickerGrid extends StatelessWidget {
                                     }
                                     return ClipRRect(
                                       borderRadius: BorderRadius.circular(6),
-                                      child: Image.file(
+                                      child: storedImage(
                                         snapshot.data!,
                                         fit: BoxFit.cover,
                                       ),
@@ -683,10 +682,10 @@ class _StickerGrid extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final file = stickerFiles[index];
                         return GestureDetector(
-                          onTap: () => onStickerPicked(file.path),
+                          onTap: () => onStickerPicked(file),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
+                            child: storedImage(
                               file,
                               fit: BoxFit.cover,
                             ),
@@ -699,19 +698,8 @@ class _StickerGrid extends StatelessWidget {
     );
   }
 
-  Future<File?> _getStickerFile(String relPath) async {
-    try {
-      final docs = await getApplicationDocumentsDirectory();
-      final absPath = p.join(docs.path, relPath);
-      final file = File(absPath);
-      if (await file.exists()) {
-        return file;
-      }
-      return null;
-    } catch (e) {
-      return null;
-    }
-  }
+  Future<String?> _getStickerFile(String relPath) =>
+      StickerCollectionService.instance.absoluteFileForRel(relPath);
 }
 
 class _GifGrid extends StatelessWidget {

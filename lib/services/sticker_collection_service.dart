@@ -8,9 +8,15 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/sticker_pack.dart';
+import '../utils/web_file_store.dart';
 
-/// Локальная коллекция стикеров (свои и добавленные из чатов): пути `images/stk_*`.
-/// Наборы — [StickerPack] в `sticker_packs.json`.
+/// Локальная коллекция стикеров (свои и добавленные из чатов).
+/// • Native: файлы `images/stk_*` + индексы `sticker_collection.json` /
+///   `sticker_packs.json` в documents.
+/// • Web: индексы в OPFS; сами картинки хранятся как inline `data:` URL прямо
+///   в [StickerPack.stickerRelPaths] / the flat list (same trick as
+///   EmojiPackService — makes stickers renderable via Image.memory/network
+///   without a real filesystem).
 class StickerCollectionService {
   StickerCollectionService._();
   static final StickerCollectionService instance = StickerCollectionService._();
@@ -18,6 +24,8 @@ class StickerCollectionService {
   final ValueNotifier<int> version = ValueNotifier(0);
   static const _jsonName = 'sticker_collection.json';
   static const _packsJsonName = 'sticker_packs.json';
+  static const _webListPath = 'opfs://rlink/$_jsonName';
+  static const _webPacksPath = 'opfs://rlink/$_packsJsonName';
   static const _defaultPackAssetPrefix = 'assets/sticker_packs/default/';
   static const _defaultPackAssetNames = <String>[
     'Angry.png',
@@ -35,6 +43,12 @@ class StickerCollectionService {
   ];
   final _uuid = const Uuid();
 
+  static bool isDataOrRemote(String ref) =>
+      ref.startsWith('data:') ||
+      ref.startsWith('http://') ||
+      ref.startsWith('https://') ||
+      ref.startsWith('opfs://');
+
   /// Инициализация коллекции и подстановка встроенного набора при пустом списке.
   Future<void> init() async {
     await ensureInitialized();
@@ -44,76 +58,70 @@ class StickerCollectionService {
   /// Принудительное обновление дефолтного набора новыми стикерами
   Future<void> forceReseedDefaultPack() async {
     final packs = await _readPacks();
-    
-    // Delete ALL existing Rlink packs (in case of duplicates)
     for (final pack in packs) {
       if (pack.title == 'Rlink' && pack.sourcePeerId == null) {
         await deletePack(pack.id);
       }
     }
-    
-    // Seed without checking if packs are empty
-    final docs = await getApplicationDocumentsDirectory();
-    final imgDir = Directory(p.join(docs.path, 'images'));
-    if (!imgDir.existsSync()) imgDir.createSync(recursive: true);
-
-    final rels = <String>[];
-    for (final name in _defaultPackAssetNames) {
-      try {
-        final data =
-            await rootBundle.load('$_defaultPackAssetPrefix$name');
-        final destName =
-            'stk_default_${name.replaceAll('.png', '').replaceAll('.webp', '')}${p.extension(name)}';
-        final dest = File(p.join(imgDir.path, destName));
-        
-        // Only add if file doesn't already exist
-        if (!await dest.exists()) {
-          await dest.writeAsBytes(data.buffer.asUint8List());
-        }
-        rels.add(p.join('images', destName));
-      } catch (e, st) {
-        debugPrint('[Stickers] default asset $name: $e\n$st');
-      }
-    }
+    final rels = await _seedDefaultPackAssets(skipExisting: true);
     if (rels.isEmpty) return;
-
-    await createPack(
-      title: 'Rlink',
-      relPaths: rels,
-    );
+    await createPack(title: 'Rlink', relPaths: rels);
     debugPrint('[Stickers] reseeded default pack (${rels.length} files)');
   }
 
   Future<void> _seedDefaultPackIfEmpty() async {
     final packs = await _readPacks();
     if (packs.isNotEmpty) return;
+    final rels = await _seedDefaultPackAssets(skipExisting: false);
+    if (rels.isEmpty) return;
+    await createPack(title: 'Rlink', relPaths: rels);
+    debugPrint('[Stickers] seeded default pack (${rels.length} files)');
+  }
 
-    final docs = await getApplicationDocumentsDirectory();
-    final imgDir = Directory(p.join(docs.path, 'images'));
-    if (!imgDir.existsSync()) imgDir.createSync(recursive: true);
-
+  Future<List<String>> _seedDefaultPackAssets({required bool skipExisting}) async {
     final rels = <String>[];
+    Directory? imgDir;
+    if (!kIsWeb) {
+      final docs = await getApplicationDocumentsDirectory();
+      imgDir = Directory(p.join(docs.path, 'images'));
+      if (!imgDir.existsSync()) imgDir.createSync(recursive: true);
+    }
     for (final name in _defaultPackAssetNames) {
       try {
-        final data =
-            await rootBundle.load('$_defaultPackAssetPrefix$name');
+        final data = await rootBundle.load('$_defaultPackAssetPrefix$name');
         final destName =
             'stk_default_${name.replaceAll('.png', '').replaceAll('.webp', '')}${p.extension(name)}';
-        final dest = File(p.join(imgDir.path, destName));
-        await dest.writeAsBytes(data.buffer.asUint8List());
-        rels.add(p.join('images', destName));
+        if (kIsWeb) {
+          rels.add(_dataUrlFor(data.buffer.asUint8List(), _mimeForExt(p.extension(name))));
+        } else {
+          final dest = File(p.join(imgDir!.path, destName));
+          if (!skipExisting || !await dest.exists()) {
+            await dest.writeAsBytes(data.buffer.asUint8List());
+          }
+          rels.add(p.join('images', destName));
+        }
       } catch (e, st) {
         debugPrint('[Stickers] default asset $name: $e\n$st');
       }
     }
-    if (rels.isEmpty) return;
-
-    await createPack(
-      title: 'Rlink',
-      relPaths: rels,
-    );
-    debugPrint('[Stickers] seeded default pack (${rels.length} files)');
+    return rels;
   }
+
+  static String _mimeForExt(String ext) {
+    switch (ext.toLowerCase()) {
+      case '.gif':
+        return 'image/gif';
+      case '.webp':
+        return 'image/webp';
+      case '.rls':
+        return 'application/octet-stream';
+      default:
+        return 'image/png';
+    }
+  }
+
+  static String _dataUrlFor(Uint8List bytes, String mime) =>
+      'data:$mime;base64,${base64Encode(bytes)}';
 
   Future<File> _jsonFile() async {
     final d = await getApplicationDocumentsDirectory();
@@ -126,6 +134,7 @@ class StickerCollectionService {
   }
 
   Future<void> ensureInitialized() async {
+    if (kIsWeb) return; // OPFS reads default to empty; nothing to pre-create.
     final f = await _jsonFile();
     if (!await f.exists()) {
       await syncFromDisk();
@@ -137,6 +146,15 @@ class StickerCollectionService {
   }
 
   Future<List<String>> _readList() async {
+    if (kIsWeb) {
+      final bytes = await readWebStoredFile(_webListPath);
+      if (bytes == null || bytes.isEmpty) return [];
+      try {
+        return (jsonDecode(utf8.decode(bytes)) as List).cast<String>();
+      } catch (_) {
+        return [];
+      }
+    }
     final f = await _jsonFile();
     if (!await f.exists()) return [];
     try {
@@ -147,6 +165,15 @@ class StickerCollectionService {
   }
 
   Future<void> _writeList(List<String> relPaths) async {
+    if (kIsWeb) {
+      await writeWebStoredFile(
+        fileName: _jsonName,
+        bytes: Uint8List.fromList(utf8.encode(jsonEncode(relPaths))),
+        mimeType: 'application/json',
+      );
+      version.value++;
+      return;
+    }
     final f = await _jsonFile();
     await f.writeAsString(jsonEncode(relPaths));
     version.value++;
@@ -154,6 +181,15 @@ class StickerCollectionService {
 
   Future<List<StickerPack>> _readPacks() async {
     await ensureInitialized();
+    if (kIsWeb) {
+      final bytes = await readWebStoredFile(_webPacksPath);
+      if (bytes == null || bytes.isEmpty) return [];
+      try {
+        return StickerPack.decodeList(utf8.decode(bytes));
+      } catch (_) {
+        return [];
+      }
+    }
     final f = await _packsFile();
     if (!await f.exists()) return [];
     try {
@@ -181,23 +217,32 @@ class StickerCollectionService {
   }
 
   Future<void> _writePacksRaw(List<StickerPack> packs) async {
+    if (kIsWeb) {
+      await writeWebStoredFile(
+        fileName: _packsJsonName,
+        bytes: Uint8List.fromList(utf8.encode(StickerPack.encodeList(packs))),
+        mimeType: 'application/json',
+      );
+      version.value++;
+      return;
+    }
     final f = await _packsFile();
     await f.writeAsString(StickerPack.encodeList(packs));
     version.value++;
   }
 
-  Future<void> _writePacks(List<StickerPack> packs) async {
-    await _writePacksRaw(packs);
-  }
+  Future<void> _writePacks(List<StickerPack> packs) => _writePacksRaw(packs);
 
   Future<List<StickerPack>> _prunePackPaths(List<StickerPack> packs) async {
+    // Web entries are inline data: URLs — nothing on "disk" to go stale.
+    if (kIsWeb) return packs;
     final docs = await getApplicationDocumentsDirectory();
     var changed = false;
     final out = <StickerPack>[];
     for (final pack in packs) {
       final keep = <String>[];
       for (final rel in pack.stickerRelPaths) {
-        if (File(p.join(docs.path, rel)).existsSync()) {
+        if (isDataOrRemote(rel) || File(p.join(docs.path, rel)).existsSync()) {
           keep.add(rel);
         } else {
           changed = true;
@@ -218,13 +263,17 @@ class StickerCollectionService {
     return out;
   }
 
-  /// Пути относительно каталога документов приложения.
+  /// Пути относительно каталога документов приложения (native) или data:
+  /// URLs (web) — valid, renderable refs for the flat collection.
   Future<List<String>> relativePathsValid() async {
-    final docs = await getApplicationDocumentsDirectory();
     final raw = await _readList();
+    if (kIsWeb) return raw;
+    final docs = await getApplicationDocumentsDirectory();
     final out = <String>[];
     for (final rel in raw) {
-      if (File(p.join(docs.path, rel)).existsSync()) out.add(rel);
+      if (isDataOrRemote(rel) || File(p.join(docs.path, rel)).existsSync()) {
+        out.add(rel);
+      }
     }
     if (out.length != raw.length) {
       await _writeList(out);
@@ -232,21 +281,26 @@ class StickerCollectionService {
     return out;
   }
 
-  Future<List<File>> stickerFilesNewestFirst() async {
-    final docs = await getApplicationDocumentsDirectory();
+  /// Renderable refs (native abs paths or web data: URLs), newest first.
+  Future<List<String>> stickerFilesNewestFirst() async {
     final rels = await relativePathsValid();
+    if (kIsWeb) {
+      // Web list is already maintained newest-first on insert.
+      return rels;
+    }
+    final docs = await getApplicationDocumentsDirectory();
     final files = <File>[];
     for (final r in rels) {
       final f = File(p.join(docs.path, r));
       if (f.existsSync()) files.add(f);
     }
-    files.sort((a, b) =>
-        b.lastModifiedSync().compareTo(a.lastModifiedSync()));
-    return files;
+    files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    return files.map((f) => f.path).toList();
   }
 
-  /// Файлы набора по порядку; [packId] == null — все стикеры (как [stickerFilesNewestFirst]).
-  Future<List<File>> stickerFilesForPack(String? packId) async {
+  /// Renderable refs for a pack in order; [packId] == null — the whole
+  /// collection (like [stickerFilesNewestFirst]).
+  Future<List<String>> stickerFilesForPack(String? packId) async {
     if (packId == null || packId.isEmpty) {
       return stickerFilesNewestFirst();
     }
@@ -259,21 +313,23 @@ class StickerCollectionService {
       }
     }
     if (pack == null) return stickerFilesNewestFirst();
+    if (kIsWeb) return pack.stickerRelPaths;
     final docs = await getApplicationDocumentsDirectory();
-    final files = <File>[];
+    final out = <String>[];
     for (final rel in pack.stickerRelPaths) {
-      final f = File(p.join(docs.path, rel));
-      if (f.existsSync()) files.add(f);
+      if (File(p.join(docs.path, rel)).existsSync()) out.add(rel);
     }
-    return files;
+    return out;
   }
 
-  /// Resolves a relative sticker path (as stored on [StickerPack]) to its
-  /// absolute file, or null if missing.
-  Future<File?> absoluteFileForRel(String relPath) async {
+  /// Resolves a relative sticker path (as stored on [StickerPack]) to a
+  /// renderable ref — the data: URL unchanged on web, the absolute file path
+  /// on native — or null if missing.
+  Future<String?> absoluteFileForRel(String relPath) async {
+    if (kIsWeb || isDataOrRemote(relPath)) return relPath;
     final docs = await getApplicationDocumentsDirectory();
     final f = File(p.join(docs.path, relPath));
-    return f.existsSync() ? f : null;
+    return f.existsSync() ? f.path : null;
   }
 
   Future<List<StickerPack>> loadPacks() => _readPacks();
@@ -286,8 +342,10 @@ class StickerCollectionService {
     return null;
   }
 
-  /// Подтянуть в JSON все `images/stk_*` с диска.
+  /// Подтянуть в JSON все `images/stk_*` с диска. No-op on web (nothing to
+  /// scan — entries only ever arrive via registerStickerBytes/register*).
   Future<void> syncFromDisk() async {
+    if (kIsWeb) return;
     final docs = await getApplicationDocumentsDirectory();
     final imgDir = Directory(p.join(docs.path, 'images'));
     final fromDisk = <String>{};
@@ -305,6 +363,10 @@ class StickerCollectionService {
   }
 
   Future<String> _ensureRelForAbsolute(String absPath) async {
+    if (kIsWeb) {
+      throw UnsupportedError(
+          'registerAbsoluteStickerPath needs a real file path — use registerStickerBytes on web');
+    }
     final docs = await getApplicationDocumentsDirectory();
     final norm = p.normalize(absPath);
     if (!File(norm).existsSync()) {
@@ -334,17 +396,47 @@ class StickerCollectionService {
     return rel;
   }
 
+  /// Cross-platform sticker registration from raw bytes — the entry point for
+  /// anything that doesn't already have a native file (image_picker bytes on
+  /// web, a freshly-exported .rls sticker, downloaded bytes). Native writes a
+  /// real file and delegates to the same path as registerAbsoluteStickerPath;
+  /// web stores an inline data: URL. Returns the renderable ref.
+  Future<String> registerStickerBytes({
+    required Uint8List bytes,
+    String ext = '.png',
+  }) async {
+    if (kIsWeb) {
+      final ref = _dataUrlFor(bytes, _mimeForExt(ext));
+      final list = await _readList();
+      list.insert(0, ref);
+      await _writeList(list);
+      return ref;
+    }
+    final docs = await getApplicationDocumentsDirectory();
+    final destDir = Directory(p.join(docs.path, 'images'));
+    if (!destDir.existsSync()) destDir.createSync(recursive: true);
+    final safeExt = ext.isNotEmpty && ext.length <= 6 ? ext.toLowerCase() : '.png';
+    final name = 'stk_${_uuid.v4()}$safeExt';
+    final dest = File(p.join(destDir.path, name));
+    await dest.writeAsBytes(bytes);
+    return _ensureRelForAbsolute(dest.path);
+  }
+
   /// Зарегистрировать файл стикера (уже в sandbox или скопировать в `images/stk_*`).
+  /// Native only — pass bytes via [registerStickerBytes] on web.
   Future<void> registerAbsoluteStickerPath(String absPath) async {
+    if (kIsWeb) return;
     await _ensureRelForAbsolute(absPath);
   }
 
   Future<void> importChatImageToCollection(String imageAbsPath) async {
+    if (kIsWeb) return;
     if (!File(imageAbsPath).existsSync()) return;
     await registerAbsoluteStickerPath(imageAbsPath);
   }
 
-  /// Создать набор. [relPaths] — относительные пути; несуществующие отфильтровываются.
+  /// Создать набор. [relPaths] — относительные пути (native) или data: URLs
+  /// (web); entries that no longer resolve are filtered out.
   Future<String> createPack({
     required String title,
     List<String> relPaths = const [],
@@ -352,18 +444,9 @@ class StickerCollectionService {
     String? sourcePeerLabel,
   }) async {
     await ensureInitialized();
-    final docs = await getApplicationDocumentsDirectory();
     final packs = await _readPacks();
     final id = _uuid.v4();
-    final seen = <String>{};
-    final valid = <String>[];
-    for (final r in relPaths) {
-      if (seen.contains(r)) continue;
-      if (File(p.join(docs.path, r)).existsSync()) {
-        valid.add(r);
-        seen.add(r);
-      }
-    }
+    final valid = await _validRels(relPaths);
     final t = title.trim().isEmpty ? 'Набор' : title.trim();
     packs.insert(
       0,
@@ -378,6 +461,21 @@ class StickerCollectionService {
     );
     await _writePacks(packs);
     return id;
+  }
+
+  Future<List<String>> _validRels(List<String> relPaths) async {
+    final seen = <String>{};
+    final valid = <String>[];
+    final docs = kIsWeb ? null : await getApplicationDocumentsDirectory();
+    for (final r in relPaths) {
+      if (!seen.add(r)) continue;
+      if (kIsWeb || isDataOrRemote(r)) {
+        valid.add(r);
+      } else if (File(p.join(docs!.path, r)).existsSync()) {
+        valid.add(r);
+      }
+    }
+    return valid;
   }
 
   Future<void> deletePack(String packId) async {
@@ -404,20 +502,11 @@ class StickerCollectionService {
   }
 
   Future<void> setPackStickerRels(String packId, List<String> relPaths) async {
-    final docs = await getApplicationDocumentsDirectory();
     final packs = await _readPacks();
     final i = packs.indexWhere((e) => e.id == packId);
     if (i < 0) return;
     final p0 = packs[i];
-    final seen = <String>{};
-    final valid = <String>[];
-    for (final r in relPaths) {
-      if (seen.contains(r)) continue;
-      if (File(p.join(docs.path, r)).existsSync()) {
-        valid.add(r);
-        seen.add(r);
-      }
-    }
+    final valid = await _validRels(relPaths);
     packs[i] = StickerPack(
       id: p0.id,
       title: p0.title,
@@ -429,7 +518,8 @@ class StickerCollectionService {
     await _writePacks(packs);
   }
 
-  /// Импорт копий в галерею + новый набор (стикеры от контакта).
+  /// Импорт копий в галерею + новый набор (стикеры от контакта). Native only
+  /// — pass raw bytes via [importPackFromBytesList] on web.
   Future<String> importPackFromAbsolutePaths({
     required String title,
     required List<String> absPaths,
@@ -450,8 +540,33 @@ class StickerCollectionService {
     );
   }
 
-  /// Относительный путь для файла внутри sandbox (без копирования).
+  /// Cross-platform pack import from raw bytes (a received pack's decoded
+  /// sticker files) — works on both native and web.
+  Future<String> importPackFromBytesList({
+    required String title,
+    required List<Uint8List> bytesList,
+    List<String> exts = const [],
+    String? sourcePeerId,
+    String? sourcePeerLabel,
+  }) async {
+    final rels = <String>[];
+    for (var i = 0; i < bytesList.length; i++) {
+      final ext = i < exts.length && exts[i].isNotEmpty ? exts[i] : '.png';
+      try {
+        rels.add(await registerStickerBytes(bytes: bytesList[i], ext: ext));
+      } catch (_) {}
+    }
+    return createPack(
+      title: title,
+      relPaths: rels,
+      sourcePeerId: sourcePeerId,
+      sourcePeerLabel: sourcePeerLabel,
+    );
+  }
+
+  /// Относительный путь для файла внутри sandbox (без копирования). Native only.
   Future<String?> relativePathIfInAppDocs(String absPath) async {
+    if (kIsWeb) return null;
     final docs = await getApplicationDocumentsDirectory();
     final norm = p.normalize(absPath);
     if (!norm.startsWith(docs.path)) return null;
