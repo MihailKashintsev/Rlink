@@ -537,11 +537,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
-                  // Avatar overlaps the banner's bottom-left edge — the ring
-                  // border gives it a clean cut against the photo underneath.
+                  // Avatar overlaps the banner's bottom edge, centered — the
+                  // ring border gives it a clean cut against the photo
+                  // underneath.
                   Positioned(
-                    left: 20,
+                    left: 0,
+                    right: 0,
                     bottom: -44,
+                    child: Center(
                     child: GestureDetector(
                       onTap: _editing
                           ? () => setState(() {
@@ -614,6 +617,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
+                  ),
                   ),
                 ],
               ),
