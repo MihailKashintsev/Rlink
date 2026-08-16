@@ -11,12 +11,22 @@ name: Release
 #
 # Requires secrets on THIS repo: KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_PASSWORD,
 # KEY_ALIAS (Android signing), RELEASES_PAT (contents:write on Rlink-releases),
-# RELAY_SSH_KEY (optional — relay mirror).
+# RELAY_SSH_KEY (optional — relay mirror), TURN_PASSWORD (calls; see below).
 
 on:
   push:
     tags:
       - 'v*.*.*'
+
+# CallService reads TURN over String.fromEnvironment, so a build without these
+# ships with no TURN server at all — only public STUN. Every released build was
+# in that state, which is why coturn had logged zero allocations: a call that
+# can't go peer-to-peer had nothing to fall back to. deploy-gh-pages.yml already
+# passed them; release builds must too.
+env:
+  TURN_HOST: ${{ vars.TURN_HOST || '185.244.172.90' }}
+  TURN_USER: ${{ vars.TURN_USER || 'rlink' }}
+  TURN_PASSWORD: ${{ secrets.TURN_PASSWORD }}
 
 permissions:
   contents: read
@@ -63,14 +73,20 @@ jobs:
           EOF
       - run: flutter pub get
       - name: Build AAB (RuStore)
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release \
+          --dart-define="TURN_HOST=${TURN_HOST}" \
+          --dart-define="TURN_USER=${TURN_USER}" \
+          --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
       # Split per ABI, not a universal APK: the relay is bandwidth-capped
       # (~2 MB/s global), so a smaller file is the only real download speedup.
       # arm64 is ~65 MB vs ~130 MB universal. `android` in the manifest means
       # arm64 (what every client reads by default); 32-bit ARM devices get
       # `android_arm32`.
       - name: Build APK (site)
-        run: flutter build apk --release --split-per-abi
+        run: flutter build apk --release --split-per-abi \
+          --dart-define="TURN_HOST=${TURN_HOST}" \
+          --dart-define="TURN_USER=${TURN_USER}" \
+          --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
       - name: Rename
         run: |
           V="${{ github.ref_name }}"
@@ -140,9 +156,16 @@ jobs:
       # CL env var injects the define into every cl.exe call so plugins that pull
       # <experimental/coroutine> (audioplayers/gal/permission_handler/…) don't hard-error.
       - name: Build
+        # bash, not the Windows default pwsh: `${VAR}` and the `\` line
+        # continuation below are bash syntax and silently produce empty
+        # dart-defines under PowerShell.
+        shell: bash
         env:
           CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
-        run: flutter build windows --release
+        run: flutter build windows --release \
+          --dart-define="TURN_HOST=${TURN_HOST}" \
+          --dart-define="TURN_USER=${TURN_USER}" \
+          --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
       - name: ZIP
         shell: pwsh
         run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "rlink_${{ github.ref_name }}_windows.zip"
@@ -174,7 +197,10 @@ jobs:
           cache: false
       - run: flutter pub get
       - name: Build
-        run: flutter build macos --release
+        run: flutter build macos --release \
+          --dart-define="TURN_HOST=${TURN_HOST}" \
+          --dart-define="TURN_USER=${TURN_USER}" \
+          --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
       - name: ZIP
         run: |
           cd build/macos/Build/Products/Release

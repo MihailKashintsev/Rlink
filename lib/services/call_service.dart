@@ -70,6 +70,15 @@ class CallService {
   int _acceptResendAttempts = 0;
   Timer? _offerResendTimer;
   Timer? _iceDiagTimer;
+
+  /// Grace window for a transient `disconnected`. WebRTC uses that state for
+  /// "connectivity checks are failing right now", and it recovers on its own
+  /// routinely — a mobile network blip, a Wi-Fi/LTE handover, a NAT rebind.
+  /// Tearing the call down on the first one is why long calls died after
+  /// 20-30 minutes. We wait, ask ICE to re-negotiate a path, and only give up
+  /// if it hasn't come back.
+  Timer? _reconnectGrace;
+  static const Duration _reconnectGraceDuration = Duration(seconds: 12);
   int _localRelayCount = 0;
   int _localSrflxCount = 0;
   int _localHostCount = 0;
@@ -349,6 +358,22 @@ class CallService {
     recordingElapsed.value = Duration.zero;
     localRecording.value = false;
     return _recordingPath;
+  }
+
+  void _cancelReconnectGrace() {
+    _reconnectGrace?.cancel();
+    _reconnectGrace = null;
+  }
+
+  /// Best-effort ICE restart. Only the side that made the offer may renegotiate,
+  /// and the plugin can throw on platforms that don't implement it — a failure
+  /// here just means we fall back to waiting out the grace window.
+  Future<void> _tryRestartIce(RTCPeerConnection pc) async {
+    try {
+      await pc.restartIce();
+    } catch (e) {
+      debugPrint('[RLINK][Call] restartIce failed: $e');
+    }
   }
 
   Map<String, dynamic> _iceConfig() {
@@ -693,15 +718,34 @@ class CallService {
     pc.onConnectionState = (state) {
       debugPrint('[RLINK][Call] PC state: $state');
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+        _cancelReconnectGrace();
         unawaited(_cleanup(CallPhase.failed));
       } else if (state ==
-              RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
-          state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+          RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+        // Transient by definition — don't hang up on it. Ask ICE for a fresh
+        // path and give it a moment; `connected` below cancels the timer.
+        if (phase.value != CallPhase.ended &&
+            phase.value != CallPhase.failed &&
+            _reconnectGrace == null) {
+          debugPrint('[RLINK][Call] disconnected — trying to recover');
+          unawaited(_tryRestartIce(pc));
+          _reconnectGrace = Timer(_reconnectGraceDuration, () {
+            _reconnectGrace = null;
+            if (phase.value != CallPhase.ended &&
+                phase.value != CallPhase.failed) {
+              debugPrint('[RLINK][Call] recovery window expired — ending');
+              unawaited(_cleanup(CallPhase.ended));
+            }
+          });
+        }
+      } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+        _cancelReconnectGrace();
         if (phase.value != CallPhase.ended && phase.value != CallPhase.failed) {
           unawaited(_cleanup(CallPhase.ended));
         }
       } else if (state ==
           RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+        _cancelReconnectGrace();
         _connectTimeout?.cancel();
         if (phase.value != CallPhase.connected) {
           _setPhase(CallPhase.connected);
@@ -1035,6 +1079,7 @@ class CallService {
   }
 
   Future<void> _cleanup(CallPhase endPhase) async {
+    _cancelReconnectGrace();
     await SoundEffectsService.instance.stopIncomingRingtone();
     await SoundEffectsService.instance.stopOutgoingCallTone();
     unawaited(setSpeakerphone(false));
