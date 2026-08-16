@@ -2042,6 +2042,12 @@ class _GalleryTabState extends State<_GalleryTab> {
   String? _error;
   bool _loading = true;
 
+  // Photo mode only: tapping toggles selection (Telegram-style) instead of
+  // sending immediately — order in this list is send order, and each cell's
+  // badge number is its position here + 1, so removing one renumbers the rest.
+  final List<AssetEntity> _selected = [];
+  bool _sending = false;
+
   @override
   void initState() {
     super.initState();
@@ -2190,7 +2196,37 @@ class _GalleryTabState extends State<_GalleryTab> {
     await _loadNative();
   }
 
+  void _toggleSelected(AssetEntity asset) {
+    setState(() {
+      if (!_selected.remove(asset)) _selected.add(asset);
+    });
+  }
+
+  Future<void> _sendSelected() async {
+    if (_selected.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    final ordered = List<AssetEntity>.from(_selected);
+    final sheetNav = Navigator.of(widget.sheetContext);
+    try {
+      for (final asset in ordered) {
+        final file = await asset.file;
+        if (file == null) continue;
+        await widget.onPhotoPath(file.path);
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+    sheetNav.pop();
+  }
+
   Future<void> _onTapAsset(AssetEntity asset) async {
+    // Photos: tap toggles multi-select (Telegram-style numbered badges) —
+    // sending happens via the "Отправить N" bar once at least one is picked.
+    if (widget.mode == _GalleryMode.photo) {
+      _toggleSelected(asset);
+      return;
+    }
+
     final sheetNav = Navigator.of(widget.sheetContext);
 
     final file = await asset.file;
@@ -2204,9 +2240,7 @@ class _GalleryTabState extends State<_GalleryTab> {
         await widget.onGifPath(path);
         break;
       case _GalleryMode.photo:
-        if (!mounted) return;
-        sheetNav.pop();
-        await widget.onPhotoPath(path);
+        // Unreachable — handled above.
         break;
       case _GalleryMode.video:
         if (!mounted) return;
@@ -2368,6 +2402,9 @@ class _GalleryTabState extends State<_GalleryTab> {
         itemCount: assets.length,
         itemBuilder: (context, index) {
           final asset = assets[index];
+          final selIndex =
+              widget.mode == _GalleryMode.photo ? _selected.indexOf(asset) : -1;
+          final selected = selIndex >= 0;
           return GestureDetector(
             onTap: () => _onTapAsset(asset),
             child: FutureBuilder<Uint8List?>(
@@ -2391,6 +2428,8 @@ class _GalleryTabState extends State<_GalleryTab> {
                   fit: StackFit.expand,
                   children: [
                     Image.memory(d, fit: BoxFit.cover),
+                    if (selected)
+                      Container(color: Colors.black.withValues(alpha: 0.25)),
                     if (asset.type == AssetType.video)
                       const Align(
                         alignment: Alignment.bottomRight,
@@ -2398,6 +2437,33 @@ class _GalleryTabState extends State<_GalleryTab> {
                           padding: EdgeInsets.all(4),
                           child: Icon(Icons.play_circle_fill,
                               color: Colors.white, size: 22),
+                        ),
+                      ),
+                    if (widget.mode == _GalleryMode.photo)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: selected
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.black.withValues(alpha: 0.35),
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          child: selected
+                              ? Text(
+                                  '${selIndex + 1}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                )
+                              : null,
                         ),
                       ),
                   ],
@@ -2474,7 +2540,124 @@ class _GalleryTabState extends State<_GalleryTab> {
             ),
           ),
         Expanded(child: gridOrEmpty()),
+        if (widget.mode == _GalleryMode.photo && _selected.isNotEmpty)
+          _SelectedPhotosBar(
+            selected: _selected,
+            sending: _sending,
+            onRemove: _toggleSelected,
+            onSend: _sendSelected,
+          ),
       ],
+    );
+  }
+}
+
+/// Shown once at least one photo is picked: a filmstrip of what's about to be
+/// sent — each thumbnail keeps its own aspect ratio (not force-cropped square)
+/// so portrait/landscape shots are distinguishable at a glance — plus the
+/// "Отправить N" action, exactly Telegram's multi-select flow.
+class _SelectedPhotosBar extends StatelessWidget {
+  final List<AssetEntity> selected;
+  final bool sending;
+  final void Function(AssetEntity) onRemove;
+  final VoidCallback onSend;
+
+  const _SelectedPhotosBar({
+    required this.selected,
+    required this.sending,
+    required this.onRemove,
+    required this.onSend,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(top: BorderSide(color: cs.outlineVariant)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 72,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              itemCount: selected.length,
+              itemBuilder: (context, i) {
+                final asset = selected[i];
+                final ratio = (asset.width > 0 && asset.height > 0)
+                    ? asset.width / asset.height
+                    : 1.0;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: GestureDetector(
+                    onTap: () => onRemove(asset),
+                    child: AspectRatio(
+                      aspectRatio: ratio.clamp(0.5, 2.0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            FutureBuilder<Uint8List?>(
+                              future: asset.thumbnailDataWithSize(
+                                const ThumbnailSize(160, 160),
+                              ),
+                              builder: (context, snap) {
+                                final d = snap.data;
+                                if (d == null) {
+                                  return Container(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.15));
+                                }
+                                return Image.memory(d, fit: BoxFit.contain);
+                              },
+                            ),
+                            Positioned(
+                              top: 2,
+                              right: 2,
+                              child: Container(
+                                width: 18,
+                                height: 18,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black54,
+                                ),
+                                child: const Icon(Icons.close,
+                                    size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: sending ? null : onSend,
+                icon: sending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.send_rounded, size: 18),
+                label: Text('Отправить ${selected.length}'),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

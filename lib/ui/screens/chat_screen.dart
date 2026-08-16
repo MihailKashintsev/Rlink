@@ -3932,21 +3932,42 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _sendWebCompressedPhoto(String myId) async {
     try {
-      final picked = await _picker.pickImage(
-        source: ImageSource.gallery,
+      final picked = await _picker.pickMultiImage(
         maxWidth: 1600,
         maxHeight: 1600,
         imageQuality: 78,
         requestFullMetadata: false,
       );
-      if (picked == null || !mounted) return;
-      final bytes = await picked.readAsBytes();
+      if (picked.isEmpty || !mounted) return;
+
+      // Several picked at once: the crop/caption editor is a one-photo-at-a-
+      // time flow, so making someone step through it N times would be worse
+      // than just sending the batch — send each in the order picked instead.
+      if (picked.length > 1) {
+        for (final x in picked) {
+          if (!mounted) return;
+          final bytes = await x.readAsBytes();
+          if (bytes.isEmpty) continue;
+          final fileName = x.name.trim().isNotEmpty ? x.name.trim() : 'photo.jpg';
+          await _sendWebBytesAsFile(
+            bytes: bytes,
+            fileName: fileName,
+            myId: myId,
+            textFallback: '',
+            asImage: true,
+          );
+        }
+        return;
+      }
+
+      final picked1 = picked.first;
+      final bytes = await picked1.readAsBytes();
       if (bytes.isEmpty) {
         _showErrorSnack('Не удалось прочитать фото в браузере');
         return;
       }
       final fileName =
-          picked.name.trim().isNotEmpty ? picked.name.trim() : 'photo.jpg';
+          picked1.name.trim().isNotEmpty ? picked1.name.trim() : 'photo.jpg';
       if (!mounted) return;
       final result = await Navigator.of(context).push<MediaPreviewResult>(
         MaterialPageRoute(
