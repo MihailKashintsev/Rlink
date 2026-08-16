@@ -13367,6 +13367,7 @@ class _MediaGalleryViewer extends StatefulWidget {
 class _MediaGalleryViewerState extends State<_MediaGalleryViewer> {
   late final PageController _pageCtrl;
   late int _index;
+  bool _chromeVisible = true;
 
   @override
   void initState() {
@@ -13380,6 +13381,8 @@ class _MediaGalleryViewerState extends State<_MediaGalleryViewer> {
     _pageCtrl.dispose();
     super.dispose();
   }
+
+  void _toggleChrome() => setState(() => _chromeVisible = !_chromeVisible);
 
   @override
   Widget build(BuildContext context) {
@@ -13395,117 +13398,161 @@ class _MediaGalleryViewerState extends State<_MediaGalleryViewer> {
             onPageChanged: (i) => setState(() => _index = i),
             itemBuilder: (context, i) {
               final it = widget.items[i];
-              return it.isVideo
-                  ? _GalleryVideoPage(path: it.path)
-                  : Center(
-                      child: InteractiveViewer(
-                        minScale: 0.5,
-                        maxScale: 6,
-                        clipBehavior: Clip.none,
-                        boundaryMargin: const EdgeInsets.all(80),
-                        child: _DmImage(
-                          imagePath: it.path,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                        ),
-                      ),
-                    );
-            },
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: IgnorePointer(
-              child: Container(
-                height: 120,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.45),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                children: [
-                  _ViewerCircleButton(
-                    icon: Icons.close_rounded,
-                    onTap: () => Navigator.of(context).pop(),
-                  ),
-                  if (widget.items.length > 1) ...[
-                    const SizedBox(width: 10),
-                    Text(
-                      '${_index + 1} / ${widget.items.length}',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+              if (it.isVideo) return _GalleryVideoPage(path: it.path);
+              // _DmImage falls back to a small (220x260) thumbnail box when no
+              // explicit size is given — right for a chat bubble, wrong here.
+              // Feed it the full available size so BoxFit.contain scales the
+              // photo up to fill the screen instead of showing it tiny.
+              return LayoutBuilder(builder: (context, box) {
+                return GestureDetector(
+                  onTap: _toggleChrome,
+                  child: Center(
+                    child: InteractiveViewer(
+                      minScale: 0.5,
+                      maxScale: 6,
+                      clipBehavior: Clip.none,
+                      boundaryMargin: const EdgeInsets.all(80),
+                      child: _DmImage(
+                        imagePath: it.path,
+                        width: box.maxWidth,
+                        height: box.maxHeight,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
                       ),
                     ),
-                  ],
-                  const Spacer(),
-                  if (item.isVideo)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _ViewerCircleButton(
-                        icon: Icons.open_in_full_rounded,
-                        tooltip: 'Плеер',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                DmVideoFullscreenPage(path: item.path),
+                  ),
+                );
+              });
+            },
+          ),
+          IgnorePointer(
+            ignoring: !_chromeVisible,
+            child: AnimatedOpacity(
+              opacity: _chromeVisible ? 1 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: IgnorePointer(
+                      child: Container(
+                        height: 120,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.45),
+                              Colors.transparent,
+                            ],
                           ),
                         ),
                       ),
                     ),
-                  if (widget.onSaveToGallery != null)
-                    _ViewerCircleButton(
-                      icon: Icons.download_rounded,
-                      tooltip: 'Сохранить',
-                      onTap: () async => widget.onSaveToGallery!(item),
+                  ),
+                  // Close — top-left; save — top-right.
+                  SafeArea(
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      child: Row(
+                        children: [
+                          _ViewerCircleButton(
+                            icon: Icons.close_rounded,
+                            onTap: () => Navigator.of(context).pop(),
+                          ),
+                          const Spacer(),
+                          if (item.isVideo)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _ViewerCircleButton(
+                                icon: Icons.open_in_full_rounded,
+                                tooltip: 'Плеер',
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        DmVideoFullscreenPage(path: item.path),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (widget.onSaveToGallery != null)
+                            _ViewerCircleButton(
+                              icon: Icons.download_rounded,
+                              tooltip: 'Сохранить',
+                              onTap: () async => widget.onSaveToGallery!(item),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (item.caption != null && item.caption!.isNotEmpty)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: IgnorePointer(
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(16, 32, 16, 44),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.55),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                          child: SafeArea(
+                            top: false,
+                            child: Text(
+                              item.caption!,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 14),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  // Page counter — bottom-center.
+                  if (widget.items.length > 1)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.42),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${_index + 1} / ${widget.items.length}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                 ],
               ),
             ),
           ),
-          if (item.caption != null && item.caption!.isNotEmpty)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 32, 16, 20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 0.55),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: Text(
-                      item.caption!,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );

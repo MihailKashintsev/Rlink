@@ -162,7 +162,7 @@ class AppSettings extends ChangeNotifier {
   final Map<String, int> _autoDeleteMap = {};
   String _locale = 'system';
   int _fontSize = 1; // 0=small, 1=medium, 2=large
-  bool _sendOnEnter = false; // false = send button, true = Enter sends
+  bool _sendOnEnter = true; // false = send button, true = Enter sends
   bool _hasSeenIntro = false; // animated promo/intro shown once per device
   bool _showReadReceipts = true;
   bool _showOnlineStatus = true;
@@ -411,7 +411,7 @@ class AppSettings extends ChangeNotifier {
     }
     _locale = _prefs.getString(_keyLocale) ?? 'system';
     _fontSize = (_prefs.getInt(_keyFontSize) ?? 1).clamp(0, 2);
-    _sendOnEnter = _prefs.getBool(_keySendOnEnter) ?? false;
+    _sendOnEnter = _prefs.getBool(_keySendOnEnter) ?? true;
     _hasSeenIntro = _prefs.getBool(_keyHasSeenIntro) ?? false;
     _showReadReceipts = _prefs.getBool(_keyShowReadReceipts) ?? true;
     _showOnlineStatus = _prefs.getBool(_keyShowOnlineStatus) ?? true;

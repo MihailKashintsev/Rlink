@@ -268,6 +268,14 @@ class StickerCollectionService {
     return files;
   }
 
+  /// Resolves a relative sticker path (as stored on [StickerPack]) to its
+  /// absolute file, or null if missing.
+  Future<File?> absoluteFileForRel(String relPath) async {
+    final docs = await getApplicationDocumentsDirectory();
+    final f = File(p.join(docs.path, relPath));
+    return f.existsSync() ? f : null;
+  }
+
   Future<List<StickerPack>> loadPacks() => _readPacks();
 
   Future<StickerPack?> packById(String id) async {

@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import '../../models/sticker_pack.dart';
 import '../../services/sticker_collection_service.dart';
 
-/// Нижняя панель выбора стикера: вкладки по наборам, сетка файлов.
+/// Нижняя панель выбора стикера: паки — рядом маленьких иконок сверху (как в
+/// пикере эмодзи), сетка выбранного пака под ним.
 /// [onCreateAnimated], if given, shows a "Создать" action that closes the
 /// sheet and hands control to the caller (opens the animated sticker editor).
 Future<void> showStickerPickerSheet(
@@ -20,23 +21,6 @@ Future<void> showStickerPickerSheet(
     isScrollControlled: true,
     builder: (ctx) {
       final h = MediaQuery.sizeOf(ctx).height * 0.58;
-      final cs = Theme.of(ctx).colorScheme;
-      final createBar = onCreateAnimated == null
-          ? null
-          : Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    onCreateAnimated();
-                  },
-                  icon: const Icon(Icons.auto_awesome, size: 18),
-                  label: const Text('Создать анимированный'),
-                ),
-              ),
-            );
       return SafeArea(
         child: SizedBox(
           height: h,
@@ -47,56 +31,18 @@ Future<void> showStickerPickerSheet(
                 return const Center(child: CircularProgressIndicator());
               }
               final packs = snap.data ?? const <StickerPack>[];
-              if (packs.isEmpty) {
-                return Column(
-                  children: [
-                    if (createBar != null) createBar,
-                    Expanded(
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            'Нет наборов. Создайте набор в разделе стикеров.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: cs.onSurfaceVariant),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }
-              return DefaultTabController(
-                length: packs.length,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (createBar != null) createBar,
-                    Material(
-                      color: cs.surface,
-                      child: TabBar(
-                        isScrollable: true,
-                        tabs: [
-                          for (final p in packs) Tab(text: _shortPackTitle(p.title)),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: TabBarView(
-                        children: [
-                          for (final pack in packs)
-                            _StickerPackPickerGrid(
-                              packId: pack.id,
-                              onPicked: (abs) async {
-                                Navigator.pop(ctx);
-                                await onPickedSticker(abs);
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              return _StickerPickerBody(
+                packs: packs,
+                onPicked: (abs) async {
+                  Navigator.pop(ctx);
+                  await onPickedSticker(abs);
+                },
+                onCreateAnimated: onCreateAnimated == null
+                    ? null
+                    : () {
+                        Navigator.pop(ctx);
+                        onCreateAnimated();
+                      },
               );
             },
           ),
@@ -106,11 +52,130 @@ Future<void> showStickerPickerSheet(
   );
 }
 
-String _shortPackTitle(String raw) {
-  final s = raw.trim();
-  if (s.isEmpty) return 'Набор';
-  if (s.length <= 16) return s;
-  return '${s.substring(0, 14)}…';
+class _StickerPickerBody extends StatefulWidget {
+  final List<StickerPack> packs;
+  final Future<void> Function(String absolutePath) onPicked;
+  final VoidCallback? onCreateAnimated;
+
+  const _StickerPickerBody({
+    required this.packs,
+    required this.onPicked,
+    this.onCreateAnimated,
+  });
+
+  @override
+  State<_StickerPickerBody> createState() => _StickerPickerBodyState();
+}
+
+class _StickerPickerBodyState extends State<_StickerPickerBody> {
+  int _sel = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final packs = widget.packs;
+    return Column(
+      children: [
+        if (widget.onCreateAnimated != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: widget.onCreateAnimated,
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: const Text('Создать анимированный'),
+              ),
+            ),
+          ),
+        if (packs.isEmpty)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Нет наборов. Создайте набор в разделе стикеров.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: cs.onSurfaceVariant),
+                ),
+              ),
+            ),
+          )
+        else ...[
+          // ── One row of small pack icons, like the emoji picker's tab row ──
+          SizedBox(
+            height: 44,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              itemCount: packs.length,
+              itemBuilder: (_, i) {
+                final pack = packs[i];
+                final selected = i == _sel.clamp(0, packs.length - 1);
+                final firstRel = pack.stickerRelPaths.isNotEmpty
+                    ? pack.stickerRelPaths.first
+                    : null;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => setState(() => _sel = i),
+                    child: Container(
+                      width: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? cs.primary.withValues(alpha: 0.16)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: firstRel == null
+                          ? const Icon(Icons.folder_outlined, size: 20)
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: _PackThumb(relPath: firstRel),
+                            ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: _StickerPackPickerGrid(
+              key: ValueKey(packs[_sel.clamp(0, packs.length - 1)].id),
+              packId: packs[_sel.clamp(0, packs.length - 1)].id,
+              onPicked: widget.onPicked,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PackThumb extends StatelessWidget {
+  final String relPath;
+  const _PackThumb({required this.relPath});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<File?>(
+      future: StickerCollectionService.instance.absoluteFileForRel(relPath),
+      builder: (context, snap) {
+        final f = snap.data;
+        if (f == null) return const Icon(Icons.image_outlined, size: 18);
+        return Image.file(
+          f,
+          width: 26,
+          height: 26,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const Icon(Icons.image_outlined, size: 18),
+        );
+      },
+    );
+  }
 }
 
 class _StickerPackPickerGrid extends StatelessWidget {
@@ -118,6 +183,7 @@ class _StickerPackPickerGrid extends StatelessWidget {
   final Future<void> Function(String absolutePath) onPicked;
 
   const _StickerPackPickerGrid({
+    super.key,
     required this.packId,
     required this.onPicked,
   });
