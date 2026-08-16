@@ -129,6 +129,8 @@ import 'stickers_hub_screen.dart';
 import 'text_selection_view_screen.dart';
 import 'safety_number_screen.dart';
 import '../../models/user_profile.dart';
+import '../../models/rls_sticker.dart';
+import '../widgets/rls_sticker_view.dart';
 import '../widgets/aurora_background.dart';
 import '../widgets/nick_text.dart';
 import '../widgets/wheel_time_picker.dart';
@@ -13052,23 +13054,32 @@ class _DmImage extends StatelessWidget {
       );
     }
 
+    final isRls = imagePath.split('#').first.split('?').first.toLowerCase().endsWith(rlsFileExtension);
+
+    Widget fromBytesOrRls(Uint8List bytes) {
+      if (isRls) {
+        final sticker = RlsSticker.decodeBytes(bytes);
+        if (sticker == null) return errorBox('bad_rls_sticker');
+        return RlsStickerView(sticker: sticker, width: width, height: height);
+      }
+      return Image.memory(
+        bytes,
+        width: width,
+        height: height,
+        fit: fit,
+        filterQuality: filterQuality,
+        errorBuilder: (_, error, __) => errorBox(error),
+        frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded || frame != null) return child;
+          return loadingBox();
+        },
+      );
+    }
+
     if (kIsWeb) {
       final bytes = _ChatScreenState._bytesFromDataUri(imagePath);
       if (bytes != null) {
-        return constrain(
-          Image.memory(
-            bytes,
-            width: width,
-            height: height,
-            fit: fit,
-            filterQuality: filterQuality,
-            errorBuilder: (_, error, __) => errorBox(error),
-            frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
-              if (wasSynchronouslyLoaded || frame != null) return child;
-              return loadingBox();
-            },
-          ),
-        );
+        return constrain(fromBytesOrRls(bytes));
       }
       if (imagePath.startsWith('opfs://rlink/')) {
         final cleanPath = imagePath.split('#').first;
@@ -13085,24 +13096,14 @@ class _DmImage extends StatelessWidget {
               }
               return constrain(errorBox('missing_web_stored_image'));
             }
-            return constrain(
-              Image.memory(
-                data,
-                width: width,
-                height: height,
-                fit: fit,
-                filterQuality: filterQuality,
-                errorBuilder: (_, error, __) => errorBox(error),
-                frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
-                  if (wasSynchronouslyLoaded || frame != null) return child;
-                  return loadingBox();
-                },
-              ),
-            );
+            return constrain(fromBytesOrRls(data));
           },
         );
       }
       if (_ChatScreenState._isInlineWebUri(imagePath)) {
+        // .rls over a bare network/blob URL isn't a supported combination yet
+        // (no sender path produces one) — animated stickers always arrive via
+        // data:/opfs: above.
         return constrain(
           Image.network(
             imagePath,
@@ -13116,6 +13117,21 @@ class _DmImage extends StatelessWidget {
           ),
         );
       }
+    }
+    if (isRls) {
+      return FutureBuilder<Uint8List>(
+        future: File(imagePath).readAsBytes(),
+        builder: (context, snapshot) {
+          final data = snapshot.data;
+          if (data == null) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return constrain(loadingBox());
+            }
+            return constrain(errorBox(snapshot.error ?? 'missing_rls_sticker'));
+          }
+          return constrain(fromBytesOrRls(data));
+        },
+      );
     }
     return constrain(
       Image.file(
