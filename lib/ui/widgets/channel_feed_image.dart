@@ -4,8 +4,10 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
+import '../../models/rls_sticker.dart';
 import '../../utils/web_file_store.dart';
 import 'platform_layout.dart';
+import 'rls_sticker_view.dart';
 
 // Cache of decoded OPFS image bytes so that scrolling a feed (which recycles
 // list items) doesn't re-read from OPFS each time — the async gap produced a
@@ -30,6 +32,12 @@ Widget storedImage(String path,
   // Reserve vertical space while loading so the post height stays stable.
   Widget loadingBox() =>
       SizedBox(width: width == double.infinity ? null : width, height: 200);
+  // Animated .rls stickers are not images — they need their own player. This
+  // is the single place every sticker surface (picker, packs, hub, feeds)
+  // resolves a ref through, so handling it here covers all of them.
+  if (looksLikeRlsRef(path)) {
+    return _RlsFromRef(path: path, width: width, height: height);
+  }
   if (path.startsWith('data:') ||
       path.startsWith('http://') ||
       path.startsWith('https://')) {
@@ -73,6 +81,53 @@ Widget storedImage(String path,
       height: height,
       fit: fit,
       errorBuilder: (_, __, ___) => broken());
+}
+
+/// Loads an `.rls` from any ref shape (inline data:, OPFS, native file) and
+/// plays it. Bytes are cached in [_webImgCache] alongside images so scrolling a
+/// grid doesn't re-read and restart the animation on every recycle.
+class _RlsFromRef extends StatelessWidget {
+  final String path;
+  final double? width;
+  final double? height;
+
+  const _RlsFromRef({required this.path, this.width, this.height});
+
+  Future<Uint8List?> _load() async {
+    if (path.startsWith('data:')) {
+      return Uri.parse(path).data?.contentAsBytes();
+    }
+    if (kIsWeb) {
+      if (!isWebStoredFile(path)) return null;
+      return readWebStoredFile(path.split('#').first);
+    }
+    final f = File(path.split('#').first);
+    return f.existsSync() ? f.readAsBytes() : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget play(Uint8List bytes) {
+      final sticker = RlsSticker.decodeBytes(bytes);
+      if (sticker == null) return const SizedBox.shrink();
+      return RlsStickerView(sticker: sticker, width: width, height: height);
+    }
+
+    final cached = _webImgCache[path];
+    if (cached != null) return play(cached);
+    return FutureBuilder<Uint8List?>(
+      future: _load(),
+      builder: (_, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return SizedBox(width: width, height: height);
+        }
+        final b = snap.data;
+        if (b == null || b.isEmpty) return const SizedBox.shrink();
+        _cacheWebImg(path, b);
+        return play(b);
+      },
+    );
+  }
 }
 
 /// Картинка в ленте канала / шапке поста: на ПК — компактнее, без полноэкранной ширины.

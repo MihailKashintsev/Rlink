@@ -109,4 +109,79 @@ void main() {
     final sx = layer.transformAt(850).sx;
     expect(sx, greaterThan(2.0));
   });
+  group('decode limits reject hostile input', () {
+    Uint8List encodeWith({
+      int width = 512,
+      int height = 512,
+      int durationMs = 1000,
+      int layers = 1,
+      int keysPerLayer = 2,
+    }) {
+      return RlsSticker(
+        width: width,
+        height: height,
+        durationMs: durationMs,
+        assets: {'a': Uint8List.fromList([1, 2, 3])},
+        layers: [
+          for (var i = 0; i < layers; i++)
+            RlsLayer(
+              id: 'l$i',
+              assetId: 'a',
+              keys: [
+                for (var k = 0; k < keysPerLayer; k++)
+                  RlsKeyframe(tMs: k * 10, x: 1, y: 1),
+              ],
+            ),
+        ],
+      ).encode();
+    }
+
+    test('a sane sticker still decodes', () {
+      expect(RlsSticker.decodeBytes(encodeWith()), isNotNull);
+    });
+
+    test('too many layers is rejected', () {
+      expect(RlsSticker.decodeBytes(encodeWith(layers: rlsMaxLayers + 1)),
+          isNull);
+    });
+
+    test('too many keyframes is rejected', () {
+      expect(
+          RlsSticker.decodeBytes(
+              encodeWith(keysPerLayer: rlsMaxKeysPerLayer + 1)),
+          isNull);
+    });
+
+    test('absurd duration is rejected', () {
+      expect(
+          RlsSticker.decodeBytes(encodeWith(durationMs: rlsMaxDurationMs + 1)),
+          isNull);
+      expect(RlsSticker.decodeBytes(encodeWith(durationMs: 0)), isNull);
+    });
+
+    test('absurd canvas is rejected', () {
+      expect(
+          RlsSticker.decodeBytes(encodeWith(width: rlsMaxCanvasSide + 1)),
+          isNull);
+      expect(RlsSticker.decodeBytes(encodeWith(height: 0)), isNull);
+    });
+  });
+
+  group('looksLikeRlsRef', () {
+    test('native and OPFS paths are matched by extension', () {
+      expect(looksLikeRlsRef('/docs/images/stk_x.rls'), isTrue);
+      expect(looksLikeRlsRef('opfs://rlink/abc_sticker.rls'), isTrue);
+      expect(looksLikeRlsRef('opfs://rlink/abc_sticker.rls#frag'), isTrue);
+      expect(looksLikeRlsRef('/docs/images/stk_x.png'), isFalse);
+    });
+
+    test('web data refs are matched by MIME, not extension', () {
+      expect(looksLikeRlsRef('data:$rlsMimeType;base64,AAAA'), isTrue);
+      expect(looksLikeRlsRef('data:image/png;base64,AAAA'), isFalse);
+      // The old octet-stream form must NOT be treated as a sticker.
+      expect(
+          looksLikeRlsRef('data:application/octet-stream;base64,AAAA'), isFalse);
+    });
+  });
+
 }

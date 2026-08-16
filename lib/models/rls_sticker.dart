@@ -52,6 +52,29 @@ import 'package:archive/archive.dart';
 const String rlsFormatId = 'rls1';
 const String rlsFileExtension = '.rls';
 
+/// MIME used when an `.rls` travels as a `data:` URL (the web collection has no
+/// real files, so the extension isn't available to identify it by).
+const String rlsMimeType = 'application/x-rls';
+
+/// Is this renderable ref an animated sticker? Covers both shapes a ref can
+/// take: a path/URL ending in `.rls` (native files, OPFS entries) and a
+/// `data:application/x-rls;base64,…` inline ref (web collection).
+bool looksLikeRlsRef(String ref) {
+  if (ref.startsWith('data:')) return ref.startsWith('data:$rlsMimeType');
+  return ref.split('#').first.split('?').first.toLowerCase().endsWith(
+        rlsFileExtension,
+      );
+}
+
+/// Ceilings applied when decoding. `.rls` files arrive from other people over
+/// the network, so a malformed or hostile one must be rejected rather than be
+/// allowed to allocate unbounded work in the renderer.
+const int rlsMaxLayers = 64;
+const int rlsMaxKeysPerLayer = 512;
+const int rlsMaxCanvasSide = 4096;
+const int rlsMaxDurationMs = 60000;
+const int rlsMaxTotalAssetBytes = 16 * 1024 * 1024;
+
 class RlsKeyframe {
   final int tMs;
   final double x;
@@ -258,17 +281,38 @@ class RlsSticker {
     return Uint8List.fromList(GZipEncoder().encode(jsonBytes));
   }
 
-  /// Decodes `.rls` bytes. Returns null on any malformed/foreign input rather
-  /// than throwing — callers treat an unreadable sticker as "missing", never
-  /// a crash.
+  /// Decodes `.rls` bytes. Returns null on any malformed, foreign or
+  /// out-of-bounds input rather than throwing — callers treat an unreadable
+  /// sticker as "missing", never a crash.
   static RlsSticker? decodeBytes(Uint8List bytes) {
     try {
       final jsonBytes = GZipDecoder().decodeBytes(bytes);
       final decoded = jsonDecode(utf8.decode(jsonBytes));
       if (decoded is! Map || decoded['fmt'] != rlsFormatId) return null;
-      return _fromSchema(Map<String, dynamic>.from(decoded));
+      final s = _fromSchema(Map<String, dynamic>.from(decoded));
+      return s._withinLimits() ? s : null;
     } catch (_) {
       return null;
     }
+  }
+
+  /// A sticker from the network must not be able to make the renderer do
+  /// unbounded work — reject anything past the ceilings instead of clamping,
+  /// so a bad file reads as "missing" rather than as a mangled sticker.
+  bool _withinLimits() {
+    if (width < 1 || width > rlsMaxCanvasSide) return false;
+    if (height < 1 || height > rlsMaxCanvasSide) return false;
+    if (durationMs < 1 || durationMs > rlsMaxDurationMs) return false;
+    if (layers.length > rlsMaxLayers) return false;
+    if (assets.length > rlsMaxLayers) return false;
+    var total = 0;
+    for (final a in assets.values) {
+      total += a.length;
+      if (total > rlsMaxTotalAssetBytes) return false;
+    }
+    for (final l in layers) {
+      if (l.keys.length > rlsMaxKeysPerLayer) return false;
+    }
+    return true;
   }
 }

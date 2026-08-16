@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -122,11 +123,32 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
     }
   }
 
+  /// Re-encodes a picked layer to PNG, downscaled to fit the canvas.
+  ///
+  /// This is the single biggest lever on sticker weight. Layers are stored as
+  /// lossless RGBA PNG, so a 1200×1200 photo costs ~5.5× the pixels the 512×512
+  /// canvas can ever show — measured at ~1.8 MB per layer instead of ~330 KB,
+  /// for detail that is thrown away at paint time anyway. Decoding straight to
+  /// the target size also avoids ever materialising the full-res bitmap.
   Future<Uint8List> _decodeToPng(Uint8List raw) async {
-    final codec = await ui.instantiateImageCodec(raw);
+    final buffer = await ui.ImmutableBuffer.fromUint8List(raw);
+    final descriptor = await ui.ImageDescriptor.encoded(buffer);
+    const maxSide = _kCanvasSide;
+    final w = descriptor.width;
+    final h = descriptor.height;
+    var tw = w;
+    var th = h;
+    if (w > maxSide || h > maxSide) {
+      final s = maxSide / math.max(w, h);
+      tw = (w * s).round().clamp(1, maxSide.round());
+      th = (h * s).round().clamp(1, maxSide.round());
+    }
+    final codec =
+        await descriptor.instantiateCodec(targetWidth: tw, targetHeight: th);
     final frame = await codec.getNextFrame();
     final data = await frame.image.toByteData(format: ui.ImageByteFormat.png);
     frame.image.dispose();
+    descriptor.dispose();
     return data!.buffer.asUint8List();
   }
 
@@ -159,12 +181,10 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
 
   Future<void> _addPhotoLayer() async {
     try {
-      final picked = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 90,
-      );
+      // No maxWidth/imageQuality: those make image_picker re-encode to JPEG,
+      // which flattens away the alpha channel — and a cut-out PNG layer is
+      // exactly what makes a good sticker. _decodeToPng downscales instead.
+      final picked = await _picker.pickImage(source: ImageSource.gallery);
       if (picked == null) return;
       final bytes = await picked.readAsBytes();
       if (bytes.isEmpty) return;

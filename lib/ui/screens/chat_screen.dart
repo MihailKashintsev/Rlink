@@ -4574,12 +4574,14 @@ class _ChatScreenState extends State<ChatScreen> {
       final data = Uri.parse(absPath).data;
       if (data == null) return;
       final mime = data.mimeType;
-      final ext = mime == 'image/gif'
-          ? 'gif'
-          : mime == 'image/webp'
-              ? 'webp'
-              : mime == 'application/octet-stream'
-                  ? rlsFileExtension.substring(1)
+      // The file name is what identifies an animated sticker once it lands in
+      // OPFS on the receiving side, so the .rls extension has to survive here.
+      final ext = mime == rlsMimeType
+          ? rlsFileExtension.substring(1)
+          : mime == 'image/gif'
+              ? 'gif'
+              : mime == 'image/webp'
+                  ? 'webp'
                   : 'png';
       await _sendWebBytesAsFile(
         bytes: data.contentAsBytes(),
@@ -13172,7 +13174,7 @@ class _DmImage extends StatelessWidget {
       );
     }
 
-    final isRls = imagePath.split('#').first.split('?').first.toLowerCase().endsWith(rlsFileExtension);
+    final isRls = looksLikeRlsRef(imagePath);
 
     Widget fromBytesOrRls(Uint8List bytes) {
       if (isRls) {

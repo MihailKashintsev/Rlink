@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/rls_sticker.dart';
 import '../models/sticker_pack.dart';
 import '../utils/web_file_store.dart';
 
@@ -113,8 +114,10 @@ class StickerCollectionService {
         return 'image/gif';
       case '.webp':
         return 'image/webp';
-      case '.rls':
-        return 'application/octet-stream';
+      case rlsFileExtension:
+        // Not octet-stream: the web collection has no file names, so this MIME
+        // is the only thing that identifies an animated sticker in a data: ref.
+        return rlsMimeType;
       default:
         return 'image/png';
     }
