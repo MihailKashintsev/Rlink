@@ -10,6 +10,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'app_settings.dart';
 import 'ble_service.dart';
+import 'block_service.dart';
 import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
@@ -88,6 +89,10 @@ class RelayService with WidgetsBindingObserver {
 
   /// Один раз навешиваем lifecycle-наблюдатель.
   bool _lifecycleAttached = false;
+
+  /// Once attached, keeps the relay's per-user block list current so it can
+  /// exclude blocked peers from presence fanout (see [_broadcastBlockedList]).
+  bool _blockSyncAttached = false;
 
   /// Default public relay server.
   /// Захардкожен — пользователь не может переопределить через настройки
@@ -528,7 +533,23 @@ class RelayService with WidgetsBindingObserver {
 
   // ── Connect / Disconnect ─────────────────────────────────────
 
+  /// Tells the relay who this account has blocked, so it can leave them out
+  /// of presence broadcasts — "он не увидит время моего захода" only holds if
+  /// the relay itself never sends them the presence update in the first
+  /// place; a client can't un-tell a peer something their own client already
+  /// received.
+  void _sendBlockedList() {
+    _safeSend(
+      {'type': 'set_blocked', 'blocked': BlockService.instance.blockedIds.toList()},
+      context: 'set_blocked',
+    );
+  }
+
   Future<void> connect() async {
+    if (!_blockSyncAttached) {
+      _blockSyncAttached = true;
+      BlockService.instance.blockedNotifier.addListener(_sendBlockedList);
+    }
     if (state.value == RelayState.connected ||
         state.value == RelayState.connecting) {
       return;
@@ -1200,6 +1221,8 @@ class RelayService with WidgetsBindingObserver {
           _retryCount = 0;
           _lastPongAt = DateTime.now();
           debugPrint('[RLINK][Relay] Registered, $count users online');
+          // Re-sync in case the block list changed while disconnected.
+          _sendBlockedList();
           break;
 
         case 'packet':

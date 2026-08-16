@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import 'block_service.dart';
 import 'call_history_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
@@ -882,6 +883,15 @@ class CallService {
     Map<String, dynamic> payload,
   ) async {
     final f8 = fromId.length >= 8 ? fromId.substring(0, 8) : fromId;
+    // Drop every call signal from a blocked peer — including 'invite', so a
+    // blocked contact's call never rings, never notifies, never touches
+    // phase/activeCallId at all. The block-contact dialog already promises
+    // "you won't receive calls from them"; nothing here previously enforced
+    // that promise.
+    if (BlockService.instance.isBlocked(fromId)) {
+      debugPrint('[RLINK][Call] Dropped $signalType from blocked $f8');
+      return;
+    }
     debugPrint('[RLINK][Call][RX] $signalType from=$f8');
     switch (signalType) {
       case 'invite':

@@ -290,6 +290,12 @@ Future<Uint8List?> _sealServiceMediaForPeer(
   Contact? contact,
 }) async {
   final canonical = ChatStorageService.normalizeDmPeerId(peerKey);
+  // Every avatar/banner/profile-music/story-image send to a specific peer
+  // funnels through here to get encrypted for them — the single choke point
+  // for "a blocked contact stops seeing my media going forward". Existing
+  // messages already cached on their device before the block can't be
+  // reached from here; see BlockService docs for that limit.
+  if (BlockService.instance.isBlocked(canonical)) return null;
   var x25519 = RelayService.instance.getPeerX25519Key(canonical);
   x25519 ??= contact?.x25519Key?.trim();
   if (x25519 == null || x25519.isEmpty) {
@@ -3177,6 +3183,13 @@ Future<void> _sendProfileDirectToPeer(String peerKey) async {
 
 /// Send profile + avatar + banner to a specific peer via relay.
 Future<void> _sendFullProfileToPeer(String peerKey) async {
+  // Covers every caller: pair-request response, explicit profile_req reply,
+  // and the reconnect/online-peers push loops. A blocked contact stops
+  // receiving my nick/status/avatar/banner/music from here on.
+  if (BlockService.instance
+      .isBlocked(ChatStorageService.normalizeDmPeerId(peerKey))) {
+    return;
+  }
   await _sendProfileDirectToPeer(peerKey);
 
   final myProfile = ProfileService.instance.profile;
