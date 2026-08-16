@@ -6848,6 +6848,46 @@ class _ChatScreenState extends State<ChatScreen> {
     await Gal.requestAccess(toAlbum: true);
   }
 
+  /// Opens the swipeable media gallery starting at the message with
+  /// [startMsgId], listing every image/regular-video message in [messages]
+  /// (in chat order) — round video "circles" are voice-note-like and stay
+  /// excluded, same as Telegram excludes round messages from its gallery.
+  Future<void> _openMediaGalleryFrom(
+      List<ChatMessage> messages, String startMsgId) async {
+    final items = <GalleryMediaItem>[];
+    var startIndex = 0;
+    for (final m in messages) {
+      final hasImage = m.imagePath != null &&
+          m.imagePath!.isNotEmpty &&
+          !m.isSticker &&
+          !p.basename(m.imagePath!).startsWith('stk_');
+      final hasVideo = m.videoPath != null &&
+          m.videoPath!.isNotEmpty &&
+          !_dmVideoPathIsSquare(m.videoPath!);
+      if (!hasImage && !hasVideo) continue;
+      if (m.id == startMsgId) startIndex = items.length;
+      items.add(GalleryMediaItem(
+        path: hasImage ? m.imagePath! : m.videoPath!,
+        isVideo: hasVideo,
+        caption: m.text.isNotEmpty ? m.text : null,
+      ));
+    }
+    if (items.isEmpty) return;
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _MediaGalleryViewer(
+          items: items,
+          initialIndex: startIndex,
+          onSaveToGallery: (item) => item.isVideo
+              ? _saveVideoToGallery(item.path)
+              : _saveImageToGallery(item.path),
+        ),
+      ),
+    );
+  }
+
   Future<void> _saveImageToGallery(String imagePath) async {
     try {
       if (kIsWeb) {
@@ -7933,6 +7973,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                           _saveImageToGallery,
                                                                       onEditImage:
                                                                           _editAndResendImage,
+                                                                      onOpenMediaGallery: () =>
+                                                                          unawaited(_openMediaGalleryFrom(
+                                                                              messages,
+                                                                              msg.id)),
                                                                       onLongPressSaveImageToGallery: _bulkSelectMode
                                                                           ? null
                                                                           : (p) =>
@@ -8871,6 +8915,7 @@ class _MessageBubble extends StatelessWidget {
   final bool bulkSelectMode;
   final Function(String)? onDownloadImage;
   final Future<void> Function(String path)? onEditImage;
+  final VoidCallback? onOpenMediaGallery;
   final void Function(String path)? onLongPressSaveImageToGallery;
   final void Function(String path)? onLongPressSaveVideoToGallery;
   final Future<void> Function(ChatMessage msg, String newEncoded)?
@@ -8903,6 +8948,7 @@ class _MessageBubble extends StatelessWidget {
     this.bulkSelectMode = false,
     this.onDownloadImage,
     this.onEditImage,
+    this.onOpenMediaGallery,
     this.onLongPressSaveImageToGallery,
     this.onLongPressSaveVideoToGallery,
     this.onCollabPersist,
@@ -9194,6 +9240,10 @@ class _MessageBubble extends StatelessWidget {
                           }
                           // Stickers don't open full screen
                           if (isSticker) return;
+                          if (onOpenMediaGallery != null) {
+                            onOpenMediaGallery!();
+                            return;
+                          }
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -13277,5 +13327,288 @@ class _ViewerCircleButton extends StatelessWidget {
       ),
     );
     return tooltip == null ? btn : Tooltip(message: tooltip!, child: btn);
+  }
+}
+
+/// One entry in a swipeable media gallery.
+class GalleryMediaItem {
+  final String path;
+  final bool isVideo;
+  final String? caption;
+  const GalleryMediaItem({
+    required this.path,
+    required this.isVideo,
+    this.caption,
+  });
+}
+
+/// Redesigned media viewer: swipe left/right through every image/video in the
+/// surrounding list (chat, in future also channel/group — see GalleryMediaItem),
+/// instead of the old one-photo-at-a-time viewer. Pinch-zoom on images;
+/// video pages get a light inline player (tap to play/pause) with an
+/// "expand" action into the full-featured DmVideoFullscreenPage for
+/// speed/seek controls, so the two gesture systems never fight for the same
+/// horizontal drag.
+class _MediaGalleryViewer extends StatefulWidget {
+  final List<GalleryMediaItem> items;
+  final int initialIndex;
+  final Future<void> Function(GalleryMediaItem item)? onSaveToGallery;
+
+  const _MediaGalleryViewer({
+    required this.items,
+    required this.initialIndex,
+    this.onSaveToGallery,
+  });
+
+  @override
+  State<_MediaGalleryViewer> createState() => _MediaGalleryViewerState();
+}
+
+class _MediaGalleryViewerState extends State<_MediaGalleryViewer> {
+  late final PageController _pageCtrl;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex.clamp(0, widget.items.length - 1);
+    _pageCtrl = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.items[_index];
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          PageView.builder(
+            controller: _pageCtrl,
+            itemCount: widget.items.length,
+            onPageChanged: (i) => setState(() => _index = i),
+            itemBuilder: (context, i) {
+              final it = widget.items[i];
+              return it.isVideo
+                  ? _GalleryVideoPage(path: it.path)
+                  : Center(
+                      child: InteractiveViewer(
+                        minScale: 0.5,
+                        maxScale: 6,
+                        clipBehavior: Clip.none,
+                        boundaryMargin: const EdgeInsets.all(80),
+                        child: _DmImage(
+                          imagePath: it.path,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
+                      ),
+                    );
+            },
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: Container(
+                height: 120,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.45),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  _ViewerCircleButton(
+                    icon: Icons.close_rounded,
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                  if (widget.items.length > 1) ...[
+                    const SizedBox(width: 10),
+                    Text(
+                      '${_index + 1} / ${widget.items.length}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  if (item.isVideo)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _ViewerCircleButton(
+                        icon: Icons.open_in_full_rounded,
+                        tooltip: 'Плеер',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                DmVideoFullscreenPage(path: item.path),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (widget.onSaveToGallery != null)
+                    _ViewerCircleButton(
+                      icon: Icons.download_rounded,
+                      tooltip: 'Сохранить',
+                      onTap: () async => widget.onSaveToGallery!(item),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (item.caption != null && item.caption!.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(16, 32, 16, 20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.55),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Text(
+                      item.caption!,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lightweight in-gallery video page: tap to play/pause, no seek/speed chrome
+/// (that lives behind the "expand" button → DmVideoFullscreenPage) — kept
+/// deliberately simple so it never competes with PageView's horizontal swipe.
+class _GalleryVideoPage extends StatefulWidget {
+  final String path;
+  const _GalleryVideoPage({required this.path});
+
+  @override
+  State<_GalleryVideoPage> createState() => _GalleryVideoPageState();
+}
+
+class _GalleryVideoPageState extends State<_GalleryVideoPage> {
+  VideoPlayerController? _ctrl;
+  bool _initialized = false;
+  bool _playing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_init());
+  }
+
+  Future<void> _init() async {
+    try {
+      final path = widget.path;
+      String? resolvedUrl;
+      if (kIsWeb && path.startsWith('opfs://rlink/')) {
+        final clean = path.split('#').first;
+        for (final mime in webVideoMimeCandidatesForPath(path)) {
+          resolvedUrl = await webStoredFileObjectUrl(clean, mimeType: mime);
+          if (resolvedUrl != null) break;
+        }
+      } else if (kIsWeb && _ChatScreenState._isInlineWebUri(path)) {
+        resolvedUrl = path;
+      }
+      final ctrl = (kIsWeb && resolvedUrl != null)
+          ? VideoPlayerController.networkUrl(Uri.parse(resolvedUrl))
+          : VideoPlayerController.file(File(path));
+      await ctrl.initialize();
+      await ctrl.setLooping(true);
+      if (!mounted) {
+        await ctrl.dispose();
+        return;
+      }
+      setState(() {
+        _ctrl = ctrl;
+        _initialized = true;
+      });
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    final c = _ctrl;
+    if (c == null) return;
+    if (_playing) {
+      c.pause();
+    } else {
+      c.play();
+    }
+    setState(() => _playing = !_playing);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ctrl = _ctrl;
+    return GestureDetector(
+      onTap: _toggle,
+      child: Center(
+        child: !_initialized || ctrl == null
+            ? const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white54),
+              )
+            : AspectRatio(
+                aspectRatio: ctrl.value.aspectRatio,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    VideoPlayer(ctrl),
+                    AnimatedOpacity(
+                      opacity: _playing ? 0 : 1,
+                      duration: const Duration(milliseconds: 150),
+                      child: const Icon(Icons.play_arrow_rounded,
+                          color: Colors.white, size: 64),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
   }
 }
