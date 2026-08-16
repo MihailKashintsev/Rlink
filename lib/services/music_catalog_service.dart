@@ -454,17 +454,23 @@ Future<bool> isStreamReachable(String url) async {
   }
 }
 
-/// Keep only what will play, checked a few at a time.
+/// Keep only what will play.
+///
+/// Web is skipped on purpose. A `fetch()` probe there answers a different
+/// question than "will this play": media elements load cross-origin audio
+/// without CORS, so a track whose probe fails can still play fine — measured
+/// on Audius trending, 2 of 8 playable tracks were discarded this way, while
+/// the probing itself added ~12s before the feed appeared. VoiceService's
+/// watchdog already skips a track that turns out to be dead, so the browser
+/// shows the feed at once and lets that handle the rare miss.
 Future<List<CatalogTrack>> filterReachable(List<CatalogTrack> tracks) async {
-  final out = <CatalogTrack>[];
-  const batch = 5;
-  for (var i = 0; i < tracks.length; i += batch) {
-    final slice = tracks.skip(i).take(batch).toList();
-    final ok =
-        await Future.wait(slice.map((t) => isStreamReachable(t.streamUrl)));
-    for (var j = 0; j < slice.length; j++) {
-      if (ok[j]) out.add(slice[j]);
-    }
-  }
-  return out;
+  if (kIsWeb) return tracks;
+  // Native has no CORS, so the probe is meaningful — but it must not be paid
+  // for serially. Two bytes per track, all at once.
+  final ok =
+      await Future.wait(tracks.map((t) => isStreamReachable(t.streamUrl)));
+  return [
+    for (var i = 0; i < tracks.length; i++)
+      if (ok[i]) tracks[i],
+  ];
 }

@@ -257,7 +257,7 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
                 decoration: InputDecoration(
                   isDense: true,
                   prefixIcon: const Icon(Icons.search, size: 18),
-                  hintText: 'Поиск в каталоге Audius',
+                  hintText: 'Поиск музыки',
                   hintStyle: const TextStyle(fontSize: 13),
                   filled: true,
                   fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
