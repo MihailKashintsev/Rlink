@@ -6,12 +6,9 @@ import 'channel_feed_image.dart';
 
 /// Нижняя панель выбора стикера: паки — рядом маленьких иконок сверху (как в
 /// пикере эмодзи), сетка выбранного пака под ним.
-/// [onCreateAnimated], if given, shows a "Создать" action that closes the
-/// sheet and hands control to the caller (opens the animated sticker editor).
 Future<void> showStickerPickerSheet(
   BuildContext context, {
   required Future<void> Function(String absolutePath) onPickedSticker,
-  VoidCallback? onCreateAnimated,
 }) async {
   await StickerCollectionService.instance.init();
   if (!context.mounted) return;
@@ -36,12 +33,6 @@ Future<void> showStickerPickerSheet(
                   Navigator.pop(ctx);
                   await onPickedSticker(abs);
                 },
-                onCreateAnimated: onCreateAnimated == null
-                    ? null
-                    : () {
-                        Navigator.pop(ctx);
-                        onCreateAnimated();
-                      },
               );
             },
           ),
@@ -54,12 +45,10 @@ Future<void> showStickerPickerSheet(
 class _StickerPickerBody extends StatefulWidget {
   final List<StickerPack> packs;
   final Future<void> Function(String absolutePath) onPicked;
-  final VoidCallback? onCreateAnimated;
 
   const _StickerPickerBody({
     required this.packs,
     required this.onPicked,
-    this.onCreateAnimated,
   });
 
   @override
@@ -75,18 +64,6 @@ class _StickerPickerBodyState extends State<_StickerPickerBody> {
     final packs = widget.packs;
     return Column(
       children: [
-        if (widget.onCreateAnimated != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: widget.onCreateAnimated,
-                icon: const Icon(Icons.auto_awesome, size: 18),
-                label: const Text('Создать анимированный'),
-              ),
-            ),
-          ),
         if (packs.isEmpty)
           Expanded(
             child: Center(

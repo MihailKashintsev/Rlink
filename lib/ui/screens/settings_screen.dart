@@ -519,6 +519,13 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             onTap: () => _open(context, const EmojiHubScreen()),
           ),
           _CategoryItem(
+            icon: Icons.auto_awesome_motion_outlined,
+            color: const Color(0xFF7E57C2),
+            title: 'Стикеры и наборы',
+            subtitle: 'Свои наборы и редактор анимированных стикеров',
+            onTap: () => _open(context, const StickersHubScreen()),
+          ),
+          _CategoryItem(
             icon: Icons.lock_outline,
             color: const Color(0xFF4CAF50),
             title: AppL10n.t('settings_privacy'),
