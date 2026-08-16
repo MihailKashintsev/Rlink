@@ -54,9 +54,11 @@ class EmojiPackDmService {
       if (totalBytes > 2 * 1024 * 1024) {
         break; // Increased to 2MB for larger emoji packs
       }
+      final packName = EmojiPackService.instance.packNameForShortcode(sc);
       emojis.add({
         'shortcode': sc,
         'data': encoded,
+        if (packName != null && packName.isNotEmpty) 'pack': packName,
       });
     }
     if (emojis.isEmpty) return null;

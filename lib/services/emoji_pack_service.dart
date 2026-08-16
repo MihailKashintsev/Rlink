@@ -178,6 +178,20 @@ class EmojiPackService {
     return null;
   }
 
+  /// Which local pack a shortcode belongs to, if any — used when building an
+  /// auto-collect payload so the recipient can sort it into a sensibly named
+  /// pack instead of one generic dump bucket.
+  String? packNameForShortcode(String shortcode) {
+    final k = shortcode.trim().toLowerCase();
+    if (k.isEmpty) return null;
+    for (final pack in _cachedPacks) {
+      for (final e in pack.emojis) {
+        if (e.shortcode.toLowerCase() == k) return pack.name;
+      }
+    }
+    return null;
+  }
+
   CustomEmoji? lookupByShortcode(String shortcode) {
     final k = shortcode.trim().toLowerCase();
     if (k.isEmpty) return null;
@@ -496,6 +510,13 @@ class EmojiPackService {
   }
 
   /// Авто-импорт эмодзи от пира (служебный payload relay blob).
+  ///
+  /// Groups incoming emoji by the SENDER's own pack name (carried per-emoji
+  /// as `'pack'`, see EmojiPackDmService._buildPayloadFromShortcodes) instead
+  /// of dumping everything from one peer into a single undifferentiated
+  /// "Автоимпорт" bucket — e.g. emoji from their "Смайлы" pack land in a
+  /// "Смайлы" pack here too, so it's obvious what you're looking at. Falls
+  /// back to a neutral name only if the sender's pack couldn't be resolved.
   Future<int> installFromAutoPayload(
     Map<String, dynamic> payload, {
     required String sourcePeerId,
@@ -505,14 +526,21 @@ class EmojiPackService {
     if (rawEmojis.isEmpty) return 0;
 
     final packs = await _readPacksRaw();
-    String? packId;
-    for (final p0 in packs) {
-      if (p0.sourcePeerId == sourcePeerId && p0.name == 'Автоимпорт') {
-        packId = p0.id;
-        break;
+    final resolvedPackIds = <String, String>{};
+
+    Future<String> packIdFor(String name) async {
+      final cached = resolvedPackIds[name];
+      if (cached != null) return cached;
+      for (final p0 in packs) {
+        if (p0.sourcePeerId == sourcePeerId && p0.name == name) {
+          resolvedPackIds[name] = p0.id;
+          return p0.id;
+        }
       }
+      final id = await createPack(name: name, sourcePeerId: sourcePeerId);
+      resolvedPackIds[name] = id;
+      return id;
     }
-    packId ??= await createPack(name: 'Автоимпорт', sourcePeerId: sourcePeerId);
 
     var n = 0;
     for (final e in rawEmojis) {
@@ -530,7 +558,11 @@ class EmojiPackService {
         continue;
       }
       if (bytes.isEmpty) continue;
+      final packName = (m['pack'] as String?)?.trim();
+      final targetName =
+          (packName != null && packName.isNotEmpty) ? packName : 'Из чата';
       try {
+        final packId = await packIdFor(targetName);
         await addEmojiBytes(packId: packId, shortcode: norm, bytes: bytes);
         n++;
       } catch (_) {}
