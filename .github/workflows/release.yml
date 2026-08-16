@@ -64,13 +64,19 @@ jobs:
       - run: flutter pub get
       - name: Build AAB (RuStore)
         run: flutter build appbundle --release
+      # Split per ABI, not a universal APK: the relay is bandwidth-capped
+      # (~2 MB/s global), so a smaller file is the only real download speedup.
+      # arm64 is ~65 MB vs ~130 MB universal. `android` in the manifest means
+      # arm64 (what every client reads by default); 32-bit ARM devices get
+      # `android_arm32`.
       - name: Build APK (site)
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi
       - name: Rename
         run: |
           V="${{ github.ref_name }}"
           cp build/app/outputs/bundle/release/app-release.aab   rlink_${V}_rustore.aab
-          cp build/app/outputs/flutter-apk/app-release.apk      Rlink-${V}.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   Rlink-${V}-arm64.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Rlink-${V}-arm32.apk
       - name: Upload to Rlink-releases
         uses: softprops/action-gh-release@v2
         with:
@@ -86,7 +92,8 @@ jobs:
           body: |
             Rlink ${{ github.ref_name }}
 
-            • Android APK: `Rlink-${{ github.ref_name }}.apk` (установи, разрешив «неизвестные источники»)
+            • Android APK: `Rlink-${{ github.ref_name }}-arm64.apk` (установи, разрешив «неизвестные источники»)
+            • Android APK для старых 32-битных: `Rlink-${{ github.ref_name }}-arm32.apk`
             • macOS: `rlink_${{ github.ref_name }}_macos.zip`
             • Windows: `rlink_${{ github.ref_name }}_windows.zip`
             • RuStore AAB: `rlink_${{ github.ref_name }}_rustore.aab`
@@ -199,7 +206,7 @@ jobs:
         run: |
           B=https://github.com/MihailKashintsev/Rlink-releases/releases/download/$V
           mkdir -p artifacts && cd artifacts
-          for f in "Rlink-$V.apk" "rlink_${V}_windows.zip" "rlink_${V}_macos.zip"; do
+          for f in "Rlink-$V-arm64.apk" "Rlink-$V-arm32.apk" "rlink_${V}_windows.zip" "rlink_${V}_macos.zip"; do
             if curl -fsSL --retry 6 --retry-delay 3 -o "$f" "$B/$f"; then
               echo "got $f"
             else
@@ -223,12 +230,15 @@ jobs:
           HOST=root@185.244.172.90
           DIR=/var/www/rlink-updates
           B=https://185.244.172.90.nip.io/updates
-          au=""; [ -f "artifacts/Rlink-${V}.apk" ]         && au="$B/Rlink-${V}.apk"
+          # `android` = arm64: every client, including old ones that predate the
+          # split, reads that key. 32-bit ARM picks `android_arm32` when present.
+          au=""; [ -f "artifacts/Rlink-${V}-arm64.apk" ]   && au="$B/Rlink-${V}-arm64.apk"
+          a32=""; [ -f "artifacts/Rlink-${V}-arm32.apk" ]  && a32="$B/Rlink-${V}-arm32.apk"
           wu=""; [ -f "artifacts/rlink_${V}_windows.zip" ] && wu="$B/rlink_${V}_windows.zip"
           mu=""; [ -f "artifacts/rlink_${V}_macos.zip" ]   && mu="$B/rlink_${V}_macos.zip"
-          jq -n --arg v "$V" --arg au "$au" --arg wu "$wu" --arg mu "$mu" '{
+          jq -n --arg v "$V" --arg au "$au" --arg a32 "$a32" --arg wu "$wu" --arg mu "$mu" '{
             version:$v, notes:("Обновление "+$v), publishedAt:(now|todate),
-            assets:{android:$au, windows:$wu, macos:$mu, linux:"", web:$v}
+            assets:{android:$au, android_arm32:$a32, windows:$wu, macos:$mu, linux:"", web:$v}
           }' > manifest.json
           $SSH $HOST "mkdir -p $DIR"
           for f in "Rlink-${V}.apk" "rlink_${V}_windows.zip" "rlink_${V}_macos.zip"; do
@@ -236,5 +246,5 @@ jobs:
           done
           $SCP manifest.json "$HOST:$DIR/manifest.json"
           # Keep ONLY the current version on the relay (GitHub keeps full history).
-          $SSH $HOST "cd $DIR && for f in Rlink-*.apk rlink_*_windows.zip rlink_*_macos.zip rlink_*_linux.tar.gz; do [ -e \"\$f\" ] || continue; case \"\$f\" in Rlink-${V}.apk|rlink_${V}_windows.zip|rlink_${V}_macos.zip|rlink_${V}_linux.tar.gz) : ;; *) rm -f \"\$f\" && echo \"removed old \$f\" ;; esac; done && chmod -R 755 $DIR && ls -lah $DIR"
+          $SSH $HOST "cd $DIR && for f in Rlink-*.apk rlink_*_windows.zip rlink_*_macos.zip rlink_*_linux.tar.gz; do [ -e \"\$f\" ] || continue; case \"\$f\" in Rlink-${V}-arm64.apk|Rlink-${V}-arm32.apk|rlink_${V}_windows.zip|rlink_${V}_macos.zip|rlink_${V}_linux.tar.gz) : ;; *) rm -f \"\$f\" && echo \"removed old \$f\" ;; esac; done && chmod -R 755 $DIR && ls -lah $DIR"
           echo "relay update published: $V"
