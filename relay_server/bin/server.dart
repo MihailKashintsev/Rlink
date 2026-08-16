@@ -2993,6 +2993,38 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
       return _jsonResponse({'ok': false, 'error': 'proxy_failed'}, status: 502);
     }
   }
+  if (request.url.path == 'music-search') {
+    // Deezer's search API sends no access-control-allow-origin, so the web
+    // build can't call it directly. Fetch it here and hand back the JSON with
+    // CORS. Allowlisted hosts only — this must not become an open proxy.
+    const allowedHosts = {'api.deezer.com', 'api.jamendo.com'};
+    final raw = request.url.queryParameters['u'] ?? '';
+    final target = Uri.tryParse(raw);
+    if (target == null ||
+        target.scheme != 'https' ||
+        !allowedHosts.contains(target.host)) {
+      return _jsonResponse({'ok': false, 'error': 'bad_target'}, status: 400);
+    }
+    try {
+      final req = await _proxyClient.getUrl(target);
+      req.headers.set('user-agent', 'Mozilla/5.0 (compatible; RlinkRelay)');
+      final resp = await req.close();
+      if (resp.statusCode != 200) {
+        await resp.drain<void>();
+        return _jsonResponse(
+            {'ok': false, 'error': 'upstream_${resp.statusCode}'},
+            status: 502);
+      }
+      final body = await resp.transform(utf8.decoder).join();
+      return shelf.Response.ok(body, headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'access-control-allow-origin': '*',
+        'cache-control': 'public, max-age=300',
+      });
+    } catch (e) {
+      return _jsonResponse({'ok': false, 'error': 'proxy_failed'}, status: 502);
+    }
+  }
   if (request.url.path == 'health') {
     final peers = _users.values
         .map((u) => {

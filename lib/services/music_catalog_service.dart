@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
 import 'relay_service.dart';
@@ -64,17 +65,35 @@ class CatalogTrack {
   });
 }
 
-/// Audius: open catalog, public API, no key and no registration.
+/// Free catalogs that answer from Russia without a VPN.
 ///
-/// Jamendo is the other free source we picked, but its API requires a
-/// client_id you have to register for — wire it in [searchJamendo] once that
-/// id exists.
+/// Internet Archive used to be here but is RKN-blocked, so its results were
+/// dead links for most users — dropped. Jamendo needs a free client_id from
+/// devportal.jamendo.com; until [_jamendoClientId] is filled in it just sits
+/// out and the other sources cover for it.
 class MusicCatalogService {
   MusicCatalogService._();
   static final instance = MusicCatalogService._();
 
   static const _appName = 'Rlink';
+  static const _jamendoClientId = '';
   String? _host; // discovery node, resolved once
+
+  /// Deezer's search API sends no CORS header, so the browser can't call it
+  /// directly — route it through the relay, which returns the same JSON with
+  /// `access-control-allow-origin`. Native talks to Deezer directly.
+  Uri _catalogUri(Uri direct) {
+    if (!kIsWeb) return direct;
+    final base =
+        RelayService.instance.serverUrl ?? RelayService.defaultServerUrl;
+    final httpBase = base.startsWith('wss://')
+        ? base.replaceFirst('wss://', 'https://')
+        : base.startsWith('ws://')
+            ? base.replaceFirst('ws://', 'http://')
+            : base;
+    return Uri.parse(
+        '$httpBase/music-search?u=${Uri.encodeQueryComponent(direct.toString())}');
+  }
 
   Future<String?> _discoverHost() async {
     if (_host != null) return _host;
@@ -95,14 +114,16 @@ class MusicCatalogService {
   ///
   /// Measured from Russia without a VPN: Audius answers but ~25% of its
   /// tracks redirect to community content nodes that are unreachable, so it
-  /// can't be the only source. Internet Archive serves full tracks, and
-  /// iTunes covers mainstream music (30-second previews only, labelled).
+  /// can't be the only source. Jamendo adds full CC tracks; Deezer and iTunes
+  /// cover mainstream music including Russian artists (30-second previews
+  /// only, labelled as such).
   Future<List<CatalogTrack>> search(String query) async {
     final q = query.trim();
     if (q.length < 2) return const [];
     final results = await Future.wait([
       _searchAudius(q),
-      _searchArchive(q),
+      _searchJamendo(q),
+      _searchDeezer(q),
       _searchItunes(q),
     ]);
     // Full tracks first, previews last — a 30s sample is a fallback, not a
@@ -132,31 +153,30 @@ class MusicCatalogService {
     }
   }
 
-  /// Internet Archive — full-length, free, no key.
-  Future<List<CatalogTrack>> _searchArchive(String q) async {
+  /// Jamendo — full-length CC-licensed tracks. Needs a free client_id.
+  Future<List<CatalogTrack>> _searchJamendo(String q) async {
+    if (_jamendoClientId.isEmpty) return const [];
     try {
-      final uri = Uri.parse(
-        'https://archive.org/advancedsearch.php?q='
-        '${Uri.encodeQueryComponent('($q) AND mediatype:(audio)')}'
-        '&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator'
-        '&sort%5B%5D=downloads+desc&rows=12&page=1&output=json',
+      final direct = Uri.parse(
+        'https://api.jamendo.com/v3.0/tracks/?client_id=$_jamendoClientId'
+        '&format=json&limit=12&search=${Uri.encodeQueryComponent(q)}'
+        '&audioformat=mp32',
       );
-      final r = await http.get(uri).timeout(const Duration(seconds: 12));
+      final r =
+          await http.get(_catalogUri(direct)).timeout(const Duration(seconds: 12));
       if (r.statusCode != 200) return const [];
-      final docs =
-          ((jsonDecode(r.body) as Map)['response'] as Map?)?['docs'] as List?;
-      if (docs == null) return const [];
-      // One metadata call per item would be 12 round-trips; the archive's
-      // own player endpoint resolves the first audio file for us.
+      final list = (jsonDecode(r.body) as Map)['results'] as List?;
+      if (list == null) return const [];
       return [
-        for (final d in docs.take(8))
-          if (d is Map && d['identifier'] != null)
+        for (final e in list)
+          if (e is Map && e['audio'] is String && '${e['audio']}'.isNotEmpty)
             CatalogTrack(
-              title: _archiveTitle(d),
-              artist: _archiveCreator(d),
-              streamUrl:
-                  'https://archive.org/download/${d['identifier']}/_rlink_first_audio',
-              source: 'Archive',
+              title: '${e['name'] ?? ''}',
+              artist: '${e['artist_name'] ?? ''}',
+              streamUrl: '${e['audio']}',
+              artworkUrl: e['image'] as String?,
+              duration: Duration(seconds: (e['duration'] as num?)?.toInt() ?? 0),
+              source: 'Jamendo',
             ),
       ];
     } catch (_) {
@@ -164,41 +184,35 @@ class MusicCatalogService {
     }
   }
 
-  String _archiveTitle(Map d) {
-    final t = d['title'];
-    if (t is String && t.trim().isNotEmpty) return t.trim();
-    if (t is List && t.isNotEmpty) return '${t.first}';
-    return '${d['identifier']}';
-  }
-
-  String _archiveCreator(Map d) {
-    final c = d['creator'];
-    if (c is String) return c;
-    if (c is List && c.isNotEmpty) return '${c.first}';
-    return 'Internet Archive';
-  }
-
-  /// Resolve an Archive item to a real audio file URL (called on play).
-  Future<String?> resolveArchiveStream(String placeholderUrl) async {
-    final m = RegExp(r'archive\.org/download/([^/]+)/_rlink_first_audio')
-        .firstMatch(placeholderUrl);
-    if (m == null) return null;
-    final id = m.group(1)!;
+  /// Deezer — mainstream catalogue with good Russian coverage, no key.
+  /// 30-second previews only; the preview CDN serves CORS + range, so these
+  /// play in the browser directly even though the search API doesn't.
+  Future<List<CatalogTrack>> _searchDeezer(String q) async {
     try {
-      final r = await http
-          .get(Uri.parse('https://archive.org/metadata/$id'))
-          .timeout(const Duration(seconds: 12));
-      if (r.statusCode != 200) return null;
-      final files = (jsonDecode(r.body) as Map)['files'] as List?;
-      if (files == null) return null;
-      for (final f in files) {
-        final name = f is Map ? '${f['name']}' : '';
-        if (RegExp(r'\.(mp3|m4a|ogg)$', caseSensitive: false).hasMatch(name)) {
-          return 'https://archive.org/download/$id/${Uri.encodeComponent(name)}';
-        }
-      }
-    } catch (_) {}
-    return null;
+      final direct = Uri.parse(
+          'https://api.deezer.com/search?q=${Uri.encodeQueryComponent(q)}&limit=12');
+      final r =
+          await http.get(_catalogUri(direct)).timeout(const Duration(seconds: 12));
+      if (r.statusCode != 200) return const [];
+      final list = (jsonDecode(r.body) as Map)['data'] as List?;
+      if (list == null) return const [];
+      return [
+        for (final e in list)
+          if (e is Map && e['preview'] is String && '${e['preview']}'.isNotEmpty)
+            CatalogTrack(
+              title: '${e['title'] ?? ''}',
+              artist: e['artist'] is Map ? '${e['artist']['name'] ?? ''}' : '',
+              streamUrl: '${e['preview']}',
+              artworkUrl:
+                  e['album'] is Map ? e['album']['cover_medium'] as String? : null,
+              duration: const Duration(seconds: 30),
+              source: 'Deezer',
+              isPreview: true,
+            ),
+      ];
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// iTunes Search — mainstream catalogue (Russian included), no key.
@@ -273,7 +287,7 @@ class MusicCatalogService {
       // Линия is for listening, not sampling — no 30s previews here.
       final seed = _seeds[_rnd.nextInt(_seeds.length)];
       final lists =
-          await Future.wait([_searchAudius(seed), _searchArchive(seed)]);
+          await Future.wait([_searchAudius(seed), _searchJamendo(seed)]);
       final tracks = [for (final l in lists) ...l];
       tracks.shuffle(_rnd);
       return tracks;
@@ -412,14 +426,7 @@ void rememberTrackRef(String ref) {
 
 String? trackRefFor(String url) => _refByUrl[url];
 
-/// Archive results carry a placeholder URL (the item, not a file). Resolve it
-/// to a real audio URL right before playing; everything else passes through.
-Future<String?> resolvePlayableUrl(String url) async {
-  if (url.contains('_rlink_first_audio')) {
-    return MusicCatalogService.instance.resolveArchiveStream(url);
-  }
-  return url;
-}
+Future<String?> resolvePlayableUrl(String url) async => url;
 
 /// Can this URL actually be streamed from here?
 ///
@@ -427,27 +434,8 @@ Future<String?> resolvePlayableUrl(String url) async {
 /// unreachable from Russia — measured 6/8 playable, and a retry never helps
 /// because the node is fixed per track. So dead tracks are filtered out of
 /// the list instead of being offered and failing.
-/// Is archive.org reachable from here? It's blocked by RKN in Russia, so its
-/// tracks only play over a VPN. Probed once and cached for the session.
-bool? _archiveHostOk;
-Future<bool> _archiveReachable() async {
-  if (_archiveHostOk != null) return _archiveHostOk!;
-  try {
-    final r = await http
-        .head(Uri.parse('https://archive.org/'))
-        .timeout(const Duration(seconds: 5));
-    _archiveHostOk = r.statusCode < 500;
-  } catch (_) {
-    _archiveHostOk = false;
-  }
-  return _archiveHostOk!;
-}
-
 Future<bool> isStreamReachable(String url) async {
   if (!url.startsWith('http')) return true;
-  // Archive links are resolved to a real file on play; gate them on whether
-  // archive.org itself is reachable (blocked in Russia → drop them).
-  if (url.contains('_rlink_first_audio')) return _archiveReachable();
   try {
     final req = http.Request('GET', Uri.parse(url))
       ..headers['Range'] = 'bytes=0-1';

@@ -139,8 +139,8 @@ class _MusicScreenState extends State<MusicScreen>
     }
     setState(() => _loading = true);
     final r = await MusicCatalogService.instance.search(v);
-    // Drop catalog hits that won't actually play from here (archive.org blocked
-    // in RU, dead Audius nodes) — otherwise search offers VPN-only results.
+    // Drop catalog hits that won't actually play from here (dead Audius
+    // content nodes) — otherwise search offers results that fail on tap.
     final playable = await filterReachable(r);
     if (!mounted) return;
     // Uploaded tracks are part of the same library — match them first, and
