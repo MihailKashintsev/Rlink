@@ -4005,6 +4005,36 @@ void _onBlobReceived(
     return;
   }
 
+  if (msgId.startsWith('emojipack_')) {
+    try {
+      final preview = await EmojiPackDmService.receivePackShareFromRelay(
+        fromId,
+        msgId,
+        data,
+      );
+      if (preview != null) {
+        incomingMessageController.add(IncomingMessage(
+          fromId: fromId,
+          text: preview,
+          timestamp: DateTime.now(),
+          msgId: msgId,
+        ));
+        final myKey = CryptoService.instance.publicKeyHex;
+        if (myKey.isNotEmpty) {
+          unawaited(GossipRouter.instance.sendAck(
+            messageId: msgId,
+            senderId: myKey,
+            recipientId: fromId,
+          ));
+        }
+        await _notifyIncomingDirectEvent(peerId: fromId, body: preview);
+      }
+    } catch (e, st) {
+      debugPrint('[RLINK][EmojiPack] relay blob failed: $e\n$st');
+    }
+    return;
+  }
+
   if (msgId.startsWith('emojiauto_')) {
     try {
       await EmojiPackDmService.receiveFromRelay(

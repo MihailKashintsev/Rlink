@@ -6,7 +6,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../models/emoji_pack.dart';
+import '../../services/emoji_pack_dm_service.dart';
 import '../../services/emoji_pack_service.dart';
+import '../widgets/forward_target_sheet.dart';
 
 class EmojiPackDetailScreen extends StatefulWidget {
   final String packId;
@@ -42,6 +44,23 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _sharePack() async {
+    final pack = _pack;
+    if (pack == null) return;
+    if (pack.emojis.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('В наборе нет эмодзи')));
+      return;
+    }
+    final picked = await showForwardDmTargetSheet(context);
+    if (picked == null || !mounted) return;
+    await EmojiPackDmService.sendPackToPeer(
+      context: context,
+      targetPeerId: picked.peerId,
+      pack: pack,
+    );
   }
 
   Future<void> _rename() async {
@@ -130,6 +149,11 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
       appBar: AppBar(
         title: Text(pack.name),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.ios_share_rounded),
+            tooltip: 'Поделиться',
+            onPressed: _sharePack,
+          ),
           IconButton(icon: const Icon(Icons.drive_file_rename_outline), onPressed: _rename),
           IconButton(
             icon: const Icon(Icons.delete_outline),
