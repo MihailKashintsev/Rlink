@@ -173,6 +173,8 @@ flutter:
     - assets/branding/logo.svg
     - assets/animated_emoji/
     - assets/sticker_packs/default/
+    - assets/sounds/accordion_note.wav
+    - assets/sounds/call_fx/
 
 flutter_launcher_icons:
   android: true

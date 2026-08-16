@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -5,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 import 'app_settings.dart';
 import 'runtime_platform.dart';
@@ -16,12 +18,8 @@ enum ActionSound {
   callConnected,
 }
 
-/// In-call reaction sounds (Google Meet-style). Synthesized, not sampled —
-/// same reasoning as the rest of this file (no bundled audio assets, works
-/// identically on every platform). A synthesizer can't reproduce a real fart,
-/// laugh or crowd honestly; these are cartoon approximations built from noise
-/// and oscillators, good enough to read as the intended joke, not as audio
-/// realism.
+/// In-call reaction sounds (Google Meet-style) — real bundled recordings
+/// under assets/sounds/call_fx/, played via [SoundEffectsService.playCallFx].
 enum CallFxSound {
   fart('💨', 'Пук'),
   laugh('😂', 'Смех'),
@@ -47,7 +45,13 @@ enum AppSoundSlot {
 }
 
 class SoundEffectsService {
-  SoundEffectsService._();
+  SoundEffectsService._() {
+    // Fire-and-forget: by the time a user actually reaches a bayan-themed
+    // sound (toggle a setting, get a call/message), this ~550KB asset has
+    // almost always finished decoding. _waveAt falls back to synthesis for
+    // the rare case it hasn't (or never does).
+    unawaited(_loadAccordionSample());
+  }
   static final SoundEffectsService instance = SoundEffectsService._();
 
   final AudioPlayer _effectsPlayer = AudioPlayer(playerId: 'rlink_fx');
@@ -60,7 +64,6 @@ class SoundEffectsService {
   final AudioPlayer _callFxPlayer = AudioPlayer(playerId: 'rlink_call_fx');
   Uint8List? _tickBytes;
   int _lastTickMs = 0;
-  final Map<CallFxSound, Uint8List> _callFxCache = {};
 
   bool get _enabled => AppSettings.instance.notifSound;
   bool get _supportedPlatform =>
@@ -164,16 +167,28 @@ class SoundEffectsService {
     } catch (_) {}
   }
 
+  static const _callFxAssetPath = {
+    CallFxSound.fart: 'sounds/call_fx/fart.wav',
+    CallFxSound.laugh: 'sounds/call_fx/laugh.wav',
+    CallFxSound.applause: 'sounds/call_fx/applause.wav',
+    CallFxSound.bee: 'sounds/call_fx/bee.wav',
+  };
+
+  @visibleForTesting
+  static Map<CallFxSound, String> get callFxAssetPathsForTest =>
+      _callFxAssetPath;
+
   /// Plays a call reaction sound locally. [CallService] is responsible for
   /// also signalling the peer so both sides hear it — this only handles the
-  /// audio, same split as [playAction]/[startIncomingRingtone].
+  /// audio, same split as [playAction]/[startIncomingRingtone]. Real bundled
+  /// recordings, not synthesized — a sine-wave synth can't sound like a
+  /// laugh or a crowd no matter how it's shaped.
   Future<void> playCallFx(CallFxSound fx) async {
     if (!_enabled || !_supportedPlatform) return;
     try {
-      final bytes = _callFxCache.putIfAbsent(fx, () => _callFxBytes(fx));
       await _callFxPlayer.stop();
       await _callFxPlayer.setReleaseMode(ReleaseMode.stop);
-      await _callFxPlayer.play(BytesSource(bytes), volume: 1);
+      await _callFxPlayer.play(AssetSource(_callFxAssetPath[fx]!), volume: 1);
     } catch (e) {
       debugPrint('[RLINK][Sound] playCallFx failed: $e');
     }
@@ -276,6 +291,20 @@ class SoundEffectsService {
 
   static double _waveAt(double t, int freq, {required bool bayan}) {
     if (!bayan) return math.sin(2 * math.pi * freq * t);
+    final loop = _accordionLoop;
+    if (loop != null && loop.isNotEmpty) {
+      // Play the real note back faster/slower than it was recorded — the
+      // standard cheap pitch-shift (changes both pitch and effective
+      // playback rate together, which is why we loop rather than play once).
+      final ratio = freq / _accordionBaseFreq;
+      final pos = (t * ratio * _accordionSampleRate) % loop.length;
+      final i0 = pos.floor();
+      final frac = pos - i0;
+      final i1 = (i0 + 1) % loop.length;
+      return loop[i0] * (1 - frac) + loop[i1] * frac;
+    }
+    // Fallback additive-harmonic approximation — used only until the real
+    // sample finishes loading, or if it never does.
     var v = 0.0;
     for (final h in _bayanHarmonics) {
       v += math.sin(2 * math.pi * freq * h.mul * t) * h.amp;
@@ -286,6 +315,123 @@ class SoundEffectsService {
     // like vibrato-effect processing.
     final tremolo = 1.0 + 0.16 * math.sin(2 * math.pi * 5.5 * t);
     return v * tremolo / 1.89; // 1.89 = sum of harmonic amps, keeps peak ~1
+  }
+
+  // ── Real accordion sample (assets/sounds/accordion_note.wav) ───────────
+  // Decoded once, cached as a seamlessly-loopable middle segment (skips the
+  // bellows attack/tail) plus its detected fundamental frequency, so _waveAt
+  // above can pitch-shift it to any note by resampling.
+  static List<double>? _accordionLoop;
+  static double _accordionSampleRate = 44100;
+  static double _accordionBaseFreq = 220;
+
+  static Future<void> _loadAccordionSample() async {
+    try {
+      final data = await rootBundle.load('assets/sounds/accordion_note.wav');
+      final bytes =
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      final parsed = _decodeWavPcm16(bytes);
+      if (parsed == null || parsed.samples.length < 2048) return;
+      final s = parsed.samples;
+      // Middle 50% — skips attack chiff and any release, leaving just the
+      // sustained tone to loop and to measure pitch from.
+      final start = (s.length * 0.25).round();
+      final end = (s.length * 0.75).round();
+      final loop = _seamlessLoop(
+          s.sublist(start, end), (parsed.sampleRate * 0.01).round());
+      _accordionSampleRate = parsed.sampleRate.toDouble();
+      _accordionBaseFreq = _detectFundamentalHz(loop, parsed.sampleRate);
+      _accordionLoop = loop;
+      debugPrint('[RLINK][Sound] accordion sample ready: '
+          '${loop.length} samples @ ${parsed.sampleRate}Hz, '
+          'pitch ${_accordionBaseFreq.toStringAsFixed(1)}Hz');
+    } catch (e) {
+      debugPrint('[RLINK][Sound] accordion sample load failed: $e');
+    }
+  }
+
+  /// Crossfades the segment's tail into its head over [fadeSamples] so
+  /// wrapping it in a modulo loop doesn't produce an audible click at the seam.
+  static List<double> _seamlessLoop(List<double> src, int fadeSamples) {
+    final n = src.length;
+    final fade = fadeSamples.clamp(1, n ~/ 4);
+    final out = List<double>.of(src);
+    for (var i = 0; i < fade; i++) {
+      final k = i / fade;
+      out[n - fade + i] = out[n - fade + i] * (1 - k) + out[i] * k;
+    }
+    return out;
+  }
+
+  /// Autocorrelation pitch detection, searching only the musically-plausible
+  /// 70-1000 Hz range — simple, well-understood, and accurate enough for a
+  /// single sustained note (no polyphony/noise to confuse it).
+  static double _detectFundamentalHz(List<double> window, int sampleRate) {
+    if (window.length < 512) return 220;
+    final minLag = (sampleRate / 1000).floor().clamp(1, window.length - 1);
+    final maxLag = (sampleRate / 70).ceil().clamp(minLag + 1, window.length - 1);
+    var bestLag = minLag;
+    var bestScore = double.negativeInfinity;
+    for (var lag = minLag; lag <= maxLag; lag++) {
+      var sum = 0.0;
+      for (var i = 0; i < window.length - lag; i++) {
+        sum += window[i] * window[i + lag];
+      }
+      if (sum > bestScore) {
+        bestScore = sum;
+        bestLag = lag;
+      }
+    }
+    return sampleRate / bestLag;
+  }
+
+  /// Minimal PCM16 WAV decoder (mono or stereo, downmixed to mono) — walks
+  /// chunks rather than assuming fixed offsets, robust to whatever extra
+  /// metadata chunks a given encoder adds.
+  static ({List<double> samples, int sampleRate})? _decodeWavPcm16(
+      Uint8List bytes) {
+    if (bytes.length < 44) return null;
+    if (String.fromCharCodes(bytes.sublist(0, 4)) != 'RIFF' ||
+        String.fromCharCodes(bytes.sublist(8, 12)) != 'WAVE') {
+      return null;
+    }
+    final header = ByteData.sublistView(bytes);
+    var offset = 12;
+    int? sampleRate;
+    int? channels;
+    int? bitsPerSample;
+    Uint8List? pcmBytes;
+    while (offset + 8 <= bytes.length) {
+      final id = String.fromCharCodes(bytes.sublist(offset, offset + 4));
+      final size = header.getUint32(offset + 4, Endian.little);
+      final body = offset + 8;
+      if (id == 'fmt ' && body + 16 <= bytes.length) {
+        channels = header.getUint16(body + 2, Endian.little);
+        sampleRate = header.getUint32(body + 4, Endian.little);
+        bitsPerSample = header.getUint16(body + 14, Endian.little);
+      } else if (id == 'data') {
+        pcmBytes = bytes.sublist(body, (body + size).clamp(0, bytes.length));
+      }
+      offset = body + size + (size.isOdd ? 1 : 0);
+    }
+    if (sampleRate == null ||
+        channels == null ||
+        bitsPerSample != 16 ||
+        pcmBytes == null ||
+        channels < 1) {
+      return null;
+    }
+    final pcm = ByteData.sublistView(pcmBytes);
+    final frameCount = pcmBytes.length ~/ (2 * channels);
+    final samples = List<double>.filled(frameCount, 0);
+    for (var i = 0; i < frameCount; i++) {
+      var sum = 0;
+      for (var c = 0; c < channels; c++) {
+        sum += pcm.getInt16((i * channels + c) * 2, Endian.little);
+      }
+      samples[i] = (sum / channels) / 32768.0;
+    }
+    return (samples: samples, sampleRate: sampleRate);
   }
 
   static Uint8List _buildToneBytes({
@@ -331,121 +477,6 @@ class SoundEffectsService {
     );
   }
 
-  static final _fxRandom = math.Random();
-
-  /// Writes [totalSamples] of mono 16-bit PCM from a per-sample generator
-  /// returning roughly -1..1, then wraps it as a WAV — the shared plumbing
-  /// under all four call-FX sounds below.
-  static Uint8List _pcm16(
-      int totalSamples, int sampleRate, double Function(int i) gen) {
-    final pcm = BytesBuilder();
-    for (var i = 0; i < totalSamples; i++) {
-      final val = (gen(i) * 32000).round().clamp(-32768, 32767);
-      pcm.addByte(val & 0xff);
-      pcm.addByte((val >> 8) & 0xff);
-    }
-    return _wrapPcm16MonoWav(pcm.toBytes(), sampleRate: sampleRate);
-  }
-
-  /// Sawtooth-ish buzz via a falling-harmonic series (amp ~ 1/n, first 5
-  /// partials) — a plain sine reads as a whistle, not an insect.
-  static double _buzzWave(double t, double freq) {
-    var v = 0.0;
-    for (var n = 1; n <= 5; n++) {
-      v += math.sin(2 * math.pi * freq * n * t) / n;
-    }
-    return v / 1.79; // normalize (sum of 1/n for n=1..5), peak ~1
-  }
-
-  static Uint8List _callFxBytes(CallFxSound fx) {
-    const sr = 16000;
-    switch (fx) {
-      case CallFxSound.bee:
-        // Buzzy sawtooth around 210 Hz with a fast ~28 Hz amplitude wobble —
-        // the wingbeat-rate wobble is what reads as "insect" rather than
-        // "kazoo". A slow pitch drift keeps it from sounding like a pure loop.
-        final dur = (0.9 * sr).round();
-        return _pcm16(dur, sr, (i) {
-          final t = i / sr;
-          final env = math.min(1.0, i / 400) * math.min(1.0, (dur - i) / 800);
-          final freq = 210 + 12 * math.sin(2 * math.pi * 0.8 * t);
-          final wobble = 1.0 + 0.35 * math.sin(2 * math.pi * 28 * t);
-          return _buzzWave(t, freq) * wobble * env * 0.5;
-        });
-      case CallFxSound.fart:
-        // Classic "raspberry": a low buzzy tone with a fast downward pitch
-        // slide plus a little noise for rasp. Sound design, not physics.
-        final dur = (0.55 * sr).round();
-        return _pcm16(dur, sr, (i) {
-          final t = i / sr;
-          final progress = i / dur;
-          final freq = 150 - 85 * progress; // 150 Hz -> 65 Hz slide
-          final env = math.min(1.0, i / 200) * (1.0 - progress * 0.15);
-          final tone = _buzzWave(t, freq);
-          final noise = (_fxRandom.nextDouble() * 2 - 1) * 0.18;
-          return (tone * 0.85 + noise) * env * 0.55;
-        });
-      case CallFxSound.applause:
-        // Gated white noise: real applause is broadband with no clear pitch,
-        // and a crowd is many independent random claps — random-length,
-        // random-amplitude noise bursts is the standard cheap approximation
-        // (the same trick old arcade sound chips used).
-        final dur = (1.4 * sr).round();
-        return _pcm16(dur, sr, (i) {
-          final t = i / dur;
-          // Swells in over the first third, holds, fades over the last third.
-          final swell = t < 0.3 ? t / 0.3 : (t > 0.75 ? (1 - t) / 0.25 : 1.0);
-          // ~65% duty-cycle gate at ~35 Hz reads as a dense crowd of claps
-          // rather than a single hiss.
-          final gate =
-              (math.sin(2 * math.pi * 35 * (i / sr)) > -0.3) ? 1.0 : 0.0;
-          final noise = (_fxRandom.nextDouble() * 2 - 1);
-          return noise * gate * swell.clamp(0.0, 1.0) * 0.5;
-        });
-      case CallFxSound.laugh:
-        // 4 short "ha" bursts: fundamental + a strong 3rd partial (vowel-ish),
-        // each with a quick pitch rise-then-fall. Reads as a cartoon laugh,
-        // not a recording of one — real laughter has formant structure this
-        // simple a model can't reach.
-        const burstMs = [130, 120, 120, 160];
-        const burstBaseHz = [300.0, 330.0, 320.0, 280.0];
-        const gapMs = 55;
-        final segments = <({int samples, double baseHz})>[
-          for (var k = 0; k < burstMs.length; k++)
-            (samples: (burstMs[k] / 1000 * sr).round(), baseHz: burstBaseHz[k]),
-        ];
-        final gapSamples = (gapMs / 1000 * sr).round();
-        final total = segments.fold<int>(0, (a, s) => a + s.samples) +
-            gapSamples * (segments.length - 1);
-        return _pcm16(total, sr, (i) {
-          var offset = 0;
-          for (var k = 0; k < segments.length; k++) {
-            final seg = segments[k];
-            if (i < offset + seg.samples) {
-              final li = i - offset;
-              final t = li / sr;
-              final p = li / seg.samples; // 0..1 within this burst
-              final pitchArc = 1.0 + 0.12 * math.sin(math.pi * p); // rise/fall
-              final freq = seg.baseHz * pitchArc;
-              final env = math.sin(math.pi * p).clamp(0.0, 1.0); // smooth in/out
-              final wave = math.sin(2 * math.pi * freq * t) +
-                  0.4 * math.sin(2 * math.pi * freq * 3 * t);
-              return wave * env * 0.4;
-            }
-            offset += seg.samples;
-            if (k < segments.length - 1) {
-              if (i < offset + gapSamples) return 0.0;
-              offset += gapSamples;
-            }
-          }
-          return 0.0;
-        });
-    }
-  }
-
-  @visibleForTesting
-  static Uint8List callFxBytesForTest(CallFxSound fx) => _callFxBytes(fx);
-
   @visibleForTesting
   static Uint8List toneBytesForTest({
     required List<int> notes,
@@ -453,6 +484,15 @@ class SoundEffectsService {
     bool bayan = false,
   }) =>
       _buildToneBytes(notes: notes, stepMs: stepMs, bayan: bayan);
+
+  @visibleForTesting
+  static Future<void> loadAccordionSampleForTest() => _loadAccordionSample();
+
+  @visibleForTesting
+  static bool get accordionSampleLoadedForTest => _accordionLoop != null;
+
+  @visibleForTesting
+  static double get accordionBaseFreqForTest => _accordionBaseFreq;
 
   Future<void> previewSlot(AppSoundSlot slot) async {
     if (!_supportedPlatform) return;

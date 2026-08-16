@@ -52,10 +52,28 @@ class _CallScreenState extends State<CallScreen>
   /// В видеозвонке: true — большой кадр собеседника, false — большой свой.
   bool _mainShowsPeer = true;
 
+  // Falling-emoji overlay for in-call reaction sounds (see _openFxSheet).
+  // _rainKey changes on every trigger so a repeat of the same emoji restarts
+  // the animation instead of being a no-op.
+  CallFxSound? _rainFx;
+  int _rainKey = 0;
+  VoidCallback? _fxListener;
+
   @override
   void initState() {
     super.initState();
+    _fxListener = _onFxSignal;
+    CallService.instance.fxSignal.addListener(_fxListener!);
     _init();
+  }
+
+  void _onFxSignal() {
+    final fx = CallService.instance.lastFx;
+    if (fx == null || !mounted) return;
+    setState(() {
+      _rainFx = fx;
+      _rainKey++;
+    });
   }
 
   String _initials(String name) {
@@ -290,6 +308,10 @@ class _CallScreenState extends State<CallScreen>
       CallService.instance.speakerOn.removeListener(_speakerListener!);
       _speakerListener = null;
     }
+    if (_fxListener != null) {
+      CallService.instance.fxSignal.removeListener(_fxListener!);
+      _fxListener = null;
+    }
     unawaited(CallProximityService.instance.stop());
     _ambient.dispose();
     _localRenderer.dispose();
@@ -387,6 +409,16 @@ class _CallScreenState extends State<CallScreen>
                   child: AbsorbPointer(
                     absorbing: true,
                     child: Container(color: Colors.black),
+                  ),
+                ),
+              if (_rainFx != null)
+                Positioned.fill(
+                  child: _EmojiRainOverlay(
+                    key: ValueKey(_rainKey),
+                    emoji: _rainFx!.emoji,
+                    onDone: () {
+                      if (mounted) setState(() => _rainFx = null);
+                    },
                   ),
                 ),
             ],
@@ -809,6 +841,16 @@ class _CallScreenState extends State<CallScreen>
                 ),
               ),
             ),
+            if (_rainFx != null)
+              Positioned.fill(
+                child: _EmojiRainOverlay(
+                  key: ValueKey(_rainKey),
+                  emoji: _rainFx!.emoji,
+                  onDone: () {
+                    if (mounted) setState(() => _rainFx = null);
+                  },
+                ),
+              ),
           ],
         ),
       ),
@@ -973,6 +1015,111 @@ class _FxButtonState extends State<_FxButton> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One falling piece's motion parameters, randomized once at spawn.
+class _FallingPiece {
+  final double xFrac; // horizontal start position, 0..1 of overlay width
+  final double delay; // 0..1 of the overlay's total lifetime, when it starts
+  final double
+      fallFrac; // 0..1, how much of the remaining time it takes to fall
+  final double size;
+  final double rotations; // full turns over its fall
+  final double swayAmp;
+  final double swayCycles;
+
+  _FallingPiece(math.Random rnd)
+      : xFrac = rnd.nextDouble(),
+        delay = rnd.nextDouble() * 0.4,
+        fallFrac = 0.5 + rnd.nextDouble() * 0.35,
+        size = 22 + rnd.nextDouble() * 20,
+        rotations = (rnd.nextDouble() - 0.5) * 3,
+        swayAmp = 10 + rnd.nextDouble() * 22,
+        swayCycles = 1 + rnd.nextDouble() * 1.5;
+}
+
+/// Falling-emoji rain triggered by an in-call reaction sound (Meet-style).
+/// Runs once for [_kLifetime] then calls [onDone] so the caller can remove it
+/// from the tree — this widget never loops or waits to be told to stop.
+class _EmojiRainOverlay extends StatefulWidget {
+  final String emoji;
+  final VoidCallback onDone;
+
+  const _EmojiRainOverlay(
+      {super.key, required this.emoji, required this.onDone});
+
+  @override
+  State<_EmojiRainOverlay> createState() => _EmojiRainOverlayState();
+}
+
+class _EmojiRainOverlayState extends State<_EmojiRainOverlay>
+    with SingleTickerProviderStateMixin {
+  static const _kLifetime = Duration(milliseconds: 2400);
+  late final AnimationController _ctrl;
+  late final List<_FallingPiece> _pieces;
+
+  @override
+  void initState() {
+    super.initState();
+    final rnd = math.Random();
+    _pieces = List.generate(16, (_) => _FallingPiece(rnd));
+    _ctrl = AnimationController(vsync: this, duration: _kLifetime)
+      ..forward().whenComplete(widget.onDone);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final h = box.maxHeight;
+          final w = box.maxWidth;
+          return AnimatedBuilder(
+            animation: _ctrl,
+            builder: (context, _) {
+              return Stack(
+                children: [
+                  for (final p in _pieces)
+                    Builder(builder: (_) {
+                      if (_ctrl.value < p.delay) return const SizedBox.shrink();
+                      final t =
+                          ((_ctrl.value - p.delay) / (1 - p.delay) / p.fallFrac)
+                              .clamp(0.0, 1.0);
+                      final y = -p.size + t * (h + p.size * 2);
+                      final x = (p.xFrac * w +
+                              math.sin(t * p.swayCycles * 2 * math.pi) *
+                                  p.swayAmp)
+                          .clamp(0.0, w - p.size);
+                      final opacity = t > 0.82 ? (1 - (t - 0.82) / 0.18) : 1.0;
+                      return Positioned(
+                        left: x,
+                        top: y,
+                        child: Opacity(
+                          opacity: opacity.clamp(0.0, 1.0),
+                          child: Transform.rotate(
+                            angle: t * p.rotations * 2 * math.pi,
+                            child: Text(
+                              widget.emoji,
+                              style: TextStyle(fontSize: p.size),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }

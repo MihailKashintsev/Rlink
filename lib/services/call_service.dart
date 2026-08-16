@@ -1045,15 +1045,29 @@ class CallService {
         } catch (_) {
           fx = null;
         }
-        if (fx != null) unawaited(SoundEffectsService.instance.playCallFx(fx));
+        if (fx != null) _fireFx(fx);
         break;
     }
+  }
+
+  /// Last reaction sound played (self-triggered or received from the peer)
+  /// and a counter that bumps on every trigger — CallScreen listens to the
+  /// counter to know when to (re)play the falling-emoji overlay, since a
+  /// ValueNotifier only notifies on a value *change* and the same emoji can
+  /// legitimately fire twice in a row.
+  CallFxSound? lastFx;
+  final ValueNotifier<int> fxSignal = ValueNotifier(0);
+
+  void _fireFx(CallFxSound fx) {
+    lastFx = fx;
+    fxSignal.value++;
+    unawaited(SoundEffectsService.instance.playCallFx(fx));
   }
 
   /// Triggers an in-call reaction sound (Meet-style) — plays it locally right
   /// away and tells the peer to play the same one, so both sides hear it.
   Future<void> sendCallFx(CallFxSound fx) async {
-    unawaited(SoundEffectsService.instance.playCallFx(fx));
+    _fireFx(fx);
     final peerId = _activePeerId;
     final callId = _activeCallId;
     if (peerId == null || callId == null) return;
