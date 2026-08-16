@@ -463,136 +463,159 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(children: [
-              // Баннер
-              GestureDetector(
-                onTap: _editing ? _pickBanner : null,
-                child: Container(
-                  width: bannerWidth,
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: AspectRatio(
-                    aspectRatio: 3.2,
+              // ── Header: banner backdrop, avatar overlapping its bottom-left
+              // corner — one cohesive card instead of a banner box floating
+              // above a separately-centred avatar.
+              const SizedBox(height: 44), // room for the avatar's top half
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _MaybePressable(
+                    onTap: _editing ? _pickBanner : null,
                     child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color:
-                            Theme.of(context).colorScheme.surfaceContainerHigh,
-                        image: _bannerImagePath != null &&
-                                (kIsWeb || File(_bannerImagePath!).existsSync())
-                            ? DecorationImage(
-                                image: kIsWeb
-                                    ? NetworkImage(_bannerImagePath!)
-                                    : FileImage(File(_bannerImagePath!))
-                                        as ImageProvider,
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                      ),
-                      child: _bannerImagePath == null ||
-                              (!kIsWeb && !File(_bannerImagePath!).existsSync())
-                          ? Center(
-                              child: _editing
-                                  ? Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.add_photo_alternate_outlined,
-                                            color: Theme.of(context).hintColor,
-                                            size: 32),
-                                        const SizedBox(height: 4),
-                                        Text('Добавить баннер',
-                                            style: TextStyle(
-                                                color:
-                                                    Theme.of(context).hintColor,
-                                                fontSize: 12)),
-                                      ],
+                      width: bannerWidth,
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: AspectRatio(
+                        aspectRatio: 3.2,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            color: cs.surfaceContainerHigh,
+                            image: _bannerImagePath != null &&
+                                    (kIsWeb ||
+                                        File(_bannerImagePath!).existsSync())
+                                ? DecorationImage(
+                                    image: kIsWeb
+                                        ? NetworkImage(_bannerImagePath!)
+                                        : FileImage(File(_bannerImagePath!))
+                                            as ImageProvider,
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          child: _bannerImagePath == null ||
+                                  (!kIsWeb &&
+                                      !File(_bannerImagePath!).existsSync())
+                              ? Center(
+                                  child: _editing
+                                      ? Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                                Icons
+                                                    .add_photo_alternate_outlined,
+                                                color: Theme.of(context)
+                                                    .hintColor,
+                                                size: 32),
+                                            const SizedBox(height: 4),
+                                            Text('Добавить баннер',
+                                                style: TextStyle(
+                                                    color: Theme.of(context)
+                                                        .hintColor,
+                                                    fontSize: 12)),
+                                          ],
+                                        )
+                                      : Icon(Icons.panorama_outlined,
+                                          color: Theme.of(context).hintColor,
+                                          size: 40),
+                                )
+                              : _editing
+                                  ? const Align(
+                                      alignment: Alignment.topRight,
+                                      child: Padding(
+                                        padding: EdgeInsets.all(8),
+                                        child: CircleAvatar(
+                                          radius: 14,
+                                          backgroundColor: Colors.black54,
+                                          child: Icon(Icons.edit,
+                                              size: 14, color: Colors.white),
+                                        ),
+                                      ),
                                     )
-                                  : Icon(Icons.panorama_outlined,
-                                      color: Theme.of(context).hintColor,
-                                      size: 40),
-                            )
-                          : _editing
-                              ? const Align(
-                                  alignment: Alignment.topRight,
-                                  child: Padding(
-                                    padding: EdgeInsets.all(8),
-                                    child: CircleAvatar(
-                                      radius: 14,
-                                      backgroundColor: Colors.black54,
+                                  : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Avatar overlaps the banner's bottom-left edge — the ring
+                  // border gives it a clean cut against the photo underneath.
+                  Positioned(
+                    left: 20,
+                    bottom: -44,
+                    child: GestureDetector(
+                      onTap: _editing
+                          ? () => setState(() {
+                                _showEmojiPicker = !_showEmojiPicker;
+                                _showStatusEmojiPicker = false;
+                              })
+                          : null,
+                      child: Hero(
+                        tag: 'avatar_my_profile',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isDark
+                                  ? const Color(0xFF0F0F0F)
+                                  : const Color(0xFFE8E8E8),
+                            ),
+                            child: Stack(children: [
+                              AvatarWidget(
+                                initials: (_editing &&
+                                        _controller.text.isNotEmpty)
+                                    ? _controller.text[0].toUpperCase()
+                                    : profile.initials,
+                                color: _editing
+                                    ? _selectedColor
+                                    : profile.avatarColor,
+                                emoji: _editing
+                                    ? _selectedEmoji
+                                    : profile.avatarEmoji,
+                                imagePath: _editing
+                                    ? _selectedImagePath
+                                    : profile.avatarImagePath,
+                                size: 88,
+                              ),
+                              if (_editing)
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: _PressableScale(
+                                    onTap: _showAvatarPhotoMenu,
+                                    child: Container(
+                                      width: 30,
+                                      height: 30,
+                                      decoration: BoxDecoration(
+                                        color: cs.primary,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: isDark
+                                                ? const Color(0xFF0F0F0F)
+                                                : const Color(0xFFE8E8E8),
+                                            width: 2.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: cs.primary
+                                                .withValues(alpha: 0.35),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
                                       child: Icon(Icons.edit,
-                                          size: 14, color: Colors.white),
+                                          size: 15, color: cs.onPrimary),
                                     ),
                                   ),
-                                )
-                              : null,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Аватар
-              Center(
-                child: Stack(children: [
-                  GestureDetector(
-                    onTap: _editing
-                        ? () => setState(() {
-                              _showEmojiPicker = !_showEmojiPicker;
-                              _showStatusEmojiPicker = false;
-                            })
-                        : null,
-                    child: Hero(
-                      tag: 'avatar_my_profile',
-                      child: Material(
-                        color: Colors.transparent,
-                        child: AvatarWidget(
-                          initials: (_editing && _controller.text.isNotEmpty)
-                              ? _controller.text[0].toUpperCase()
-                              : profile.initials,
-                          color:
-                              _editing ? _selectedColor : profile.avatarColor,
-                          emoji:
-                              _editing ? _selectedEmoji : profile.avatarEmoji,
-                          imagePath: _editing
-                              ? _selectedImagePath
-                              : profile.avatarImagePath,
-                          size: 88,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_editing) ...[
-                    // Карандаш: меню смены аватарки (фото / эмодзи / убрать).
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: _PressableScale(
-                        onTap: _showAvatarPhotoMenu,
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: cs.primary,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color:
-                                    Theme.of(context).scaffoldBackgroundColor,
-                                width: 2.5),
-                            boxShadow: [
-                              BoxShadow(
-                                color: cs.primary.withValues(alpha: 0.35),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                                ),
+                            ]),
                           ),
-                          child: Icon(Icons.edit,
-                              size: 15, color: cs.onPrimary),
                         ),
                       ),
                     ),
-                    // Фото профиля редактируется не здесь, а через зажатие
-                    // аватарки во вкладке «Я» (изменить/удалить/открыть).
-                  ],
-                ]),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
 
@@ -657,6 +680,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
 
+              _SectionCard(children: [
               // Имя
               _editing
                   ? TextField(
@@ -828,11 +852,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             }
                           : null,
                     ),
-              const SizedBox(height: 12),
+              ]),
+              const SizedBox(height: 16),
 
               // Premium: цвет ника — его видят все собеседники.
+              _SectionCard(children: [
               if (_editing) ...[
-                const SizedBox(height: 8),
                 Row(
                   children: [
                     const Icon(Icons.palette_outlined, size: 20),
@@ -1034,7 +1059,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               fontSize: 13)),
                   ],
                 ),
-              const SizedBox(height: 12),
+              ]),
+              const SizedBox(height: 16),
 
               const _GigaChatProfileCard(),
               const SizedBox(height: 12),
@@ -1313,6 +1339,45 @@ class _InfoTile extends StatelessWidget {
           IconButton(icon: const Icon(Icons.copy, size: 18), onPressed: onCopy),
       ]),
     );
+  }
+}
+
+/// Groups related fields into one visually distinct card — legible sections
+/// instead of one long undifferentiated column of fields.
+class _SectionCard extends StatelessWidget {
+  final List<Widget> children;
+  const _SectionCard({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
+}
+
+/// Like [_PressableScale], but a no-op (no gesture detector at all, no scale
+/// feedback) when [onTap] is null — a press animation on a tap that does
+/// nothing would tell the user the interface heard them when it didn't.
+class _MaybePressable extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const _MaybePressable({required this.child, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final tap = onTap;
+    if (tap == null) return child;
+    return _PressableScale(onTap: tap, child: child);
   }
 }
 
