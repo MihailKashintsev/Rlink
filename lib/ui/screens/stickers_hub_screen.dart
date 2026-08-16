@@ -1,13 +1,21 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 import '../../l10n/app_l10n.dart';
 
 import '../../models/contact.dart';
+import '../../models/rls_sticker.dart';
 import '../../models/sticker_pack.dart';
 import '../../services/chat_storage_service.dart';
 import '../../services/sticker_collection_service.dart';
 import 'peer_stickers_screen.dart';
+import 'rls_sticker_editor_screen.dart';
 import 'sticker_pack_detail_screen.dart';
 import 'sticker_pack_editor_screen.dart';
 
@@ -101,6 +109,43 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
     }
   }
 
+  /// Opens the .rls editor and, on success, saves the exported bytes into the
+  /// flat sticker collection (visible immediately via _reload — version bumps
+  /// on registerAbsoluteStickerPath). Native-only: StickerCollectionService is
+  /// dart:io-based, same constraint the rest of this screen already has.
+  Future<void> _createAnimatedSticker(BuildContext context) async {
+    final bytes = await Navigator.push<Uint8List>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const RlsStickerEditorScreen(),
+      ),
+    );
+    if (bytes == null || !context.mounted) return;
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final dir = Directory(p.join(docs.path, 'images'));
+      if (!dir.existsSync()) dir.createSync(recursive: true);
+      final path =
+          p.join(dir.path, 'stk_${const Uuid().v4()}$rlsFileExtension');
+      await File(path).writeAsBytes(bytes);
+      await StickerCollectionService.instance.registerAbsoluteStickerPath(path);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Стикер сохранён в коллекцию. Добавьте его в набор ниже.'),
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось сохранить стикер: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -108,6 +153,12 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
       appBar: AppBar(
         title: const Text('Стикеры'),
         actions: [
+          if (!kIsWeb)
+            IconButton(
+              tooltip: 'Создать анимированный стикер',
+              icon: const Icon(Icons.auto_awesome),
+              onPressed: () => _createAnimatedSticker(context),
+            ),
           IconButton(
             tooltip: 'Стикеры из чата с контактом',
             icon: const Icon(Icons.person_search_outlined),

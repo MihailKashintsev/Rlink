@@ -25,7 +25,9 @@ import 'package:archive/archive.dart';
 /// {
 ///   "fmt": "rls1",
 ///   "w": 512, "h": 512,       // canvas size, px
-///   "durMs": 1600,             // one loop's duration
+///   "durMs": 1600,             // one loop's duration. Playback is continuous
+///                               // (time-driven interpolation), not frame-
+///                               // quantized, so there is no "fps" field.
 ///   "loop": true,
 ///   "assets": { "a1": "<base64 png bytes>", ... },   // deduped raster layers
 ///   "layers": [

@@ -6,9 +6,12 @@ import '../../models/sticker_pack.dart';
 import '../../services/sticker_collection_service.dart';
 
 /// Нижняя панель выбора стикера: вкладки по наборам, сетка файлов.
+/// [onCreateAnimated], if given, shows a "Создать" action that closes the
+/// sheet and hands control to the caller (opens the animated sticker editor).
 Future<void> showStickerPickerSheet(
   BuildContext context, {
   required Future<void> Function(String absolutePath) onPickedSticker,
+  VoidCallback? onCreateAnimated,
 }) async {
   await StickerCollectionService.instance.init();
   if (!context.mounted) return;
@@ -17,6 +20,23 @@ Future<void> showStickerPickerSheet(
     isScrollControlled: true,
     builder: (ctx) {
       final h = MediaQuery.sizeOf(ctx).height * 0.58;
+      final cs = Theme.of(ctx).colorScheme;
+      final createBar = onCreateAnimated == null
+          ? null
+          : Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    onCreateAnimated();
+                  },
+                  icon: const Icon(Icons.auto_awesome, size: 18),
+                  label: const Text('Создать анимированный'),
+                ),
+              ),
+            );
       return SafeArea(
         child: SizedBox(
           height: h,
@@ -28,17 +48,22 @@ Future<void> showStickerPickerSheet(
               }
               final packs = snap.data ?? const <StickerPack>[];
               if (packs.isEmpty) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'Нет наборов. Создайте набор в разделе стикеров.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                return Column(
+                  children: [
+                    if (createBar != null) createBar,
+                    Expanded(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'Нет наборов. Создайте набор в разделе стикеров.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: cs.onSurfaceVariant),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 );
               }
               return DefaultTabController(
@@ -46,8 +71,9 @@ Future<void> showStickerPickerSheet(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (createBar != null) createBar,
                     Material(
-                      color: Theme.of(context).colorScheme.surface,
+                      color: cs.surface,
                       child: TabBar(
                         isScrollable: true,
                         tabs: [
