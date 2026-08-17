@@ -289,14 +289,22 @@ class SoundEffectsService {
     (mul: 4.0, amp: 0.14),
   ];
 
+  /// Shifts every bayan note down an octave from what the melody nominally
+  /// asks for — the user's own call after hearing the first pass. Applied to
+  /// both rendering paths (real sample and the harmonic fallback) so they
+  /// stay pitch-consistent with each other. 0.5 = one octave down exactly;
+  /// for a smaller drop use e.g. math.pow(2, -7/12) for a fifth.
+  static const double _bayanPitchMultiplier = 0.5;
+
   static double _waveAt(double t, int freq, {required bool bayan}) {
     if (!bayan) return math.sin(2 * math.pi * freq * t);
+    final target = freq * _bayanPitchMultiplier;
     final loop = _accordionLoop;
     if (loop != null && loop.isNotEmpty) {
       // Play the real note back faster/slower than it was recorded — the
       // standard cheap pitch-shift (changes both pitch and effective
       // playback rate together, which is why we loop rather than play once).
-      final ratio = freq / _accordionBaseFreq;
+      final ratio = target / _accordionBaseFreq;
       final pos = (t * ratio * _accordionSampleRate) % loop.length;
       final i0 = pos.floor();
       final frac = pos - i0;
@@ -307,7 +315,7 @@ class SoundEffectsService {
     // sample finishes loading, or if it never does.
     var v = 0.0;
     for (final h in _bayanHarmonics) {
-      v += math.sin(2 * math.pi * freq * h.mul * t) * h.amp;
+      v += math.sin(2 * math.pi * target * h.mul * t) * h.amp;
     }
     // Musette tremolo: real accordions detune two reed banks a few cents
     // apart, which beats into a slow amplitude wobble — the single most

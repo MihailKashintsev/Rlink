@@ -3914,7 +3914,17 @@ class _IncomingPairRequestTile extends StatelessWidget {
 void showPairRequestScreen(
     BuildContext context, String bleId, Map<String, dynamic> info) {
   Navigator.of(context).push(PageRouteBuilder(
-    opaque: false,
+    // _PairRequestScreen's Scaffold uses theme.scaffoldBackgroundColor, which
+    // the "new design" theme sets to fully transparent (every normal screen
+    // relies on the single shared AuroraBackground behind the Navigator for
+    // that). opaque: false additionally keeps the PREVIOUS route alive and
+    // painted underneath instead of just the aurora — unlike the boom-
+    // celebration/incoming-call overlays, which deliberately paint their own
+    // Colors.black(alpha: ~0.85) backdrop, this screen has no opaque layer of
+    // its own, so the previous screen bled straight through it. opaque: true
+    // is the fix: same slide-in transition, but the Navigator now properly
+    // discards the previous route's compositing once this one is on top.
+    opaque: true,
     pageBuilder: (_, __, ___) => _PairRequestScreen(bleId: bleId, info: info),
     transitionsBuilder: (_, anim, __, child) {
       return SlideTransition(
