@@ -132,11 +132,25 @@ class ProfileService {
     }
   }
 
-  /// Clears the in-memory profile. Called during a full app reset so that
-  /// [hasProfile] returns false and [profileNotifier] reflects the cleared state.
-  void clearProfile() {
+  /// Clears the profile in memory and in persisted storage. Called during a
+  /// full app reset so that [hasProfile] returns false and [profileNotifier]
+  /// reflects the cleared state — on web, the persisted copy must be erased
+  /// too, or the old nickname/avatar reappears on next launch despite the
+  /// wipe (WebAccountBundle's storage is separate from FlutterSecureStorage,
+  /// which the rest of the reset already clears).
+  Future<void> clearProfile() async {
     _profile = null;
     profileNotifier.value = null;
+    if (RuntimePlatform.isWeb) {
+      await WebAccountBundle.clearProfileEverywhere();
+      // The flat/bundle layers are now clean, but OPFS is a fourth, separate
+      // copy (survives localStorage wipes by design) — without re-syncing it
+      // here too, the next boot's hydrate-from-OPFS step brings the stale
+      // profile right back.
+      await WebIdentityPortable.syncIdentitySnapshotToOpfs(
+        profileJsonOverride: '',
+      );
+    }
   }
 
   Future<UserProfile> createProfile({

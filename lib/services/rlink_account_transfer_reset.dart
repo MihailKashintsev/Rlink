@@ -44,11 +44,21 @@ Future<void> rlinkPerformAccountTransferWipe(BuildContext context) async {
     await BleService.instance.stop();
   } catch (_) {}
   BleService.instance.clearMappings();
-  await ChatStorageService.instance.resetAll();
-  await ChannelService.instance.resetAll();
-  await GroupService.instance.resetAll();
-  await StoryService.instance.reset();
-  await MediaUploadQueue.instance.clearAll();
+  try {
+    await ChatStorageService.instance.resetAll();
+  } catch (_) {}
+  try {
+    await ChannelService.instance.resetAll();
+  } catch (_) {}
+  try {
+    await GroupService.instance.resetAll();
+  } catch (_) {}
+  try {
+    await StoryService.instance.reset();
+  } catch (_) {}
+  try {
+    await MediaUploadQueue.instance.clearAll();
+  } catch (_) {}
   try {
     await StickerCollectionService.instance.resetAll();
   } catch (_) {}
@@ -67,13 +77,21 @@ Future<void> rlinkPerformAccountTransferWipe(BuildContext context) async {
       accessibility: KeychainAccessibility.first_unlock,
     ),
   );
-  await storage.deleteAll();
-  await GigachatService.instance.clear();
-  await CryptoService.instance.regenerateKeys();
+  try {
+    await storage.deleteAll();
+  } catch (_) {}
+  try {
+    await GigachatService.instance.clear();
+  } catch (_) {}
+  try {
+    await CryptoService.instance.regenerateKeys();
+  } catch (_) {}
   try {
     RelayService.instance.reconnect();
   } catch (_) {}
-  ProfileService.instance.clearProfile();
+  try {
+    await ProfileService.instance.clearProfile();
+  } catch (_) {}
   if (!context.mounted) return;
   Navigator.of(context).pushAndRemoveUntil(
     MaterialPageRoute(builder: (_) => const OnboardingScreen()),

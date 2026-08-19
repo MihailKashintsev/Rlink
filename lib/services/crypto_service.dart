@@ -257,11 +257,15 @@ class CryptoService {
           xPrivB64: base64.encode(xPriv),
           xPubB64: base64.encode(xPub.bytes),
           profileJson: null,
+          clearProfile: true,
         );
       } catch (e) {
         debugPrint('[Crypto] Web bundle persist after regenerate: $e');
       }
-      unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
+      // Awaited (not fire-and-forget) — a wipe's later ProfileService.clearProfile()
+      // must not race an in-flight OPFS sync that could re-persist the stale
+      // profile after the clear already ran.
+      await WebIdentityPortable.syncIdentitySnapshotToOpfs();
     }
 
     debugPrint('[Crypto] Keys regenerated → ${publicKeyHex.substring(0, 8)}…');

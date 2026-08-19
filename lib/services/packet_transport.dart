@@ -72,6 +72,11 @@ class DefaultPacketTransport implements PacketTransport {
           'edit',
           'delete',
           'dm_pin',
+          'xfer_request',
+          'xfer_denied',
+          'xfer_data',
+          'xfer_complete_ack',
+          'xfer_wiping',
         };
         final isDirectedType = directedTypes.contains(packet.type);
 
@@ -80,11 +85,12 @@ class DefaultPacketTransport implements PacketTransport {
             packet.type == 'pair_req' ||
             packet.type == 'pair_acc' ||
             packet.type == 'ether' ||
-            packet.type == 'call_sig') {
+            packet.type == 'call_sig' ||
+            packet.type.startsWith('xfer_')) {
           final route = (recipientKey != null && recipientKey.isNotEmpty)
               ? 'direct'
               : 'drop/broadcast';
-          // Detailed routing trace for DM/pair/ether/call_sig diagnostics.
+          // Detailed routing trace for DM/pair/ether/call_sig/xfer diagnostics.
           final line = '[RLINK][Transport] type=${packet.type} route=$route '
               'rid=${_short(packet.recipientId ?? '')} r8=${packet.payload['r'] ?? '-'} '
               'resolved=${_short(recipientKey ?? '')} explicit=${_short(explicitRecipient ?? '')}';

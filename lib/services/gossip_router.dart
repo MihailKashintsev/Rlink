@@ -65,6 +65,11 @@ void _gossipTrace(String line) {
   DiagnosticsLogService.instance.add(line);
 }
 
+String _shortOrDash(String? v) {
+  if (v == null || v.isEmpty) return '-';
+  return v.length > 8 ? v.substring(0, 8) : v;
+}
+
 class GossipPacket {
   final String id;
   final String type;
@@ -1498,7 +1503,12 @@ class GossipRouter {
       },
     );
     _markSeen(packet.id);
-    await _forward(packet);
+    // Carries a full EncryptedMessage (ciphertext + signature + ephemeral
+    // key) — routinely well over the generic 700-byte gossip cap, so this
+    // must use the same encrypted-payload forward path as regular 'msg'
+    // packets, not the tiny default one (which silently drops oversized
+    // packets rather than throwing).
+    await _forwardEncrypted(packet);
   }
 
   /// New device → old device, sent only once every selected category is
@@ -2281,6 +2291,7 @@ class GossipRouter {
         if (!_matchesRid8(myPublicKey, rid8)) {
           return;
         }
+        _gossipTrace('[RLINK][Xfer][RX] type=xfer_request from=${_shortOrDash(fromKey)}');
         if (fromKey != null && xpk != null) {
           onAccountTransferRequest?.call(srcId, fromKey, xpk, label);
         }
@@ -2294,6 +2305,7 @@ class GossipRouter {
         if (!_matchesRid8(myPublicKey, rid8)) {
           return;
         }
+        _gossipTrace('[RLINK][Xfer][RX] type=xfer_denied from=${_shortOrDash(fromKey)}');
         if (fromKey != null) {
           onAccountTransferDenied?.call(srcId, fromKey);
         }
@@ -2309,6 +2321,8 @@ class GossipRouter {
         final srcId = sourceId ?? packet.payload['from'] as String? ?? '';
         final total = _jsonIntLoose(packet.payload['total']);
         final done = packet.payload['done'] == true;
+        _gossipTrace(
+            '[RLINK][Xfer][RX] type=xfer_data k=$kind total=$total done=$done from=${_shortOrDash(srcId)}');
         if (kind != null && kind.isNotEmpty) {
           await onAccountTransferData?.call(srcId, packet.payload, kind, total, done);
         }
@@ -2324,6 +2338,7 @@ class GossipRouter {
         if (!_matchesRid8(myPublicKey, rid8)) {
           return;
         }
+        _gossipTrace('[RLINK][Xfer][RX] type=xfer_complete_ack from=${_shortOrDash(fromKey)}');
         if (fromKey != null) {
           onAccountTransferAck?.call(srcId, fromKey, reqId, proof);
         }
@@ -2337,6 +2352,7 @@ class GossipRouter {
         if (!_matchesRid8(myPublicKey, rid8)) {
           return;
         }
+        _gossipTrace('[RLINK][Xfer][RX] type=xfer_wiping from=${_shortOrDash(fromKey)}');
         if (fromKey != null) {
           onAccountTransferWiping?.call(srcId, fromKey);
         }

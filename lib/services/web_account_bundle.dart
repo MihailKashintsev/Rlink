@@ -205,10 +205,16 @@ class WebAccountBundle {
     required String xPrivB64,
     required String xPubB64,
     String? profileJson,
+    // When true, a null/empty [profileJson] means "no profile", full stop —
+    // skips recovering whatever profile is still sitting in the existing
+    // bundle. Regular boot wants that recovery (e.g. localStorage got wiped
+    // but the OPFS-backed bundle survived); an explicit wipe/regenerate does
+    // not — recovering there silently undoes "delete RID"'s profile clear.
+    bool clearProfile = false,
   }) async {
     if (!RuntimePlatform.isWeb) return;
     var prof = profileJson;
-    if (prof == null || prof.isEmpty) {
+    if (!clearProfile && (prof == null || prof.isEmpty)) {
       final raw = await _readRawBundleAllSources();
       if (raw != null) {
         try {
@@ -265,5 +271,43 @@ class WebAccountBundle {
       xPubB64: xPu,
       profileJson: profileEncoded,
     );
+  }
+
+  /// Erases the profile from every layer this class writes to (flat key +
+  /// the merged bundle). Used by account wipes — without this, a stale
+  /// nickname/avatar survives "delete RID" and reappears on next boot,
+  /// because [persistBundle] otherwise recovers whatever profile was
+  /// already in the bundle when none is passed explicitly.
+  static Future<void> clearProfileEverywhere() async {
+    if (!RuntimePlatform.isWeb) return;
+    await writeWebState(kUserProfile, '');
+    await AccountKvStore.write(kUserProfile, '');
+    await _prefsWrite(kUserProfile, '');
+    final edPr = await layeredRead(kMeshIdentityPrivate);
+    final edPu = await layeredRead(kMeshIdentityPublic);
+    final xPr = await layeredRead(kMeshX25519Private);
+    final xPu = await layeredRead(kMeshX25519Public);
+    if (edPr == null ||
+        edPu == null ||
+        xPr == null ||
+        xPu == null ||
+        edPr.isEmpty ||
+        edPu.isEmpty ||
+        xPr.isEmpty ||
+        xPu.isEmpty) {
+      return;
+    }
+    final j = <String, dynamic>{
+      'v': 1,
+      'edPr': edPr,
+      'edPu': edPu,
+      'xPr': xPr,
+      'xPu': xPu,
+    };
+    final raw = jsonEncode(j);
+    final stored = (await encryptSecret(raw)) ?? raw;
+    await writeWebState(_bundleLogicalKey, stored);
+    await AccountKvStore.write(_bundleLogicalKey, stored);
+    await _prefsWrite(_bundleLogicalKey, stored);
   }
 }
