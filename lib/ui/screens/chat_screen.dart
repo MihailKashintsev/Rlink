@@ -130,7 +130,11 @@ import 'text_selection_view_screen.dart';
 import 'safety_number_screen.dart';
 import '../../models/user_profile.dart';
 import '../../models/rls_sticker.dart';
+import '../../models/rlv_sticker.dart';
+import '../../models/tgs_sticker.dart';
 import '../widgets/rls_sticker_view.dart';
+import '../widgets/rlv_sticker_view.dart';
+import '../widgets/tgs_sticker_view.dart';
 import '../widgets/aurora_background.dart';
 import '../widgets/nick_text.dart';
 import '../widgets/wheel_time_picker.dart';
@@ -4613,15 +4617,20 @@ class _ChatScreenState extends State<ChatScreen> {
       final data = Uri.parse(absPath).data;
       if (data == null) return;
       final mime = data.mimeType;
-      // The file name is what identifies an animated sticker once it lands in
-      // OPFS on the receiving side, so the .rls extension has to survive here.
+      // The file name is what identifies an animated/vector/Telegram sticker
+      // once it lands in OPFS on the receiving side, so the extension has to
+      // survive here.
       final ext = mime == rlsMimeType
           ? rlsFileExtension.substring(1)
-          : mime == 'image/gif'
-              ? 'gif'
-              : mime == 'image/webp'
-                  ? 'webp'
-                  : 'png';
+          : mime == rlvMimeType
+              ? rlvFileExtension.substring(1)
+              : mime == tgsMimeType
+                  ? tgsFileExtension.substring(1)
+                  : mime == 'image/gif'
+                      ? 'gif'
+                      : mime == 'image/webp'
+                          ? 'webp'
+                          : 'png';
       await _sendWebBytesAsFile(
         bytes: data.contentAsBytes(),
         fileName: 'sticker.$ext',
@@ -13303,12 +13312,23 @@ class _DmImage extends StatelessWidget {
     }
 
     final isRls = looksLikeRlsRef(imagePath);
+    final isRlv = looksLikeRlvRef(imagePath);
+    final isTgs = looksLikeTgsRef(imagePath);
+    final isCustomSticker = isRls || isRlv || isTgs;
 
     Widget fromBytesOrRls(Uint8List bytes) {
       if (isRls) {
         final sticker = RlsSticker.decodeBytes(bytes);
         if (sticker == null) return errorBox('bad_rls_sticker');
         return RlsStickerView(sticker: sticker, width: width, height: height);
+      }
+      if (isRlv) {
+        final sticker = RlvSticker.decodeBytes(bytes);
+        if (sticker == null) return errorBox('bad_rlv_sticker');
+        return RlvStickerView(sticker: sticker, width: width, height: height);
+      }
+      if (isTgs) {
+        return TgsStickerView(tgsBytes: bytes, width: width, height: height);
       }
       return Image.memory(
         bytes,
@@ -13349,9 +13369,9 @@ class _DmImage extends StatelessWidget {
         );
       }
       if (_ChatScreenState._isInlineWebUri(imagePath)) {
-        // .rls over a bare network/blob URL isn't a supported combination yet
-        // (no sender path produces one) — animated stickers always arrive via
-        // data:/opfs: above.
+        // .rls/.rlv/.tgs over a bare network/blob URL isn't a supported
+        // combination yet (no sender path produces one) — animated stickers
+        // always arrive via data:/opfs: above.
         return constrain(
           Image.network(
             imagePath,
@@ -13366,7 +13386,7 @@ class _DmImage extends StatelessWidget {
         );
       }
     }
-    if (isRls) {
+    if (isCustomSticker) {
       return FutureBuilder<Uint8List>(
         future: File(imagePath).readAsBytes(),
         builder: (context, snapshot) {
@@ -13375,7 +13395,7 @@ class _DmImage extends StatelessWidget {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return constrain(loadingBox());
             }
-            return constrain(errorBox(snapshot.error ?? 'missing_rls_sticker'));
+            return constrain(errorBox(snapshot.error ?? 'missing_custom_sticker'));
           }
           return constrain(fromBytesOrRls(data));
         },

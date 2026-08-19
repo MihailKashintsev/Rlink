@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../models/user_profile.dart';
+import '../../services/account_transfer_service.dart';
 import '../../services/app_settings.dart';
 import '../../services/ble_service.dart';
 import '../../services/channel_service.dart';
@@ -44,6 +45,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   static const _maxNickLength     = 20;
   static const _maxUsernameLength = 20;
+
+  // ── Restore existing account (account transfer) ──────────────────
+  bool _restoreMode = false;
+  bool _restoreRequested = false;
+  final _restoreIdController = TextEditingController();
+  static final _hex64 = RegExp(r'^[0-9a-fA-F]{64}$');
+
+  void _enterRestoreMode() {
+    setState(() => _restoreMode = true);
+  }
+
+  Future<void> _sendRestoreRequest() async {
+    final id = _restoreIdController.text.trim().toLowerCase();
+    if (!_hex64.hasMatch(id)) {
+      _showSnack('ID должен быть 64 hex-символа');
+      return;
+    }
+    AccountTransferService.instance.adoptedIdentityLive.addListener(_onIdentityAdopted);
+    setState(() => _restoreRequested = true);
+    await AccountTransferService.instance.requestTransfer(id);
+  }
+
+  Future<void> _onIdentityAdopted() async {
+    if (!AccountTransferService.instance.adoptedIdentityLive.value) return;
+    AccountTransferService.instance.adoptedIdentityLive.removeListener(_onIdentityAdopted);
+    final profile = ProfileService.instance.profile;
+    if (profile == null || !mounted) return;
+    unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
+    await _restartTransports(profile);
+    unawaited(RlinkDeepLinkService.instance.start(navigatorKey));
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ChatListScreen()),
+      );
+    }
+  }
+
 
   // ── Validation ────────────────────────────────────────────────
 
@@ -190,6 +228,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _nickController.dispose();
     _usernameController.dispose();
     _usernameFocus.dispose();
+    _restoreIdController.dispose();
+    AccountTransferService.instance.adoptedIdentityLive.removeListener(_onIdentityAdopted);
     super.dispose();
   }
 
@@ -199,6 +239,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (_restoreMode) return _buildRestoreView(cs);
 
     return Scaffold(
       body: SafeArea(
@@ -434,6 +475,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: _loading ? null : _enterRestoreMode,
+                  child: Text(
+                    'У меня уже есть аккаунт',
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  ),
+                ),
               ],
 
               const SizedBox(height: 32),
@@ -441,6 +490,158 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildRestoreView(ColorScheme cs) {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: _restoreRequested
+                        ? null
+                        : () => setState(() => _restoreMode = false),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: _restoreRequested ? _restoreWaiting(cs) : _restoreForm(cs),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _restoreForm(ColorScheme cs) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.swap_horiz_rounded, color: cs.primary, size: 48),
+        const SizedBox(height: 16),
+        Text(
+          'Перенос аккаунта',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: cs.onSurface),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Введите уникальный ID (64 hex-символа) своего аккаунта — его можно '
+          'скопировать в Настройках на старом устройстве. Там нужно будет '
+          'подтвердить перенос.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+        ),
+        const SizedBox(height: 24),
+        TextField(
+          controller: _restoreIdController,
+          autofocus: true,
+          maxLines: 2,
+          style: const TextStyle(fontSize: 14, fontFamily: 'monospace'),
+          decoration: InputDecoration(
+            hintText: '64-символьный ID',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: cs.surfaceContainerHighest,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.red.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            'После подтверждения на старом устройстве оно будет очищено. '
+            'Отменить перенос нельзя.',
+            style: TextStyle(color: Colors.red.shade300, fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: FilledButton(
+            onPressed: _sendRestoreRequest,
+            child: const Text('Отправить запрос', style: TextStyle(fontSize: 16)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _restoreWaiting(ColorScheme cs) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: AccountTransferService.instance.wasDenied,
+      builder: (_, denied, __) {
+        if (denied) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.block, color: cs.error, size: 48),
+              const SizedBox(height: 16),
+              Text('Запрос отклонён', style: TextStyle(fontSize: 18, color: cs.onSurface)),
+              const SizedBox(height: 8),
+              Text(
+                'Старое устройство не подтвердило перенос.',
+                style: TextStyle(color: cs.onSurfaceVariant),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              OutlinedButton(
+                onPressed: () => setState(() {
+                  _restoreRequested = false;
+                  AccountTransferService.instance.wasDenied.value = false;
+                }),
+                child: const Text('Попробовать снова'),
+              ),
+            ],
+          );
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ValueListenableBuilder<TransferProgress?>(
+              valueListenable: AccountTransferService.instance.progress,
+              builder: (_, p, __) {
+                final fraction = (p != null && p.total > 0) ? p.done / p.total : null;
+                return SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: CircularProgressIndicator(value: fraction, strokeWidth: 4),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+            const Text('Ожидание подтверждения на старом устройстве…',
+                textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            ValueListenableBuilder<TransferProgress?>(
+              valueListenable: AccountTransferService.instance.progress,
+              builder: (_, p, __) => Text(
+                p?.phase ?? '',
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

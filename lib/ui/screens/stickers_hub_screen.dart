@@ -1,16 +1,20 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
 
 import '../../models/contact.dart';
 import '../../models/rls_sticker.dart';
+import '../../models/rlv_sticker.dart';
 import '../../models/sticker_pack.dart';
+import '../../models/tgs_sticker.dart';
 import '../../services/chat_storage_service.dart';
 import '../../services/sticker_collection_service.dart';
 import 'peer_stickers_screen.dart';
 import 'rls_sticker_editor_screen.dart';
+import 'rlv_sticker_editor_screen.dart';
 import 'sticker_pack_detail_screen.dart';
 import 'sticker_pack_editor_screen.dart';
 
@@ -135,6 +139,72 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
     }
   }
 
+  /// Same flow as [_createAnimatedSticker], for the vector `.rlv` studio.
+  Future<void> _createVectorSticker(BuildContext context) async {
+    final bytes = await Navigator.push<Uint8List>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const RlvStickerEditorScreen(),
+      ),
+    );
+    if (bytes == null || !context.mounted) return;
+    try {
+      await StickerCollectionService.instance
+          .registerStickerBytes(bytes: bytes, ext: rlvFileExtension);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Стикер сохранён в коллекцию. Добавьте его в набор ниже.'),
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось сохранить стикер: $e')),
+        );
+      }
+    }
+  }
+
+  /// Imports a Telegram `.tgs` sticker byte-for-byte (it's already the final
+  /// gzip container, nothing to re-encode) — playback-only, not editable.
+  Future<void> _importTgsSticker(BuildContext context) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['tgs'],
+        withData: true,
+      );
+      final bytes = result?.files.single.bytes;
+      if (bytes == null) return;
+      if (gunzipTgsToLottieJson(bytes) == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Файл не похож на стикер Telegram (.tgs)')),
+          );
+        }
+        return;
+      }
+      await StickerCollectionService.instance
+          .registerStickerBytes(bytes: bytes, ext: tgsFileExtension);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Стикер сохранён в коллекцию. Добавьте его в набор ниже.'),
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось импортировать стикер: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -142,10 +212,33 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
       appBar: AppBar(
         title: const Text('Стикеры'),
         actions: [
-          IconButton(
-            tooltip: 'Создать анимированный стикер',
-            icon: const Icon(Icons.auto_awesome),
-            onPressed: () => _createAnimatedSticker(context),
+          PopupMenuButton<String>(
+            tooltip: 'Создать или импортировать стикер',
+            icon: const Icon(Icons.add_circle_outline),
+            onSelected: (v) {
+              switch (v) {
+                case 'animated':
+                  _createAnimatedSticker(context);
+                case 'vector':
+                  _createVectorSticker(context);
+                case 'tgs':
+                  _importTgsSticker(context);
+              }
+            },
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(
+                value: 'vector',
+                child: Text('Векторный (мини-студия)'),
+              ),
+              PopupMenuItem(
+                value: 'animated',
+                child: Text('Анимированный (растровый)'),
+              ),
+              PopupMenuItem(
+                value: 'tgs',
+                child: Text('Импорт из Telegram (.tgs)'),
+              ),
+            ],
           ),
           IconButton(
             tooltip: 'Стикеры из чата с контактом',

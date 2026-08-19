@@ -9,7 +9,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
+import '../models/rls_sticker.dart';
+import '../models/rlv_sticker.dart';
 import '../models/sticker_pack.dart';
+import '../models/tgs_sticker.dart';
 import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'image_service.dart';
@@ -25,6 +28,40 @@ class StickerPackDmService {
   static const _maxSingleBlob = 800 * 1024;
   static const _blobFileName = 'rlink_sticker_pack.json';
   static const _uuid = Uuid();
+
+  /// The extension a downloaded sticker's [rel] identifies it as — `rel`
+  /// already carries this (native: `images/stk_x.rls`; web: a `data:<mime>`
+  /// ref), it just wasn't being read on receive.
+  static String _extForStickerRel(String rel) {
+    if (rel.startsWith('data:')) {
+      final mime = Uri.parse(rel).data?.mimeType;
+      if (mime == rlsMimeType) return rlsFileExtension;
+      if (mime == rlvMimeType) return rlvFileExtension;
+      if (mime == tgsMimeType) return tgsFileExtension;
+      if (mime == 'image/gif') return '.gif';
+      if (mime == 'image/webp') return '.webp';
+      return '.png';
+    }
+    final ext = p.extension(rel.split('#').first.split('?').first);
+    return ext.isEmpty ? '.png' : ext;
+  }
+
+  static String _mimeForExt(String ext) {
+    switch (ext.toLowerCase()) {
+      case '.gif':
+        return 'image/gif';
+      case '.webp':
+        return 'image/webp';
+      case rlsFileExtension:
+        return rlsMimeType;
+      case rlvFileExtension:
+        return rlvMimeType;
+      case tgsFileExtension:
+        return tgsMimeType;
+      default:
+        return 'image/png';
+    }
+  }
 
   static Future<String?> _recipientX25519(String canonicalPeerId) async {
     final relayKey = RelayService.instance.getPeerX25519Key(canonicalPeerId);
@@ -321,13 +358,13 @@ class StickerPackDmService {
           if (e == null) continue;
           final b64 = e['bytes'] as String?;
           if (b64 == null || b64.isEmpty) continue;
+          final ext = _extForStickerRel((e['rel'] as String?) ?? '');
 
           final bytes = base64Decode(b64);
           if (kIsWeb) {
-            downloadedPaths.add('data:image/png;base64,$b64');
+            downloadedPaths.add('data:${_mimeForExt(ext)};base64,$b64');
           } else {
-            const safeExt = '.png';
-            final destName = 'stk_downloaded_${msgId}_$i$safeExt';
+            final destName = 'stk_downloaded_${msgId}_$i$ext';
             final dest = File(p.join(imgDir!.path, destName));
             await dest.writeAsBytes(bytes);
             downloadedPaths.add(p.join('images', destName));

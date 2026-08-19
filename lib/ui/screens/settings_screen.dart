@@ -40,6 +40,7 @@ import '../../services/sound_effects_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/web_notification_bridge.dart';
 import '../../utils/web_file_store.dart';
+import '../screens/rid_screen.dart';
 import '../screens/stickers_hub_screen.dart';
 import '../screens/emoji_hub_screen.dart';
 import '../screens/music_screen.dart';
@@ -91,7 +92,7 @@ Scaffold _subScaffold({
 }
 
 /// Unlink linked device — used from both NetworkPage and child-device mode.
-Future<void> _doUnlinkDevice(BuildContext context) async {
+Future<void> doUnlinkDevice(BuildContext context) async {
   final settings = AppSettings.instance;
   final linkedKey = settings.linkedDevicePublicKey;
   final myProfile = ProfileService.instance.profile;
@@ -109,6 +110,84 @@ Future<void> _doUnlinkDevice(BuildContext context) async {
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(content: Text(AppL10n.t('cm_link_removed'))),
+  );
+}
+
+/// Pick a contact, send them a companion-device link request — used from
+/// both NetworkPage and the RID screen.
+Future<void> requestDeviceLink(BuildContext context) async {
+  final settings = AppSettings.instance;
+  final myProfile = ProfileService.instance.profile;
+  if (myProfile == null) return;
+  final contact = await _pickContactForLink(context);
+  if (contact == null) return;
+
+  await settings.setConnectionMode(1);
+  await applyConnectionTransport();
+  await RelayService.instance.connect();
+  if (!RelayService.instance.isConnected) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Не удалось подключиться к интернет-ретранслятору')),
+      );
+    }
+    return;
+  }
+  await GossipRouter.instance.sendDeviceLinkRequest(
+    publicKey: myProfile.publicKeyHex,
+    nick: myProfile.nickname,
+    username: myProfile.username,
+    recipientId: contact.publicKeyHex,
+  );
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Запрос на связку отправлен: ${contact.nickname}')),
+  );
+}
+
+Future<Contact?> _pickContactForLink(BuildContext context) async {
+  final contacts = await ChatStorageService.instance.getContacts();
+  if (!context.mounted) return null;
+  if (contacts.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Нет контактов для связки устройств')),
+    );
+    return null;
+  }
+  return showModalBottomSheet<Contact>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          const ListTile(
+            title: Text('Выберите устройство'),
+            subtitle: Text(
+              'Выбранный контакт получит запрос на привязку как дочернего устройства.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+          for (final c in contacts)
+            ListTile(
+              leading: AvatarWidget(
+                initials: c.initials,
+                color: c.avatarColor,
+                emoji: c.avatarEmoji,
+                imagePath: c.avatarImagePath,
+                size: 40,
+              ),
+              title: Text(c.nickname),
+              subtitle: Text(
+                c.username.isNotEmpty ? '#${c.username}' : c.shortId,
+                style: const TextStyle(fontSize: 11),
+              ),
+              onTap: () => Navigator.pop(ctx, c),
+            ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -231,7 +310,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Отвязаться от главного устройства',
               style: TextStyle(color: Colors.red),
             ),
-            onTap: () => _doUnlinkDevice(context),
+            onTap: () => doUnlinkDevice(context),
           ),
         ],
       ),
@@ -456,6 +535,15 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
   }
 
   List<List<_CategoryItem>> _groups(BuildContext context) => [
+        [
+          _CategoryItem(
+            icon: Icons.key_outlined,
+            color: const Color(0xFF1DB954),
+            title: 'RID',
+            subtitle: 'Ваш RlinkID — перенос, привязка, удаление',
+            onTap: () => _open(context, const RidScreen()),
+          ),
+        ],
         [
           _CategoryItem(
             icon: Icons.palette_outlined,
@@ -2883,23 +2971,18 @@ class _ProfilePageState extends State<_ProfilePage> {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.key_outlined),
-            title: Text(AppL10n.t('settings_public_key')),
+            leading: const Icon(Icons.fingerprint),
+            title: const Text('RID'),
             subtitle: Text(
               profile?.publicKeyHex ?? '—',
               style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            trailing: IconButton(
-              icon: const Icon(Icons.copy, size: 18),
-              onPressed: () {
-                if (profile == null) return;
-                Clipboard.setData(ClipboardData(text: profile.publicKeyHex));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(AppL10n.t('settings_key_copied'))),
-                );
-              },
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push<void>(
+              context,
+              rlinkOpaquePushRoute(const RidScreen()),
             ),
           ),
           _SectionHeader(AppL10n.t('settings_find_user')),
@@ -3221,7 +3304,7 @@ class _NetworkPageState extends State<_NetworkPage> {
                   style: TextStyle(color: Colors.red)),
               subtitle: const Text('Связка будет снята на обоих устройствах',
                   style: TextStyle(fontSize: 12)),
-              onTap: () => _doUnlinkDevice(context),
+              onTap: () => doUnlinkDevice(context),
             ),
           ] else ...[
             ListTile(
@@ -3230,7 +3313,7 @@ class _NetworkPageState extends State<_NetworkPage> {
               subtitle: const Text(
                   'Выберите контакт и отправьте запрос на связку',
                   style: TextStyle(fontSize: 12)),
-              onTap: _requestDeviceLink,
+              onTap: () => requestDeviceLink(context),
             ),
           ],
 
@@ -3488,83 +3571,6 @@ class _NetworkPageState extends State<_NetworkPage> {
     await applyConnectionTransport();
   }
 
-  Future<void> _requestDeviceLink() async {
-    final settings = AppSettings.instance;
-    final myProfile = ProfileService.instance.profile;
-    if (myProfile == null) return;
-    final contact = await _pickContactForLink(context);
-    if (contact == null) return;
-
-    await settings.setConnectionMode(1);
-    await applyConnectionTransport();
-    await RelayService.instance.connect();
-    if (!RelayService.instance.isConnected) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content:
-                  Text('Не удалось подключиться к интернет-ретранслятору')),
-        );
-      }
-      return;
-    }
-    await GossipRouter.instance.sendDeviceLinkRequest(
-      publicKey: myProfile.publicKeyHex,
-      nick: myProfile.nickname,
-      username: myProfile.username,
-      recipientId: contact.publicKeyHex,
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text('Запрос на связку отправлен: ${contact.nickname}')),
-    );
-  }
-
-  Future<Contact?> _pickContactForLink(BuildContext context) async {
-    final contacts = await ChatStorageService.instance.getContacts();
-    if (!context.mounted) return null;
-    if (contacts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нет контактов для связки устройств')),
-      );
-      return null;
-    }
-    return showModalBottomSheet<Contact>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const ListTile(
-              title: Text('Выберите устройство'),
-              subtitle: Text(
-                'Выбранный контакт получит запрос на привязку как дочернего устройства.',
-                style: TextStyle(fontSize: 12),
-              ),
-            ),
-            for (final c in contacts)
-              ListTile(
-                leading: AvatarWidget(
-                  initials: c.initials,
-                  color: c.avatarColor,
-                  emoji: c.avatarEmoji,
-                  imagePath: c.avatarImagePath,
-                  size: 40,
-                ),
-                title: Text(c.nickname),
-                subtitle: Text(
-                  c.username.isNotEmpty ? '#${c.username}' : c.shortId,
-                  style: const TextStyle(fontSize: 11),
-                ),
-                onTap: () => Navigator.pop(ctx, c),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────

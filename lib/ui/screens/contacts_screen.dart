@@ -147,7 +147,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     if (key == null || !_pubKey64.hasMatch(key)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Нужен полный публичный ключ (64 hex) или онлайн-пир по коду'),
+          content: Text('Нужен полный RID (64 hex) или онлайн-пир по коду'),
         ),
       );
       return;

@@ -126,6 +126,17 @@ class EmojiPackService {
     }
   }
 
+  /// Clears every custom emoji pack (used by a full account reset,
+  /// including account transfer's old-device wipe) — same orphaned-native-
+  /// file trade-off as `StickerCollectionService.resetAll()`.
+  Future<void> resetAll() async {
+    await ensureInitialized();
+    _cachedPacks = [];
+    await _writeIndexRaw(EmojiPack.encodeList(const []));
+    refreshIndexSync();
+    version.value++;
+  }
+
   Future<List<EmojiPack>> _readPacksRaw() async {
     await ensureInitialized();
     return await _pruneMissingFiles(List<EmojiPack>.from(_cachedPacks));

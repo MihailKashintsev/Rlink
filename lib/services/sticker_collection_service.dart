@@ -8,7 +8,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/rls_sticker.dart';
+import '../models/rlv_sticker.dart';
 import '../models/sticker_pack.dart';
+import '../models/tgs_sticker.dart';
 import '../utils/web_file_store.dart';
 
 /// Локальная коллекция стикеров (свои и добавленные из чатов).
@@ -118,6 +120,10 @@ class StickerCollectionService {
         // Not octet-stream: the web collection has no file names, so this MIME
         // is the only thing that identifies an animated sticker in a data: ref.
         return rlsMimeType;
+      case rlvFileExtension:
+        return rlvMimeType;
+      case tgsFileExtension:
+        return tgsMimeType;
       default:
         return 'image/png';
     }
@@ -333,6 +339,16 @@ class StickerCollectionService {
     final docs = await getApplicationDocumentsDirectory();
     final f = File(p.join(docs.path, relPath));
     return f.existsSync() ? f.path : null;
+  }
+
+  /// Clears the collection index + pack list (used by a full account reset,
+  /// including account transfer's old-device wipe). Like `ChatStorageService
+  /// .resetAll()`'s handling of avatars, this doesn't sweep orphaned sticker
+  /// image files on native — an accepted, pre-existing trade-off in this
+  /// codebase's reset paths, not new scope here.
+  Future<void> resetAll() async {
+    await _writeList(const []);
+    await _writePacks(const []);
   }
 
   Future<List<StickerPack>> loadPacks() => _readPacks();

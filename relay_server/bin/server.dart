@@ -126,6 +126,11 @@ final Map<String, List<Map<String, dynamic>>> _pushSubscriptions = {};
 const _pushSubsFile = 'push_subscriptions.json';
 const _pushCooldownSeconds = 12;
 final Map<String, DateTime> _lastPushForRecipient = {};
+// A push skipped for being inside the cooldown window must not be dropped
+// silently — the recipient still needs to hear about it, just not as a
+// second alert 1s after the first. One deferred catch-up push per recipient
+// covers every message that arrived during the window.
+final Map<String, Timer> _pendingCooldownPush = {};
 
 final String _vapidPublicKey =
     (Platform.environment['VAPID_PUBLIC_KEY'] ?? '').trim();
@@ -1893,14 +1898,39 @@ Future<void> _notifyRecipientQueued({
   if (!_webPushConfigured) return;
   final now = DateTime.now();
   final prev = _lastPushForRecipient[recipientKey];
-  if (prev != null && now.difference(prev).inSeconds < _pushCooldownSeconds) {
-    return;
+  if (prev != null) {
+    final elapsed = now.difference(prev).inSeconds;
+    if (elapsed < _pushCooldownSeconds) {
+      // Defer one catch-up push to the end of this recipient's cooldown
+      // window instead of dropping this message's notification entirely —
+      // re-scheduling on every skip means the LATEST sender/kind in the
+      // burst is what the catch-up push reports.
+      _pendingCooldownPush[recipientKey]?.cancel();
+      _pendingCooldownPush[recipientKey] = Timer(
+        Duration(seconds: _pushCooldownSeconds - elapsed),
+        () {
+          _pendingCooldownPush.remove(recipientKey);
+          unawaited(_notifyRecipientQueued(
+            recipientKey: recipientKey,
+            senderKey: senderKey,
+            kind: kind,
+          ));
+        },
+      );
+      return;
+    }
   }
+  _pendingCooldownPush.remove(recipientKey)?.cancel();
   final subs = _pushSubscriptions[recipientKey];
   if (subs == null || subs.isEmpty) return;
+  final body = switch (kind) {
+    'call' => 'Входящий звонок',
+    'account_transfer' => 'Кто-то пытается перенести ваш аккаунт',
+    _ => 'Новое сообщение',
+  };
   final payload = utf8.encode(jsonEncode({
     'title': 'Rlink',
-    'body': kind == 'call' ? 'Входящий звонок' : 'Новое сообщение',
+    'body': body,
     'tag': 'rlink-${senderKey.substring(0, senderKey.length.clamp(0, 8))}',
     'data': {'recipient': recipientKey, 'kind': kind},
   }));
@@ -1952,7 +1982,9 @@ String _queuedKindFromPacketData(String dataB64) {
     final decoded = utf8.decode(base64Decode(dataB64));
     final obj = jsonDecode(decoded);
     if (obj is! Map) return 'message';
-    if (obj['t'] != 'call_sig' && obj['type'] != 'call_sig') return 'message';
+    final t = obj['t'] ?? obj['type'];
+    if (t == 'xfer_request') return 'account_transfer';
+    if (t != 'call_sig') return 'message';
     final payload = obj['p'] ?? obj['payload'];
     if (payload is Map && payload['st'] == 'invite') return 'call';
   } catch (_) {}

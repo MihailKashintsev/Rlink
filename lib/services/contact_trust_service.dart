@@ -26,6 +26,18 @@ class ContactTrustService {
     await p.remove(_changedPref(id));
   }
 
+  /// Wipes trust state for every contact — used by a full account reset
+  /// (including account transfer's old-device wipe), where no single [id]
+  /// applies.
+  Future<void> clearAll() async {
+    final p = await SharedPreferences.getInstance();
+    final keys = p.getKeys().where(
+        (k) => k.startsWith('ct_verified_x25519_') || k.startsWith('ct_key_changed_'));
+    for (final k in keys.toList()) {
+      await p.remove(k);
+    }
+  }
+
   Future<String?> verifiedKey(String id) async {
     final p = await SharedPreferences.getInstance();
     return p.getString(_verifiedKeyPref(id));

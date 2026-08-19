@@ -267,6 +267,78 @@ class CryptoService {
     debugPrint('[Crypto] Keys regenerated → ${publicKeyHex.substring(0, 8)}…');
   }
 
+  /// Raw key material for account transfer — the new device needs the
+  /// actual private keys to legitimately become this account, not just the
+  /// public identity. Callers MUST send this only through an encrypted
+  /// channel (see `AccountTransferService`); nothing in this class does
+  /// that encryption itself.
+  Future<Map<String, String>> exportRawKeyMaterialForTransfer() async {
+    final edPriv = await _identityKeyPair.extractPrivateKeyBytes();
+    final edPub = await _identityKeyPair.extractPublicKey();
+    final xPriv = await _x25519IdentityKeyPair.extractPrivateKeyBytes();
+    final xPub = await _x25519IdentityKeyPair.extractPublicKey();
+    return {
+      'edPriv': base64.encode(edPriv),
+      'edPub': base64.encode(edPub.bytes),
+      'xPriv': base64.encode(xPriv),
+      'xPub': base64.encode(xPub.bytes),
+    };
+  }
+
+  /// Replaces this device's identity with received key material (account
+  /// transfer). Unlike [regenerateKeys], this adopts a SPECIFIC keypair
+  /// rather than generating a random one, and updates everything live —
+  /// callers don't need to restart the app. The caller is responsible for
+  /// verifying the material's provenance (signature + sender match) before
+  /// calling this; this method trusts whatever bytes it's given.
+  Future<void> restoreIdentity({
+    required String edPrivB64,
+    required String edPubB64,
+    required String xPrivB64,
+    required String xPubB64,
+  }) async {
+    final edPrivBytes = base64.decode(edPrivB64);
+    final edPubBytes = base64.decode(edPubB64);
+    final xPrivBytes = base64.decode(xPrivB64);
+    final xPubBytes = base64.decode(xPubB64);
+
+    _identityKeyPair = SimpleKeyPairData(
+      edPrivBytes,
+      publicKey: SimplePublicKey(edPubBytes, type: KeyPairType.ed25519),
+      type: KeyPairType.ed25519,
+    );
+    _x25519IdentityKeyPair = SimpleKeyPairData(
+      xPrivBytes,
+      publicKey: SimplePublicKey(xPubBytes, type: KeyPairType.x25519),
+      type: KeyPairType.x25519,
+    );
+    publicKeyHex = _bytesToHex(edPubBytes);
+    x25519PublicKeyBase64 = base64.encode(xPubBytes);
+
+    await _write(_keyPrivate, edPrivB64);
+    await _write(_keyPublic, edPubB64);
+    await _write(_keyX25519Private, xPrivB64);
+    await _write(_keyX25519Public, xPubB64);
+
+    if (RuntimePlatform.isWeb) {
+      try {
+        await WebAccountBundle.persistBundle(
+          edPrivB64: edPrivB64,
+          edPubB64: edPubB64,
+          xPrivB64: xPrivB64,
+          xPubB64: xPubB64,
+          profileJson: null,
+        );
+        unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
+      } catch (e) {
+        debugPrint('[Crypto] Web bundle persist after restoreIdentity: $e');
+      }
+    }
+
+    debugPrint(
+        '[Crypto] Identity restored via account transfer → ${publicKeyHex.substring(0, 8)}…');
+  }
+
   // ── Шифрование ───────────────────────────────────────────────
 
   /// Шифрует plaintext для получателя с его X25519 публичным ключом base64.
@@ -365,6 +437,30 @@ class CryptoService {
       );
     } catch (e) {
       debugPrint('[Crypto] verifyEncryptedEnvelope error: $e');
+      return false;
+    }
+  }
+
+  /// Verifies an Ed25519 signature over an arbitrary UTF-8 message against a
+  /// claimed public key — the same primitive [verifyEncryptedEnvelope] uses
+  /// internally, exposed directly for callers (account-transfer's
+  /// proof-of-possession ack) that need to verify a signature that isn't
+  /// wrapped in an [EncryptedMessage] envelope.
+  Future<bool> verifyUtf8Signature(
+      String pubHex, String message, String sigHex) async {
+    try {
+      final sigBytes = _hexToBytes(sigHex);
+      final pubBytes = _hexToBytes(pubHex);
+      if (sigBytes.isEmpty || pubBytes.length != 32) return false;
+      return await _ed25519.verify(
+        utf8.encode(message),
+        signature: Signature(
+          sigBytes,
+          publicKey: SimplePublicKey(pubBytes, type: KeyPairType.ed25519),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[Crypto] verifyUtf8Signature error: $e');
       return false;
     }
   }

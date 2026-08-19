@@ -9,7 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../models/rls_sticker.dart';
+import '../../models/rlv_sticker.dart';
+import '../../models/tgs_sticker.dart';
 import '../../services/sticker_collection_service.dart';
+import 'rls_sticker_view.dart';
+import 'rlv_sticker_view.dart';
+import 'tgs_sticker_view.dart';
 
 /// Карточка набора стикеров в пузыре ЛС: превью и импорт.
 class StickerPackCardBubble extends StatelessWidget {
@@ -249,6 +255,11 @@ class _PreviewTile extends StatelessWidget {
 
   const _PreviewTile({required this.entry});
 
+  Widget _broken() => ColoredBox(
+        color: Colors.grey.shade700,
+        child: const Icon(Icons.broken_image_outlined),
+      );
+
   @override
   Widget build(BuildContext context) {
     final b64 = entry['bytes'] as String?;
@@ -260,14 +271,27 @@ class _PreviewTile extends StatelessWidget {
     }
     try {
       final bytes = base64Decode(b64);
+      final rel = entry['rel'] as String? ?? '';
+      // `rel` already carries which format these bytes are (extension on a
+      // native path, MIME on a web data: ref) — branch on it instead of
+      // always assuming a plain raster image, so shared .rls/.rlv/.tgs
+      // stickers preview correctly here too, not just a broken-image icon.
+      if (looksLikeRlsRef(rel)) {
+        final sticker = RlsSticker.decodeBytes(bytes);
+        return sticker == null ? _broken() : RlsStickerView(sticker: sticker);
+      }
+      if (looksLikeRlvRef(rel)) {
+        final sticker = RlvSticker.decodeBytes(bytes);
+        return sticker == null ? _broken() : RlvStickerView(sticker: sticker);
+      }
+      if (looksLikeTgsRef(rel)) {
+        return TgsStickerView(tgsBytes: bytes);
+      }
       return Image.memory(
         bytes,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => ColoredBox(
-          color: Colors.grey.shade700,
-          child: const Icon(Icons.broken_image_outlined),
-        ),
+        errorBuilder: (_, __, ___) => _broken(),
       );
     } catch (_) {
       return ColoredBox(

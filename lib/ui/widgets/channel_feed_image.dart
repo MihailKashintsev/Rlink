@@ -5,9 +5,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../models/rls_sticker.dart';
+import '../../models/rlv_sticker.dart';
+import '../../models/tgs_sticker.dart';
 import '../../utils/web_file_store.dart';
 import 'platform_layout.dart';
 import 'rls_sticker_view.dart';
+import 'rlv_sticker_view.dart';
+import 'tgs_sticker_view.dart';
 
 // Cache of decoded OPFS image bytes so that scrolling a feed (which recycles
 // list items) doesn't re-read from OPFS each time — the async gap produced a
@@ -37,6 +41,12 @@ Widget storedImage(String path,
   // resolves a ref through, so handling it here covers all of them.
   if (looksLikeRlsRef(path)) {
     return _RlsFromRef(path: path, width: width, height: height);
+  }
+  if (looksLikeRlvRef(path)) {
+    return _RlvFromRef(path: path, width: width, height: height);
+  }
+  if (looksLikeTgsRef(path)) {
+    return _TgsFromRef(path: path, width: width, height: height);
   }
   if (path.startsWith('data:') ||
       path.startsWith('http://') ||
@@ -125,6 +135,90 @@ class _RlsFromRef extends StatelessWidget {
         if (b == null || b.isEmpty) return const SizedBox.shrink();
         _cacheWebImg(path, b);
         return play(b);
+      },
+    );
+  }
+}
+
+/// Same load-and-cache shape as [_RlsFromRef], for `.rlv` vector stickers.
+class _RlvFromRef extends StatelessWidget {
+  final String path;
+  final double? width;
+  final double? height;
+
+  const _RlvFromRef({required this.path, this.width, this.height});
+
+  Future<Uint8List?> _load() async {
+    if (path.startsWith('data:')) {
+      return Uri.parse(path).data?.contentAsBytes();
+    }
+    if (kIsWeb) {
+      if (!isWebStoredFile(path)) return null;
+      return readWebStoredFile(path.split('#').first);
+    }
+    final f = File(path.split('#').first);
+    return f.existsSync() ? f.readAsBytes() : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget play(Uint8List bytes) {
+      final sticker = RlvSticker.decodeBytes(bytes);
+      if (sticker == null) return const SizedBox.shrink();
+      return RlvStickerView(sticker: sticker, width: width, height: height);
+    }
+
+    final cached = _webImgCache[path];
+    if (cached != null) return play(cached);
+    return FutureBuilder<Uint8List?>(
+      future: _load(),
+      builder: (_, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return SizedBox(width: width, height: height);
+        }
+        final b = snap.data;
+        if (b == null || b.isEmpty) return const SizedBox.shrink();
+        _cacheWebImg(path, b);
+        return play(b);
+      },
+    );
+  }
+}
+
+/// Same load-and-cache shape as [_RlsFromRef], for `.tgs` Telegram stickers.
+class _TgsFromRef extends StatelessWidget {
+  final String path;
+  final double? width;
+  final double? height;
+
+  const _TgsFromRef({required this.path, this.width, this.height});
+
+  Future<Uint8List?> _load() async {
+    if (path.startsWith('data:')) {
+      return Uri.parse(path).data?.contentAsBytes();
+    }
+    if (kIsWeb) {
+      if (!isWebStoredFile(path)) return null;
+      return readWebStoredFile(path.split('#').first);
+    }
+    final f = File(path.split('#').first);
+    return f.existsSync() ? f.readAsBytes() : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cached = _webImgCache[path];
+    if (cached != null) return TgsStickerView(tgsBytes: cached, width: width, height: height);
+    return FutureBuilder<Uint8List?>(
+      future: _load(),
+      builder: (_, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return SizedBox(width: width, height: height);
+        }
+        final b = snap.data;
+        if (b == null || b.isEmpty) return const SizedBox.shrink();
+        _cacheWebImg(path, b);
+        return TgsStickerView(tgsBytes: b, width: width, height: height);
       },
     );
   }

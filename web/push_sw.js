@@ -17,11 +17,16 @@ self.addEventListener('push', (event) => {
   if (!payload.body) return;
   const title = payload.title || 'Rlink';
   const tag = payload.tag || 'rlink-message';
+  const kind = (payload.data && payload.data.kind) || 'message';
   event.waitUntil(
     self.registration.showNotification(title, {
       body: payload.body,
       tag,
       renotify: true,
+      // Account-transfer requests are consequential and time-sensitive
+      // (the old device has to actually see and act on this) — don't let
+      // it auto-dismiss like a regular message notification can.
+      requireInteraction: kind === 'account_transfer',
       icon: 'icons/Icon-192.png',
       badge: 'icons/Icon-192.png',
       data: payload.data || {},

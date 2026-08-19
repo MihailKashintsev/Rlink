@@ -282,6 +282,45 @@ typedef OnDeviceDmSyncPacket = Future<void> Function(
   bool snapshot,
 );
 
+/// Account transfer — distinct from device-link (dev_*): the new device
+/// asks to become an EXISTING account (moving the identity), not to mirror
+/// one alongside its own. See `AccountTransferService`.
+typedef OnAccountTransferRequest = void Function(
+  String sourceId,
+  String fromPublicKey,
+  String xpk,
+  String label,
+);
+
+typedef OnAccountTransferDenied = void Function(
+  String sourceId,
+  String fromPublicKey,
+);
+
+/// [encryptedJson] is the raw packet payload, containing both the
+/// `EncryptedMessage` envelope fields (from/epk/n/ct/mac/sig) and this
+/// packet's own k/r/total/done — callers pass it straight to
+/// `EncryptedMessage.fromJson`.
+typedef OnAccountTransferData = Future<void> Function(
+  String sourceId,
+  Map<String, dynamic> encryptedJson,
+  String kind,
+  int? total,
+  bool done,
+);
+
+typedef OnAccountTransferAck = void Function(
+  String sourceId,
+  String fromPublicKey,
+  String reqId,
+  String proof,
+);
+
+typedef OnAccountTransferWiping = void Function(
+  String sourceId,
+  String fromPublicKey,
+);
+
 /// Вызывается при получении img_meta (начало передачи изображения/голоса).
 typedef OnImgMeta = void Function(
   String fromId,
@@ -361,6 +400,11 @@ class GossipRouter {
   OnDeviceUnlink? onDeviceUnlink;
   OnDeviceDmSyncRequest? onDeviceDmSyncRequest;
   OnDeviceDmSyncPacket? onDeviceDmSyncPacket;
+  OnAccountTransferRequest? onAccountTransferRequest;
+  OnAccountTransferDenied? onAccountTransferDenied;
+  OnAccountTransferData? onAccountTransferData;
+  OnAccountTransferAck? onAccountTransferAck;
+  OnAccountTransferWiping? onAccountTransferWiping;
   OnTypingReceived? onTypingReceived;
   OnCallSignal? onCallSignal;
 
@@ -1383,6 +1427,127 @@ class GossipRouter {
     await _forward(packet);
   }
 
+  /// New device → old device: "I want to become account [targetId]", with
+  /// nothing sensitive in it — just the return address ([xpk]) the old
+  /// device will encrypt its reply to.
+  Future<void> sendAccountTransferRequest({
+    required String fromPublicKey,
+    required String xpk,
+    required String label,
+    required String recipientId,
+  }) async {
+    final rid8 =
+        recipientId.length >= 8 ? recipientId.substring(0, 8) : recipientId;
+    final packet = GossipPacket(
+      id: _uuid.v4(),
+      type: 'xfer_request',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: <String, dynamic>{
+        'from': fromPublicKey,
+        'xpk': xpk,
+        'label': label,
+        'r': rid8,
+      },
+    );
+    _markSeen(packet.id);
+    await _forward(packet);
+  }
+
+  Future<void> sendAccountTransferDenied({
+    required String fromPublicKey,
+    required String recipientId,
+  }) async {
+    final rid8 =
+        recipientId.length >= 8 ? recipientId.substring(0, 8) : recipientId;
+    final packet = GossipPacket(
+      id: _uuid.v4(),
+      type: 'xfer_denied',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: <String, dynamic>{'from': fromPublicKey, 'r': rid8},
+    );
+    _markSeen(packet.id);
+    await _forward(packet);
+  }
+
+  /// One packet per chunk of transferred data — [encryptedJson] is an
+  /// already-built `EncryptedMessage.toJson()` map (the caller does the
+  /// encryption; this method only routes it). [kind] identifies what's
+  /// inside (keys/contact/channel/group/emoji_pack/dm/settings/sticker).
+  Future<void> sendAccountTransferData({
+    required Map<String, dynamic> encryptedJson,
+    required String kind,
+    required String recipientId,
+    int? total,
+    bool done = false,
+  }) async {
+    final rid8 =
+        recipientId.length >= 8 ? recipientId.substring(0, 8) : recipientId;
+    final packet = GossipPacket(
+      id: _uuid.v4(),
+      type: 'xfer_data',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: <String, dynamic>{
+        ...encryptedJson,
+        'k': kind,
+        'r': rid8,
+        if (total != null) 'total': total,
+        if (done) 'done': true,
+      },
+    );
+    _markSeen(packet.id);
+    await _forward(packet);
+  }
+
+  /// New device → old device, sent only once every selected category is
+  /// fully received — [proof] is a signature made with the NEWLY adopted
+  /// key over a nonce tied to [reqId], so the old device isn't just trusting
+  /// a bare "done" flag before it wipes itself.
+  Future<void> sendAccountTransferAck({
+    required String fromPublicKey,
+    required String reqId,
+    required String proof,
+    required String recipientId,
+  }) async {
+    final rid8 =
+        recipientId.length >= 8 ? recipientId.substring(0, 8) : recipientId;
+    final packet = GossipPacket(
+      id: _uuid.v4(),
+      type: 'xfer_complete_ack',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: <String, dynamic>{
+        'from': fromPublicKey,
+        'reqId': reqId,
+        'proof': proof,
+        'r': rid8,
+      },
+    );
+    _markSeen(packet.id);
+    await _forward(packet);
+  }
+
+  /// Old device → new device, fire-and-forget, right before the old
+  /// device's wipe begins.
+  Future<void> sendAccountTransferWiping({
+    required String fromPublicKey,
+    required String recipientId,
+  }) async {
+    final rid8 =
+        recipientId.length >= 8 ? recipientId.substring(0, 8) : recipientId;
+    final packet = GossipPacket(
+      id: _uuid.v4(),
+      type: 'xfer_wiping',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: <String, dynamic>{'from': fromPublicKey, 'r': rid8},
+    );
+    _markSeen(packet.id);
+    await _forward(packet);
+  }
+
   /// Send typing/activity indicator. activity: 0=stopped, 1=typing, 2=recording video, 3=recording voice
   Future<void> sendTypingIndicator({
     required String fromId,
@@ -2103,6 +2268,77 @@ class GossipRouter {
             data,
             snapshot,
           );
+        }
+        return;
+      }
+
+      if (packet.type == 'xfer_request') {
+        final fromKey = packet.payload['from'] as String?;
+        final xpk = packet.payload['xpk'] as String?;
+        final label = packet.payload['label'] as String? ?? '';
+        final rid8 = packet.payload['r'] as String?;
+        final srcId = sourceId ?? fromKey ?? '';
+        if (!_matchesRid8(myPublicKey, rid8)) {
+          return;
+        }
+        if (fromKey != null && xpk != null) {
+          onAccountTransferRequest?.call(srcId, fromKey, xpk, label);
+        }
+        return;
+      }
+
+      if (packet.type == 'xfer_denied') {
+        final fromKey = packet.payload['from'] as String?;
+        final rid8 = packet.payload['r'] as String?;
+        final srcId = sourceId ?? fromKey ?? '';
+        if (!_matchesRid8(myPublicKey, rid8)) {
+          return;
+        }
+        if (fromKey != null) {
+          onAccountTransferDenied?.call(srcId, fromKey);
+        }
+        return;
+      }
+
+      if (packet.type == 'xfer_data') {
+        final rid8 = packet.payload['r'] as String?;
+        if (!_matchesRid8(myPublicKey, rid8)) {
+          return;
+        }
+        final kind = packet.payload['k'] as String?;
+        final srcId = sourceId ?? packet.payload['from'] as String? ?? '';
+        final total = _jsonIntLoose(packet.payload['total']);
+        final done = packet.payload['done'] == true;
+        if (kind != null && kind.isNotEmpty) {
+          await onAccountTransferData?.call(srcId, packet.payload, kind, total, done);
+        }
+        return;
+      }
+
+      if (packet.type == 'xfer_complete_ack') {
+        final fromKey = packet.payload['from'] as String?;
+        final reqId = packet.payload['reqId'] as String? ?? '';
+        final proof = packet.payload['proof'] as String? ?? '';
+        final rid8 = packet.payload['r'] as String?;
+        final srcId = sourceId ?? fromKey ?? '';
+        if (!_matchesRid8(myPublicKey, rid8)) {
+          return;
+        }
+        if (fromKey != null) {
+          onAccountTransferAck?.call(srcId, fromKey, reqId, proof);
+        }
+        return;
+      }
+
+      if (packet.type == 'xfer_wiping') {
+        final fromKey = packet.payload['from'] as String?;
+        final rid8 = packet.payload['r'] as String?;
+        final srcId = sourceId ?? fromKey ?? '';
+        if (!_matchesRid8(myPublicKey, rid8)) {
+          return;
+        }
+        if (fromKey != null) {
+          onAccountTransferWiping?.call(srcId, fromKey);
         }
         return;
       }

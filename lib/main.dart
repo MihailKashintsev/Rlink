@@ -66,6 +66,7 @@ import 'services/ai_bot_constants.dart';
 import 'services/dm_bot_flags.dart';
 import 'services/device_link_sync_service.dart';
 import 'services/account_sync_service.dart';
+import 'services/account_transfer_service.dart';
 import 'services/scheduled_dm_service.dart';
 import 'services/outbox_service.dart';
 import 'services/typing_service.dart';
@@ -83,6 +84,7 @@ import 'services/web_identity_portable.dart';
 import 'services/web_notification_bridge.dart';
 import 'app_route_observer.dart';
 import 'ui/app_palettes.dart';
+import 'ui/screens/account_transfer_approve_screen.dart';
 import 'ui/screens/app_lock_screen.dart';
 import 'ui/screens/chat_list_screen.dart';
 import 'ui/widgets/audio_queue_mini_player.dart';
@@ -2037,6 +2039,15 @@ Future<void> initServices() async {
     };
 
     await DeviceLinkSyncService.instance.init();
+    await AccountTransferService.instance.init();
+    AccountTransferService.instance.incomingRequest.addListener(() {
+      final request = AccountTransferService.instance.incomingRequest.value;
+      if (request == null) return;
+      final ctx = navigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        showAccountTransferApprovalScreen(ctx, request);
+      }
+    });
 
     // ── Channel/Group packet handlers ──────────────────────────────
     GossipRouter.instance.onChannelMeta = (payload) {

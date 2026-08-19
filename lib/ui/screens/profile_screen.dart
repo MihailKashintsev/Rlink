@@ -1070,7 +1070,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 12),
 
               _InfoTile(
-                label: 'Полный ID (для поиска через &)',
+                label: 'RID (для поиска через &)',
                 value: profile.publicKeyHex,
                 monospace: true,
                 onCopy: () {

@@ -7,6 +7,36 @@ import '../models/message_poll.dart';
 import '../models/shared_collab.dart';
 import 'custom_emoji_text.dart';
 
+// Same marker set `RichMessageText` renders (see rich_message_text.dart's
+// doc-comment) — previews are a plain subtitle string, not a rich widget, so
+// "its own formatting" means stripped-to-readable-text rather than actual
+// bold/italic glyphs, matching how every reference messenger renders a
+// chat-list subtitle. Spoiler is handled separately, first, and never
+// reveals its content — the whole point of the marker.
+final _previewSpoilerRegex = RegExp(r'\|\|([\s\S]*?)\|\|');
+final _previewMdLinkRegex = RegExp(r'\[([^\]]+)\]\((https?://[^\s)]+)\)');
+final _previewBoldRegex = RegExp(r'\*\*([\s\S]*?)\*\*');
+final _previewUnderlineRegex = RegExp(r'__([\s\S]*?)__');
+final _previewStrikeRegex = RegExp(r'~~([\s\S]*?)~~');
+final _previewMonoRegex = RegExp(r'`([\s\S]*?)`');
+final _previewItalicRegex = RegExp(r'_([\s\S]*?)_');
+
+/// Strips message-formatting markers for the plain-text preview line: bold
+/// `**`/underline `__`/strike `~~`/mono `` ` ``/italic `_`/`[text](url)`
+/// collapse to their readable inner text, and `||spoiler||` is masked to
+/// "🙈" rather than shown in the clear — a spoiler hidden in the chat must
+/// stay hidden on the chat-list screen too.
+String stripPreviewFormatting(String text) {
+  var t = text.replaceAll(_previewSpoilerRegex, '🙈');
+  t = t.replaceAllMapped(_previewMdLinkRegex, (m) => m.group(1) ?? '');
+  t = t.replaceAllMapped(_previewBoldRegex, (m) => m.group(1) ?? '');
+  t = t.replaceAllMapped(_previewUnderlineRegex, (m) => m.group(1) ?? '');
+  t = t.replaceAllMapped(_previewStrikeRegex, (m) => m.group(1) ?? '');
+  t = t.replaceAllMapped(_previewMonoRegex, (m) => m.group(1) ?? '');
+  t = t.replaceAllMapped(_previewItalicRegex, (m) => m.group(1) ?? '');
+  return t;
+}
+
 /// Человекочитаемое превью последнего сообщения (список чатов и т.п.).
 String formatMessagePreview(String? text, {String? pollJson}) {
   final p = MessagePoll.tryDecode(pollJson ?? '');
@@ -35,7 +65,7 @@ String formatMessagePreview(String? text, {String? pollJson}) {
   if (text == '📹 Видео' || text == '⬛ Видео') return text;
   if (text.startsWith('📎 ')) return text;
 
-  return humanizeCustomEmojiCodes(text);
+  return humanizeCustomEmojiCodes(stripPreviewFormatting(text));
 }
 
 /// Превью для последнего сообщения личного чата (список диалогов).

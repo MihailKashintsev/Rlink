@@ -429,10 +429,18 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
               ),
             ),
           ),
-          if (_sel != null) _opacityRow(cs),
-          _timeline(cs),
-          _layerTray(cs),
-          _toolbar(cs),
+          // Keyed: the opacity row appears/disappears as layers get
+          // selected, which shifts every later child's index in this
+          // Column. Without stable keys, Flutter's default type+index
+          // reconciliation reuses the wrong RenderObject/Element across the
+          // shift (e.g. the timeline's Slider ends up painted where the
+          // opacity row should be) — a real rendering-corruption bug, not
+          // just a lint nicety.
+          if (_sel != null)
+            KeyedSubtree(key: const ValueKey('opacityRow'), child: _opacityRow(cs)),
+          KeyedSubtree(key: const ValueKey('timeline'), child: _timeline(cs)),
+          KeyedSubtree(key: const ValueKey('layerTray'), child: _layerTray(cs)),
+          KeyedSubtree(key: const ValueKey('toolbar'), child: _toolbar(cs)),
         ],
       ),
     );
