@@ -38,22 +38,27 @@ val newBuildDir: Directory =
         .get()
 rootProject.layout.buildDirectory.set(newBuildDir)
 
+// Transitive deps of super_clipboard whose build.gradle predates AGP's
+// namespace requirement — they only declare the legacy AndroidManifest
+// `package` attribute, which AGP 8+ ignores. Backfilled below from that same
+// manifest value rather than patching the pub-cache copy, which
+// `flutter pub get` overwrites on every CI run.
+val missingNamespaces = mapOf(
+    "irondash_engine_context" to "dev.irondash.engine_context",
+    "super_native_extensions" to "com.superlist.super_native_extensions",
+)
+
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.set(newSubprojectBuildDir)
 
-    // irondash_engine_context (transitive via super_clipboard) predates AGP's
-    // namespace requirement — its build.gradle never sets `namespace`, only the
-    // legacy AndroidManifest `package` attribute, which AGP 8+ ignores. Backfill
-    // it from that same manifest value here rather than patching the pub-cache
-    // copy, which `flutter pub get` overwrites on every CI run. Uses
     // plugins.withId (not afterEvaluate) since evaluationDependsOn below can
     // force this project to evaluate before an afterEvaluate block registers.
-    if (project.name == "irondash_engine_context") {
+    missingNamespaces[project.name]?.let { ns ->
         plugins.withId("com.android.library") {
             extensions.configure(com.android.build.gradle.LibraryExtension::class.java) {
                 if (namespace == null) {
-                    namespace = "dev.irondash.engine_context"
+                    namespace = ns
                 }
             }
         }
