@@ -89,6 +89,10 @@ class NotificationService {
       final androidImpl = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       await androidImpl?.requestNotificationsPermission();
+      // Android 14+ гейтит fullScreenIntent отдельным разрешением — без него
+      // звонок при заблокированном экране придёт обычным (неполноэкранным)
+      // уведомлением. На более старых версиях выдаётся автоматически.
+      await androidImpl?.requestFullScreenIntentPermission();
     } catch (e) {
       debugPrint('[RLINK][Notif] requestPermissions failed: $e');
     }
@@ -148,6 +152,56 @@ class NotificationService {
       threadIdentifier: peerId,
       silent: silent,
     );
+  }
+
+  /// Android-only: a full-screen-intent call notification. Unlike
+  /// [showPersonalMessage], this fires regardless of foreground/background —
+  /// if the app is genuinely in front, Android just shows it as a normal
+  /// heads-up notification instead of taking over the screen (standard OS
+  /// behaviour for fullScreenIntent), so it's safe to always call this for
+  /// an incoming call rather than trying to detect "is the screen locked"
+  /// ourselves. [MainActivity]'s show-when-locked flags must already be set
+  /// (see `CallService`'s `call_ui` channel `ring` call) before this fires,
+  /// so the Activity it wakes/brings forward is allowed to draw over the
+  /// keyguard instead of the system just showing the lock screen underneath.
+  Future<void> showIncomingCallNotification({
+    required String peerId,
+    required String title,
+    required bool isVideo,
+  }) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (!_initialised) await init();
+    try {
+      final androidDetails = AndroidNotificationDetails(
+        'rlink_calls',
+        'Звонки',
+        channelDescription: 'Входящие звонки',
+        importance: Importance.max,
+        priority: Priority.max,
+        category: AndroidNotificationCategory.call,
+        fullScreenIntent: true,
+        ongoing: true,
+        autoCancel: false,
+        playSound: false, // ringtone is already handled by SoundEffectsService
+        timeoutAfter: 60000, // matches CallService's ringing timeout
+      );
+      await _plugin.show(
+        id: _stableId('call', peerId),
+        title: title,
+        body: isVideo ? 'Видеозвонок' : 'Аудиозвонок',
+        notificationDetails: NotificationDetails(android: androidDetails),
+        payload: 'dm:$peerId',
+      );
+    } catch (e) {
+      debugPrint('[RLINK][Notif] showIncomingCallNotification failed: $e');
+    }
+  }
+
+  Future<void> cancelIncomingCallNotification(String peerId) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _plugin.cancel(id: _stableId('call', peerId));
+    } catch (_) {}
   }
 
   Future<void> showGroupMessage({

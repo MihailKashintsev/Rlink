@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -48,6 +49,25 @@ class CallService {
       String.fromEnvironment('TURN_USER', defaultValue: '');
   static const _turnPassword =
       String.fromEnvironment('TURN_PASSWORD', defaultValue: '');
+
+  static const _callUiChannel = MethodChannel('com.rendergames.rlink/call_ui');
+
+  /// Show-over-lock-screen for the duration of the ring, so the full-screen
+  /// incoming-call banner is actually visible if the phone is locked instead
+  /// of the OS just showing the keyguard underneath. No-op off Android.
+  Future<void> _ringLockScreen() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _callUiChannel.invokeMethod('ring');
+    } catch (_) {}
+  }
+
+  Future<void> _stopRingLockScreen() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _callUiChannel.invokeMethod('stopRinging');
+    } catch (_) {}
+  }
 
   final _uuid = const Uuid();
   final ValueNotifier<CallSessionInfo?> incomingCall = ValueNotifier(null);
@@ -141,6 +161,18 @@ class CallService {
     _phaseSince = DateTime.now();
     if (next == CallPhase.connected && prev != CallPhase.connected) {
       _armCallDurationTimer();
+    }
+    // Leaving the ringing state (accepted, declined, timed out, caller
+    // cancelled) — clear whatever the incoming-call UI armed, regardless of
+    // which call site triggered the transition.
+    if (prev == CallPhase.ringing && next != CallPhase.ringing) {
+      unawaited(_stopRingLockScreen());
+      final peerId = _activePeerId;
+      if (peerId != null) {
+        unawaited(NotificationService.instance.cancelIncomingCallNotification(
+          peerId,
+        ));
+      }
     }
   }
 
@@ -946,13 +978,26 @@ class CallService {
         _videoEnabled = isVideo;
         incomingCall.value = info;
         _setPhase(CallPhase.ringing);
-        unawaited(
-          NotificationService.instance.showPersonalMessage(
-            peerId: fromId,
-            title: displayName,
-            body: isVideo ? 'Видеозвонок' : 'Аудиозвонок',
-          ),
-        );
+        // Only when backgrounded — while the app is open, the dedicated
+        // incoming-call overlay/banner already covers this; also firing the
+        // generic in-app message banner would double up on the same call.
+        if (NotificationService.instance.isInBackground.value) {
+          unawaited(
+            NotificationService.instance.showPersonalMessage(
+              peerId: fromId,
+              title: displayName,
+              body: isVideo ? 'Видеозвонок' : 'Аудиозвонок',
+            ),
+          );
+        }
+        // Android: arm show-over-lock-screen first, then the full-screen
+        // notification — order matters if the phone is currently locked.
+        unawaited(_ringLockScreen());
+        unawaited(NotificationService.instance.showIncomingCallNotification(
+          peerId: fromId,
+          title: displayName,
+          isVideo: isVideo,
+        ));
         unawaited(SoundEffectsService.instance.startIncomingRingtone());
         break;
       case 'offer':

@@ -30,6 +30,7 @@ import androidx.core.content.FileProvider
 import android.os.Build
 import android.os.ParcelUuid
 import android.os.PowerManager
+import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -45,6 +46,7 @@ class MainActivity : FlutterActivity() {
         const val METHOD_CHANNEL = "com.rendergames.rlink/ble"
         const val EVENT_CHANNEL  = "com.rendergames.rlink/ble_events"
         const val PROXIMITY_CHANNEL = "com.rendergames.rlink/proximity"
+        const val CALL_UI_CHANNEL = "com.rendergames.rlink/call_ui"
         const val NOTIFICATION_CHANNEL_ID = "rlink_messages"
         private const val APP_ICON_CHANNEL_ID = "rlink_app_icon"
         private const val APP_ICON_NOTIFICATION_ID = 91001
@@ -227,6 +229,25 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        // Show-over-lock-screen for an incoming call — set BEFORE the
+        // full-screen-intent notification fires (see NotificationService),
+        // so if the screen is locked, the Activity it wakes/brings forward is
+        // already allowed to display on top instead of showing the keyguard.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CALL_UI_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "ring" -> {
+                        setLockScreenCallMode(true)
+                        result.success(null)
+                    }
+                    "stopRinging" -> {
+                        setLockScreenCallMode(false)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
             .setMethodCallHandler { call, result ->
@@ -411,6 +432,26 @@ class MainActivity : FlutterActivity() {
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
         }
         startActivity(intent)
+    }
+
+    /// Показ поверх экрана блокировки + пробуждение экрана на время звонка —
+    /// как в обычном "Телефоне": экран не разблокируется, но окно рисуется
+    /// поверх него, пока идёт вызов; снимается сразу после принятия/отклонения.
+    private fun setLockScreenCallMode(enabled: Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(enabled)
+            setTurnScreenOn(enabled)
+        } else {
+            val lockFlags = WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            if (enabled) window.addFlags(lockFlags) else window.clearFlags(lockFlags)
+        }
+        if (enabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     private fun startProximityMonitoring() {
