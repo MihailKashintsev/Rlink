@@ -54,8 +54,9 @@ class _EdLayer {
   });
 
   ({double x, double y, double sx, double sy, double rotDeg, double alpha})
-      transformAt(int tMs) => RlsLayer(id: id, assetId: id, keys: keys, defaultEase: ease)
-          .transformAt(tMs);
+      transformAt(int tMs) =>
+          RlsLayer(id: id, assetId: id, keys: keys, defaultEase: ease)
+              .transformAt(tMs);
 }
 
 class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
@@ -74,8 +75,14 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
   // Live (uncommitted) pose while the user is actively dragging the selected
   // layer — kept separate from committed keyframes so a drag can be cancelled
   // by lifting outside the canvas without leaving a half-formed keyframe.
-  ({double x, double y, double sx, double sy, double rotDeg, double alpha})?
-      _livePose;
+  ({
+    double x,
+    double y,
+    double sx,
+    double sy,
+    double rotDeg,
+    double alpha
+  })? _livePose;
   Offset? _dragStartFocal;
   double _dragStartScale = 1;
   double _dragStartRotDeg = 0;
@@ -373,7 +380,8 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
         assets: {for (final l in _layers) l.id: l.pngBytes},
         layers: [
           for (final l in _layers)
-            RlsLayer(id: l.id, assetId: l.id, keys: l.keys, defaultEase: l.ease),
+            RlsLayer(
+                id: l.id, assetId: l.id, keys: l.keys, defaultEase: l.ease),
         ],
       );
       final bytes = sticker.encode();
@@ -418,7 +426,14 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
       ),
       body: Column(
         children: [
+          // Keyed like every sibling below (this one was the one gap — see
+          // the same fix + full explanation in rlv_sticker_editor_screen.dart,
+          // where the equivalent gap was caught live: the opacity row's
+          // appear/disappear shifting this Column's children could still
+          // land wrong without a key on every single child here, this one
+          // included).
           Expanded(
+            key: const ValueKey('canvas'),
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -429,15 +444,9 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
               ),
             ),
           ),
-          // Keyed: the opacity row appears/disappears as layers get
-          // selected, which shifts every later child's index in this
-          // Column. Without stable keys, Flutter's default type+index
-          // reconciliation reuses the wrong RenderObject/Element across the
-          // shift (e.g. the timeline's Slider ends up painted where the
-          // opacity row should be) — a real rendering-corruption bug, not
-          // just a lint nicety.
           if (_sel != null)
-            KeyedSubtree(key: const ValueKey('opacityRow'), child: _opacityRow(cs)),
+            KeyedSubtree(
+                key: const ValueKey('opacityRow'), child: _opacityRow(cs)),
           KeyedSubtree(key: const ValueKey('timeline'), child: _timeline(cs)),
           KeyedSubtree(key: const ValueKey('layerTray'), child: _layerTray(cs)),
           KeyedSubtree(key: const ValueKey('toolbar'), child: _toolbar(cs)),
@@ -452,12 +461,10 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
       return ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: GestureDetector(
-          onScaleStart: _selected == null
-              ? null
-              : (d) => _onScaleStart(d, size),
-          onScaleUpdate: _selected == null
-              ? null
-              : (d) => _onScaleUpdate(d, size),
+          onScaleStart:
+              _selected == null ? null : (d) => _onScaleStart(d, size),
+          onScaleUpdate:
+              _selected == null ? null : (d) => _onScaleUpdate(d, size),
           onScaleEnd: _selected == null ? null : _onScaleEnd,
           child: Container(
             color: const Color(0xFF1B1B22),
@@ -506,46 +513,67 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
             children: [
               IconButton(
                 color: Colors.white,
-                icon: Icon(_playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                icon: Icon(
+                    _playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
                 onPressed: _togglePlay,
               ),
               Expanded(
-                child: Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Slider(
-                      value: _playheadMs.toDouble().clamp(0, _durationMs.toDouble()),
-                      max: _durationMs.toDouble(),
-                      onChanged: (v) {
-                        _pausePlaybackForEditing();
-                        setState(() {
-                          _playheadMs = v.round();
-                          _livePose = null;
-                        });
-                      },
-                    ),
-                    if (layer != null)
-                      IgnorePointer(
-                        child: Stack(
-                          children: [
-                            for (final k in layer.keys)
-                              Positioned(
-                                left: (k.tMs / _durationMs.clamp(1, 1 << 30)) *
-                                    (MediaQuery.sizeOf(context).width - 32 - 96),
-                                top: 18,
-                                child: Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: cs.primary,
-                                    shape: BoxShape.circle,
+                // Bounded height required: a bare Stack here has nothing to
+                // size itself against (Column always gives non-flex children
+                // unbounded max-height, Row passes that straight through).
+                // The Slider masked it — fixed intrinsic height regardless —
+                // but the keyframe-dots Stack below has only Positioned
+                // children, so once a layer is selected and it starts
+                // rendering, Flutter throws "Stack requires bounded
+                // constraints" (stripped in release builds — silently just
+                // fails to lay out there, which is exactly the reported
+                // corruption: canvas/timeline/toolbar going missing after
+                // picking a layer). See the identical fix + full writeup in
+                // rlv_sticker_editor_screen.dart's _timeline.
+                child: SizedBox(
+                  height: 48,
+                  child: Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [
+                      Slider(
+                        value: _playheadMs
+                            .toDouble()
+                            .clamp(0, _durationMs.toDouble()),
+                        max: _durationMs.toDouble(),
+                        onChanged: (v) {
+                          _pausePlaybackForEditing();
+                          setState(() {
+                            _playheadMs = v.round();
+                            _livePose = null;
+                          });
+                        },
+                      ),
+                      if (layer != null)
+                        IgnorePointer(
+                          child: Stack(
+                            children: [
+                              for (final k in layer.keys)
+                                Positioned(
+                                  left:
+                                      (k.tMs / _durationMs.clamp(1, 1 << 30)) *
+                                          (MediaQuery.sizeOf(context).width -
+                                              32 -
+                                              96),
+                                  top: 18,
+                                  child: Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: cs.primary,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               IconButton(
@@ -649,8 +677,7 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.timeline_rounded,
-                color: layer == null ? Colors.white24 : Colors.white,
-                size: 22),
+                color: layer == null ? Colors.white24 : Colors.white, size: 22),
             const SizedBox(height: 2),
             Text(
               layer?.ease ?? 'ease',
@@ -714,7 +741,8 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: onTap == null ? Colors.white24 : Colors.white, size: 22),
+            Icon(icon,
+                color: onTap == null ? Colors.white24 : Colors.white, size: 22),
             const SizedBox(height: 2),
             Text(label,
                 style: TextStyle(
@@ -731,8 +759,14 @@ class _EditorPainter extends CustomPainter {
   final List<_EdLayer> layers;
   final int? selected;
   final int tMs;
-  final ({double x, double y, double sx, double sy, double rotDeg, double alpha})?
-      livePose;
+  final ({
+    double x,
+    double y,
+    double sx,
+    double sy,
+    double rotDeg,
+    double alpha
+  })? livePose;
 
   _EditorPainter({
     required this.layers,

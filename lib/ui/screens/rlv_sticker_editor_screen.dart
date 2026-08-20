@@ -9,7 +9,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../models/rlv_animation_presets.dart';
 import '../../models/rlv_sticker.dart';
-import '../widgets/rlv_sticker_view.dart' show buildShapePath, buildFreehandPath, parseRlvHexColor;
+import '../widgets/rlv_sticker_view.dart'
+    show buildShapePath, buildFreehandPath, parseRlvHexColor;
 
 /// The vector sticker "mini studio": compose shape/freehand/SVG layers, pose
 /// each one on the canvas at chosen moments in time (same keyframe/timeline
@@ -63,7 +64,8 @@ const Map<String, String> _kPresetLabels = {
 String _colorToHex(Color c) {
   int ch(double v) => (v * 255).round().clamp(0, 255);
   String hx(int v) => v.toRadixString(16).padLeft(2, '0');
-  return '#${hx(ch(c.r))}${hx(ch(c.g))}${hx(ch(c.b))}${hx(ch(c.a))}'.toUpperCase();
+  return '#${hx(ch(c.r))}${hx(ch(c.g))}${hx(ch(c.b))}${hx(ch(c.a))}'
+      .toUpperCase();
 }
 
 class _RlvEdLayer {
@@ -116,7 +118,8 @@ class _RlvEdLayer {
   });
 
   RlvPose transformAt(int tMs) =>
-      RlvLayer(id: id, kind: kind, keys: keys, defaultEase: ease).transformAt(tMs);
+      RlvLayer(id: id, kind: kind, keys: keys, defaultEase: ease)
+          .transformAt(tMs);
 
   RlvLayer toRlvLayer() => RlvLayer(
         id: id,
@@ -181,8 +184,9 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
     super.dispose();
   }
 
-  _RlvEdLayer? get _sel =>
-      _selected != null && _selected! < _layers.length ? _layers[_selected!] : null;
+  _RlvEdLayer? get _sel => _selected != null && _selected! < _layers.length
+      ? _layers[_selected!]
+      : null;
 
   void _togglePlay() {
     setState(() => _playing = !_playing);
@@ -413,7 +417,8 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Фигура', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('Фигура',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 12,
@@ -452,7 +457,9 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
                               shape: BoxShape.circle,
                               color: c,
                               border: Border.all(
-                                color: c == chosenColor ? Colors.white : Colors.white24,
+                                color: c == chosenColor
+                                    ? Colors.white
+                                    : Colors.white24,
                                 width: c == chosenColor ? 3 : 1,
                               ),
                             ),
@@ -627,7 +634,8 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.check_rounded, size: 18),
               label: const Text('Готово'),
@@ -635,9 +643,26 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
           ),
         ],
       ),
+      // The Column below intentionally has a FIXED 2 children (canvas +
+      // bottom controls), never a variable-length list. An earlier version
+      // put the opacity row, timeline, layer tray and toolbar as siblings of
+      // Expanded(canvas) directly, individually keyed — the opacity row
+      // appearing/disappearing (finishing a freehand stroke adds+selects a
+      // layer AND exits draw mode in one setState, so it can appear the same
+      // rebuild the canvas slot's own content changes too) still corrupted
+      // rendering even with keys: a semantics ParentData-dirty assertion
+      // (Expanded's ParentData not flushed before layout) reproduced in a
+      // widget test for this exact sequence, and matches what actually
+      // rendered live — the canvas slot replaced by just the opacity row,
+      // full-bleed, everything else gone. Expanded needs stable, non-shifting
+      // adjacency to its Flex parent; mixing it with a conditionally-present
+      // sibling list is the actual hazard, not just missing keys. Nesting the
+      // variable-length part inside its own always-present Column sidesteps
+      // it entirely — Expanded only ever sees a Column of constant length.
       body: Column(
         children: [
           Expanded(
+            key: const ValueKey('canvas'),
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -645,15 +670,9 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
               ),
             ),
           ),
-          // Keyed: the opacity row appears/disappears as layers get
-          // selected, which shifts every later child's index in this
-          // Column. Without stable keys, Flutter's default type+index
-          // reconciliation reuses the wrong RenderObject/Element across the
-          // shift (e.g. the timeline's Slider ends up painted where the
-          // opacity row should be) — a real rendering-corruption bug, not
-          // just a lint nicety.
           if (_sel != null && !_drawMode)
-            KeyedSubtree(key: const ValueKey('opacityRow'), child: _opacityRow(cs)),
+            KeyedSubtree(
+                key: const ValueKey('opacityRow'), child: _opacityRow(cs)),
           KeyedSubtree(key: const ValueKey('timeline'), child: _timeline(cs)),
           KeyedSubtree(key: const ValueKey('layerTray'), child: _layerTray(cs)),
           KeyedSubtree(key: const ValueKey('toolbar'), child: _toolbar(cs)),
@@ -722,46 +741,62 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
         children: [
           IconButton(
             color: Colors.white,
-            icon: Icon(_playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+            icon:
+                Icon(_playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
             onPressed: _togglePlay,
           ),
           Expanded(
-            child: Stack(
-              alignment: Alignment.centerLeft,
-              children: [
-                Slider(
-                  value: _playheadMs.toDouble().clamp(0, _durationMs.toDouble()),
-                  max: _durationMs.toDouble(),
-                  onChanged: (v) {
-                    _pausePlaybackForEditing();
-                    setState(() {
-                      _playheadMs = v.round();
-                      _livePose = null;
-                    });
-                  },
-                ),
-                if (layer != null)
-                  IgnorePointer(
-                    child: Stack(
-                      children: [
-                        for (final k in layer.keys)
-                          Positioned(
-                            left: (k.tMs / _durationMs.clamp(1, 1 << 30)) *
-                                (MediaQuery.sizeOf(context).width - 32 - 96),
-                            top: 18,
-                            child: Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: cs.primary,
-                                shape: BoxShape.circle,
+            // A bare Stack here has no bounded height to size itself against
+            // — Column always gives non-flex children unbounded max-height,
+            // which Row passes straight through to this Expanded's cross
+            // axis. The Slider masked that (it has its own intrinsic height
+            // regardless), but the keyframe-dots Stack below has only
+            // Positioned children — nothing to size itself from — so the
+            // instant a layer gets selected and it starts rendering, Flutter
+            // throws "Stack requires bounded constraints" (asserts are
+            // stripped in release builds, so this was silent there — the
+            // slot just fails to lay out, which is the corruption reported
+            // live: canvas/timeline/toolbar all missing after drawing).
+            child: SizedBox(
+              height: 48,
+              child: Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  Slider(
+                    value:
+                        _playheadMs.toDouble().clamp(0, _durationMs.toDouble()),
+                    max: _durationMs.toDouble(),
+                    onChanged: (v) {
+                      _pausePlaybackForEditing();
+                      setState(() {
+                        _playheadMs = v.round();
+                        _livePose = null;
+                      });
+                    },
+                  ),
+                  if (layer != null)
+                    IgnorePointer(
+                      child: Stack(
+                        children: [
+                          for (final k in layer.keys)
+                            Positioned(
+                              left: (k.tMs / _durationMs.clamp(1, 1 << 30)) *
+                                  (MediaQuery.sizeOf(context).width - 32 - 96),
+                              top: 18,
+                              child: Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: cs.primary,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
           IconButton(
@@ -823,14 +858,16 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
           child: Row(
             children: [
               _toolBtn(Icons.category_outlined, 'Фигура', _pickShape),
-              _toolBtn(Icons.edit_outlined, 'Рисовать', () => setState(() => _drawMode = true)),
+              _toolBtn(Icons.edit_outlined, 'Рисовать',
+                  () => setState(() => _drawMode = true)),
               _toolBtn(Icons.image_outlined, 'SVG', _addSvgLayer),
               _toolBtn(
                 Icons.auto_awesome_rounded,
                 'Пресеты',
                 layer == null ? null : () => _pickPreset(layer),
               ),
-              _toolBtn(Icons.delete_outline, 'Удалить', layer == null ? null : _removeSelectedLayer),
+              _toolBtn(Icons.delete_outline, 'Удалить',
+                  layer == null ? null : _removeSelectedLayer),
               _easePicker(layer),
               _durationPicker(),
             ],
@@ -968,11 +1005,13 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: onTap == null ? Colors.white24 : Colors.white, size: 22),
+            Icon(icon,
+                color: onTap == null ? Colors.white24 : Colors.white, size: 22),
             const SizedBox(height: 2),
             Text(label,
                 style: TextStyle(
-                    color: onTap == null ? Colors.white24 : Colors.white70, fontSize: 11)),
+                    color: onTap == null ? Colors.white24 : Colors.white70,
+                    fontSize: 11)),
           ],
         ),
       ),
@@ -984,7 +1023,8 @@ void _paintLayerContent(Canvas canvas, _RlvEdLayer layer, double alpha) {
   if (layer.kind == 'svg') {
     final pic = layer.svgPicture;
     if (pic == null) return;
-    canvas.saveLayer(null, Paint()..color = Color.fromRGBO(255, 255, 255, alpha));
+    canvas.saveLayer(
+        null, Paint()..color = Color.fromRGBO(255, 255, 255, alpha));
     canvas.drawPicture(pic);
     canvas.restore();
     return;
@@ -1010,7 +1050,8 @@ void _paintLayerContent(Canvas canvas, _RlvEdLayer layer, double alpha) {
           ..strokeWidth = layer.strokeWidth
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round
-          ..color = stroke.withValues(alpha: (stroke.a * alpha).clamp(0.0, 1.0)),
+          ..color =
+              stroke.withValues(alpha: (stroke.a * alpha).clamp(0.0, 1.0)),
       );
     }
   } else {
@@ -1054,7 +1095,9 @@ class _RlvEditorPainter extends CustomPainter {
     canvas.scale(scale, scale);
     for (var i = 0; i < layers.length; i++) {
       final layer = layers[i];
-      final tr = (i == selected && livePose != null) ? livePose! : layer.transformAt(tMs);
+      final tr = (i == selected && livePose != null)
+          ? livePose!
+          : layer.transformAt(tMs);
       if (tr.alpha <= 0.003) continue;
       final alpha = tr.alpha.clamp(0.0, 1.0);
       final w = layer.localSize.width, h = layer.localSize.height;
