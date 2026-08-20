@@ -57,6 +57,8 @@ import 'services/sticker_pack_dm_service.dart';
 import 'services/name_filter.dart';
 import 'services/profile_service.dart';
 import 'services/profile_privacy_service.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    show NotificationResponse;
 import 'services/broadcast_outbox_service.dart';
 import 'services/media_upload_queue.dart';
 import 'services/notification_service.dart';
@@ -94,6 +96,7 @@ import 'ui/widgets/link_sync_overlay.dart';
 import 'ui/widgets/in_app_notification_overlay.dart';
 import 'services/in_app_notification_service.dart';
 import 'ui/mention_nav.dart';
+import 'ui/screens/call_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
 import 'ui/widgets/incoming_call_overlay.dart';
 import 'ui/widgets/incoming_call_fullscreen_banner.dart';
@@ -268,6 +271,47 @@ Future<void> _showIncomingCallOverlay(
   } finally {
     _incomingCallOverlayOpen = false;
   }
+}
+
+/// Handles the call_accept/call_decline action buttons on
+/// [NotificationService.showIncomingCallNotification] — the fallback path
+/// for when the full-screen banner doesn't actually take over (DND, OEM
+/// restrictions, or Android just decided to show a plain heads-up instead).
+void _handleNotificationResponse(NotificationResponse r) {
+  final payload = r.payload;
+  if (payload == null || !payload.startsWith('dm:')) return;
+  final peerId = payload.substring('dm:'.length);
+  final session = CallService.instance.incomingCall.value;
+  if (session == null || session.peerId != peerId) return;
+  if (r.actionId == 'call_decline') {
+    unawaited(CallService.instance.rejectIncoming(session));
+  } else if (r.actionId == 'call_accept') {
+    unawaited(_acceptCallFromNotification(session));
+  }
+}
+
+Future<void> _acceptCallFromNotification(CallSessionInfo session) async {
+  // The ringing banner is already on screen — let its own Accept button
+  // handle this rather than racing a second acceptIncoming() call.
+  if (_incomingCallOverlayOpen) return;
+  try {
+    await CallService.instance.acceptIncoming(session);
+  } catch (_) {
+    return;
+  }
+  final nav = navigatorKey.currentState;
+  if (nav == null) return;
+  final peerName = await _peerDisplayName(session.peerId);
+  final contact = await ChatStorageService.instance.getContact(session.peerId);
+  nav.push(MaterialPageRoute(
+    builder: (_) => CallScreen(
+      session: session,
+      peerName: peerName,
+      peerAvatarColor: contact?.avatarColor ?? 0xFF5C6BC0,
+      peerAvatarEmoji: contact?.avatarEmoji ?? '',
+      peerAvatarImagePath: contact?.avatarImagePath,
+    ),
+  ));
 }
 
 Future<void> _notifyIncomingDirectEvent({
@@ -1948,6 +1992,8 @@ Future<void> initServices() async {
     );
     CallService.instance.bindSignaling();
     _bindIncomingCallOverlay();
+    NotificationService.instance.onNotificationResponse =
+        _handleNotificationResponse;
     InAppNotificationService.instance.onOpen = _openChatFromNotif;
 
     GossipRouter.instance.onDeviceLinkRequest = (_, publicKey, nick, username) {

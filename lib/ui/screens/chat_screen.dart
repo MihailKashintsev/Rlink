@@ -9018,9 +9018,18 @@ class _CallHistoryMessageCard extends StatelessWidget {
             Duration(
               milliseconds: (data['durationMs'] as num?)?.toInt() ?? 0,
             );
+        final outcome = entry?.outcome ?? data['outcome'] as String?;
         final transcript = entry?.transcript?.trim() ?? '';
         final fg = isOutgoing ? colorScheme.onPrimary : colorScheme.onSurface;
         final muted = fg.withValues(alpha: 0.72);
+        // A call this device never answered — the classic red "missed call"
+        // treatment, same as every other messenger/phone app.
+        final isMissedByMe = outcome == 'missed' && incoming;
+        final subtitle = outcome == 'missed'
+            ? (incoming ? 'Пропущенный' : 'Нет ответа')
+            : outcome == 'declined'
+                ? 'Отклонён'
+                : '${incoming ? 'Входящий' : 'Исходящий'} • ${_fmt(duration)}';
         return InkWell(
           onTap: entry == null ? null : () => unawaited(_open(context, entry)),
           borderRadius: BorderRadius.circular(14),
@@ -9042,7 +9051,7 @@ class _CallHistoryMessageCard extends StatelessWidget {
                     Icon(
                       video ? Icons.videocam_outlined : Icons.call_outlined,
                       size: 20,
-                      color: fg,
+                      color: isMissedByMe ? Colors.red.shade300 : fg,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -9061,8 +9070,12 @@ class _CallHistoryMessageCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${incoming ? 'Входящий' : 'Исходящий'} • ${_fmt(duration)}',
-                  style: TextStyle(color: muted, fontSize: 12),
+                  subtitle,
+                  style: TextStyle(
+                    color: isMissedByMe ? Colors.red.shade300 : muted,
+                    fontSize: 12,
+                    fontWeight: isMissedByMe ? FontWeight.w600 : null,
+                  ),
                 ),
                 if (transcript.isNotEmpty) ...[
                   const SizedBox(height: 8),

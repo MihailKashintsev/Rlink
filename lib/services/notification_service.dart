@@ -36,6 +36,14 @@ class NotificationService {
   /// Находится ли приложение в фоне (обновляется из WidgetsBindingObserver).
   final ValueNotifier<bool> isInBackground = ValueNotifier<bool>(false);
 
+  /// Fired on any notification tap or action-button press (e.g. the
+  /// call_accept/call_decline actions on [showIncomingCallNotification]).
+  /// The app is always alive by the time this can fire (CallService, which
+  /// created the notification, is Dart code running in this same process),
+  /// so unlike some flutter_local_notifications setups there's no need for a
+  /// separate background-isolate entry point here.
+  void Function(NotificationResponse)? onNotificationResponse;
+
   bool _initialised = false;
 
   Future<void> init() async {
@@ -69,7 +77,10 @@ class NotificationService {
       linux: linuxInit,
       windows: windowsInit,
     );
-    await _plugin.initialize(settings: init);
+    await _plugin.initialize(
+      settings: init,
+      onDidReceiveNotificationResponse: (r) => onNotificationResponse?.call(r),
+    );
   }
 
   /// Запрашивает разрешения на уведомления (iOS/Android 13+/macOS).
@@ -184,6 +195,26 @@ class NotificationService {
         autoCancel: false,
         playSound: false, // ringtone is already handled by SoundEffectsService
         timeoutAfter: 60000, // matches CallService's ringing timeout
+        // A real call rings through Do Not Disturb — this channel is
+        // call-only (never used for regular messages), so opting it in
+        // doesn't touch DND behaviour for anything else.
+        channelBypassDnd: true,
+        // Fallback for when the full-screen banner doesn't actually take
+        // over (DND, OEM restrictions, Android decided to show this as a
+        // plain heads-up instead) — still answerable from the shade itself.
+        actions: const [
+          AndroidNotificationAction(
+            'call_decline',
+            'Отклонить',
+            titleColor: Color(0xFFE53935),
+          ),
+          AndroidNotificationAction(
+            'call_accept',
+            'Принять',
+            titleColor: Color(0xFF43A047),
+            showsUserInterface: true,
+          ),
+        ],
       );
       await _plugin.show(
         id: _stableId('call', peerId),

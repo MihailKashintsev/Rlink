@@ -84,6 +84,10 @@ class CallService {
 
   /// Для записи в [CallHistoryService] при [_cleanup].
   bool _historyWasIncoming = false;
+  /// Set right before a [_cleanup] call that represents a genuinely missed
+  /// incoming call (never answered) rather than a normal end/failure — read
+  /// once by [_cleanup] and reset immediately after.
+  bool _pendingMissedOutcome = false;
   bool _videoEnabled = true;
   bool _acceptedAwaitingOffer = false;
   Timer? _connectTimeout;
@@ -976,8 +980,15 @@ class CallService {
         _activeCallId = callId;
         _activePeerId = fromId;
         _videoEnabled = isVideo;
+        // Must be set here, not only in acceptIncoming — a call that's
+        // declined or times out unanswered never reaches acceptIncoming, and
+        // _cleanup() reads this flag for call-history's incoming/outgoing
+        // label. Leaving it stale from whatever the previous call was is
+        // exactly the kind of bug that only shows up sometimes.
+        _historyWasIncoming = true;
         incomingCall.value = info;
         _setPhase(CallPhase.ringing);
+        _armIncomingRingingTimeout(fromId, callId);
         // Only when backgrounded — while the app is open, the dedicated
         // incoming-call overlay/banner already covers this; also firing the
         // generic in-app message banner would double up on the same call.
@@ -1079,6 +1090,11 @@ class CallService {
       case 'busy':
       case 'end':
         _recentlyHandledCallIds[callId] = DateTime.now();
+        // Caller gave up/cancelled while we were still ringing (never
+        // answered) — that's a missed call from our side, not just "ended".
+        if (phase.value == CallPhase.ringing && _activeCallId == callId) {
+          _pendingMissedOutcome = true;
+        }
         await _cleanup(CallPhase.ended);
         break;
       case 'fx':
@@ -1179,6 +1195,8 @@ class CallService {
         _callDurationSw != null ? _callDurationSw!.elapsed : Duration.zero;
     final incomingSnapshot = _historyWasIncoming;
     final videoSnapshot = _videoEnabled;
+    final missedSnapshot = _pendingMissedOutcome;
+    _pendingMissedOutcome = false;
     _stopCallDurationTimer();
     peerIsRecording.value = false;
     if (localRecording.value &&
@@ -1254,8 +1272,12 @@ class CallService {
           incoming: incomingSnapshot,
           video: videoSnapshot,
           recordingPath: recordingPathSnapshot,
+          outcome: missedSnapshot ? 'missed' : null,
         ),
       );
+      if (missedSnapshot) {
+        unawaited(_notifyMissedCall(peerForHistory, videoSnapshot));
+      }
     }
     _recordingPath = null;
     _historyWasIncoming = false;
@@ -1268,6 +1290,18 @@ class CallService {
         .removeWhere((k, v) => DateTime.now().difference(v) > _recentCallTtl);
     _recentInviteNotifiedAt
         .removeWhere((k, v) => DateTime.now().difference(v) > _recentCallTtl);
+  }
+
+  Future<void> _notifyMissedCall(String peerId, bool video) async {
+    final contact = await ChatStorageService.instance.getContact(peerId);
+    final name = (contact?.nickname.trim().isNotEmpty ?? false)
+        ? contact!.nickname.trim()
+        : (peerId.length >= 8 ? '${peerId.substring(0, 8)}...' : peerId);
+    unawaited(NotificationService.instance.showPersonalMessage(
+      peerId: peerId,
+      title: name,
+      body: video ? 'Пропущенный видеозвонок' : 'Пропущенный звонок',
+    ));
   }
 
   void _startAcceptResendLoop(String peerId, String callId) {
@@ -1361,6 +1395,23 @@ class CallService {
         '[RLINK][Call] ringing timeout: phase=${phase.value}',
       );
       unawaited(_cleanup(CallPhase.failed));
+    });
+  }
+
+  /// Callee-side counterpart to [_armRingingTimeout] — was previously only
+  /// armed for the caller, so an incoming call nobody answered just rang
+  /// forever locally with no local timeout of its own (only stopped if the
+  /// caller happened to send an explicit reject/busy/end). Also tells the
+  /// caller the ring window closed, and marks the outcome as missed so
+  /// _cleanup records/reports it as such instead of a generic ended call.
+  void _armIncomingRingingTimeout(String peerId, String callId) {
+    _connectTimeout?.cancel();
+    _connectTimeout = Timer(_ringingTimeoutDuration, () {
+      if (phase.value != CallPhase.ringing || _activeCallId != callId) return;
+      debugPrint('[RLINK][Call] incoming ringing timeout: no answer');
+      unawaited(_sendSignal(peerId, callId, 'end'));
+      _pendingMissedOutcome = true;
+      unawaited(_cleanup(CallPhase.ended));
     });
   }
 

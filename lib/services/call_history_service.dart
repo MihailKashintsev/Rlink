@@ -20,6 +20,9 @@ class CallHistoryEntry {
   final String? transcript;
   final String?
       transcriptSpeakerLabels; // JSON: [{"speaker":"me"/"peer","text":"..."},...]
+  /// `'missed'` (never answered — timed out or caller cancelled first) or
+  /// `'declined'` (explicitly rejected) — null for a call that connected.
+  final String? outcome;
 
   const CallHistoryEntry({
     required this.id,
@@ -32,6 +35,7 @@ class CallHistoryEntry {
     this.recordingPath,
     this.transcript,
     this.transcriptSpeakerLabels,
+    this.outcome,
   });
 
   DateTime get endedAt =>
@@ -50,6 +54,7 @@ class CallHistoryEntry {
         'recordingPath': recordingPath,
         'transcript': transcript,
         'transcriptSpeakerLabels': transcriptSpeakerLabels,
+        'outcome': outcome,
       };
 
   factory CallHistoryEntry.fromJson(Map<String, dynamic> m) {
@@ -64,6 +69,7 @@ class CallHistoryEntry {
       recordingPath: m['recordingPath'] as String?,
       transcript: m['transcript'] as String?,
       transcriptSpeakerLabels: m['transcriptSpeakerLabels'] as String?,
+      outcome: m['outcome'] as String?,
     );
   }
 }
@@ -146,6 +152,7 @@ class CallHistoryService {
     required bool incoming,
     required bool video,
     String? recordingPath,
+    String? outcome,
   }) async {
     if (peerId.trim().length < 8) return;
     final normalized = peerId.trim().toLowerCase();
@@ -162,6 +169,7 @@ class CallHistoryService {
       incoming: incoming,
       video: video,
       recordingPath: recordingPath,
+      outcome: outcome,
     );
     _entries.insert(0, entry);
     while (_entries.length > _kMaxEntries) {
@@ -190,6 +198,7 @@ class CallHistoryService {
       recordingPath: old.recordingPath,
       transcript: transcript,
       transcriptSpeakerLabels: speakerLabels,
+      outcome: old.outcome,
     );
     version.value++;
     await _save();
@@ -198,10 +207,17 @@ class CallHistoryService {
   Future<void> _saveChatCallMessage(CallHistoryEntry entry) async {
     try {
       final title = entry.video ? 'Видеозвонок' : 'Звонок';
-      final dur = entry.duration;
-      final durationText = dur.inSeconds <= 0
-          ? 'не состоялся'
-          : '${dur.inMinutes.remainder(60).toString().padLeft(2, '0')}:${dur.inSeconds.remainder(60).toString().padLeft(2, '0')}';
+      final String durationText;
+      if (entry.outcome == 'missed') {
+        durationText = entry.incoming ? 'пропущен' : 'нет ответа';
+      } else if (entry.outcome == 'declined') {
+        durationText = 'отклонён';
+      } else {
+        final dur = entry.duration;
+        durationText = dur.inSeconds <= 0
+            ? 'не состоялся'
+            : '${dur.inMinutes.remainder(60).toString().padLeft(2, '0')}:${dur.inSeconds.remainder(60).toString().padLeft(2, '0')}';
+      }
       await ChatStorageService.instance.saveMessage(
         ChatMessage(
           id: 'call_${entry.id}',
@@ -219,6 +235,7 @@ class CallHistoryService {
             'durationMs': entry.durationMs,
             if (entry.recordingPath != null)
               'recordingPath': entry.recordingPath,
+            if (entry.outcome != null) 'outcome': entry.outcome,
           }),
         ),
       );
@@ -236,6 +253,7 @@ class CallHistoryService {
       duration: Duration.zero,
       incoming: true,
       video: video,
+      outcome: 'declined',
     );
   }
 }
