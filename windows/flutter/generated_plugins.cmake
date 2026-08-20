@@ -13,13 +13,11 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_webrtc
   gal
   geolocator_windows
-  irondash_engine_context
   permission_handler_windows
   record_windows
   screen_retriever_windows
   share_plus
   sqlite3_flutter_libs
-  super_native_extensions
   syncfusion_pdfviewer_windows
   tray_manager
   url_launcher_windows

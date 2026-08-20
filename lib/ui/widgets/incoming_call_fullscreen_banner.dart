@@ -6,12 +6,11 @@ import '../../services/call_service.dart';
 import 'avatar_widget.dart';
 import '../screens/call_screen.dart';
 
-/// Full-screen incoming-call UI for native platforms (Android/iOS/desktop) —
-/// takes over the whole screen with large accept/decline controls, matching
-/// how a real phone call looks, instead of the smaller modal card. Web uses
-/// the lighter [IncomingCallOverlay] card instead (see main.dart's
-/// `_showIncomingCallOverlay`) — a full-bleed takeover reads as an intrusive
-/// popup in a browser tab the way it doesn't on a phone.
+/// Full-screen incoming-call UI, used on every platform (see main.dart's
+/// `_showIncomingCallOverlay`) — takes over the whole screen with large
+/// accept/decline controls, matching how a real phone call looks. On web
+/// it's gated to only show while the tab is genuinely foregrounded, so it
+/// never pops up over whatever the user is doing elsewhere.
 class IncomingCallFullscreenBanner extends StatefulWidget {
   final CallSessionInfo session;
   final String peerName;
@@ -133,68 +132,88 @@ class _IncomingCallFullscreenBannerState
           children: [
             _ambientBackground(),
             SafeArea(
-              child: Column(
-                children: [
-                  const SizedBox(height: 48),
-                  Text(
-                    isVideo ? 'Входящий видеозвонок' : 'Входящий аудиозвонок',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  _PulsingCallAvatarLarge(
-                    controller: _pulseController,
-                    peerName: widget.peerName,
-                    peerAvatarColor: widget.peerAvatarColor,
-                    peerAvatarEmoji: widget.peerAvatarEmoji,
-                    peerAvatarImagePath: widget.peerAvatarImagePath,
-                    isVideo: isVideo,
-                  ),
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Text(
-                      widget.peerName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w700,
+              // Fixed gaps instead of Spacer, wrapped in a scroll view: a
+              // Spacer can't shrink below zero, so on a short screen (small
+              // phone, or one with tall system bars) the fixed-size content
+              // below (200px avatar + labels + button row) can genuinely not
+              // fit — that overflowed and clipped the decline button on real
+              // devices. This can't overflow; it just scrolls that last
+              // handful of pixels instead on the rare screen too short for it.
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints:
+                          BoxConstraints(minHeight: constraints.maxHeight),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Text(
+                            isVideo
+                                ? 'Входящий видеозвонок'
+                                : 'Входящий аудиозвонок',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          _PulsingCallAvatarLarge(
+                            controller: _pulseController,
+                            peerName: widget.peerName,
+                            peerAvatarColor: widget.peerAvatarColor,
+                            peerAvatarEmoji: widget.peerAvatarEmoji,
+                            peerAvatarImagePath: widget.peerAvatarImagePath,
+                            isVideo: isVideo,
+                          ),
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 24),
+                            child: Text(
+                              widget.peerName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 30,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 32),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _CallActionButton(
+                                    busy: _busy,
+                                    onTap: _decline,
+                                    color: const Color(0xFFE53935),
+                                    icon: Icons.call_end_rounded,
+                                    label: 'Отклонить',
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _CallActionButton(
+                                    busy: _busy,
+                                    onTap: _accept,
+                                    color: const Color(0xFF43A047),
+                                    icon: isVideo
+                                        ? Icons.videocam_rounded
+                                        : Icons.call_rounded,
+                                    label: 'Принять',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const Spacer(flex: 2),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 40, vertical: 32),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _CallActionButton(
-                          busy: _busy,
-                          onTap: _decline,
-                          color: const Color(0xFFE53935),
-                          icon: Icons.call_end_rounded,
-                          label: 'Отклонить',
-                        ),
-                        _CallActionButton(
-                          busy: _busy,
-                          onTap: _accept,
-                          color: const Color(0xFF43A047),
-                          icon: isVideo
-                              ? Icons.videocam_rounded
-                              : Icons.call_rounded,
-                          label: 'Принять',
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ],
@@ -222,6 +241,7 @@ class _CallActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Material(
           color: color,
@@ -239,6 +259,8 @@ class _CallActionButton extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(color: Colors.white70, fontSize: 14),
         ),
       ],

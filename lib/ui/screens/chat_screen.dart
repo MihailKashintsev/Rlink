@@ -142,7 +142,6 @@ import '../widgets/settings_profile_header.dart' show ProfileCard;
 import '../widgets/composer_input_bar.dart';
 import '../widgets/message_actions_overlay.dart';
 import '../mention_nav.dart';
-import 'package:super_clipboard/super_clipboard.dart';
 
 bool _dmVideoPathIsSquare(String path) {
   final lower = p.basename(path).toLowerCase();
@@ -13651,15 +13650,6 @@ class _MediaGalleryViewerState extends State<_MediaGalleryViewer> {
                 );
               },
             ),
-            if (!item.isVideo)
-              ListTile(
-                leading: const Icon(Icons.copy_all_outlined),
-                title: const Text('Скопировать'),
-                onTap: () async {
-                  Navigator.pop(sheetCtx);
-                  await _copyImageToClipboard(item);
-                },
-              ),
             ListTile(
               leading: const Icon(Icons.chat_bubble_outline_rounded),
               title: const Text('Перейти к сообщению в чате'),
@@ -13675,51 +13665,6 @@ class _MediaGalleryViewerState extends State<_MediaGalleryViewer> {
         ),
       ),
     );
-  }
-
-  /// Sniffs the actual encoding from magic bytes rather than trusting a file
-  /// extension (data:/opfs: refs don't reliably have one) — a mislabeled
-  /// clipboard entry can fail to paste in the receiving app.
-  static SimpleDataFormat<Uint8List>? _sniffImageFormat(Uint8List b) {
-    if (b.length < 12) return null;
-    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) {
-      return Formats.png;
-    }
-    if (b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return Formats.jpeg;
-    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return Formats.gif;
-    if (b[0] == 0x52 &&
-        b[1] == 0x49 &&
-        b[2] == 0x46 &&
-        b[3] == 0x46 &&
-        b[8] == 0x57 &&
-        b[9] == 0x45 &&
-        b[10] == 0x42 &&
-        b[11] == 0x50) {
-      return Formats.webp;
-    }
-    return null;
-  }
-
-  Future<void> _copyImageToClipboard(GalleryMediaItem item) async {
-    try {
-      final bytes = await readBytesFromStoredPath(item.path);
-      if (bytes == null || bytes.isEmpty) {
-        throw StateError('empty');
-      }
-      final format = _sniffImageFormat(bytes) ?? Formats.png;
-      final writerItem = DataWriterItem();
-      writerItem.add(format(bytes));
-      await ClipboardWriter.instance.write([writerItem]);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Скопировано')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось скопировать: $e')),
-      );
-    }
   }
 
   @override

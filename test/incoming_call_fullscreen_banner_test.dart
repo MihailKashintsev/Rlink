@@ -45,4 +45,34 @@ void main() {
     expect(find.text('Входящий видеозвонок'), findsOneWidget);
     expect(find.byIcon(Icons.videocam_rounded), findsWidgets);
   });
+
+  testWidgets('no overflow on a narrow phone screen (small budget device)',
+      (tester) async {
+    final originalSize = tester.view.physicalSize;
+    final originalRatio = tester.view.devicePixelRatio;
+    addTearDown(() {
+      tester.view.physicalSize = originalSize;
+      tester.view.devicePixelRatio = originalRatio;
+    });
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(320, 568); // iPhone SE-class width
+
+    await tester.pumpWidget(MaterialApp(
+      home: IncomingCallFullscreenBanner(
+        session: const CallSessionInfo(
+          callId: 'c3',
+          peerId: 'peer3',
+          incoming: true,
+          videoEnabled: false,
+          audioEnabled: true,
+        ),
+        peerName: 'Узкий Экран',
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Отклонить'), findsOneWidget);
+    expect(find.text('Принять'), findsOneWidget);
+  });
 }

@@ -98,7 +98,6 @@ import 'services/in_app_notification_service.dart';
 import 'ui/mention_nav.dart';
 import 'ui/screens/call_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
-import 'ui/widgets/incoming_call_overlay.dart';
 import 'ui/widgets/incoming_call_fullscreen_banner.dart';
 
 final incomingMessageController = StreamController<IncomingMessage>.broadcast();
@@ -199,19 +198,25 @@ void _openChatFromNotif(String payload) {
 void _bindIncomingCallOverlay() {
   if (_incomingCallOverlayBound) return;
   _incomingCallOverlayBound = true;
-  CallService.instance.incomingCall.addListener(() {
+  void tryShow() {
     final session = CallService.instance.incomingCall.value;
     if (session == null || _incomingCallOverlayOpen) return;
-    // Web: only surface the in-app card while the tab is genuinely
-    // foregrounded — a call arriving while hidden/backgrounded is covered by
-    // the OS/browser notification path instead (NotificationService), not by
-    // popping this UI the instant the tab regains any rendering.
+    // Web: only surface the banner while the tab is genuinely foregrounded —
+    // a call arriving while hidden/backgrounded is covered by the OS/browser
+    // notification path instead (NotificationService), not by popping this
+    // UI the instant the tab regains any rendering. isInBackground's own
+    // listener below re-runs this check when the tab comes back to front, so
+    // a call that arrived while backgrounded still gets shown once the user
+    // actually returns instead of being silently skipped forever.
     if (kIsWeb && NotificationService.instance.isInBackground.value) return;
     final nav = navigatorKey.currentState;
     if (nav == null) return;
     _incomingCallOverlayOpen = true;
     unawaited(_showIncomingCallOverlay(nav, session));
-  });
+  }
+
+  CallService.instance.incomingCall.addListener(tryShow);
+  NotificationService.instance.isInBackground.addListener(tryShow);
 }
 
 Future<void> _showIncomingCallOverlay(
@@ -222,52 +227,25 @@ Future<void> _showIncomingCallOverlay(
     final peerName = await _peerDisplayName(session.peerId);
     final contact =
         await ChatStorageService.instance.getContact(session.peerId);
-    // Native (Android/iOS/desktop): full-screen takeover, like a real phone
-    // call. Web: the lighter card — a full-bleed screen reads as an
-    // intrusive popup inside a browser tab in a way it doesn't on a phone.
-    if (kIsWeb) {
-      await nav.push(PageRouteBuilder(
-        opaque: false,
-        pageBuilder: (_, __, ___) => IncomingCallOverlay(
-          session: session,
-          peerName: peerName,
-          peerAvatarColor: contact?.avatarColor ?? 0xFF5C6BC0,
-          peerAvatarEmoji: contact?.avatarEmoji ?? '',
-          peerAvatarImagePath: contact?.avatarImagePath,
-        ),
-        transitionsBuilder: (_, anim, __, child) {
-          return SlideTransition(
-            position:
-                Tween(begin: const Offset(0, 1), end: Offset.zero).animate(
-              CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
-            ),
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 280),
-      ));
-    } else {
-      await nav.push(PageRouteBuilder(
-        opaque: true,
-        pageBuilder: (_, __, ___) => IncomingCallFullscreenBanner(
-          session: session,
-          peerName: peerName,
-          peerAvatarColor: contact?.avatarColor ?? 0xFF5C6BC0,
-          peerAvatarEmoji: contact?.avatarEmoji ?? '',
-          peerAvatarImagePath: contact?.avatarImagePath,
-        ),
-        transitionsBuilder: (_, anim, __, child) {
-          return SlideTransition(
-            position:
-                Tween(begin: const Offset(0, 1), end: Offset.zero).animate(
-              CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
-            ),
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 280),
-      ));
-    }
+    await nav.push(PageRouteBuilder(
+      opaque: true,
+      pageBuilder: (_, __, ___) => IncomingCallFullscreenBanner(
+        session: session,
+        peerName: peerName,
+        peerAvatarColor: contact?.avatarColor ?? 0xFF5C6BC0,
+        peerAvatarEmoji: contact?.avatarEmoji ?? '',
+        peerAvatarImagePath: contact?.avatarImagePath,
+      ),
+      transitionsBuilder: (_, anim, __, child) {
+        return SlideTransition(
+          position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+          ),
+          child: child,
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 280),
+    ));
   } finally {
     _incomingCallOverlayOpen = false;
   }
