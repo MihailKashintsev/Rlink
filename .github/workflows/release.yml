@@ -37,6 +37,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # ubuntu-latest ships ~14GB free, but preloads several GB of toolchains
+      # this build never touches (.NET, Haskell, Swift, CodeQL). Building
+      # BOTH the AAB and the split APKs in one job (two full Gradle release
+      # builds) plus Flutter/Gradle's own downloads was enough to hit
+      # "No space left on device" mid-build — this reclaims room without
+      # touching anything Android/Flutter actually needs.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift "$AGENT_TOOLSDIRECTORY/CodeQL" || true
+          sudo docker image prune -af || true
+          df -h /
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -125,6 +136,11 @@ jobs:
           # downloading Flutter each run is slower but reliable.
           cache: false
       - run: flutter pub get
+      # CMake couldn't find a C++ compiler ("No CMAKE_CXX_COMPILER could be
+      # found") on a plain shell — MSVC's cl.exe is only on PATH inside a
+      # Developer Command Prompt, which this job's bash/pwsh steps don't run
+      # in by default. This sets up that environment for the rest of the job.
+      - uses: ilammy/msvc-dev-cmd@v1
       # flutter_webrtc's third_party/CMakeLists.txt extracts libwebrtc.zip into a
       # path that runs THROUGH the flutter/ephemeral/.plugin_symlinks/flutter_webrtc
       # symlink, which CMake >=3.28 refuses ("Cannot extract through symlink"). Pre-
