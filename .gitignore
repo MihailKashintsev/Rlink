@@ -49,6 +49,14 @@ app.*.map.json
 relay_server/bin/server
 relay_server/.env
 .vscode/launch.json.local
+*.jar
+*.zip
+.continue/
+
+# Python packaging build output (tools/rlink_bot, tools/rlink_help_bot)
+tools/**/build/
+tools/**/*.egg-info/
+tools/**/__pycache__/
 
 # Claude Code local config (skills, memory) — never commit
 .claude/

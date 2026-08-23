@@ -1,2 +1,0 @@
-[console_scripts]
-rlink-bot = rlink_bot.cli:main
