@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../models/emoji_pack.dart';
 import '../../services/emoji_pack_dm_service.dart';
 import '../../services/emoji_pack_service.dart';
+import '../widgets/bind_to_emoji_dialog.dart';
 import '../widgets/forward_target_sheet.dart';
 
 class EmojiPackDetailScreen extends StatefulWidget {
@@ -110,6 +111,37 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
     if (mounted) Navigator.pop(context);
   }
 
+  Future<void> _showEmojiActions(CustomEmoji e) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.emoji_emotions_outlined),
+              title: const Text('Привязать к эмодзи'),
+              subtitle: Text('Заменять обычный эмодзи на :${e.shortcode}: при наборе'),
+              onTap: () => Navigator.pop(ctx, 'bind'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: Text(AppL10n.t('common_delete')),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'bind') {
+      await showBindToEmojiDialog(context, customEmojiShortcode: e.shortcode);
+    } else if (action == 'delete') {
+      await _confirmDeleteEmoji(e);
+    }
+  }
+
   Future<void> _confirmDeleteEmoji(CustomEmoji e) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -188,7 +220,7 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
                   builder: (context, snap) {
                     final path = snap.data;
                     return InkWell(
-                      onLongPress: () => _confirmDeleteEmoji(e),
+                      onLongPress: () => _showEmojiActions(e),
                       borderRadius: BorderRadius.circular(10),
                       child: Column(
                         children: [

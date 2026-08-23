@@ -4,8 +4,20 @@ import '../models/channel.dart';
 import '../models/chat_message.dart';
 import '../models/group.dart';
 import '../models/message_poll.dart';
+import '../models/rls_sticker.dart';
+import '../models/rlv_sticker.dart';
 import '../models/shared_collab.dart';
+import '../models/tgs_sticker.dart';
 import 'custom_emoji_text.dart';
+
+// `stk_*` (native filename prefix) only identifies a sticker on native
+// platforms; web stores stickers as inline `data:` refs with no such
+// filename, so that check silently fell through to "📷 Фото" for every
+// sticker sent on web. The format predicates recognize a sticker ref in
+// either shape (native path or web `data:` URL) — use those instead.
+bool _isStickerImagePath(String path) =>
+    looksLikeRlsRef(path) || looksLikeRlvRef(path) || looksLikeTgsRef(path) ||
+    path.split('/').last.startsWith('stk_');
 
 // Same marker set `RichMessageText` renders (see rich_message_text.dart's
 // doc-comment) — previews are a plain subtitle string, not a rich widget, so
@@ -92,8 +104,7 @@ String dmLastMessagePreview(ChatMessage m) {
   var t = formatMessagePreview(m.text.isEmpty ? null : m.text);
   if (t.isNotEmpty) return t;
   if (m.imagePath != null) {
-    final base = m.imagePath!.split('/').last;
-    if (base.startsWith('stk_')) return '🩵 Стикер';
+    if (_isStickerImagePath(m.imagePath!)) return '🩵 Стикер';
     if (m.imagePath!.toLowerCase().endsWith('.gif')) return '🎞 GIF';
     return '📷 Фото';
   }
@@ -112,6 +123,7 @@ String formatGroupMessagePreview(GroupMessage m) {
   if (t.isNotEmpty) return t;
   final img = m.imagePath;
   if (img != null && img.isNotEmpty) {
+    if (_isStickerImagePath(img)) return '🩵 Стикер';
     return img.toLowerCase().endsWith('.gif') ? '🎞 GIF' : '📷 Фото';
   }
   if (m.voicePath != null && m.voicePath!.isNotEmpty) return '🎤 Голосовое';
@@ -125,6 +137,7 @@ String formatChannelPostPreview(ChannelPost p) {
   if (t.isNotEmpty) return t;
   final img = p.imagePath;
   if (img != null && img.isNotEmpty) {
+    if (_isStickerImagePath(img)) return '🩵 Стикер';
     return img.toLowerCase().endsWith('.gif') ? '🎞 GIF' : '📷 Фото';
   }
   if (p.voicePath != null && p.voicePath!.isNotEmpty) return '🎤 Голосовое';

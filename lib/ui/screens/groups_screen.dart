@@ -2961,8 +2961,8 @@ class _GroupBubble extends StatelessWidget {
                       if (kIsWeb && bytes != null) {
                         return Image.memory(
                           bytes,
-                          width: isSticker ? 132 : 200,
-                          height: isSticker ? 132 : null,
+                          width: isSticker ? 180 : 200,
+                          height: isSticker ? 180 : null,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                         );
@@ -2973,16 +2973,16 @@ class _GroupBubble extends StatelessWidget {
                               imagePath.startsWith('https://'))) {
                         return Image.network(
                           imagePath,
-                          width: isSticker ? 132 : 200,
-                          height: isSticker ? 132 : null,
+                          width: isSticker ? 180 : 200,
+                          height: isSticker ? 180 : null,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                         );
                       }
                       return Image.file(
                         File(imagePath),
-                        width: isSticker ? 132 : 200,
-                        height: isSticker ? 132 : null,
+                        width: isSticker ? 180 : 200,
+                        height: isSticker ? 180 : null,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                       );

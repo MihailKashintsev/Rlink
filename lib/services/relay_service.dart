@@ -17,6 +17,7 @@ import 'gossip_router.dart';
 import 'profile_service.dart';
 import 'relay_web_warmup.dart';
 import 'diagnostics_log_service.dart';
+import 'secondary_relay_link.dart';
 
 int _relayJsonInt(dynamic v) {
   if (v is int) return v;
@@ -94,13 +95,68 @@ class RelayService with WidgetsBindingObserver {
   /// exclude blocked peers from presence fanout (see [_broadcastBlockedList]).
   bool _blockSyncAttached = false;
 
-  /// Default public relay server.
-  /// Захардкожен — пользователь не может переопределить через настройки
-  /// (см. serverUrl getter и connect() ниже).
+  /// Default public relay server — always tried, so a broken custom relay
+  /// (see [AppSettings.relayServerUrl]) degrades to "slower to connect",
+  /// never "no connectivity at all".
   static const defaultServerUrl = 'wss://185.244.172.90.nip.io';
   static const List<String> fallbackServerUrls = <String>[
     defaultServerUrl,
   ];
+
+  /// URLs to try, in order, for the next [connect] call. A user-configured
+  /// relay (self-hosted, for independence from the default server) is tried
+  /// first; the default is always appended as a safety net.
+  List<String> get _urlsToTry {
+    final custom = AppSettings.instance.relayServerUrl.trim();
+    if (custom.isEmpty || custom == defaultServerUrl) return fallbackServerUrls;
+    return [custom, ...fallbackServerUrls];
+  }
+
+  String? _connectedServerUrl;
+
+  /// A second, minimal connection to [defaultServerUrl] — exists ONLY while
+  /// the primary connection actually landed on a DIFFERENT (custom) relay.
+  /// This is how a contact who never configured a custom relay (still on
+  /// the default, the common case) stays reachable even from someone who
+  /// has switched their primary elsewhere — no server-to-server protocol,
+  /// the client just also plugs into that other server directly. Must
+  /// never target the SAME url the primary is already registered on: the
+  /// relay server keeps one connection per public key and disconnects
+  /// whichever registered first, so two links to the same server under the
+  /// same identity would just kick each other off in a loop.
+  SecondaryRelayLink? _secondary;
+
+  /// True while also connected to [defaultServerUrl] alongside a different
+  /// primary relay — see [_secondary].
+  bool get hasSecondaryLink => _secondary != null;
+
+  void _syncSecondaryLink() {
+    final connectedUrl = _connectedServerUrl;
+    final needsSecondary =
+        connectedUrl != null && connectedUrl != defaultServerUrl;
+    if (!needsSecondary) {
+      _secondary?.dispose();
+      _secondary = null;
+      return;
+    }
+    if (_secondary != null)
+      return; // already have one, always targets defaultServerUrl
+    _secondary = SecondaryRelayLink(
+      url: defaultServerUrl,
+      myPublicKey: () => CryptoService.instance.publicKeyHex,
+      myNick: () => ProfileService.instance.profile?.nickname ?? '',
+      myX25519: () => CryptoService.instance.x25519PublicKeyBase64,
+    )..connect();
+  }
+
+  /// Also sends [packet] via the secondary link (see [_secondary]) when one
+  /// is active — a no-op otherwise. Lets someone on the default relay
+  /// receive messages from a contact whose primary connection is a
+  /// different, custom relay.
+  Future<void> sendPacketToSecondary(GossipPacket packet,
+      {String? recipientKey}) async {
+    await _secondary?.send(packet, recipientKey: recipientKey);
+  }
 
   WebSocketChannel? _channel;
   Stream<dynamic>? _channelStream;
@@ -225,7 +281,19 @@ class RelayService with WidgetsBindingObserver {
   bool get isConnected => state.value == RelayState.connected;
 
   /// URL ретранслятора для UI и web-push (всегда [defaultServerUrl]).
+  ///
+  /// Deliberately NOT the custom relay from [AppSettings.relayServerUrl]
+  /// even when connected to one: this is the base URL for auxiliary HTTP
+  /// APIs hosted alongside the official relay (payments, translation proxy,
+  /// music catalog, bot directory) that a self-hosted relay has no reason
+  /// to implement. Use [activeGossipRelayUrl] for "what are we actually
+  /// connected to right now" instead.
   String? get serverUrl => defaultServerUrl;
+
+  /// The WebSocket URL this instance is actually connected to right now —
+  /// the custom relay from [AppSettings.relayServerUrl] if one is set and
+  /// reachable, otherwise [defaultServerUrl]. Null while disconnected.
+  String? get activeGossipRelayUrl => _connectedServerUrl;
 
   static const _kCloseNormal = 1000;
   static const _kCloseReconnect = 4000;
@@ -540,7 +608,10 @@ class RelayService with WidgetsBindingObserver {
   /// received.
   void _sendBlockedList() {
     _safeSend(
-      {'type': 'set_blocked', 'blocked': BlockService.instance.blockedIds.toList()},
+      {
+        'type': 'set_blocked',
+        'blocked': BlockService.instance.blockedIds.toList()
+      },
       context: 'set_blocked',
     );
   }
@@ -586,7 +657,7 @@ class RelayService with WidgetsBindingObserver {
 
     String? connectedUrl;
     Exception? lastConnectError;
-    for (final url in fallbackServerUrls) {
+    for (final url in _urlsToTry) {
       try {
         if (kIsWeb) {
           final httpBase = url.replaceFirst('wss://', 'https://');
@@ -620,10 +691,13 @@ class RelayService with WidgetsBindingObserver {
       debugPrint('[RLINK][Relay] Connection failed: $msg');
       lastError.value = msg;
       state.value = RelayState.disconnected;
+      _connectedServerUrl = null;
       _clearPresenceOnlineCache();
       _scheduleReconnect();
       return;
     }
+    _connectedServerUrl = connectedUrl;
+    _syncSecondaryLink();
 
     try {
       // Listen for messages
@@ -755,6 +829,9 @@ class RelayService with WidgetsBindingObserver {
     } catch (_) {}
     _channel = null;
     _channelStream = null;
+    _connectedServerUrl = null;
+    _secondary?.dispose();
+    _secondary = null;
     state.value = RelayState.disconnected;
     _clearPresenceOnlineCache();
     lastError.value = null;
@@ -769,6 +846,7 @@ class RelayService with WidgetsBindingObserver {
     _subscription?.cancel();
     _channel = null;
     _channelStream = null;
+    _connectedServerUrl = null;
     _chunkQueue.clear();
     _draining = false;
     _blobAssemblies.clear();
@@ -1372,9 +1450,8 @@ class RelayService with WidgetsBindingObserver {
             final c = _keystoreGetCompleters.remove(ksChannelId);
             if (c != null && !c.isCompleted) {
               final found = msg['found'] as bool? ?? false;
-              final wrapped = found
-                  ? msg['wrapped'] as Map<String, dynamic>?
-                  : null;
+              final wrapped =
+                  found ? msg['wrapped'] as Map<String, dynamic>? : null;
               scheduleMicrotask(() {
                 if (!c.isCompleted) c.complete(wrapped);
               });
@@ -1649,7 +1726,8 @@ class RelayService with WidgetsBindingObserver {
   }) async {
     final changes = <String, dynamic>{'verifyRequest': true};
     final n = note.trim();
-    if (n.isNotEmpty) changes['verifyNote'] = n.length > 200 ? n.substring(0, 200) : n;
+    if (n.isNotEmpty)
+      changes['verifyNote'] = n.length > 200 ? n.substring(0, 200) : n;
     return sendBotOwnerPatch(botId: botId, changes: changes);
   }
 

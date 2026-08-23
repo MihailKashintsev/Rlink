@@ -30,6 +30,7 @@ import androidx.core.content.FileProvider
 import android.os.Build
 import android.os.ParcelUuid
 import android.os.PowerManager
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -47,6 +48,7 @@ class MainActivity : FlutterActivity() {
         const val EVENT_CHANNEL  = "com.rendergames.rlink/ble_events"
         const val PROXIMITY_CHANNEL = "com.rendergames.rlink/proximity"
         const val CALL_UI_CHANNEL = "com.rendergames.rlink/call_ui"
+        const val DELIVERY_HEALTH_CHANNEL = "com.rendergames.rlink/delivery_health"
         const val NOTIFICATION_CHANNEL_ID = "rlink_messages"
         private const val APP_ICON_CHANNEL_ID = "rlink_app_icon"
         private const val APP_ICON_NOTIFICATION_ID = 91001
@@ -293,6 +295,45 @@ class MainActivity : FlutterActivity() {
         // Native square video cropping
         VideoCropPlugin.register(flutterEngine.dartExecutor.binaryMessenger)
 
+        // Delivery diagnostics: battery-optimization exemption, OEM autostart
+        // deep links, and the foreground service's persisted running state —
+        // surfaced in Settings so users can see (and fix) why messages might
+        // not arrive while the app is closed.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DELIVERY_HEALTH_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "manufacturer" -> result.success(Build.MANUFACTURER)
+                    "isIgnoringBatteryOptimizations" -> {
+                        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                        result.success(pm.isIgnoringBatteryOptimizations(packageName))
+                    }
+                    "requestIgnoreBatteryOptimizations" -> {
+                        try {
+                            startActivity(Intent(
+                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                Uri.parse("package:$packageName"),
+                            ))
+                            result.success(true)
+                        } catch (_: Exception) {
+                            openAppSettingsFallback()
+                            result.success(false)
+                        }
+                    }
+                    "openAutostartSettings" -> {
+                        result.success(openAutostartSettings())
+                    }
+                    "isForegroundServiceRunning" -> {
+                        result.success(deliveryHealthPrefs().getBoolean(
+                            RlinkForegroundService.KEY_RUNNING, false))
+                    }
+                    "foregroundServiceLastStartedAtMs" -> {
+                        result.success(deliveryHealthPrefs().getLong(
+                            RlinkForegroundService.KEY_LAST_STARTED_AT, 0L))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         // In-app updater: download an APK in the background (system DownloadManager,
         // survives minimizing/killing the app) and install it via the system installer.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
@@ -432,6 +473,63 @@ class MainActivity : FlutterActivity() {
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
         }
         startActivity(intent)
+    }
+
+    private fun deliveryHealthPrefs() =
+        getSharedPreferences(RlinkForegroundService.PREFS_NAME, Context.MODE_PRIVATE)
+
+    private fun openAppSettingsFallback() {
+        try {
+            startActivity(Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ))
+        } catch (_: Exception) { }
+    }
+
+    /// Best-effort deep link into the OEM's "autostart"/"protected apps" screen
+    /// — these are undocumented, vendor- and OS-version-specific, and change
+    /// across releases, so every candidate is tried and the first that resolves
+    /// wins. Falls back to the app's own settings page, which always exists.
+    /// Returns true if a screen (OEM-specific or fallback) was actually opened.
+    private fun openAutostartSettings(): Boolean {
+        val candidates = when (Build.MANUFACTURER.lowercase()) {
+            "xiaomi" -> listOf(
+                "com.miui.securitycenter" to "com.miui.permcenter.autostart.AutoStartManagementActivity",
+            )
+            "huawei", "honor" -> listOf(
+                "com.huawei.systemmanager" to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+                "com.huawei.systemmanager" to "com.huawei.systemmanager.optimize.process.ProtectActivity",
+            )
+            "oppo" -> listOf(
+                "com.coloros.safecenter" to "com.coloros.safecenter.permission.startup.StartupAppListActivity",
+                "com.coloros.safecenter" to "com.coloros.safecenter.startupapp.StartupAppListActivity",
+            )
+            "vivo" -> listOf(
+                "com.vivo.permissionmanager" to "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
+            )
+            "oneplus" -> listOf(
+                "com.oneplus.security" to "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity",
+            )
+            "meizu" -> listOf(
+                "com.meizu.safe" to "com.meizu.safe.permission.SmartBGActivity",
+            )
+            "asus" -> listOf(
+                "com.asus.mobilemanager" to "com.asus.mobilemanager.autostart.AutoStartActivity",
+            )
+            else -> emptyList()
+        }
+        for ((pkg, cls) in candidates) {
+            try {
+                startActivity(Intent().apply {
+                    component = ComponentName(pkg, cls)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                })
+                return true
+            } catch (_: Exception) { }
+        }
+        openAppSettingsFallback()
+        return false
     }
 
     /// Показ поверх экрана блокировки + пробуждение экрана на время звонка —

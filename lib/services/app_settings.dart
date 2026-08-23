@@ -82,6 +82,12 @@ class AppSettings extends ChangeNotifier {
   static const _keyBatteryAnimReduceAt = 'battery_anim_reduce_at'; // percent
   static const _keyBatteryAnimOffAt = 'battery_anim_off_at'; // percent
   static const _keyHideLastSeen = 'hide_last_seen';
+  static const _keyLastPickerKind =
+      'last_picker_kind'; // 'emoji'|'sticker'|'gif' — drives the composer button icon
+  static const _keyBatteryExemptionPromptShown = 'battery_exemption_prompt_shown';
+  static const _keyEmojiSuggestionsEnabled = 'emoji_suggestions_enabled';
+  static const _keyEmojiSuggestionsMode =
+      'emoji_suggestions_mode'; // 'both'|'stickers'|'emoji'
 
   late SharedPreferences _prefs;
   bool _prefsReady = false;
@@ -163,6 +169,10 @@ class AppSettings extends ChangeNotifier {
   // auto-delete on THIS device — reduces plaintext at rest (esp. on web).
   final Map<String, int> _autoDeleteMap = {};
   String _locale = 'system';
+  String _lastPickerKind = 'emoji';
+  bool _batteryExemptionPromptShown = false;
+  bool _emojiSuggestionsEnabled = true;
+  String _emojiSuggestionsMode = 'both';
   int _fontSize = 1; // 0=small, 1=medium, 2=large
   bool _sendOnEnter = true; // false = send button, true = Enter sends
   bool _hasSeenIntro = false; // animated promo/intro shown once per device
@@ -221,6 +231,14 @@ class AppSettings extends ChangeNotifier {
   bool get notifVibration => _notifVibration;
   String? chatBgForPeer(String peerId) => _chatBgMap[peerId];
   String get locale => _locale;
+  String get lastPickerKind => _lastPickerKind;
+  bool get batteryExemptionPromptShown => _batteryExemptionPromptShown;
+  bool get emojiSuggestionsEnabled => _emojiSuggestionsEnabled;
+  String get emojiSuggestionsMode => _emojiSuggestionsMode;
+  bool get emojiSuggestionsShowStickers =>
+      _emojiSuggestionsEnabled && _emojiSuggestionsMode != 'emoji';
+  bool get emojiSuggestionsShowCustomEmoji =>
+      _emojiSuggestionsEnabled && _emojiSuggestionsMode != 'stickers';
   int get fontSize => _fontSize;
   bool get sendOnEnter => _sendOnEnter;
   bool get hasSeenIntro => _hasSeenIntro;
@@ -414,6 +432,11 @@ class AppSettings extends ChangeNotifier {
       }
     }
     _locale = _prefs.getString(_keyLocale) ?? 'system';
+    _lastPickerKind = _prefs.getString(_keyLastPickerKind) ?? 'emoji';
+    _batteryExemptionPromptShown =
+        _prefs.getBool(_keyBatteryExemptionPromptShown) ?? false;
+    _emojiSuggestionsEnabled = _prefs.getBool(_keyEmojiSuggestionsEnabled) ?? true;
+    _emojiSuggestionsMode = _prefs.getString(_keyEmojiSuggestionsMode) ?? 'both';
     _fontSize = (_prefs.getInt(_keyFontSize) ?? 1).clamp(0, 2);
     _sendOnEnter = _prefs.getBool(_keySendOnEnter) ?? true;
     _hasSeenIntro = _prefs.getBool(_keyHasSeenIntro) ?? false;
@@ -910,6 +933,40 @@ class AppSettings extends ChangeNotifier {
   Future<void> setLocale(String locale) async {
     _locale = locale;
     await _runPrefsWrite((p) => p.setString(_keyLocale, locale));
+    _notifySettingsChanged();
+  }
+
+  /// Records which picker tab (emoji/sticker/gif) was last viewed — opening
+  /// the tab is enough, no send required — so the composer's picker button
+  /// and the sheet's initial tab both match it next time.
+  Future<void> setLastPickerKind(String kind) async {
+    if (_lastPickerKind == kind) return;
+    _lastPickerKind = kind;
+    await _runPrefsWrite((p) => p.setString(_keyLastPickerKind, kind));
+    _notifySettingsChanged();
+  }
+
+  /// One-shot flag: the "allow background delivery" battery-exemption prompt
+  /// only auto-shows once ever, the first time it'd actually help (a long
+  /// background gap before the next foreground). Users can still trigger it
+  /// again manually from the delivery-diagnostics screen in Settings.
+  Future<void> setBatteryExemptionPromptShown() async {
+    if (_batteryExemptionPromptShown) return;
+    _batteryExemptionPromptShown = true;
+    await _runPrefsWrite((p) => p.setBool(_keyBatteryExemptionPromptShown, true));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setEmojiSuggestionsEnabled(bool v) async {
+    _emojiSuggestionsEnabled = v;
+    await _runPrefsWrite((p) => p.setBool(_keyEmojiSuggestionsEnabled, v));
+    _notifySettingsChanged();
+  }
+
+  /// 'both'|'stickers'|'emoji'
+  Future<void> setEmojiSuggestionsMode(String mode) async {
+    _emojiSuggestionsMode = mode;
+    await _runPrefsWrite((p) => p.setString(_keyEmojiSuggestionsMode, mode));
     _notifySettingsChanged();
   }
 

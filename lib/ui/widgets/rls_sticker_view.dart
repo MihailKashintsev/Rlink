@@ -48,7 +48,10 @@ class _RlsStickerViewState extends State<RlsStickerView>
     if (!mounted) return;
     setState(() => _ready = true);
     if (widget.sticker.loop) {
-      _ctrl.repeat();
+      // Plays 3 full cycles then settles rather than looping forever — each
+      // time the message scrolls into view or the chat reopens, this widget
+      // is recreated (initState runs again), so the count naturally resets.
+      _ctrl.repeat(count: 3);
     } else {
       _ctrl.forward();
     }

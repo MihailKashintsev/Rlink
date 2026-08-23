@@ -23,4 +23,10 @@ class PeerKeyDirectory {
     if (viaRelay != null && viaRelay.isNotEmpty) return viaRelay;
     return null;
   }
+
+  /// True only once this peer's profile has been seen advertising Double
+  /// Ratchet support — false (safe legacy fallback) for anyone not yet
+  /// known, including peers on older app versions that never will.
+  bool supportsRatchet(String publicKey) =>
+      BleService.instance.supportsRatchetFor(publicKey);
 }

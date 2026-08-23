@@ -3,8 +3,8 @@ import '../../l10n/app_l10n.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/shared_collab.dart';
-import '../widgets/adaptive_pickers.dart';
 import '../widgets/glass_dialog.dart';
+import '../widgets/wheel_time_picker.dart';
 
 /// Диалог создания списка дел. Возвращает закодированный `text` сообщения.
 Future<String?> showSharedTodoComposeDialog(BuildContext context) async {
@@ -116,33 +116,30 @@ Future<String?> showSharedCalendarComposeDialog(BuildContext context) async {
               const SizedBox(height: 12),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Дата'),
+                title: const Text('Дата и время'),
                 subtitle: Text(
                   '${date.day.toString().padLeft(2, '0')}.'
-                  '${date.month.toString().padLeft(2, '0')}.${date.year}',
+                  '${date.month.toString().padLeft(2, '0')}.${date.year} '
+                  '${time.format(ctx)}',
                 ),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: () async {
-                  final d = await showAdaptiveDatePicker(
-                    context: ctx,
-                    initialDate: date,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2100),
-                  );
-                  if (d != null) setSt(() => date = d);
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Время'),
-                subtitle: Text(time.format(ctx)),
                 trailing: const Icon(Icons.schedule),
                 onTap: () async {
-                  final t = await showAdaptiveTimePicker(
-                    context: ctx,
-                    initialTime: time,
+                  final picked = await showWheelDateTimeSheet(
+                    ctx,
+                    initial: DateTime(
+                      date.year,
+                      date.month,
+                      date.day,
+                      time.hour,
+                      time.minute,
+                    ),
                   );
-                  if (t != null) setSt(() => time = t);
+                  if (picked != null) {
+                    setSt(() {
+                      date = picked;
+                      time = TimeOfDay.fromDateTime(picked);
+                    });
+                  }
                 },
               ),
               TextField(

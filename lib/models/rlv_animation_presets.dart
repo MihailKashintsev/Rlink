@@ -8,28 +8,29 @@ import 'rlv_sticker.dart';
 /// eases used are among the 6 already defined in `rlv_sticker.dart` — no new
 /// curves needed.
 
-/// Подпрыгивание — crouch, launch, apex hang, bounce-land, settle. ~700ms.
+/// Подпрыгивание — anticipation crouch, launch with lean, apex hang, fall,
+/// hard land, small secondary rebound, settle. ~750ms. Bigger squash/stretch
+/// and a rotation lean through the arc (vs. a previous pure-vertical version
+/// that read as mechanical) is what actually sells "alive" here.
 List<RlvKeyframe> bouncePreset(RlvPose base, {double canvasSide = 512}) {
-  final crouchSx = base.sx * 1.12;
-  final crouchSy = base.sy * 0.88;
-  final apexY = base.y - canvasSide * 0.16;
+  final apexY = base.y - canvasSide * 0.10;
   return [
     RlvKeyframe(
       tMs: 0,
       x: base.x,
       y: base.y,
-      sx: crouchSx,
-      sy: crouchSy,
-      rotDeg: base.rotDeg,
+      sx: base.sx * 1.16,
+      sy: base.sy * 0.84,
+      rotDeg: base.rotDeg - 4,
       alpha: base.alpha,
     ),
     RlvKeyframe(
-      tMs: 90,
+      tMs: 110,
       x: base.x,
-      y: base.y + 10,
-      sx: crouchSx,
-      sy: crouchSy,
-      rotDeg: base.rotDeg,
+      y: base.y + 6,
+      sx: base.sx * 0.92,
+      sy: base.sy * 1.10,
+      rotDeg: base.rotDeg + 3,
       alpha: base.alpha,
       ease: 'easeOut',
     ),
@@ -37,24 +38,44 @@ List<RlvKeyframe> bouncePreset(RlvPose base, {double canvasSide = 512}) {
       tMs: 300,
       x: base.x,
       y: apexY,
-      sx: base.sx * 0.95,
-      sy: base.sy * 1.05,
-      rotDeg: base.rotDeg,
+      sx: base.sx * 0.92,
+      sy: base.sy * 1.08,
+      rotDeg: base.rotDeg - 3,
       alpha: base.alpha,
       ease: 'easeOut',
     ),
     RlvKeyframe(
-      tMs: 520,
+      tMs: 460,
+      x: base.x,
+      y: base.y + 8,
+      sx: base.sx * 0.94,
+      sy: base.sy * 1.06,
+      rotDeg: base.rotDeg + 2,
+      alpha: base.alpha,
+      ease: 'easeIn',
+    ),
+    RlvKeyframe(
+      tMs: 560,
       x: base.x,
       y: base.y + 10,
-      sx: crouchSx,
-      sy: crouchSy,
-      rotDeg: base.rotDeg,
+      sx: base.sx * 1.20,
+      sy: base.sy * 0.80,
+      rotDeg: base.rotDeg - 2,
       alpha: base.alpha,
       ease: 'outBounce',
     ),
     RlvKeyframe(
-      tMs: 700,
+      tMs: 650,
+      x: base.x,
+      y: base.y + 3,
+      sx: base.sx * 1.04,
+      sy: base.sy * 0.97,
+      rotDeg: base.rotDeg + 1,
+      alpha: base.alpha,
+      ease: 'easeOut',
+    ),
+    RlvKeyframe(
+      tMs: 750,
       x: base.x,
       y: base.y,
       sx: base.sx,
@@ -66,7 +87,9 @@ List<RlvKeyframe> bouncePreset(RlvPose base, {double canvasSide = 512}) {
   ];
 }
 
-/// Пульсация — scale up and back. ~600ms.
+/// Пульсация — a heartbeat "lub-dub" (quick punchy attack, dip, smaller
+/// second beat) instead of one smooth symmetric scale, plus a hair of
+/// rotation so it doesn't read as a static breathing loop. ~650ms.
 List<RlvKeyframe> pulsePreset(RlvPose base) => [
       RlvKeyframe(
         tMs: 0,
@@ -78,17 +101,47 @@ List<RlvKeyframe> pulsePreset(RlvPose base) => [
         alpha: base.alpha,
       ),
       RlvKeyframe(
+        tMs: 150,
+        x: base.x,
+        y: base.y,
+        sx: base.sx * 1.15,
+        sy: base.sy * 1.15,
+        rotDeg: base.rotDeg,
+        alpha: base.alpha,
+        ease: 'easeOut',
+      ),
+      RlvKeyframe(
         tMs: 300,
         x: base.x,
         y: base.y,
-        sx: base.sx * 1.18,
-        sy: base.sy * 1.18,
-        rotDeg: base.rotDeg,
+        sx: base.sx * 1.24,
+        sy: base.sy * 1.24,
+        rotDeg: base.rotDeg + 2,
+        alpha: base.alpha,
+        ease: 'easeOut',
+      ),
+      RlvKeyframe(
+        tMs: 400,
+        x: base.x,
+        y: base.y,
+        sx: base.sx * 1.04,
+        sy: base.sy * 1.04,
+        rotDeg: base.rotDeg - 1,
         alpha: base.alpha,
         ease: 'easeInOut',
       ),
       RlvKeyframe(
-        tMs: 600,
+        tMs: 480,
+        x: base.x,
+        y: base.y,
+        sx: base.sx * 1.10,
+        sy: base.sy * 1.10,
+        rotDeg: base.rotDeg + 1,
+        alpha: base.alpha,
+        ease: 'easeOut',
+      ),
+      RlvKeyframe(
+        tMs: 650,
         x: base.x,
         y: base.y,
         sx: base.sx,

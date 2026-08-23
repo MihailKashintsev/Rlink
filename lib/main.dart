@@ -31,6 +31,7 @@ import 'models/user_profile.dart';
 import 'models/shared_collab.dart';
 import 'app_version.dart';
 import 'services/app_settings.dart';
+import 'services/delivery_health_service.dart';
 import 'services/premium_service.dart';
 import 'services/app_lock_service.dart';
 import 'services/motion_controller.dart';
@@ -42,6 +43,7 @@ import 'services/call_service.dart';
 import 'services/channel_directory_relay.dart';
 import 'services/ether_service.dart';
 import 'services/ble_service.dart';
+import 'services/peer_key_directory.dart';
 import 'services/browser_cache_service.dart';
 import 'services/block_service.dart';
 import 'services/chat_storage_service.dart';
@@ -909,8 +911,10 @@ Future<void> initServices() async {
                 '[RLINK][Main] Dropping malformed encrypted message (missing fields)');
             return;
           }
-          final plaintext =
-              await CryptoService.instance.decryptMessage(encrypted);
+          final plaintext = await CryptoService.instance.decryptMessage(
+            encrypted,
+            senderX25519KeyBase64: PeerKeyDirectory.instance.getX25519(fromId),
+          );
           if (plaintext == null) {
             debugPrint(
                 '[RLINK][Main] Decryption failed! from=${fromId.substring(0, 16)} msgId=$messageId');
@@ -1398,6 +1402,7 @@ Future<void> initServices() async {
             statusEmoji: myProfile.statusEmoji,
             nickColor: myProfile.nickColor,
             birthday: myProfile.birthday,
+            supportsRatchet: true,
           );
           // Show celebration screen on sender side
           final myKey = CryptoService.instance.publicKeyHex;
@@ -1755,7 +1760,7 @@ Future<void> initServices() async {
       // x25519Key — X25519 ключ base64 для E2E шифрования (пустая строка у старых версий)
       onProfile: (bleId, publicKey, nick, username, color, emoji, x25519Key,
           tags, statusEmojiPayload, statusEmojiAutoPayloadJson,
-          nickColorPayload, birthdayPayload) async {
+          nickColorPayload, birthdayPayload, supportsRatchetPeer) async {
         if (statusEmojiAutoPayloadJson != null &&
             statusEmojiAutoPayloadJson.isNotEmpty) {
           try {
@@ -1778,6 +1783,8 @@ Future<void> initServices() async {
           unawaited(ChatStorageService.instance
               .updateContactX25519Key(publicKey, x25519Key));
         }
+        BleService.instance
+            .registerPeerRatchetCapability(publicKey, supportsRatchetPeer);
         // Запоминаем username в relay-кеше для поиска
         if (username.isNotEmpty) {
           RelayService.instance.registerPeerUsername(publicKey, username);
@@ -2984,6 +2991,7 @@ Future<void> initServices() async {
           statusEmoji: myProfile.statusEmoji,
           nickColor: myProfile.nickColor,
           birthday: myProfile.birthday,
+          supportsRatchet: true,
         );
       }
       // Request stories from newly connected BLE peer
@@ -3127,7 +3135,8 @@ void _bindGossipFallbackHandlersIfMissing() {
       statusEmojiPayload,
       statusEmojiAutoPayloadJson,
       nickColorPayload,
-      birthdayPayload) {
+      birthdayPayload,
+      supportsRatchetPeer) {
     debugPrint('[RLINK][Fallback] Bind onProfileReceived from $nick');
     // Register the peer's key mapping
     BleService.instance.registerPeerKey(bleId, publicKey);
@@ -3135,6 +3144,8 @@ void _bindGossipFallbackHandlersIfMissing() {
     if (x25519Key.isNotEmpty) {
       BleService.instance.registerPeerX25519Key(publicKey, x25519Key);
     }
+    BleService.instance
+        .registerPeerRatchetCapability(publicKey, supportsRatchetPeer);
     // Broadcast our profile back to enable bidirectional exchange
     final myProfile = ProfileService.instance.profile;
     if (myProfile != null) {
@@ -3149,6 +3160,7 @@ void _bindGossipFallbackHandlersIfMissing() {
         statusEmoji: myProfile.statusEmoji,
         nickColor: myProfile.nickColor,
         birthday: myProfile.birthday,
+        supportsRatchet: true,
       ));
     }
   };
@@ -3406,6 +3418,7 @@ Future<void> sendProfileToAllContacts() async {
       statusEmoji: myProfile.statusEmoji,
       nickColor: myProfile.nickColor,
       birthday: myProfile.birthday,
+      supportsRatchet: true,
     );
     debugPrint('[RLINK][Profile] Gossip-broadcast profile');
   } catch (e) {
@@ -4462,6 +4475,7 @@ class RlinkApp extends StatefulWidget {
 class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
   bool _ready = false;
   bool _hasProfile = false;
+  DateTime? _backgroundedAt;
 
   @override
   void initState() {
@@ -4524,6 +4538,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       // считаем сворачиванием, иначе presence будет «мигать».
       if (state != AppLifecycleState.inactive) {
         RelayService.instance.sendPresenceAway(true);
+        _backgroundedAt ??= DateTime.now();
       }
     } else if (state == AppLifecycleState.detached) {
       NotificationService.instance.isInBackground.value = true;
@@ -4534,6 +4549,56 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       AppLockService.instance.onResume();
       RelayService.instance.sendPresenceAway(false);
       _notifyPeersOnline();
+      final backgroundedAt = _backgroundedAt;
+      _backgroundedAt = null;
+      if (backgroundedAt != null) {
+        unawaited(_maybeShowBatteryExemptionPrompt(
+          DateTime.now().difference(backgroundedAt),
+        ));
+      }
+    }
+  }
+
+  /// One-shot nudge: the first time the app comes back from a long enough
+  /// background gap (a real proxy for "you might have missed something while
+  /// unreachable") on Android, without the user having already granted the
+  /// battery-optimization exemption, show why it matters. Never shown again
+  /// automatically after that — the delivery-diagnostics screen in Settings
+  /// stays available for anyone who wants it later.
+  Future<void> _maybeShowBatteryExemptionPrompt(Duration backgroundedFor) async {
+    if (!RuntimePlatform.isAndroid) return;
+    if (backgroundedFor < const Duration(minutes: 10)) return;
+    if (AppSettings.instance.batteryExemptionPromptShown) return;
+    if (await DeliveryHealthService.instance.isIgnoringBatteryOptimizations()) {
+      await AppSettings.instance.setBatteryExemptionPromptShown();
+      return;
+    }
+    await AppSettings.instance.setBatteryExemptionPromptShown();
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null || !ctx.mounted) return;
+    final allow = await showDialog<bool>(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Разрешить приём сообщений в фоне?'),
+        content: const Text(
+          'Пока Rlink закрыт, система может остановить приём сообщений, чтобы '
+          'сэкономить батарею. Исключение Rlink из оптимизации батареи не даёт '
+          'этому случиться.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Позже'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Разрешить'),
+          ),
+        ],
+      ),
+    );
+    if (allow == true) {
+      await DeliveryHealthService.instance.requestIgnoreBatteryOptimizations();
     }
   }
 

@@ -77,7 +77,9 @@ class _RlvStickerViewState extends State<RlvStickerView>
     if (!mounted) return;
     setState(() => _ready = true);
     if (widget.sticker.loop) {
-      _ctrl.repeat();
+      // Plays 3 full cycles then settles rather than looping forever — see
+      // the identical rationale in rls_sticker_view.dart.
+      _ctrl.repeat(count: 3);
     } else {
       _ctrl.forward();
     }
@@ -231,9 +233,20 @@ class _RlvPainter extends CustomPainter {
         final info = svgPictures[layer.id];
         if (info != null) {
           canvas.translate(-layer.anchorX * info.size.width, -layer.anchorY * info.size.height);
-          canvas.saveLayer(null, Paint()..color = Color.fromRGBO(255, 255, 255, alpha));
-          canvas.drawPicture(info.picture);
-          canvas.restore();
+          // An unbounded saveLayer (null bounds) over a many-path Picture
+          // renders correctly under the native/test Skia backend but leaks a
+          // stray fill on Flutter web's CanvasKit renderer — confirmed via a
+          // side-by-side render, same bytes, only the web target affected.
+          // Skip the layer entirely at full opacity (fadeIn/Out presets are
+          // the only callers that ever need it) to dodge the bug outright
+          // and avoid the compositing cost in the common case.
+          if (alpha < 0.999) {
+            canvas.saveLayer(null, Paint()..color = Color.fromRGBO(255, 255, 255, alpha));
+            canvas.drawPicture(info.picture);
+            canvas.restore();
+          } else {
+            canvas.drawPicture(info.picture);
+          }
         }
       } else {
         final path = shapePaths[layer.id];

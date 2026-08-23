@@ -67,6 +67,7 @@ import '../../services/outbound_dm_text.dart';
 import '../../services/outbox_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/gossip_router.dart';
+import '../../services/peer_key_directory.dart';
 import '../../services/image_service.dart';
 import '../../services/sticker_collection_service.dart';
 import '../../services/sticker_pack_dm_service.dart';
@@ -393,6 +394,9 @@ class _ChatScreenState extends State<ChatScreen> {
   DateTime? _lastMenuOpenAt;
   double? _pendingLat;
   double? _pendingLng;
+  // Stickers accepted from the emoji-suggestion row — sent right after the
+  // text message they were suggested for (see _send()'s tail).
+  final List<String> _pendingEmojiStickerSends = [];
   Timer? _typingDebounce;
   bool _strangerBannerDismissed = false;
   bool _isContact = false;
@@ -1037,6 +1041,31 @@ class _ChatScreenState extends State<ChatScreen> {
       EmojiPackService.instance.refreshIndexSync();
     }()));
     unawaited(_checkContactStatus());
+    if (dmBotNeedsRelay(widget.peerId) &&
+        AppSettings.instance.connectionMode == 0) {
+      // This bot only does anything over the relay (GigaChat's backend,
+      // Lib's registrar, a third-party catalog bot's own process) — in
+      // Bluetooth-only mode a message here just queues forever with no
+      // feedback otherwise, since the bot isn't a BLE peer to begin with.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        messenger?.hideCurrentMaterialBanner();
+        messenger?.showMaterialBanner(
+          MaterialBanner(
+            content: const Text(
+                'Этот бот отвечает через интернет — в режиме «только Bluetooth» ответа не будет.'),
+            leading: const Icon(Icons.wifi_off_rounded, color: Colors.amber),
+            actions: [
+              TextButton(
+                onPressed: () => messenger.hideCurrentMaterialBanner(),
+                child: const Text('Понятно'),
+              ),
+            ],
+          ),
+        );
+      });
+    }
     _pinsListener = () {
       if (mounted) unawaited(_reloadPins());
     };
@@ -1335,6 +1364,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _startCall({required bool video}) async {
     if (_isDmBot || _savedMessagesLocalOnly) return;
+    if (AppSettings.instance.connectionMode == 0) {
+      // Calls always go through the relay (signaling + TURN fallback) — BLE
+      // mesh alone can't carry them. Check this BEFORE attempting the call,
+      // not after: CallService.startOutgoing's own guard throws the generic
+      // 'peer_offline', which reads as "they're not around" even when the
+      // other person is right there over Bluetooth — that's the wrong
+      // explanation for why the call can't start.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Звонки недоступны в режиме «только Bluetooth» — нужен интернет. '
+              'Переключите режим связи в Настройки → Сеть.'),
+        ),
+      );
+      return;
+    }
     if (!_looksLikePublicKey(_resolvedPeerId)) {
       final ok = await _waitForPeerPublicKey();
       if (!ok) return;
@@ -2784,6 +2829,9 @@ class _ChatScreenState extends State<ChatScreen> {
           final enc = await CryptoService.instance.encryptMessage(
             plaintext: text,
             recipientX25519KeyBase64: x25519Key,
+            recipientPeerId: target,
+            recipientSupportsRatchet:
+                PeerKeyDirectory.instance.supportsRatchet(target),
           );
           await GossipRouter.instance.sendEncryptedMessage(
             encrypted: enc,
@@ -3125,6 +3173,9 @@ class _ChatScreenState extends State<ChatScreen> {
             final encrypted = await CryptoService.instance.encryptMessage(
               plaintext: chunk,
               recipientX25519KeyBase64: x25519Key,
+              recipientPeerId: canonicalTargetPeerId,
+              recipientSupportsRatchet: PeerKeyDirectory.instance
+                  .supportsRatchet(canonicalTargetPeerId),
             );
             await GossipRouter.instance.sendEncryptedMessage(
               encrypted: encrypted,
@@ -3187,6 +3238,19 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         }
         if (_tearingDown || !mounted) break;
+      }
+
+      if (_pendingEmojiStickerSends.isNotEmpty) {
+        final toSend = List<String>.of(_pendingEmojiStickerSends);
+        _pendingEmojiStickerSends.clear();
+        // _sendStickerFromLibraryPath guards on _isSending (still true here,
+        // for the text message this loop is sending after) and manages the
+        // flag itself around its own work, so it must see it cleared first.
+        if (!_tearingDown && mounted) setState(() => _isSending = false);
+        for (final ref in toSend) {
+          if (_tearingDown || !mounted) break;
+          await _sendStickerFromLibraryPath(ref);
+        }
       }
 
       if (_tearingDown || !mounted) return;
@@ -3760,13 +3824,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     actionTile(
                       ctx,
-                      icon: Icons.sticky_note_2_rounded,
-                      label: 'Стикер',
-                      value: 'sticker',
-                      color: Colors.orange.shade700,
-                    ),
-                    actionTile(
-                      ctx,
                       icon: Icons.more_horiz_rounded,
                       label: 'Еще',
                       value: 'menu',
@@ -3831,10 +3888,6 @@ class _ChatScreenState extends State<ChatScreen> {
         fileName: f.name.isNotEmpty ? f.name : 'video.mp4',
         myId: myId,
       );
-      return;
-    }
-    if (choice == 'sticker') {
-      await _openWebDefaultStickerPicker(myId);
       return;
     }
     if (choice == 'menu') {
@@ -3903,61 +3956,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   static const _defaultStickerAssetPrefix = 'assets/sticker_packs/default/';
-  static const _defaultStickerAssetNames = <String>[
-    'Angry.png',
-    'Best.png',
-    'Happy.png',
-    'Jump.png',
-    'LapTop.png',
-    'Like.png',
-    'Love.png',
-    'MAX.png',
-    'Sad.png',
-    'Scary.png',
-    'Wery scary.png',
-    'Woah!.png',
-  ];
-
-  Future<void> _openWebDefaultStickerPicker(String myId) async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return SafeArea(
-          child: GridView.builder(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-            ),
-            itemCount: _defaultStickerAssetNames.length,
-            itemBuilder: (context, index) {
-              final name = _defaultStickerAssetNames[index];
-              final asset = '$_defaultStickerAssetPrefix$name';
-              return Material(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.52),
-                borderRadius: BorderRadius.circular(12),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () => Navigator.pop(ctx, asset),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Image.asset(asset, fit: BoxFit.contain),
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-    if (picked == null || !mounted) return;
-    await _sendWebStickerAsset(picked, myId);
-  }
 
   Future<void> _sendWebStickerAsset(String assetPath, String myId) async {
     final data = await rootBundle.load(assetPath);
@@ -8426,6 +8424,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         : null,
                     locationActive: _pendingLat != null,
                     onSend: _send,
+                    onStickerSuggestionAccepted: (ref) =>
+                        _pendingEmojiStickerSends.add(ref),
                     onLongPressSend: _showSendOptions,
                     onPickTodo: _isDmBot ? null : _composeAndSendTodo,
                     onPickCalendar: _isDmBot ? null : _composeAndSendCalendar,
@@ -9498,8 +9498,8 @@ class _MessageBubble extends StatelessWidget {
                                   BorderRadius.circular(isSticker ? 10 : 12),
                               child: _DmImage(
                                 imagePath: msg.imagePath!,
-                                width: isSticker ? 132 : 220,
-                                height: isSticker ? 132 : null,
+                                width: isSticker ? 180 : 220,
+                                height: isSticker ? 180 : null,
                                 fit: BoxFit.cover,
                               ),
                             ),

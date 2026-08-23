@@ -3585,8 +3585,11 @@ class _NearbyTabState extends State<_NearbyTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Web/Internet-only mode — local mesh is disabled.
-    if (PlatformCapabilities.instance.isWeb ||
+    // No local mesh backend on this platform (web, or a desktop OS with no
+    // native BLE — see PlatformCapabilities.supportsBleMesh) — showing the
+    // radar here would just be a dead animation with peersCount stuck at 0.
+    // Same for explicit Internet-only mode.
+    if (!PlatformCapabilities.instance.supportsBleMesh ||
         AppSettings.instance.connectionMode == 1) {
       return Center(
         child: Padding(

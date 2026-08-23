@@ -29,22 +29,31 @@ class StickerCollectionService {
   static const _packsJsonName = 'sticker_packs.json';
   static const _webListPath = 'opfs://rlink/$_jsonName';
   static const _webPacksPath = 'opfs://rlink/$_packsJsonName';
+  // Bump whenever the bundled default sticker files change — the list in
+  // _defaultPackAssetNames OR just the bytes of a file already listed there
+  // (e.g. an art/animation fix). Installs that already seeded an older
+  // version get the default pack (and its flat-list entries) replaced on the
+  // next init() instead of being stuck with whatever was bundled the day
+  // they first launched.
+  static const _defaultPackVersion = 4;
+  static const _webDefaultPackVersionPath = 'opfs://rlink/sticker_pack_default_version';
   static const _defaultPackAssetPrefix = 'assets/sticker_packs/default/';
   static const _defaultPackAssetNames = <String>[
-    'Angry.png',
-    'Best.png',
-    'Happy.png',
-    'Jump.png',
-    'LapTop.png',
-    'Like.png',
-    'Love.png',
-    'MAX.png',
-    'Sad.png',
-    'Scary.png',
-    'Wery scary.png',
-    'Woah!.png',
+    'Angry.rls',
+    'Best.rls',
+    'Happy.rls',
+    'Jump.rls',
+    'LapTop.rls',
+    'Like.rls',
+    'Love.rls',
+    'MAX.rls',
+    'Sad.rls',
+    'Scary.rls',
+    'Wery scary.rls',
+    'Woah!.rls',
   ];
   final _uuid = const Uuid();
+  Future<void>? _initFuture;
 
   static bool isDataOrRemote(String ref) =>
       ref.startsWith('data:') ||
@@ -52,19 +61,73 @@ class StickerCollectionService {
       ref.startsWith('https://') ||
       ref.startsWith('opfs://');
 
-  /// Инициализация коллекции и подстановка встроенного набора при пустом списке.
-  Future<void> init() async {
+  /// Инициализация коллекции и подстановка встроенного набора при пустом
+  /// списке — или его замена, если бандл дефолтных стикеров обновился с
+  /// последнего запуска (см. [_defaultPackVersion]).
+  Future<void> init() => _initFuture ??= _initOnce();
+
+  Future<void> _initOnce() async {
     await ensureInitialized();
-    await _seedDefaultPackIfEmpty();
+    final storedVersion = await _readDefaultPackVersion();
+    if (storedVersion >= _defaultPackVersion) return;
+    final packs = await _readPacks();
+    if (packs.isEmpty) {
+      await _seedDefaultPackIfEmpty();
+    } else {
+      await forceReseedDefaultPack();
+    }
+    await _writeDefaultPackVersion(_defaultPackVersion);
   }
 
-  /// Принудительное обновление дефолтного набора новыми стикерами
+  Future<File> _defaultPackVersionFile() async {
+    final d = await getApplicationDocumentsDirectory();
+    return File(p.join(d.path, 'sticker_pack_default_version'));
+  }
+
+  Future<int> _readDefaultPackVersion() async {
+    try {
+      if (kIsWeb) {
+        final bytes = await readWebStoredFile(_webDefaultPackVersionPath);
+        if (bytes == null || bytes.isEmpty) return 0;
+        return int.tryParse(utf8.decode(bytes).trim()) ?? 0;
+      }
+      final f = await _defaultPackVersionFile();
+      if (!await f.exists()) return 0;
+      return int.tryParse((await f.readAsString()).trim()) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<void> _writeDefaultPackVersion(int v) async {
+    if (kIsWeb) {
+      await writeWebStoredFile(
+        fileName: 'sticker_pack_default_version',
+        bytes: Uint8List.fromList(utf8.encode('$v')),
+        mimeType: 'text/plain',
+      );
+      return;
+    }
+    final f = await _defaultPackVersionFile();
+    await f.writeAsString('$v');
+  }
+
+  /// Принудительное обновление дефолтного набора новыми стикерами: удаляет
+  /// старый авто-набор "Rlink" и его записи из плоского списка "Все", затем
+  /// пересеивает актуальный бандл.
   Future<void> forceReseedDefaultPack() async {
     final packs = await _readPacks();
+    final staleRels = <String>{};
     for (final pack in packs) {
       if (pack.title == 'Rlink' && pack.sourcePeerId == null) {
+        staleRels.addAll(pack.stickerRelPaths);
         await deletePack(pack.id);
       }
+    }
+    if (staleRels.isNotEmpty) {
+      final flat = await _readList();
+      final kept = flat.where((r) => !staleRels.contains(r)).toList();
+      if (kept.length != flat.length) await _writeList(kept);
     }
     final rels = await _seedDefaultPackAssets(skipExisting: true);
     if (rels.isEmpty) return;
@@ -92,8 +155,7 @@ class StickerCollectionService {
     for (final name in _defaultPackAssetNames) {
       try {
         final data = await rootBundle.load('$_defaultPackAssetPrefix$name');
-        final destName =
-            'stk_default_${name.replaceAll('.png', '').replaceAll('.webp', '')}${p.extension(name)}';
+        final destName = 'stk_default_${p.basename(name)}';
         if (kIsWeb) {
           rels.add(_dataUrlFor(data.buffer.asUint8List(), _mimeForExt(p.extension(name))));
         } else {
@@ -479,6 +541,14 @@ class StickerCollectionService {
       ),
     );
     await _writePacks(packs);
+    // A pack's own stickers must also show under the flat "Все" tab, which
+    // reads _readList()/stickerFilesNewestFirst(), not the pack list.
+    final flat = await _readList();
+    final flatSet = flat.toSet();
+    final newOnes = valid.where((r) => !flatSet.contains(r));
+    if (newOnes.isNotEmpty) {
+      await _writeList([...newOnes, ...flat]);
+    }
     return id;
   }
 

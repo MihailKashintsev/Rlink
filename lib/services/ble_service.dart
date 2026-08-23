@@ -38,8 +38,20 @@ class BleService {
   final Map<String, String> _publicKeyToBleId = {};
   // Ed25519 public key → X25519 public key base64 (для E2E шифрования)
   final Map<String, String> _x25519Keys = {};
+  // Ed25519 public key → advertised Double Ratchet support (from их последнего
+  // profile-пакета). Reset on restart — re-learned from the next profile
+  // broadcast, which happens routinely on reconnect anyway.
+  final Map<String, bool> _ratchetCapable = {};
   // BLE device ID → last known RSSI (for radar distance estimation)
   final Map<String, int> _rssiValues = {};
+
+  // Connect-attempt backoff: consecutive failures and the earliest time the
+  // next attempt may run. Without this, a peer that's failing to connect
+  // (out of range at the edge, GATT congestion) gets hammered with a fresh
+  // connect() on every scan-result re-emission — every second or so — which
+  // makes congestion worse instead of backing off from it.
+  final Map<DeviceIdentifier, int> _connectFailureCount = {};
+  final Map<DeviceIdentifier, DateTime> _nextRetryAllowedAt = {};
 
   StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<dynamic>? _eventSub;
@@ -63,7 +75,8 @@ class BleService {
   // Exchange state per peer: 0=connected, 1=profile_sent, 2=profile_received, 3=complete
   final ValueNotifier<Map<String, int>> exchangeStates = ValueNotifier({});
   // Incoming pair requests: bleId → {nick, color, emoji}
-  final ValueNotifier<Map<String, Map<String, dynamic>>> incomingPairRequests = ValueNotifier({});
+  final ValueNotifier<Map<String, Map<String, dynamic>>> incomingPairRequests =
+      ValueNotifier({});
 
   void setExchangeState(String peerId, int state) {
     final upd = Map<String, int>.from(exchangeStates.value);
@@ -72,13 +85,15 @@ class BleService {
   }
 
   void addPairRequest(String bleId, Map<String, dynamic> info) {
-    final upd = Map<String, Map<String, dynamic>>.from(incomingPairRequests.value);
+    final upd =
+        Map<String, Map<String, dynamic>>.from(incomingPairRequests.value);
     upd[bleId] = info;
     incomingPairRequests.value = upd;
   }
 
   void removePairRequest(String bleId) {
-    final upd = Map<String, Map<String, dynamic>>.from(incomingPairRequests.value);
+    final upd =
+        Map<String, Map<String, dynamic>>.from(incomingPairRequests.value);
     upd.remove(bleId);
     incomingPairRequests.value = upd;
   }
@@ -103,6 +118,7 @@ class BleService {
     _bleIdToPublicKey.clear();
     _publicKeyToBleId.clear();
     _x25519Keys.clear();
+    _ratchetCapable.clear();
     debugPrint('[RLINK][BLE] Key mappings cleared');
     peerMappingsVersion.value++;
   }
@@ -120,6 +136,17 @@ class BleService {
   /// Возвращает X25519 публичный ключ пира (base64) или null если неизвестен.
   String? getPeerX25519Key(String publicKey) =>
       _x25519Keys[publicKey.toLowerCase()] ?? _x25519Keys[publicKey];
+
+  /// Записывает, что пир анонсировал поддержку Double Ratchet в своём
+  /// последнем profile-пакете.
+  void registerPeerRatchetCapability(String publicKey, bool supportsRatchet) {
+    _ratchetCapable[publicKey.toLowerCase()] = supportsRatchet;
+  }
+
+  /// True только если пир явно анонсировал поддержку — по умолчанию false
+  /// (безопасный откат на legacy-схему для ещё незнакомых/старых клиентов).
+  bool supportsRatchetFor(String publicKey) =>
+      _ratchetCapable[publicKey.toLowerCase()] ?? false;
 
   /// Возвращает последний известный RSSI для пира (по publicKey или BLE ID).
   int? getRssi(String peerId) {
@@ -206,13 +233,15 @@ class BleService {
         final pid = unmapped.first.str;
         _bleIdToPublicKey[pid] = publicKey;
         markProfileReceived(pid);
-        debugPrint('[RLINK][BLE] Cross-registered peripheral $pid → ${publicKey.substring(0, 16)}');
+        debugPrint(
+            '[RLINK][BLE] Cross-registered peripheral $pid → ${publicKey.substring(0, 16)}');
       } else if (unmapped.length > 1) {
         // Multiple unmapped — register the last one (most recently connected)
         final pid = unmapped.last.str;
         _bleIdToPublicKey[pid] = publicKey;
         markProfileReceived(pid);
-        debugPrint('[RLINK][BLE] Cross-registered peripheral (last of ${unmapped.length}) $pid → ${publicKey.substring(0, 16)}');
+        debugPrint(
+            '[RLINK][BLE] Cross-registered peripheral (last of ${unmapped.length}) $pid → ${publicKey.substring(0, 16)}');
       }
     } else if (_connectedPeers.containsKey(DeviceIdentifier(bleId))) {
       // Profile came from peripheral side → register ALL unmapped centrals
@@ -223,13 +252,15 @@ class BleService {
         final cid = unmapped.first;
         _bleIdToPublicKey[cid] = publicKey;
         markProfileReceived(cid);
-        debugPrint('[RLINK][BLE] Cross-registered central $cid → ${publicKey.substring(0, 16)}');
+        debugPrint(
+            '[RLINK][BLE] Cross-registered central $cid → ${publicKey.substring(0, 16)}');
       } else if (unmapped.length > 1) {
         // Multiple unmapped — register the last one (most recently connected)
         final cid = unmapped.last;
         _bleIdToPublicKey[cid] = publicKey;
         markProfileReceived(cid);
-        debugPrint('[RLINK][BLE] Cross-registered central (last of ${unmapped.length}) $cid → ${publicKey.substring(0, 16)}');
+        debugPrint(
+            '[RLINK][BLE] Cross-registered central (last of ${unmapped.length}) $cid → ${publicKey.substring(0, 16)}');
       }
     }
   }
@@ -243,7 +274,8 @@ class BleService {
       if (!_bleIdToPublicKey.containsKey(id.str)) {
         _bleIdToPublicKey[id.str] = publicKey;
         markProfileReceived(id.str);
-        debugPrint('[RLINK][BLE] registerPeerKeyForAllRoles: peripheral ${id.str} → ${publicKey.substring(0, 16)}');
+        debugPrint(
+            '[RLINK][BLE] registerPeerKeyForAllRoles: peripheral ${id.str} → ${publicKey.substring(0, 16)}');
       }
     }
     // Register all unmapped centrals
@@ -251,7 +283,8 @@ class BleService {
       if (!_bleIdToPublicKey.containsKey(id)) {
         _bleIdToPublicKey[id] = publicKey;
         markProfileReceived(id);
-        debugPrint('[RLINK][BLE] registerPeerKeyForAllRoles: central $id → ${publicKey.substring(0, 16)}');
+        debugPrint(
+            '[RLINK][BLE] registerPeerKeyForAllRoles: central $id → ${publicKey.substring(0, 16)}');
       }
     }
     _updatePeersCount();
@@ -274,7 +307,8 @@ class BleService {
     }
     if (upd.length != pendingProfiles.value.length) {
       pendingProfiles.value = upd;
-      debugPrint('[RLINK][BLE] Cleared pending for $publicKey (${pendingProfiles.value.length} remaining)');
+      debugPrint(
+          '[RLINK][BLE] Cleared pending for $publicKey (${pendingProfiles.value.length} remaining)');
     }
   }
 
@@ -465,6 +499,8 @@ class BleService {
     _txChars.clear();
     _connecting.clear();
     _connectedCentralIds.clear();
+    _connectFailureCount.clear();
+    _nextRetryAllowedAt.clear();
     peersCount.value = 0;
   }
 
@@ -507,7 +543,8 @@ class BleService {
       final centralId = call.arguments as String? ?? '';
       if (centralId.isNotEmpty) {
         _connectedCentralIds.add(centralId);
-        final newPending = Set<String>.from(pendingProfiles.value)..add(centralId);
+        final newPending = Set<String>.from(pendingProfiles.value)
+          ..add(centralId);
         pendingProfiles.value = newPending;
         _updatePeersCount();
         onPeerConnected?.call(centralId);
@@ -554,7 +591,8 @@ class BleService {
         final centralId = event['device'] as String? ?? '';
         if (centralId.isNotEmpty) {
           _connectedCentralIds.add(centralId);
-          final newPending = Set<String>.from(pendingProfiles.value)..add(centralId);
+          final newPending = Set<String>.from(pendingProfiles.value)
+            ..add(centralId);
           pendingProfiles.value = newPending;
           _updatePeersCount();
           onPeerConnected?.call(centralId);
@@ -564,7 +602,8 @@ class BleService {
         final centralId = event['device'] as String? ?? '';
         if (centralId.isNotEmpty) {
           _connectedCentralIds.remove(centralId);
-          final newPending = Set<String>.from(pendingProfiles.value)..remove(centralId);
+          final newPending = Set<String>.from(pendingProfiles.value)
+            ..remove(centralId);
           pendingProfiles.value = newPending;
           _updatePeersCount();
           debugPrint('[RLINK][BLE] Central unsubscribed: $centralId');
@@ -622,6 +661,8 @@ class BleService {
   Future<void> _onDeviceFound(BluetoothDevice device) async {
     if (_connectedPeers.containsKey(device.remoteId)) return;
     if (_connecting.contains(device.remoteId)) return;
+    final retryAt = _nextRetryAllowedAt[device.remoteId];
+    if (retryAt != null && DateTime.now().isBefore(retryAt)) return;
 
     _connecting.add(device.remoteId);
     _connectedPeers[device.remoteId] = device;
@@ -634,6 +675,8 @@ class BleService {
       } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 200));
       await _setupGattClient(device);
+      _connectFailureCount.remove(device.remoteId);
+      _nextRetryAllowedAt.remove(device.remoteId);
       _updatePeersCount();
       // Помечаем как ожидающий профиль
       final newPending = Set<String>.from(pendingProfiles.value)
@@ -647,6 +690,11 @@ class BleService {
       debugPrint('[RLINK][BLE] Connect failed: $e');
       _connectedPeers.remove(device.remoteId);
       _updatePeersCount();
+      final failures = (_connectFailureCount[device.remoteId] ?? 0) + 1;
+      _connectFailureCount[device.remoteId] = failures;
+      final backoffSeconds = (2 << (failures - 1).clamp(0, 5)).clamp(2, 60);
+      _nextRetryAllowedAt[device.remoteId] =
+          DateTime.now().add(Duration(seconds: backoffSeconds));
     } finally {
       _connecting.remove(device.remoteId);
     }
@@ -719,7 +767,8 @@ class BleService {
           await Future.delayed(const Duration(milliseconds: 10));
         }
       } catch (e) {
-        debugPrint('[RLINK][BLE] Write failed at offset=$offset/${framed.length}: $e');
+        debugPrint(
+            '[RLINK][BLE] Write failed at offset=$offset/${framed.length}: $e');
         return; // Abort this write — retry at gossip level will resend
       }
     }
@@ -776,7 +825,8 @@ class _FrameBuffer {
     final now = DateTime.now();
     // If buffer has stale partial data, clear it before adding new bytes
     if (_buf.isNotEmpty && now.difference(_lastActivity) > _kStaleTimeout) {
-      debugPrint('[FrameBuffer] Clearing stale buffer (${_buf.length} bytes, ${now.difference(_lastActivity).inSeconds}s old)');
+      debugPrint(
+          '[FrameBuffer] Clearing stale buffer (${_buf.length} bytes, ${now.difference(_lastActivity).inSeconds}s old)');
       _buf.clear();
     }
     _lastActivity = now;
@@ -784,7 +834,8 @@ class _FrameBuffer {
 
     // Prevent unbounded buffer growth from corrupted streams
     if (_buf.length > _kMaxBufSize) {
-      debugPrint('[FrameBuffer] Buffer overflow (${_buf.length} bytes), clearing');
+      debugPrint(
+          '[FrameBuffer] Buffer overflow (${_buf.length} bytes), clearing');
       _buf.clear();
       return [];
     }

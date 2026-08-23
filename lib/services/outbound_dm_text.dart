@@ -95,6 +95,9 @@ class OutboundDmText {
         final encrypted = await CryptoService.instance.encryptMessage(
           plaintext: partText,
           recipientX25519KeyBase64: x25519Key,
+          recipientPeerId: targetPeerId,
+          recipientSupportsRatchet:
+              PeerKeyDirectory.instance.supportsRatchet(targetPeerId),
         );
         await GossipRouter.instance.sendEncryptedMessage(
           encrypted: encrypted,

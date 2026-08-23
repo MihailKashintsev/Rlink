@@ -102,6 +102,11 @@ class DefaultPacketTransport implements PacketTransport {
         if (hasValidRecipient) {
           await RelayService.instance
               .sendPacket(packet, recipientKey: recipientKey);
+          // Also reach anyone still on the default relay (the common case)
+          // even though our own primary connection is a custom one — see
+          // RelayService._secondary.
+          unawaited(RelayService.instance
+              .sendPacketToSecondary(packet, recipientKey: recipientKey));
         } else if (isDirectedType) {
           final line =
               '[RLINK][Transport][DROP] type=${packet.type} reason=invalid_direct_recipient '
@@ -111,6 +116,7 @@ class DefaultPacketTransport implements PacketTransport {
           DiagnosticsLogService.instance.add(line);
         } else {
           await RelayService.instance.broadcastPacket(packet);
+          unawaited(RelayService.instance.sendPacketToSecondary(packet));
         }
       } catch (_) {}
     } else if (packet.type == 'msg' ||

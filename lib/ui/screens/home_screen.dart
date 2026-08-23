@@ -11,6 +11,7 @@ import '../../services/app_settings.dart';
 import '../../services/ble_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/gossip_router.dart';
+import '../../services/peer_key_directory.dart';
 import '../../services/relay_service.dart';
 import '../widgets/update_available_banner.dart';
 
@@ -90,6 +91,9 @@ class _HomeScreenState extends State<HomeScreen>
       final encrypted = await CryptoService.instance.encryptMessage(
         plaintext: text,
         recipientX25519KeyBase64: x25519,
+        recipientPeerId: peerId,
+        recipientSupportsRatchet:
+            PeerKeyDirectory.instance.supportsRatchet(peerId),
       );
       await GossipRouter.instance.sendEncryptedMessage(
         encrypted: encrypted,

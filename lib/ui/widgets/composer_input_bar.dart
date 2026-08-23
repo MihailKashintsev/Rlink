@@ -6,10 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/app_settings.dart';
+import '../../services/emoji_binding_service.dart';
+import '../../services/emoji_pack_service.dart';
 import '../design/rlink_design.dart';
 import '../../services/media_upload_queue.dart';
 import '../../services/voice_service.dart';
 import 'avatar_widget.dart';
+import 'channel_feed_image.dart' show storedImage;
 import 'status_emoji_view.dart';
 import 'telegram_media_record_button.dart';
 import 'translate_action.dart';
@@ -90,6 +93,12 @@ class ComposerInputBar extends StatefulWidget {
   /// When provided, typing `@` opens a contact picker above the input.
   final List<MentionCandidate> Function()? mentionCandidates;
 
+  /// Called when the user taps a suggested sticker for an emoji they just
+  /// typed. The text is untouched — the parent is expected to send this
+  /// sticker as a follow-up message right after the current one sends (see
+  /// chat_screen.dart's `_send()` for the reference implementation).
+  final void Function(String stickerRef)? onStickerSuggestionAccepted;
+
   const ComposerInputBar({
     required this.controller,
     required this.isSending,
@@ -129,6 +138,7 @@ class ComposerInputBar extends StatefulWidget {
     required this.onHoldRecordingLockChanged,
     required this.onHoldVideoLockedPauseToggle,
     this.mentionCandidates,
+    this.onStickerSuggestionAccepted,
   });
 
   @override
@@ -239,6 +249,103 @@ class ComposerInputBarState extends State<ComposerInputBar> {
     );
   }
 
+  // Emoji→sticker/custom-emoji suggestion. Fires when the character just
+  // before the cursor is a real emoji (checked against the same dataset the
+  // emoji picker itself uses — see EmojiBindingService.isKnownEmoji) that has
+  // a saved binding. Grapheme-safe: `.characters` treats a flag or a ZWJ
+  // sequence as one unit instead of splitting it mid-codepoint.
+  String? _emojiSuggestionGlyph;
+  int _emojiSuggestionStart = 0;
+
+  void _updateEmojiSuggestion() {
+    if (!AppSettings.instance.emojiSuggestionsEnabled) {
+      _emojiSuggestionGlyph = null;
+      return;
+    }
+    final sel = widget.controller.selection;
+    final text = widget.controller.text;
+    if (!sel.isValid || !sel.isCollapsed || sel.baseOffset <= 0) {
+      _emojiSuggestionGlyph = null;
+      return;
+    }
+    final cursor = sel.baseOffset.clamp(0, text.length);
+    final before = text.substring(0, cursor).characters;
+    if (before.isEmpty) {
+      _emojiSuggestionGlyph = null;
+      return;
+    }
+    final glyph = before.last;
+    if (!EmojiBindingService.instance.isKnownEmoji(glyph) ||
+        !EmojiBindingService.instance.hasBinding(glyph)) {
+      _emojiSuggestionGlyph = null;
+      return;
+    }
+    _emojiSuggestionGlyph = glyph;
+    _emojiSuggestionStart = cursor - glyph.length;
+  }
+
+  void _acceptStickerSuggestion(String ref) {
+    widget.onStickerSuggestionAccepted?.call(ref);
+    setState(() => _emojiSuggestionGlyph = null);
+  }
+
+  void _acceptCustomEmojiSuggestion(String shortcode) {
+    final text = widget.controller.text;
+    final cursor = widget.controller.selection.baseOffset.clamp(0, text.length);
+    final start = _emojiSuggestionStart.clamp(0, text.length);
+    final insert = ':$shortcode: ';
+    final nt = text.replaceRange(start, cursor, insert);
+    widget.controller.value = TextEditingValue(
+      text: nt,
+      selection: TextSelection.collapsed(offset: (start + insert.length).clamp(0, nt.length)),
+    );
+    setState(() => _emojiSuggestionGlyph = null);
+  }
+
+  Widget _buildEmojiSuggestionRow(ColorScheme cs) {
+    final glyph = _emojiSuggestionGlyph!;
+    final settings = AppSettings.instance;
+    final stickers = settings.emojiSuggestionsShowStickers
+        ? EmojiBindingService.instance.stickerRefsFor(glyph)
+        : const <String>[];
+    final customEmoji = settings.emojiSuggestionsShowCustomEmoji
+        ? EmojiBindingService.instance.customEmojiShortcodesFor(glyph)
+        : const <String>[];
+    final tiles = <Widget>[
+      for (final ref in stickers)
+        _SuggestionTile(
+          child: storedImage(ref, fit: BoxFit.contain, width: 44, height: 44),
+          onTap: () => _acceptStickerSuggestion(ref),
+        ),
+      for (final sc in customEmoji)
+        _SuggestionTile(
+          child: () {
+            final img = EmojiPackService.instance.emojiImageProvider(sc);
+            return img == null
+                ? const Icon(Icons.emoji_emotions_outlined)
+                : Image(image: img, width: 32, height: 32, fit: BoxFit.contain);
+          }(),
+          onTap: () => _acceptCustomEmojiSuggestion(sc),
+        ),
+    ];
+    if (tiles.isEmpty) return const SizedBox.shrink();
+    return Container(
+      height: 60,
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tiles.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (_, i) => tiles[i],
+      ),
+    );
+  }
+
   void _onAppSettingsChanged() {
     if (mounted) setState(() {});
   }
@@ -306,19 +413,42 @@ class ComposerInputBarState extends State<ComposerInputBar> {
     );
   }
 
+  static IconData _iconForPickerKind(String kind) => switch (kind) {
+        'sticker' => Icons.sticky_note_2_outlined,
+        'gif' => Icons.gif_box_outlined,
+        _ => Icons.emoji_emotions_outlined,
+      };
+
   Widget _buildEmojiButton(ColorScheme cs) {
-    return IconButton(
-      onPressed: widget.isSending ? null : _openEmojiOrStickerPicker,
-      icon: Icon(
-        Icons.emoji_emotions_outlined,
-        color: widget.isSending
-            ? cs.onSurface.withValues(alpha: 0.3)
-            : cs.onSurfaceVariant,
-        size: 24,
-      ),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      tooltip: 'Эмодзи',
+    final color = widget.isSending
+        ? cs.onSurface.withValues(alpha: 0.3)
+        : cs.onSurfaceVariant;
+    return AnimatedBuilder(
+      animation: AppSettings.instance,
+      builder: (context, _) {
+        final kind = AppSettings.instance.lastPickerKind;
+        return IconButton(
+          onPressed: widget.isSending ? null : _openEmojiOrStickerPicker,
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutBack,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, anim) => RotationTransition(
+              turns: Tween<double>(begin: 0.75, end: 1).animate(anim),
+              child: ScaleTransition(scale: anim, child: child),
+            ),
+            child: Icon(
+              _iconForPickerKind(kind),
+              key: ValueKey(kind),
+              color: color,
+              size: 24,
+            ),
+          ),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          tooltip: 'Эмодзи',
+        );
+      },
     );
   }
 
@@ -348,10 +478,12 @@ class ComposerInputBarState extends State<ComposerInputBar> {
       if (mounted) {
         setState(() {
           _updateMention();
+          _updateEmojiSuggestion();
         });
       }
     };
     widget.controller.addListener(_controllerListener);
+    unawaited(EmojiBindingService.instance.init());
   }
 
   @override
@@ -573,6 +705,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
             if (_hasSelection && !widget.aiTextOnlyComposer) _buildFormatBar(cs),
             if (_mentionQuery != null && _filteredMentions.isNotEmpty)
               _buildMentionList(cs),
+            if (_emojiSuggestionGlyph != null) _buildEmojiSuggestionRow(cs),
             Row(children: [
               if (!widget.aiTextOnlyComposer) ...[
                 ..._buildButtonsInOrder(cs, leftSide: true),
@@ -905,6 +1038,27 @@ class ComposerInputBarState extends State<ComposerInputBar> {
             ]),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A single tappable thumbnail in the emoji-suggestion row (sticker or
+/// custom-emoji preview).
+class _SuggestionTile extends StatelessWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _SuggestionTile({required this.child, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: SizedBox(width: 44, height: 44, child: Center(child: child)),
       ),
     );
   }

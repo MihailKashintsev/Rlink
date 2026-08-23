@@ -253,8 +253,8 @@ class ChannelFeedImage extends StatelessWidget {
             width: double.infinity, fit: BoxFit.cover),
       );
     }
-    final maxW = isSticker ? 132.0 : (sw * 0.38).clamp(200.0, 360.0);
-    final maxH = isSticker ? 132.0 : 280.0;
+    final maxW = isSticker ? 180.0 : (sw * 0.38).clamp(200.0, 360.0);
+    final maxH = isSticker ? 180.0 : 280.0;
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(

@@ -76,4 +76,7 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // WorkManager — AndroidX/Jetpack, no Google Play Services dependency. Used
+    // as a watchdog to revive the foreground service if Doze/OEM killers stop it.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }

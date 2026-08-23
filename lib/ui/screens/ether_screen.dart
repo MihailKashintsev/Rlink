@@ -13,6 +13,7 @@ import '../../services/ether_service.dart';
 import '../../services/gossip_router.dart';
 import '../../services/name_filter.dart';
 import '../../services/app_settings.dart';
+import '../../services/platform_capabilities.dart';
 import '../../services/profile_service.dart';
 import 'chat_screen.dart';
 import 'location_map_screen.dart';
@@ -242,6 +243,37 @@ class _EtherScreenState extends State<EtherScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
+    // Эфир is a purely local Bluetooth broadcast — a post is only ever seen
+    // by phones physically nearby. On a platform with no native BLE mesh
+    // (desktop Windows/Linux — see PlatformCapabilities.supportsBleMesh),
+    // there's no one who could ever receive it, so the feed is functionally
+    // dead here; show that honestly instead of a feed that silently never
+    // reaches anyone.
+    if (!PlatformCapabilities.instance.supportsBleMesh) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.bluetooth_disabled, size: 72, color: Colors.grey.shade700),
+            const SizedBox(height: 16),
+            Text(
+              'Эфир недоступен на этом устройстве',
+              style: TextStyle(color: Colors.grey.shade300, fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Эфир — локальная BLE-рассылка для тех, кто физически рядом. '
+              'На этой платформе нет модуля Bluetooth-меша, поэтому сообщения '
+              'некому будет получить.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+            ),
+          ]),
+        ),
+      );
+    }
+
     return Column(children: [
       // Info banner
       ValueListenableBuilder<int>(

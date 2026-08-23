@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/rls_sticker.dart';
+import '../widgets/background_removal_dialog.dart';
 
 /// Editor for a Rlink animated sticker (.rls): compose a few image layers,
 /// pose each one on the canvas at chosen moments in time, and the result plays
@@ -41,8 +42,8 @@ const List<String> _kEaseNames = [
 
 class _EdLayer {
   final String id;
-  final ui.Image image;
-  final Uint8List pngBytes;
+  ui.Image image;
+  Uint8List pngBytes;
   final List<RlsKeyframe> keys;
   String ease = 'easeInOut';
 
@@ -52,6 +53,15 @@ class _EdLayer {
     required this.pngBytes,
     required this.keys,
   });
+
+  /// Swaps the layer's pixels in place (e.g. after background removal) —
+  /// the old decoded [ui.Image] is GPU-backed and must be disposed, not just
+  /// dropped, or its texture leaks for the life of the engine.
+  void replaceImage(ui.Image newImage, Uint8List newPngBytes) {
+    image.dispose();
+    image = newImage;
+    pngBytes = newPngBytes;
+  }
 
   ({double x, double y, double sx, double sy, double rotDeg, double alpha})
       transformAt(int tMs) =>
@@ -198,6 +208,25 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
       await _addLayerFromBytes(bytes);
     } catch (e) {
       _snack('Не удалось выбрать фото: $e');
+    }
+  }
+
+  Future<void> _removeBackgroundFromSelectedLayer() async {
+    final layer = _sel;
+    if (layer == null) return;
+    final result =
+        await showBackgroundRemovalDialog(context, sourceBytes: layer.pngBytes);
+    if (result == null || !mounted) return;
+    try {
+      final codec = await ui.instantiateImageCodec(result);
+      final frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      setState(() => layer.replaceImage(frame.image, result));
+    } catch (e) {
+      _snack('Не удалось применить: $e');
     }
   }
 
@@ -635,6 +664,11 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
           children: [
             _toolBtn(Icons.photo_outlined, 'Фото', _addPhotoLayer),
             _toolBtn(Icons.emoji_emotions_outlined, 'Эмодзи', _addEmojiLayer),
+            _toolBtn(
+              Icons.auto_fix_high_outlined,
+              'Убрать фон',
+              layer == null ? null : _removeBackgroundFromSelectedLayer,
+            ),
             _toolBtn(
               Icons.delete_outline,
               'Удалить слой',

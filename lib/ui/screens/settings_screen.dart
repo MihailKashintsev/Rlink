@@ -21,6 +21,8 @@ import '../../models/user_profile.dart';
 import '../../services/app_settings.dart';
 import '../../services/app_lock_service.dart';
 import 'device_security_screen.dart';
+import 'delivery_health_screen.dart';
+import 'emoji_bindings_screen.dart';
 import 'profile_privacy_screen.dart';
 import '../../services/app_icon_service.dart';
 import '../../services/google_drive_channel_backup.dart';
@@ -48,6 +50,7 @@ import '../screens/premium_status_screen.dart';
 import '../../services/premium_service.dart';
 import '../screens/chat_screen.dart';
 import '../screens/diagnostics_screen.dart';
+import '../screens/mesh_status_screen.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/update_restart_dialog.dart';
 import '../widgets/status_emoji_view.dart';
@@ -2007,6 +2010,18 @@ class _NotificationsPageState extends State<_NotificationsPage> {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
           _SectionHeader(AppL10n.t('settings_notifications')),
+          if (RuntimePlatform.isAndroid)
+            ListTile(
+              leading: Icon(Icons.mark_chat_unread_outlined, color: cs.primary),
+              title: const Text('Доставка сообщений в фоне'),
+              subtitle: Text(
+                'Почему сообщение могло не прийти, пока Rlink закрыт',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context)
+                  .push(rlinkOpaquePushRoute(const DeliveryHealthScreen())),
+            ),
           SwitchListTile(
             secondary: Icon(Icons.notifications_outlined,
                 color: settings.notificationsEnabled
@@ -2836,6 +2851,41 @@ class _MessagingPageState extends State<_MessagingPage> {
             value: settings.sendOnEnter,
             onChanged: (v) => settings.setSendOnEnter(v),
           ),
+          SwitchListTile(
+            secondary: Icon(Icons.auto_awesome_outlined,
+                color: settings.emojiSuggestionsEnabled
+                    ? cs.primary
+                    : Theme.of(context).hintColor),
+            title: const Text('Подсказки эмодзи'),
+            subtitle: Text(
+              'Стикер или кастомный эмодзи по набранному эмодзи',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            value: settings.emojiSuggestionsEnabled,
+            onChanged: (v) => settings.setEmojiSuggestionsEnabled(v),
+          ),
+          if (settings.emojiSuggestionsEnabled) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'both', label: Text('Оба')),
+                  ButtonSegment(value: 'stickers', label: Text('Стикеры')),
+                  ButtonSegment(value: 'emoji', label: Text('Эмодзи')),
+                ],
+                selected: {settings.emojiSuggestionsMode},
+                onSelectionChanged: (s) =>
+                    settings.setEmojiSuggestionsMode(s.first),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.link_rounded, color: cs.primary),
+              title: const Text('Управление привязками'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context)
+                  .push(rlinkOpaquePushRoute(const EmojiBindingsScreen())),
+            ),
+          ],
           if (!kIsWeb)
             SwitchListTile(
               secondary: Icon(Icons.photo_library_outlined,
@@ -3521,7 +3571,8 @@ class _NetworkPageState extends State<_NetworkPage> {
                   'relay=$relayState',
                   'online=$online',
                   'err=$err',
-                  'url=${RelayService.instance.serverUrl ?? '-'}',
+                  'url=${RelayService.instance.activeGossipRelayUrl ?? RelayService.instance.serverUrl ?? '-'}',
+                  'secondary=${RelayService.instance.hasSecondaryLink}',
                 ].join('\n');
                 await Clipboard.setData(ClipboardData(text: diag));
                 if (!context.mounted) return;
@@ -3542,8 +3593,104 @@ class _NetworkPageState extends State<_NetworkPage> {
                 rlinkOpaquePushRoute(const DiagnosticsScreen()),
               ),
             ),
+            ListTile(
+              leading: Icon(Icons.hub_outlined, color: cs.primary),
+              title: const Text('Статус mesh'),
+              subtitle: const Text(
+                'Кто рядом по Bluetooth, что ещё не доставлено',
+                style: TextStyle(fontSize: 12),
+              ),
+              onTap: () => Navigator.push(
+                context,
+                rlinkOpaquePushRoute(const MeshStatusScreen()),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.dns_outlined, color: cs.primary),
+              title: const Text('Свой relay-сервер'),
+              subtitle: Text(
+                settings.relayServerUrl.trim().isEmpty
+                    ? 'По умолчанию (${RelayService.defaultServerUrl})'
+                    : settings.relayServerUrl,
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
+              onTap: () => _editCustomRelayUrl(context),
+            ),
           ],
         ],
+      ),
+    );
+  }
+
+  Future<void> _editCustomRelayUrl(BuildContext context) async {
+    final settings = AppSettings.instance;
+    final controller = TextEditingController(text: settings.relayServerUrl);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Свой relay-сервер'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Сюда впиши адрес своего relay (например wss://my-server.example). '
+              'Официальный сервер при этом не отключается — приложение держит '
+              'лёгкое соединение и с ним тоже, чтобы достучаться до тех, кто '
+              'свой relay не настраивал. Платежи и другие сервисы всё равно '
+              'остаются только на официальном сервере.',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: 'wss://my-relay.example',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ''),
+            child: const Text('Сбросить'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return; // cancelled
+    if (result.isNotEmpty &&
+        !result.startsWith('ws://') &&
+        !result.startsWith('wss://')) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Адрес должен начинаться с ws:// или wss://')),
+      );
+      return;
+    }
+    await settings.setRelayServerUrl(result);
+    RelayService.instance.disconnect();
+    unawaited(RelayService.instance.connect());
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.isEmpty
+            ? 'Сброшено на сервер по умолчанию'
+            : 'Сохранено, переподключаюсь...'),
       ),
     );
   }
@@ -3570,7 +3717,6 @@ class _NetworkPageState extends State<_NetworkPage> {
     await settings.setConnectionMode(mode);
     await applyConnectionTransport();
   }
-
 }
 
 // ─────────────────────────────────────────────────────────────────────

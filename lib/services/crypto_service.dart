@@ -7,6 +7,8 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'double_ratchet.dart';
+import 'ratchet_session_store.dart';
 import 'runtime_platform.dart';
 import 'web_account_bundle.dart';
 import 'web_identity_portable.dart';
@@ -346,7 +348,45 @@ class CryptoService {
   // ── Шифрование ───────────────────────────────────────────────
 
   /// Шифрует plaintext для получателя с его X25519 публичным ключом base64.
+  ///
+  /// [recipientPeerId] — получателя долговременный Ed25519-идентификатор
+  /// (тот же publicKeyHex, что используется everywhere as "who is this").
+  /// Передавай его для живого 1:1 личного чата, чтобы попытаться
+  /// использовать Double Ratchet (forward secrecy + post-compromise
+  /// security) — сработает только если [recipientSupportsRatchet] (передай
+  /// `PeerKeyDirectory.instance.supportsRatchet(recipientPeerId)`) и либо есть
+  /// сохранённая сессия, либо мы — детерминированный инициатор для этой
+  /// пары. Если ни то, ни другое не выполняется, тихо откатывается на
+  /// сегодняшнюю схему (свежий эфемерный ECDH на каждое сообщение) — это
+  /// ожидаемо для самого первого сообщения новому контакту, не ошибка.
+  /// Не передавай для групповых/канальных бэкапов, инвайтов и переноса
+  /// аккаунта — это не непрерывная двусторонняя сессия, а другой сценарий.
   Future<EncryptedMessage> encryptMessage({
+    required String plaintext,
+    required String recipientX25519KeyBase64,
+    String? recipientPeerId,
+    bool recipientSupportsRatchet = false,
+  }) async {
+    if (recipientPeerId != null && recipientPeerId.isNotEmpty) {
+      try {
+        final ratchet = await _tryEncryptRatchet(
+          plaintext: plaintext,
+          recipientPeerId: recipientPeerId,
+          recipientX25519KeyBase64: recipientX25519KeyBase64,
+          recipientSupportsRatchet: recipientSupportsRatchet,
+        );
+        if (ratchet != null) return ratchet;
+      } catch (e) {
+        debugPrint('[Crypto] Ratchet encrypt failed, falling back to legacy: $e');
+      }
+    }
+    return _encryptLegacy(
+      plaintext: plaintext,
+      recipientX25519KeyBase64: recipientX25519KeyBase64,
+    );
+  }
+
+  Future<EncryptedMessage> _encryptLegacy({
     required String plaintext,
     required String recipientX25519KeyBase64,
   }) async {
@@ -402,6 +442,85 @@ class CryptoService {
       cipherText: ctB64,
       mac: macB64,
       signature: signature,
+    );
+  }
+
+  /// Deterministic role assignment for a peer relationship that hasn't
+  /// exchanged a ratchet message yet: comparing identities lexicographically
+  /// lets both sides independently agree on who bootstraps as initiator vs
+  /// responder, with no handshake and no race — unlike a "whoever sends
+  /// first" rule, which breaks if both sides happen to send at once.
+  bool amInitiatorFor(String peerId) => publicKeyHex.compareTo(peerId) < 0;
+
+  Future<Uint8List> _staticEcdhWith(String theirX25519PublicKeyBase64) async {
+    final theirPub = SimplePublicKey(
+      base64.decode(theirX25519PublicKeyBase64),
+      type: KeyPairType.x25519,
+    );
+    final shared = await _x25519.sharedSecretKey(
+      keyPair: _x25519IdentityKeyPair,
+      remotePublicKey: theirPub,
+    );
+    return Uint8List.fromList(await shared.extractBytes());
+  }
+
+  /// Encrypts via [recipientPeerId]'s Double Ratchet session, bootstrapping
+  /// one first if we're the deterministic initiator and none exists yet.
+  /// Returns null (never throws to the caller) when ratchet mode isn't
+  /// usable for this message — e.g. we're the responder role and haven't
+  /// received anything from them yet to bootstrap a session from — so
+  /// [encryptMessage] can fall back to the legacy scheme for just this
+  /// one message.
+  Future<EncryptedMessage?> _tryEncryptRatchet({
+    required String plaintext,
+    required String recipientPeerId,
+    required String recipientX25519KeyBase64,
+    required bool recipientSupportsRatchet,
+  }) async {
+    var session = await RatchetSessionStore.instance.load(recipientPeerId);
+    if (session == null) {
+      // Capability only matters for bootstrapping a brand-new session — an
+      // EXISTING session already proves (either we sent successfully before,
+      // or we received and responded to a real ratchet message from them)
+      // that this peer understands the scheme, regardless of what their
+      // latest advertised flag says.
+      if (!recipientSupportsRatchet) return null;
+      if (!amInitiatorFor(recipientPeerId)) return null;
+      final rootSeed = await _staticEcdhWith(recipientX25519KeyBase64);
+      final remotePub = SimplePublicKey(
+        base64.decode(recipientX25519KeyBase64),
+        type: KeyPairType.x25519,
+      );
+      session = await DoubleRatchet.initAsInitiator(
+        rootKeySeed: rootSeed,
+        remoteInitialRatchetKey: remotePub,
+      );
+    }
+    if (session.sendChainKey == null) return null;
+
+    final envelope = await DoubleRatchet.encrypt(session, utf8.encode(plaintext));
+    await RatchetSessionStore.instance.save(recipientPeerId, session);
+
+    final epkB64 = base64.encode(envelope.header.dhPublicKey);
+    final nonceB64 = base64.encode(envelope.nonce);
+    final ctB64 = base64.encode(envelope.cipherText);
+    final macB64 = base64.encode(envelope.mac);
+    final signature = await signUtf8Message(_envelopeSigningInput(
+      senderPublicKey: publicKeyHex,
+      ephemeralPublicKey: epkB64,
+      nonce: nonceB64,
+      cipherText: ctB64,
+      mac: macB64,
+    ));
+    return EncryptedMessage(
+      senderPublicKey: publicKeyHex,
+      ephemeralPublicKey: epkB64,
+      nonce: nonceB64,
+      cipherText: ctB64,
+      mac: macB64,
+      signature: signature,
+      ratchetN: envelope.header.n,
+      ratchetPn: envelope.header.pn,
     );
   }
 
@@ -631,7 +750,19 @@ class CryptoService {
     }
   }
 
-  Future<String?> decryptMessage(EncryptedMessage msg) async {
+  /// [senderX25519KeyBase64] is only needed the FIRST time ever decrypting a
+  /// ratchet message from this sender (to bootstrap our responder session's
+  /// root key) — pass it when available (e.g. via PeerKeyDirectory) for the
+  /// DM receive path; every other caller of this method (group/channel
+  /// backups, call signaling, account transfer) never sends ratchet-tagged
+  /// messages in the first place, so omitting it there changes nothing.
+  Future<String?> decryptMessage(
+    EncryptedMessage msg, {
+    String? senderX25519KeyBase64,
+  }) async {
+    if (msg.isRatchet) {
+      return _decryptRatchet(msg, senderX25519KeyBase64: senderX25519KeyBase64);
+    }
     try {
       final ephemeralPubKeyBytes = base64.decode(msg.ephemeralPublicKey);
       final ephemeralPubKey =
@@ -657,6 +788,54 @@ class CryptoService {
       return utf8.decode(plainBytes);
     } catch (e) {
       debugPrint('[RLINK][Crypto] Decrypt FAILED: $e');
+      return null;
+    }
+  }
+
+  /// Decrypts via [msg.senderPublicKey]'s Double Ratchet session, bootstrapping
+  /// a responder session first if none exists yet. A bootstrap with no
+  /// [senderX25519KeyBase64] available, or any decrypt failure (forged
+  /// header, tampered ciphertext, replay), fails closed and returns null —
+  /// see [DoubleRatchet.decrypt] for why a rejected forgery here can never
+  /// corrupt the session for a later legitimate message.
+  Future<String?> _decryptRatchet(
+    EncryptedMessage msg, {
+    String? senderX25519KeyBase64,
+  }) async {
+    try {
+      var session = await RatchetSessionStore.instance.load(msg.senderPublicKey);
+      if (session == null) {
+        if (senderX25519KeyBase64 == null || senderX25519KeyBase64.isEmpty) {
+          debugPrint(
+              '[Crypto] Ratchet decrypt: no session and no sender X25519 key to bootstrap one');
+          return null;
+        }
+        final rootSeed = await _staticEcdhWith(senderX25519KeyBase64);
+        session = DoubleRatchet.initAsResponder(
+          rootKeySeed: rootSeed,
+          selfInitialRatchetKeyPair: _x25519IdentityKeyPair,
+        );
+      }
+      final envelope = RatchetEnvelope(
+        header: RatchetHeader(
+          dhPublicKey: base64.decode(msg.ephemeralPublicKey),
+          n: msg.ratchetN!,
+          pn: msg.ratchetPn ?? 0,
+        ),
+        nonce: base64.decode(msg.nonce),
+        cipherText: base64.decode(msg.cipherText),
+        mac: base64.decode(msg.mac),
+      );
+      final plainBytes = await DoubleRatchet.decrypt(session, envelope);
+      if (plainBytes == null) return null;
+      // decrypt() only mutates `session` after a successful AEAD check, so
+      // this save always reflects a session that can read what it was just
+      // asked to read — never a half-applied ratchet step from a rejected
+      // forgery.
+      await RatchetSessionStore.instance.save(msg.senderPublicKey, session);
+      return utf8.decode(plainBytes);
+    } catch (e) {
+      debugPrint('[Crypto] Ratchet decrypt failed: $e');
       return null;
     }
   }
@@ -730,6 +909,20 @@ class EncryptedMessage {
   final String mac;
   final String signature;
 
+  /// Set only for Double Ratchet envelopes — the message's index within its
+  /// sending chain. `ephemeralPublicKey` doubles as the ratchet's DH public
+  /// key in that case rather than a one-shot ephemeral key; everything else
+  /// (nonce/cipherText/mac/signature) means exactly the same thing either
+  /// way, which is why this reuses [EncryptedMessage] instead of a parallel
+  /// wire type — old clients that don't recognize `rn`/`rpn` simply ignore
+  /// them and fail the decrypt safely (see [CryptoService.decryptMessage]).
+  final int? ratchetN;
+
+  /// Companion to [ratchetN] — the sending chain's length at the previous
+  /// DH ratchet step, letting the receiver skip stale keys in the OLD chain
+  /// correctly. Always non-null exactly when [ratchetN] is.
+  final int? ratchetPn;
+
   const EncryptedMessage({
     required this.senderPublicKey,
     required this.ephemeralPublicKey,
@@ -737,7 +930,11 @@ class EncryptedMessage {
     required this.cipherText,
     required this.mac,
     required this.signature,
+    this.ratchetN,
+    this.ratchetPn,
   });
+
+  bool get isRatchet => ratchetN != null;
 
   Map<String, dynamic> toJson() => {
         'from': senderPublicKey,
@@ -746,6 +943,8 @@ class EncryptedMessage {
         'ct': cipherText,
         'mac': mac,
         if (signature.isNotEmpty) 'sig': signature,
+        if (ratchetN != null) 'rn': ratchetN,
+        if (ratchetPn != null) 'rpn': ratchetPn,
       };
 
   factory EncryptedMessage.fromJson(Map<String, dynamic> j) => EncryptedMessage(
@@ -755,5 +954,7 @@ class EncryptedMessage {
         cipherText: j['ct'] as String? ?? '',
         mac: j['mac'] as String? ?? '',
         signature: j['sig'] as String? ?? '',
+        ratchetN: (j['rn'] as num?)?.toInt(),
+        ratchetPn: (j['rpn'] as num?)?.toInt(),
       );
 }

@@ -12,6 +12,7 @@ import '../../models/sticker_pack.dart';
 import '../../models/tgs_sticker.dart';
 import '../../services/chat_storage_service.dart';
 import '../../services/sticker_collection_service.dart';
+import '../widgets/bind_to_emoji_dialog.dart';
 import 'peer_stickers_screen.dart';
 import 'rls_sticker_editor_screen.dart';
 import 'rlv_sticker_editor_screen.dart';
@@ -121,13 +122,18 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
     );
     if (bytes == null || !context.mounted) return;
     try {
-      await StickerCollectionService.instance
+      final ref = await StickerCollectionService.instance
           .registerStickerBytes(bytes: bytes, ext: rlsFileExtension);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
+        SnackBar(
+          content: const Text(
               'Стикер сохранён в коллекцию. Добавьте его в набор ниже.'),
+          action: SnackBarAction(
+            label: 'Привязать к эмодзи',
+            onPressed: () =>
+                unawaited(showBindToEmojiDialog(context, stickerRef: ref)),
+          ),
         ),
       );
     } catch (e) {
@@ -150,13 +156,18 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
     );
     if (bytes == null || !context.mounted) return;
     try {
-      await StickerCollectionService.instance
+      final ref = await StickerCollectionService.instance
           .registerStickerBytes(bytes: bytes, ext: rlvFileExtension);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
+        SnackBar(
+          content: const Text(
               'Стикер сохранён в коллекцию. Добавьте его в набор ниже.'),
+          action: SnackBarAction(
+            label: 'Привязать к эмодзи',
+            onPressed: () =>
+                unawaited(showBindToEmojiDialog(context, stickerRef: ref)),
+          ),
         ),
       );
     } catch (e) {

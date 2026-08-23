@@ -18,6 +18,11 @@ import 'relay_service.dart';
 /// - До этого момента (sending/sent/failed) оно периодически переотправляется
 ///   с тем же messageId (дедуп на стороне получателя по primary key).
 /// - Переотправки триггерятся таймером + событиями появления сети/пира.
+/// - Store-and-forward: если получатель не в прямой досягаемости, но
+///   какой-то mesh-пир рядом есть, всё равно периодически (раз в ~45с на
+///   сообщение) переотправляем — gossip flood-forwarding может провести
+///   пакет через промежуточное устройство, даже если получателя не видно
+///   напрямую.
 class OutboxService {
   OutboxService._();
   static final OutboxService instance = OutboxService._();
@@ -26,6 +31,11 @@ class OutboxService {
   bool _running = false;
   bool _disposed = false;
   final Set<String> _inflight = <String>{};
+  // messageId → last time it was resent purely on "some mesh peer is around"
+  // (not the actual recipient). Throttled separately from the direct-peer
+  // case so store-and-forward through an intermediate device doesn't mean
+  // re-flooding every undelivered message every 7 seconds.
+  final Map<String, DateTime> _lastIndirectRetryAt = {};
 
   VoidCallback? _relayListener;
   VoidCallback? _presenceListener;
@@ -98,6 +108,8 @@ class OutboxService {
       final pending =
           await ChatStorageService.instance.getUndeliveredOutgoingMessages();
       if (pending.isEmpty) return;
+      _lastIndirectRetryAt
+          .removeWhere((id, _) => !pending.any((m) => m.id == id));
 
       for (final msg in pending) {
         if (_disposed) return;
@@ -105,9 +117,25 @@ class OutboxService {
 
         final peerId = msg.peerId;
         if (!_isPublicKeyPeer(peerId)) continue;
-        final canTry =
+        final directlyReachable =
             (hasRelay && !RelayService.instance.isPeerKnownOffline(peerId)) ||
                 (allowBle && BleService.instance.isPeerConnected(peerId));
+        bool canTry;
+        if (directlyReachable) {
+          canTry = true;
+        } else if (allowBle && BleService.instance.peersCount.value > 0) {
+          // The recipient isn't directly in range, but SOME mesh peer is —
+          // gossip flood-forwarding may still route through them. Store-
+          // and-forward here means "keep re-injecting periodically", not
+          // caching other people's ciphertext on this device, so throttle
+          // it well below the normal retry cadence.
+          final last = _lastIndirectRetryAt[msg.id];
+          canTry = last == null ||
+              DateTime.now().difference(last) > const Duration(seconds: 45);
+          if (canTry) _lastIndirectRetryAt[msg.id] = DateTime.now();
+        } else {
+          canTry = false;
+        }
         if (!canTry) continue;
 
         _inflight.add(msg.id);
@@ -154,6 +182,9 @@ class OutboxService {
         final encrypted = await CryptoService.instance.encryptMessage(
           plaintext: msg.text,
           recipientX25519KeyBase64: x25519Key,
+          recipientPeerId: msg.peerId,
+          recipientSupportsRatchet:
+              PeerKeyDirectory.instance.supportsRatchet(msg.peerId),
         );
         await GossipRouter.instance.sendEncryptedMessage(
           encrypted: encrypted,

@@ -13,6 +13,7 @@ import io.flutter.plugins.GeneratedPluginRegistrant
 class RlinkApplication : FlutterApplication() {
     override fun onCreate() {
         super.onCreate()
+        DeliveryHealthWorker.schedule(this)
         if (FlutterEngineCache.getInstance().contains(ENGINE_ID)) return
         val engine = FlutterEngine(this)
         GeneratedPluginRegistrant.registerWith(engine)

@@ -329,14 +329,18 @@ class AvatarEmojiPicker extends StatefulWidget {
   State<AvatarEmojiPicker> createState() => _AvatarEmojiPickerState();
 }
 
-class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
+class _AvatarEmojiPickerState extends State<AvatarEmojiPicker>
+    with SingleTickerProviderStateMixin {
   List<String> _stickerFiles = [];
   List<StickerPack> _stickerPacks = [];
   String? _filterStickerPackId;
   List<String> _gifUrls = [];
   bool _loadingGifs = false;
+  TabController? _tabController;
 
   // Emoji packs for "Мои эмодзи" section
+
+  static const _kindForTabIndex = ['emoji', 'sticker', 'gif'];
 
   @override
   void initState() {
@@ -345,6 +349,23 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
       StickerCollectionService.instance.version.addListener(_loadStickers);
       _loadStickers();
       _loadGifs();
+      final initialIndex = switch (AppSettings.instance.lastPickerKind) {
+        'sticker' => 1,
+        'gif' => 2,
+        _ => 0,
+      };
+      _tabController = TabController(
+        length: 3,
+        vsync: this,
+        initialIndex: initialIndex,
+      )..addListener(() {
+          // Tracks whichever tab is simply being viewed — not only a tab a
+          // pick/send happened from — so the button icon and the next open
+          // both follow wherever the user last looked, per their own
+          // correction ("не по отправленному а просто открытому пикеру").
+          unawaited(AppSettings.instance
+              .setLastPickerKind(_kindForTabIndex[_tabController!.index]));
+        });
     }
   }
 
@@ -353,6 +374,7 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
     if (widget.showStickersTab) {
       StickerCollectionService.instance.version.removeListener(_loadStickers);
     }
+    _tabController?.dispose();
     super.dispose();
   }
 
@@ -395,67 +417,66 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
 
     if (widget.showStickersTab) {
       // Show tabs when stickers tab is enabled (for sticker picker)
-      return DefaultTabController(
-        length: 3,
-        child: SizedBox(
-          height: 320,
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(12),
+      return SizedBox(
+        height: 320,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: TabBar(
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  indicator: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(8),
+                labelColor: cs.primary,
+                unselectedLabelColor: cs.onSurfaceVariant,
+                dividerColor: Colors.transparent,
+                tabs: const [
+                  Tab(text: 'Эмодзи'),
+                  Tab(text: 'Стикеры'),
+                  Tab(text: 'Гиф'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  UnifiedEmojiPicker(onSelected: widget.onSelected),
+                  _StickerGrid(
+                    stickerFiles: _stickerFiles,
+                    stickerPacks: _stickerPacks,
+                    filterPackId: _filterStickerPackId,
+                    onPackSelected: (packId) {
+                      setState(() => _filterStickerPackId = packId);
+                      unawaited(_loadStickers());
+                    },
+                    onStickerPicked: widget.onStickerPicked ??
+                        (path) {
+                          // Default: stickers can't be inserted as text
+                          debugPrint('[RLINK][Emoji] Sticker picked: $path');
+                        },
                   ),
-                  labelColor: cs.primary,
-                  unselectedLabelColor: cs.onSurfaceVariant,
-                  dividerColor: Colors.transparent,
-                  tabs: const [
-                    Tab(text: 'Эмодзи'),
-                    Tab(text: 'Стикеры'),
-                    Tab(text: 'Гиф'),
-                  ],
-                ),
+                  _GifGrid(
+                    gifUrls: _gifUrls,
+                    loading: _loadingGifs,
+                    onGifPicked: widget.onGifPicked ??
+                        (url) {
+                          // Default: log GIF pick
+                          debugPrint('[RLINK][Emoji] GIF picked: $url');
+                        },
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    UnifiedEmojiPicker(onSelected: widget.onSelected),
-                    _StickerGrid(
-                      stickerFiles: _stickerFiles,
-                      stickerPacks: _stickerPacks,
-                      filterPackId: _filterStickerPackId,
-                      onPackSelected: (packId) {
-                        setState(() => _filterStickerPackId = packId);
-                        unawaited(_loadStickers());
-                      },
-                      onStickerPicked: widget.onStickerPicked ??
-                          (path) {
-                            // Default: stickers can't be inserted as text
-                            debugPrint('[RLINK][Emoji] Sticker picked: $path');
-                          },
-                    ),
-                    _GifGrid(
-                      gifUrls: _gifUrls,
-                      loading: _loadingGifs,
-                      onGifPicked: widget.onGifPicked ??
-                          (url) {
-                            // Default: log GIF pick
-                            debugPrint('[RLINK][Emoji] GIF picked: $url');
-                          },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
@@ -474,18 +495,18 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker> {
 class _StickerGrid extends StatelessWidget {
   static const _defaultStickerAssetPrefix = 'assets/sticker_packs/default/';
   static const _defaultStickerAssetNames = <String>[
-    'Angry.png',
-    'Best.png',
-    'Happy.png',
-    'Jump.png',
-    'LapTop.png',
-    'Like.png',
-    'Love.png',
-    'MAX.png',
-    'Sad.png',
-    'Scary.png',
-    'Wery scary.png',
-    'Woah!.png',
+    'Angry.rls',
+    'Best.rls',
+    'Happy.rls',
+    'Jump.rls',
+    'LapTop.rls',
+    'Like.rls',
+    'Love.rls',
+    'MAX.rls',
+    'Sad.rls',
+    'Scary.rls',
+    'Wery scary.rls',
+    'Woah!.rls',
   ];
 
   final List<String> stickerFiles;

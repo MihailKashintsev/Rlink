@@ -5,10 +5,12 @@ import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/rlv_animation_presets.dart';
 import '../../models/rlv_sticker.dart';
+import '../widgets/photo_vectorize_dialog.dart';
 import '../widgets/rlv_sticker_view.dart'
     show buildShapePath, buildFreehandPath, parseRlvHexColor;
 
@@ -144,6 +146,7 @@ class _RlvEdLayer {
 class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
     with SingleTickerProviderStateMixin {
   final _uuid = const Uuid();
+  final _picker = ImagePicker();
   final List<_RlvEdLayer> _layers = [];
   int? _selected;
   int _durationMs = 1500;
@@ -540,6 +543,58 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
     }
   }
 
+  /// Picks a photo, runs it through [PhotoVectorizer] (color-count/detail
+  /// tuned live in the dialog), and adds the resulting flat-color SVG as an
+  /// ordinary `svg`-kind layer — same tail logic as [_addSvgLayer], since
+  /// once vectorized there's no difference between "imported from a file"
+  /// and "generated from a photo".
+  Future<void> _addPhotoVectorLayer() async {
+    try {
+      final picked = await _picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty || !mounted) return;
+      final svgText = await showPhotoVectorizeDialog(context, sourceBytes: bytes);
+      if (svgText == null || !mounted) return;
+
+      final info = await vg.loadPicture(SvgStringLoader(svgText), null);
+      var w = info.size.width;
+      var h = info.size.height;
+      if (w <= 0 || h <= 0) {
+        w = 200;
+        h = 200;
+      }
+      final fitScale = math.min(1.0, 200 / math.max(w, h));
+      final id = _uuid.v4();
+      final layer = _RlvEdLayer(
+        id: id,
+        kind: 'svg',
+        svgSource: svgText,
+        svgPicture: info.picture,
+        localSize: Size(w, h),
+        keys: [
+          RlvKeyframe(
+            tMs: _playheadMs.clamp(0, _durationMs),
+            x: _kCanvasSide / 2,
+            y: _kCanvasSide / 2,
+            sx: fitScale,
+            sy: fitScale,
+          ),
+        ],
+      );
+      if (!mounted) {
+        info.picture.dispose();
+        return;
+      }
+      setState(() {
+        _layers.add(layer);
+        _selected = _layers.length - 1;
+      });
+    } catch (e) {
+      _snack('Не удалось векторизовать фото: $e');
+    }
+  }
+
   Future<void> _pickPreset(_RlvEdLayer layer) async {
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -861,6 +916,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
               _toolBtn(Icons.edit_outlined, 'Рисовать',
                   () => setState(() => _drawMode = true)),
               _toolBtn(Icons.image_outlined, 'SVG', _addSvgLayer),
+              _toolBtn(Icons.auto_fix_high_outlined, 'Фото в вектор', _addPhotoVectorLayer),
               _toolBtn(
                 Icons.auto_awesome_rounded,
                 'Пресеты',
