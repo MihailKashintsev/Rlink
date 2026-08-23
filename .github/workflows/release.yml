@@ -73,20 +73,14 @@ jobs:
           EOF
       - run: flutter pub get
       - name: Build AAB (RuStore)
-        run: flutter build appbundle --release \
-          --dart-define="TURN_HOST=${TURN_HOST}" \
-          --dart-define="TURN_USER=${TURN_USER}" \
-          --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
+        run: flutter build appbundle --release --dart-define="TURN_HOST=${TURN_HOST}" --dart-define="TURN_USER=${TURN_USER}" --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
       # Split per ABI, not a universal APK: the relay is bandwidth-capped
       # (~2 MB/s global), so a smaller file is the only real download speedup.
       # arm64 is ~65 MB vs ~130 MB universal. `android` in the manifest means
       # arm64 (what every client reads by default); 32-bit ARM devices get
       # `android_arm32`.
       - name: Build APK (site)
-        run: flutter build apk --release --split-per-abi \
-          --dart-define="TURN_HOST=${TURN_HOST}" \
-          --dart-define="TURN_USER=${TURN_USER}" \
-          --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
+        run: flutter build apk --release --split-per-abi --dart-define="TURN_HOST=${TURN_HOST}" --dart-define="TURN_USER=${TURN_USER}" --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
       - name: Rename
         run: |
           V="${{ github.ref_name }}"
@@ -162,10 +156,7 @@ jobs:
         shell: bash
         env:
           CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
-        run: flutter build windows --release \
-          --dart-define="TURN_HOST=${TURN_HOST}" \
-          --dart-define="TURN_USER=${TURN_USER}" \
-          --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
+        run: flutter build windows --release --dart-define="TURN_HOST=${TURN_HOST}" --dart-define="TURN_USER=${TURN_USER}" --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
       - name: ZIP
         shell: pwsh
         run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "rlink_${{ github.ref_name }}_windows.zip"
@@ -197,10 +188,7 @@ jobs:
           cache: false
       - run: flutter pub get
       - name: Build
-        run: flutter build macos --release \
-          --dart-define="TURN_HOST=${TURN_HOST}" \
-          --dart-define="TURN_USER=${TURN_USER}" \
-          --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
+        run: flutter build macos --release --dart-define="TURN_HOST=${TURN_HOST}" --dart-define="TURN_USER=${TURN_USER}" --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
       - name: ZIP
         run: |
           cd build/macos/Build/Products/Release
