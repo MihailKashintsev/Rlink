@@ -67,6 +67,7 @@ import '../../services/outbound_dm_text.dart';
 import '../../services/outbox_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/gossip_router.dart';
+import '../../services/linked_device_fanout.dart';
 import '../../services/peer_key_directory.dart';
 import '../../services/image_service.dart';
 import '../../services/sticker_collection_service.dart';
@@ -1143,7 +1144,10 @@ class _ChatScreenState extends State<ChatScreen> {
           '[Chat] msg from ${msg.fromId.substring(0, 16)}, resolved=${resolved.substring(0, 16)}');
       final isOurPeer = msg.fromId == _resolvedPeerId ||
           msg.fromId == widget.peerId ||
-          msg.fromId == resolved;
+          msg.fromId == resolved ||
+          // A reply from this contact's OTHER device (see
+          // LinkedDeviceFanout) — same conversation, different key.
+          (msg.fromId == _peerContact?.linkedDeviceKey);
       if (!isOurPeer) return;
 
       // Use msg.fromId (the actual sender public key) as the canonical peer key.
@@ -2842,6 +2846,12 @@ class _ChatScreenState extends State<ChatScreen> {
             forwardFromNick: fnk,
             forwardFromChannelId: fch,
           );
+          unawaited(LinkedDeviceFanout.alsoSendToLinkedDevice(
+            primaryRecipientPeerId: target,
+            plaintext: text,
+            senderMyId: myId,
+            messageId: msgId,
+          ));
         } else {
           await ChatStorageService.instance
               .updateMessageStatusPreserveDelivered(
@@ -3187,6 +3197,15 @@ class _ChatScreenState extends State<ChatScreen> {
               replyToMessageId: isFirst ? _replyToMessageId : null,
               silent: silent,
             );
+            unawaited(LinkedDeviceFanout.alsoSendToLinkedDevice(
+              primaryRecipientPeerId: canonicalTargetPeerId,
+              plaintext: chunk,
+              senderMyId: myId,
+              messageId: msgId,
+              latitude: isFirst ? lat : null,
+              longitude: isFirst ? lng : null,
+              replyToMessageId: isFirst ? _replyToMessageId : null,
+            ));
             debugPrint('[RLINK][Chat] Sent ENCRYPTED msg $msgId');
           } else {
             await ChatStorageService.instance

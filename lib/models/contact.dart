@@ -24,6 +24,12 @@ class Contact {
   /// День рождения контакта (gossip `bd`), формат "MM-DD"/"YYYY-MM-DD".
   final String? birthday;
 
+  /// Публичный ключ связанного (linked) устройства этого контакта, если он
+  /// его анонсировал (gossip `ld`) — второе устройство того же человека,
+  /// на которое стоит дублировать исходящие сообщения и с которого входящие
+  /// сообщения относить к этому же контакту, а не заводить отдельный чат.
+  final String? linkedDeviceKey;
+
   const Contact({
     required this.publicKeyHex,
     required this.nickname,
@@ -40,6 +46,7 @@ class Contact {
     this.statusEmoji = '',
     this.nickColor,
     this.birthday,
+    this.linkedDeviceKey,
   });
 
   String get initials {
@@ -69,6 +76,8 @@ class Contact {
     bool setBirthday = false,
     int? avatarColor,
     String? avatarEmoji,
+    String? linkedDeviceKey,
+    bool setLinkedDeviceKey = false,
   }) =>
       Contact(
         publicKeyHex: publicKeyHex,
@@ -89,6 +98,8 @@ class Contact {
         statusEmoji: statusEmoji ?? this.statusEmoji,
         nickColor: nickColor ?? this.nickColor,
         birthday: setBirthday ? birthday : this.birthday,
+        linkedDeviceKey:
+            setLinkedDeviceKey ? linkedDeviceKey : this.linkedDeviceKey,
       );
 
   Map<String, dynamic> toMap() => {
@@ -107,6 +118,7 @@ class Contact {
         'status_emoji': statusEmoji.isEmpty ? null : statusEmoji,
         'nick_color': nickColor,
         'birthday': birthday,
+        'linked_device_key': linkedDeviceKey,
       };
 
   factory Contact.fromMap(Map<String, dynamic> m) => Contact(
@@ -136,5 +148,6 @@ class Contact {
             (m['status_emoji'] as String?) ?? ''),
         nickColor: m['nick_color'] as int?,
         birthday: m['birthday'] as String?,
+        linkedDeviceKey: m['linked_device_key'] as String?,
       );
 }

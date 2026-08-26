@@ -11,6 +11,7 @@ import '../../services/app_settings.dart';
 import '../../services/ble_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/gossip_router.dart';
+import '../../services/linked_device_fanout.dart';
 import '../../services/peer_key_directory.dart';
 import '../../services/relay_service.dart';
 import '../widgets/update_available_banner.dart';
@@ -95,12 +96,19 @@ class _HomeScreenState extends State<HomeScreen>
         recipientSupportsRatchet:
             PeerKeyDirectory.instance.supportsRatchet(peerId),
       );
+      final msgId = DateTime.now().microsecondsSinceEpoch.toString();
       await GossipRouter.instance.sendEncryptedMessage(
         encrypted: encrypted,
         recipientId: peerId,
         senderId: myId,
-        messageId: DateTime.now().microsecondsSinceEpoch.toString(),
+        messageId: msgId,
       );
+      unawaited(LinkedDeviceFanout.alsoSendToLinkedDevice(
+        primaryRecipientPeerId: peerId,
+        plaintext: text,
+        senderMyId: myId,
+        messageId: msgId,
+      ));
 
       setState(() {
         _messages.add(ChatMessage(

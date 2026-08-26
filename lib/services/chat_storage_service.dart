@@ -261,11 +261,61 @@ class ChatStorageService {
     debugPrint('[RLINK][DB] Initialized');
   }
 
+  /// Full-text search index over `messages.text`, kept in sync by triggers
+  /// rather than at each call site that writes a message — robust to any
+  /// insert/update path, present or future. Best-effort: FTS5 ships in every
+  /// sqlite3 build this project bundles (mobile system SQLite, the
+  /// sqlite3_flutter_libs desktop binary, and the WASM build web uses all
+  /// compile it in), but [searchMessages] still falls back to a plain LIKE
+  /// scan if this table is somehow missing, so a platform without FTS5
+  /// degrades instead of losing search entirely.
+  Future<void> _createMessagesFts(Database db, {required bool backfill}) async {
+    try {
+      await db.execute(
+          'CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(id UNINDEXED, text)');
+      if (backfill) {
+        await db.execute(
+            'INSERT INTO messages_fts(id, text) SELECT id, text FROM messages');
+      }
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+          INSERT INTO messages_fts(id, text) VALUES (new.id, new.text);
+        END
+      ''');
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+          DELETE FROM messages_fts WHERE id = old.id;
+        END
+      ''');
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
+          DELETE FROM messages_fts WHERE id = old.id;
+          INSERT INTO messages_fts(id, text) VALUES (new.id, new.text);
+        END
+      ''');
+    } catch (e) {
+      debugPrint('[RLINK][DB] FTS5 setup failed, search will fall back to LIKE: $e');
+    }
+  }
+
+  /// Splits [query] into words and quotes each as an FTS5 string literal
+  /// (doubling embedded quotes), joined with the implicit AND — turns
+  /// arbitrary user input into a safe MATCH argument instead of raw FTS5
+  /// query syntax, which would throw on bare `-`/`*`/`:`/unbalanced quotes.
+  static String _ftsMatchQuery(String query) {
+    return query
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .map((w) => '"${w.replaceAll('"', '""')}"')
+        .join(' ');
+  }
+
   Future<Database> _openMainDatabase(String path) async {
     Future<Database> open() async {
       final db = await openDatabase(
         path,
-        version: 24,
+        version: 26,
         onCreate: (db, v) async {
           try {
             await db.rawQuery('PRAGMA journal_mode = WAL');
@@ -286,7 +336,8 @@ class ChatStorageService {
             profile_music_path TEXT,
             status_emoji       TEXT,
             nick_color         INTEGER,
-            birthday           TEXT
+            birthday           TEXT,
+            linked_device_key  TEXT
           )
         ''');
           await db.execute('''
@@ -319,6 +370,7 @@ class ChatStorageService {
         ''');
           await db.execute(
               'CREATE INDEX idx_messages_peer ON messages(peer_id, timestamp)');
+          await _createMessagesFts(db, backfill: false);
           await db.execute('''
           CREATE TABLE dm_chat_pins (
             peer_id    TEXT NOT NULL,
@@ -561,6 +613,15 @@ class ChatStorageService {
             )
           ''');
           }
+          if (oldVersion < 25) {
+            await _createMessagesFts(db, backfill: true);
+          }
+          if (oldVersion < 26) {
+            try {
+              await db.execute(
+                  'ALTER TABLE contacts ADD COLUMN linked_device_key TEXT');
+            } catch (_) {}
+          }
         },
       );
       if (kIsWeb) {
@@ -668,6 +729,7 @@ class ChatStorageService {
         'status_emoji':
             contact.statusEmoji.isEmpty ? null : contact.statusEmoji,
         'nick_color': contact.nickColor,
+        'linked_device_key': contact.linkedDeviceKey,
       },
       where: 'id = ?',
       whereArgs: [normalizeDmPeerId(contact.publicKeyHex)],
@@ -930,40 +992,82 @@ class ChatStorageService {
     _notifyMessages(rows.first['peer_id'] as String);
   }
 
+  /// History for one conversation. When [peerId]'s contact has a known
+  /// linked device (see `Contact.linkedDeviceKey`/`LinkedDeviceFanout`),
+  /// also pulls in messages filed under that key and merges them in —
+  /// otherwise a reply sent from the contact's OTHER device, or a message
+  /// this device fanned out there, would silently split into a second,
+  /// invisible conversation instead of showing up in this one.
   Future<List<ChatMessage>> getMessages(String peerId,
       {int limit = 100}) async {
     await _ensureDbReady();
     final pid = normalizeDmPeerId(peerId);
+    final linkedKey = (await getContact(pid))?.linkedDeviceKey;
     return _withWebDbRecovery('getMessages', () async {
-      final rows = await _db?.query(
-            'messages',
-            where: 'peer_id = ?',
-            whereArgs: [pid],
-            orderBy: 'timestamp ASC',
-            limit: limit,
-          ) ??
-          [];
+      final rows = (linkedKey != null && linkedKey.isNotEmpty)
+          ? await _db?.query(
+                'messages',
+                where: 'peer_id = ? OR peer_id = ?',
+                whereArgs: [pid, normalizeDmPeerId(linkedKey)],
+                orderBy: 'timestamp ASC',
+                limit: limit,
+              ) ??
+              []
+          : await _db?.query(
+                'messages',
+                where: 'peer_id = ?',
+                whereArgs: [pid],
+                orderBy: 'timestamp ASC',
+                limit: limit,
+              ) ??
+              [];
       return rows.map(ChatMessage.fromMap).toList();
     });
   }
 
   /// Полнотекстовый поиск по всем перепискам (для глобального поиска).
   /// Возвращает совпадения от новых к старым.
-  Future<List<ChatMessage>> searchMessages(String query,
-      {int limit = 40}) async {
+  /// Searches message text, newest first. [peerId] narrows to one
+  /// conversation; omit it to search every chat (used by the unified search
+  /// in `chat_list_screen.dart`). Tries the FTS5 index first — much faster
+  /// than a LIKE scan once history grows into the thousands, and matches
+  /// whole words rather than raw substrings — falling back to the original
+  /// LIKE scan if the index is missing or the query fails for any reason.
+  Future<List<ChatMessage>> searchMessages(
+    String query, {
+    String? peerId,
+    int limit = 40,
+  }) async {
     final q = query.trim();
     if (q.length < 2) return [];
     await _ensureDbReady();
     return _withWebDbRecovery('searchMessages', () async {
-      final rows = await _db?.query(
-            'messages',
-            where: 'text LIKE ?',
-            whereArgs: ['%$q%'],
-            orderBy: 'timestamp DESC',
-            limit: limit,
-          ) ??
-          [];
-      return rows.map(ChatMessage.fromMap).toList();
+      final db = _db;
+      if (db == null) return const [];
+      try {
+        final rows = await db.rawQuery(
+          '''
+          SELECT messages.* FROM messages
+          JOIN messages_fts ON messages.id = messages_fts.id
+          WHERE messages_fts MATCH ?
+          ${peerId != null ? 'AND messages.peer_id = ?' : ''}
+          ORDER BY messages.timestamp DESC
+          LIMIT ?
+          ''',
+          [_ftsMatchQuery(q), if (peerId != null) peerId, limit],
+        );
+        return rows.map(ChatMessage.fromMap).toList();
+      } catch (e) {
+        debugPrint('[RLINK][DB] FTS5 search failed, falling back to LIKE: $e');
+        final rows = await db.query(
+          'messages',
+          where: peerId != null ? 'text LIKE ? AND peer_id = ?' : 'text LIKE ?',
+          whereArgs: peerId != null ? ['%$q%', peerId] : ['%$q%'],
+          orderBy: 'timestamp DESC',
+          limit: limit,
+        );
+        return rows.map(ChatMessage.fromMap).toList();
+      }
     });
   }
 

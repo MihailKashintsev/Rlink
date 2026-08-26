@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
@@ -5,6 +7,7 @@ import '../models/chat_message.dart';
 import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
+import 'linked_device_fanout.dart';
 import 'peer_key_directory.dart';
 
 /// Текстовая отправка в личный чат (как [ChatScreen._send], без UI).
@@ -105,6 +108,13 @@ class OutboundDmText {
           recipientId: targetPeerId,
           messageId: msgId,
         );
+        unawaited(LinkedDeviceFanout.alsoSendToLinkedDevice(
+          primaryRecipientPeerId: targetPeerId,
+          plaintext: partText,
+          senderMyId: myId,
+          messageId: msgId,
+          replyToMessageId: isFirst ? replyToMessageId : null,
+        ));
       } else {
         await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
           msgId,

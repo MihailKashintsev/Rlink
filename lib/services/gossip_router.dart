@@ -177,6 +177,7 @@ typedef OnProfileReceived = void Function(
   int? nickColor,
   String? birthday,
   bool supportsRatchet,
+  String? linkedDeviceKey,
 );
 
 typedef OnEditReceived = Future<void> Function(
@@ -1667,6 +1668,7 @@ class GossipRouter {
     int? nickColor,
     String? birthday,
     bool supportsRatchet = false,
+    String? linkedDeviceKey,
   }) async {
     // Per-field privacy: hidden fields are stripped so they never leave the
     // device. Status emoji and birthday are sent as an explicit empty when
@@ -1680,6 +1682,8 @@ class GossipRouter {
       'emoji': emoji,
       if (x25519Key.isNotEmpty) 'x': x25519Key,
       if (supportsRatchet) 'rk': 1,
+      if (linkedDeviceKey != null && linkedDeviceKey.isNotEmpty)
+        'ld': linkedDeviceKey,
       if (privacy.showTags && tags.isNotEmpty) 'tags': tags,
       'st': privacy.showStatusEmoji ? statusEmoji : '',
       if (privacy.showStatusEmoji &&
@@ -1852,6 +1856,7 @@ class GossipRouter {
         final String? birthdayPayload =
             bdRaw is String && bdRaw.isNotEmpty ? bdRaw : null;
         final supportsRatchetPeer = packet.payload['rk'] == 1;
+        final linkedDeviceKeyPeer = packet.payload['ld'] as String?;
 
         // Валидация: публичный ключ Ed25519 = 64 hex символа
         final isValidKey = publicKey != null &&
@@ -1875,7 +1880,8 @@ class GossipRouter {
               statusEmojiAutoPayloadJson,
               nickColorPayload,
               birthdayPayload,
-              supportsRatchetPeer);
+              supportsRatchetPeer,
+              linkedDeviceKeyPeer);
         } else {
           debugPrint(
               '[RLINK][Gossip] Invalid profile packet: key=$publicKey nick=$nick');

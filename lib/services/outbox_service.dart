@@ -8,6 +8,7 @@ import 'ble_service.dart';
 import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
+import 'linked_device_fanout.dart';
 import 'peer_key_directory.dart';
 import 'relay_service.dart';
 
@@ -198,6 +199,15 @@ class OutboxService {
           forwardFromNick: msg.forwardFromNick,
           forwardFromChannelId: msg.forwardFromChannelId,
         );
+        unawaited(LinkedDeviceFanout.alsoSendToLinkedDevice(
+          primaryRecipientPeerId: msg.peerId,
+          plaintext: msg.text,
+          senderMyId: myId,
+          messageId: msg.id,
+          latitude: msg.latitude,
+          longitude: msg.longitude,
+          replyToMessageId: msg.replyToMessageId,
+        ));
       } else {
         throw StateError('missing_peer_encryption_key');
       }

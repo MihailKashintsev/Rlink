@@ -1403,6 +1403,9 @@ Future<void> initServices() async {
             nickColor: myProfile.nickColor,
             birthday: myProfile.birthday,
             supportsRatchet: true,
+            linkedDeviceKey: AppSettings.instance.isDeviceLinked
+                ? AppSettings.instance.linkedDevicePublicKey
+                : null,
           );
           // Show celebration screen on sender side
           final myKey = CryptoService.instance.publicKeyHex;
@@ -1760,7 +1763,8 @@ Future<void> initServices() async {
       // x25519Key — X25519 ключ base64 для E2E шифрования (пустая строка у старых версий)
       onProfile: (bleId, publicKey, nick, username, color, emoji, x25519Key,
           tags, statusEmojiPayload, statusEmojiAutoPayloadJson,
-          nickColorPayload, birthdayPayload, supportsRatchetPeer) async {
+          nickColorPayload, birthdayPayload, supportsRatchetPeer,
+          linkedDeviceKeyPeer) async {
         if (statusEmojiAutoPayloadJson != null &&
             statusEmojiAutoPayloadJson.isNotEmpty) {
           try {
@@ -1859,6 +1863,8 @@ Future<void> initServices() async {
                 statusEmoji: resolvedStatus(null, oldContact),
                 nickColor: nickColorPayload ?? oldContact.nickColor,
                 birthday: birthdayPayload ?? oldContact.birthday,
+                linkedDeviceKey:
+                    linkedDeviceKeyPeer ?? oldContact.linkedDeviceKey,
               ));
               await ChatStorageService.instance
                   .deleteContact(oldContact.publicKeyHex);
@@ -1885,6 +1891,8 @@ Future<void> initServices() async {
               statusEmoji: resolvedStatus(existing, null),
               nickColor: nickColorPayload ?? existing.nickColor,
               birthday: birthdayPayload ?? existing.birthday,
+              linkedDeviceKey:
+                  linkedDeviceKeyPeer ?? existing.linkedDeviceKey,
             ));
             // Если нашли ник-дубликат или стаб с другим ключом — переносим историю и удаляем
             if (oldContact != null) {
@@ -2992,6 +3000,9 @@ Future<void> initServices() async {
           nickColor: myProfile.nickColor,
           birthday: myProfile.birthday,
           supportsRatchet: true,
+          linkedDeviceKey: AppSettings.instance.isDeviceLinked
+              ? AppSettings.instance.linkedDevicePublicKey
+              : null,
         );
       }
       // Request stories from newly connected BLE peer
@@ -3136,7 +3147,8 @@ void _bindGossipFallbackHandlersIfMissing() {
       statusEmojiAutoPayloadJson,
       nickColorPayload,
       birthdayPayload,
-      supportsRatchetPeer) {
+      supportsRatchetPeer,
+      linkedDeviceKeyPeer) {
     debugPrint('[RLINK][Fallback] Bind onProfileReceived from $nick');
     // Register the peer's key mapping
     BleService.instance.registerPeerKey(bleId, publicKey);
@@ -3161,6 +3173,9 @@ void _bindGossipFallbackHandlersIfMissing() {
         nickColor: myProfile.nickColor,
         birthday: myProfile.birthday,
         supportsRatchet: true,
+        linkedDeviceKey: AppSettings.instance.isDeviceLinked
+            ? AppSettings.instance.linkedDevicePublicKey
+            : null,
       ));
     }
   };
@@ -3419,6 +3434,9 @@ Future<void> sendProfileToAllContacts() async {
       nickColor: myProfile.nickColor,
       birthday: myProfile.birthday,
       supportsRatchet: true,
+      linkedDeviceKey: AppSettings.instance.isDeviceLinked
+          ? AppSettings.instance.linkedDevicePublicKey
+          : null,
     );
     debugPrint('[RLINK][Profile] Gossip-broadcast profile');
   } catch (e) {
