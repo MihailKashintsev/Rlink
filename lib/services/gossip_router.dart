@@ -178,7 +178,21 @@ typedef OnProfileReceived = void Function(
   String? birthday,
   bool supportsRatchet,
   String? linkedDeviceKey,
+  bool sensitiveFieldsSigned,
 );
+
+/// Canonical string signed over the security-sensitive profile fields (X25519
+/// key, linked-device key, ratchet capability) — bound to the claimed sender
+/// [id] so a forged packet can't just replay someone else's signature under
+/// its own id. Deliberately excludes cosmetic fields (nick/color/tags/status)
+/// so those can still be updated freely without re-signing.
+String _profileSensitiveFieldsCanonical(
+  String id,
+  String x25519Key,
+  String? linkedDeviceKey,
+  bool supportsRatchet,
+) =>
+    '$id|$x25519Key|${linkedDeviceKey ?? ''}|${supportsRatchet ? 1 : 0}';
 
 typedef OnEditReceived = Future<void> Function(
   String fromId,
@@ -1695,6 +1709,10 @@ class GossipRouter {
         'bd': ''
       else if (birthday != null && birthday.isNotEmpty)
         'bd': birthday,
+      'sig': await CryptoService.instance.signUtf8Message(
+        _profileSensitiveFieldsCanonical(
+            id, x25519Key, linkedDeviceKey, supportsRatchet),
+      ),
     };
     final packet = GossipPacket(
       id: _uuid.v4(),
@@ -1857,6 +1875,7 @@ class GossipRouter {
             bdRaw is String && bdRaw.isNotEmpty ? bdRaw : null;
         final supportsRatchetPeer = packet.payload['rk'] == 1;
         final linkedDeviceKeyPeer = packet.payload['ld'] as String?;
+        final sigPeer = packet.payload['sig'] as String?;
 
         // Валидация: публичный ключ Ed25519 = 64 hex символа
         final isValidKey = publicKey != null &&
@@ -1864,6 +1883,20 @@ class GossipRouter {
             RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(publicKey);
 
         if (isValidKey && nick != null && nick.isNotEmpty && color != null) {
+          // Профиль не подписывает отправитель канала/непрямой ретранслятор —
+          // подпись всегда должна соответствовать заявленному id, иначе это
+          // подделка чувствительных полей (x25519/linkedDeviceKey/ratchet) под
+          // видом уже известного контакта.
+          var sensitiveFieldsSigned = false;
+          if (sigPeer != null && sigPeer.isNotEmpty) {
+            sensitiveFieldsSigned =
+                await CryptoService.instance.verifyUtf8Signature(
+              publicKey,
+              _profileSensitiveFieldsCanonical(
+                  publicKey, x25519Key, linkedDeviceKeyPeer, supportsRatchetPeer),
+              sigPeer,
+            );
+          }
           // sourceId — BLE ID пира, который прислал пакет напрямую.
           // onProfile в main.dart проверит isDirectBleId(bleId) перед регистрацией маппинга.
           final bleId = sourceId ?? publicKey;
@@ -1881,7 +1914,8 @@ class GossipRouter {
               nickColorPayload,
               birthdayPayload,
               supportsRatchetPeer,
-              linkedDeviceKeyPeer);
+              linkedDeviceKeyPeer,
+              sensitiveFieldsSigned);
         } else {
           debugPrint(
               '[RLINK][Gossip] Invalid profile packet: key=$publicKey nick=$nick');

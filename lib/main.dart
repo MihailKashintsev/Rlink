@@ -1764,7 +1764,7 @@ Future<void> initServices() async {
       onProfile: (bleId, publicKey, nick, username, color, emoji, x25519Key,
           tags, statusEmojiPayload, statusEmojiAutoPayloadJson,
           nickColorPayload, birthdayPayload, supportsRatchetPeer,
-          linkedDeviceKeyPeer) async {
+          linkedDeviceKeyPeer, sensitiveFieldsSigned) async {
         if (statusEmojiAutoPayloadJson != null &&
             statusEmojiAutoPayloadJson.isNotEmpty) {
           try {
@@ -1781,24 +1781,41 @@ Future<void> initServices() async {
         if (isDirect && mode != 1) {
           BleService.instance.registerPeerKey(bleId, publicKey);
         }
-        // X25519 ключ сохраняем для любого профиля (прямого или пересланного).
-        if (x25519Key.isNotEmpty) {
-          BleService.instance.registerPeerX25519Key(publicKey, x25519Key);
-          unawaited(ChatStorageService.instance
-              .updateContactX25519Key(publicKey, x25519Key));
-        }
-        BleService.instance
-            .registerPeerRatchetCapability(publicKey, supportsRatchetPeer);
-        // Запоминаем username в relay-кеше для поиска
-        if (username.isNotEmpty) {
-          RelayService.instance.registerPeerUsername(publicKey, username);
-        }
-
         // Контакт сохраняем в БД при любом профиле (прямом или пересланном).
         // finally гарантирует markProfileReceived даже при ошибке БД.
         try {
           final existing =
               await ChatStorageService.instance.getContact(publicKey);
+          // X25519/linkedDeviceKey/ratchet — уже известного контакта менять
+          // без подписи нельзя: непроверенный profile-пакет мог бы иначе
+          // молча подменить ключ шифрования или подсунуть чужое устройство
+          // как "связанное" (см. security-review). Для ещё незнакомого
+          // контакта или первого заполнения поля доверяем как раньше (TOFU).
+          final knownX25519 = existing?.x25519Key ?? '';
+          final x25519TrustedToApply = x25519Key.isNotEmpty &&
+              (sensitiveFieldsSigned ||
+                  knownX25519.isEmpty ||
+                  knownX25519 == x25519Key);
+          if (x25519TrustedToApply) {
+            BleService.instance.registerPeerX25519Key(publicKey, x25519Key);
+            unawaited(ChatStorageService.instance
+                .updateContactX25519Key(publicKey, x25519Key));
+          } else if (x25519Key.isNotEmpty && knownX25519 != x25519Key) {
+            debugPrint(
+                '[Profile] Rejected unsigned X25519 key change for known contact '
+                '${publicKey.substring(0, 8)} (possible key-substitution attempt)');
+          }
+          final ratchetDowngradeBlocked = !supportsRatchetPeer &&
+              !sensitiveFieldsSigned &&
+              BleService.instance.supportsRatchetFor(publicKey);
+          if (!ratchetDowngradeBlocked) {
+            BleService.instance
+                .registerPeerRatchetCapability(publicKey, supportsRatchetPeer);
+          }
+          // Запоминаем username в relay-кеше для поиска
+          if (username.isNotEmpty) {
+            RelayService.instance.registerPeerUsername(publicKey, username);
+          }
           String resolvedStatus(Contact? ex, Contact? oldC) {
             if (statusEmojiPayload != null) {
               return UserProfile.normalizeStatusEmoji(statusEmojiPayload);
@@ -1891,8 +1908,15 @@ Future<void> initServices() async {
               statusEmoji: resolvedStatus(existing, null),
               nickColor: nickColorPayload ?? existing.nickColor,
               birthday: birthdayPayload ?? existing.birthday,
-              linkedDeviceKey:
-                  linkedDeviceKeyPeer ?? existing.linkedDeviceKey,
+              // Смена linkedDeviceKey у уже известного контакта требует
+              // подписи — иначе любой пир на меше мог бы госсип-пакетом
+              // подсунуть себя как "связанное устройство" жертвы и получать
+              // копию каждого её сообщения (см. security-review).
+              linkedDeviceKey: (existing.linkedDeviceKey == null ||
+                      existing.linkedDeviceKey!.isEmpty ||
+                      sensitiveFieldsSigned)
+                  ? (linkedDeviceKeyPeer ?? existing.linkedDeviceKey)
+                  : existing.linkedDeviceKey,
             ));
             // Если нашли ник-дубликат или стаб с другим ключом — переносим историю и удаляем
             if (oldContact != null) {
@@ -3148,7 +3172,8 @@ void _bindGossipFallbackHandlersIfMissing() {
       nickColorPayload,
       birthdayPayload,
       supportsRatchetPeer,
-      linkedDeviceKeyPeer) {
+      linkedDeviceKeyPeer,
+      sensitiveFieldsSigned) {
     debugPrint('[RLINK][Fallback] Bind onProfileReceived from $nick');
     // Register the peer's key mapping
     BleService.instance.registerPeerKey(bleId, publicKey);

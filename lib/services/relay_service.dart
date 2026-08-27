@@ -2049,11 +2049,8 @@ class RelayService with WidgetsBindingObserver {
         );
       }
       if (peer.x25519Key.isNotEmpty && peer.publicKey.isNotEmpty) {
-        _peerX25519Keys[peer.publicKey.toLowerCase()] = peer.x25519Key;
-        BleService.instance
-            .registerPeerX25519Key(peer.publicKey, peer.x25519Key);
-        unawaited(ChatStorageService.instance
-            .updateContactX25519Key(peer.publicKey, peer.x25519Key));
+        unawaited(
+            _applyRelayObservedX25519Key(peer.publicKey, peer.x25519Key));
       }
       if (peer.publicKey.isNotEmpty) {
         _peerOnline[peer.publicKey.toLowerCase()] = peer.online;
@@ -2101,6 +2098,30 @@ class RelayService with WidgetsBindingObserver {
     }
   }
 
+  /// Applies a relay-observed X25519 key for [publicKey] unless it would
+  /// silently overwrite an already-established key for a saved contact.
+  /// The relay's `register` message has no proof-of-possession — anyone can
+  /// claim any publicKey — so a `presence`/`search_result` reporting a
+  /// changed key for someone we already have a key for is exactly what a
+  /// relay-side identity-spoofing MITM looks like (see security-review).
+  /// First contact (no saved key yet) still trusts on first use, as before.
+  Future<void> _applyRelayObservedX25519Key(
+      String publicKey, String x25519Key) async {
+    if (x25519Key.isEmpty || publicKey.isEmpty) return;
+    final existing = await ChatStorageService.instance.getContact(publicKey);
+    final knownKey = existing?.x25519Key ?? '';
+    if (knownKey.isNotEmpty && knownKey != x25519Key) {
+      debugPrint(
+          '[RLINK][Relay] Rejected relay-observed X25519 key change for known contact '
+          '${publicKey.substring(0, 8)} (possible identity-spoofing/MITM attempt)');
+      return;
+    }
+    _peerX25519Keys[publicKey.toLowerCase()] = x25519Key;
+    BleService.instance.registerPeerX25519Key(publicKey, x25519Key);
+    unawaited(
+        ChatStorageService.instance.updateContactX25519Key(publicKey, x25519Key));
+  }
+
   void _handlePresence(Map<String, dynamic> msg) {
     final publicKey = msg['publicKey'] as String?;
     final online = _relayJsonBool(msg['online']);
@@ -2114,10 +2135,7 @@ class RelayService with WidgetsBindingObserver {
     // Store X25519 key if provided (for E2E encryption with relay-discovered peers)
     final x25519Key = msg['x25519'] as String?;
     if (x25519Key != null && x25519Key.isNotEmpty) {
-      _peerX25519Keys[publicKey.toLowerCase()] = x25519Key;
-      BleService.instance.registerPeerX25519Key(publicKey, x25519Key);
-      unawaited(ChatStorageService.instance
-          .updateContactX25519Key(publicKey, x25519Key));
+      unawaited(_applyRelayObservedX25519Key(publicKey, x25519Key));
     }
 
     // Store nick and username from presence data
