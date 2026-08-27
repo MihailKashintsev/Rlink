@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'crypto_service.dart';
 import 'gossip_router.dart';
 
 /// A second, minimal connection to ONE extra relay — the simplest possible
@@ -45,6 +46,7 @@ class SecondaryRelayLink {
     'delete',
     'react',
     'dm_pin',
+    'dm_ephemeral',
     'call_sig',
   };
 
@@ -53,9 +55,23 @@ class SecondaryRelayLink {
   Timer? _reconnectTimer;
   bool _disposed = false;
   bool _registered = false;
+  bool _registrationSent = false;
   int _retryCount = 0;
 
   bool get isReady => _registered;
+
+  Future<void> _sendRegister(String? proof) async {
+    if (_registrationSent) return;
+    _registrationSent = true;
+    final key = myPublicKey();
+    _channel?.sink.add(jsonEncode({
+      'type': 'register',
+      'publicKey': key,
+      'nick': myNick(),
+      if (myX25519().isNotEmpty) 'x25519': myX25519(),
+      if (proof != null) 'proof': proof,
+    }));
+  }
 
   Future<void> connect() async {
     if (_disposed || _channel != null) return;
@@ -65,14 +81,17 @@ class SecondaryRelayLink {
       final ws = WebSocketChannel.connect(Uri.parse(url));
       await ws.ready;
       _channel = ws;
+      _registrationSent = false;
       _sub = ws.stream
           .listen(_onMessage, onDone: _onClosed, onError: (_) => _onClosed());
-      ws.sink.add(jsonEncode({
-        'type': 'register',
-        'publicKey': key,
-        'nick': myNick(),
-        if (myX25519().isNotEmpty) 'x25519': myX25519(),
-      }));
+      // Wait briefly for the server's proof-of-possession challenge (see
+      // relay_server's `register` handler / security-review, 2026-08-27) so
+      // we register "verified" and can't be evicted by someone else merely
+      // claiming our key. An older relay that never sends one still gets an
+      // unsigned register after the grace period, same as before this fix.
+      Timer(const Duration(milliseconds: 500), () {
+        if (_channel == ws) unawaited(_sendRegister(null));
+      });
     } catch (e) {
       debugPrint('[RLINK][Relay2] connect failed ($url): $e');
       _channel = null;
@@ -89,6 +108,14 @@ class SecondaryRelayLink {
       return;
     }
     switch (msg['type']) {
+      case 'challenge':
+        final nonce = msg['nonce'] as String?;
+        if (nonce != null && nonce.isNotEmpty) {
+          unawaited(CryptoService.instance.signUtf8Message(nonce).then(
+              _sendRegister,
+              onError: (_) => _sendRegister(null)));
+        }
+        break;
       case 'registered':
         _registered = true;
         _retryCount = 0;

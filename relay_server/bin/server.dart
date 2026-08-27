@@ -81,6 +81,13 @@ class _User {
   String nick;
   String x25519Key;
   bool away = false; // true = backgrounded (don't show as online to others)
+  // True once this connection proved possession of publicKey's private key
+  // by signing the server's per-connection challenge nonce (see `register`
+  // handling). A verified connection can only be evicted by another
+  // registration that also proves possession — closes the identity-spoofing
+  // hole where anyone could previously register as any publicKey (see
+  // security-review, 2026-08-27).
+  bool verified = false;
   String get shortId =>
       publicKey.length > 8 ? publicKey.substring(0, 8) : publicKey;
   DateTime connectedAt = DateTime.now();
@@ -89,7 +96,8 @@ class _User {
       {required this.ws,
       required this.publicKey,
       required this.nick,
-      this.x25519Key = ''});
+      this.x25519Key = '',
+      this.verified = false});
 }
 
 // ── Server state ────────────────────────────────────────────────
@@ -321,6 +329,15 @@ String _randomUrlToken() {
 String _randomClaimId() {
   final rnd = Random.secure();
   final bytes = List<int>.generate(16, (_) => rnd.nextInt(256));
+  return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+}
+
+/// One-time per-connection nonce a client must sign with its claimed
+/// identity's private key to register as "verified" — see the `register`
+/// handler. 32 bytes so it can't feasibly be guessed/replayed.
+String _randomChallengeNonce() {
+  final rnd = Random.secure();
+  final bytes = List<int>.generate(32, (_) => rnd.nextInt(256));
   return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 }
 
@@ -2651,9 +2668,22 @@ shelf.Handler _wsHandler() {
   // живым через tuna и другие прокси (обычный idle-timeout 60-120 сек).
   return webSocketHandler((WebSocketChannel ws) {
     _User? user;
+    // Guards the register step across the `await` below — without it, a
+    // second message arriving while the first register is still verifying
+    // would also see `user == null` and race it as a second registration.
+    var registering = false;
+    // Sent immediately so a client CAN sign it as proof-of-possession in its
+    // `register` message. Older clients that don't know about this message
+    // simply ignore it and register unverified, same as before this fix —
+    // see `verified` on _User for what that gates.
+    final challengeNonce = _randomChallengeNonce();
+    try {
+      ws.sink.add(jsonEncode({'type': 'challenge', 'nonce': challengeNonce}));
+    } catch (_) {}
     ws.stream.listen(
-      (raw) {
+      (raw) async {
         if (user == null) {
+          if (registering) return;
           // First message must be registration
           if (raw is! String) return;
           try {
@@ -2672,9 +2702,38 @@ shelf.Handler _wsHandler() {
               return;
             }
             final publicKey = publicKeyRaw.toLowerCase();
+            registering = true;
 
-            // Disconnect previous connection for same key
+            // Proof-of-possession: a client that signs our challenge nonce
+            // with publicKey's private key proves it actually holds that
+            // identity. Absent/invalid proof still registers (older clients
+            // don't send one) but stays "unverified" — see the eviction
+            // check right below for what that costs it.
+            final proofHex = msg['proof'] as String?;
+            final isVerified = proofHex != null &&
+                proofHex.isNotEmpty &&
+                await _verifyEd25519SignatureOnUtf8(
+                    challengeNonce, proofHex, publicKey);
+
+            // Disconnect previous connection for same key — UNLESS it was
+            // itself verified and this new registration can't prove it's
+            // the same identity. Otherwise anyone could evict/impersonate
+            // an already-verified user just by claiming their key (see
+            // security-review, 2026-08-27).
             final prev = _users[publicKey];
+            if (prev != null && prev.verified && !isVerified) {
+              try {
+                ws.sink.add(jsonEncode({
+                  'type': 'error',
+                  'msg': 'identity_verification_required',
+                }));
+              } catch (_) {}
+              try {
+                ws.sink.close(4009, 'identity_verification_required');
+              } catch (_) {}
+              registering = false;
+              return;
+            }
             if (prev != null) {
               try {
                 prev.ws.sink.close(4001, 'replaced_by_new_connection');
@@ -2682,7 +2741,11 @@ shelf.Handler _wsHandler() {
             }
 
             user = _User(
-                ws: ws, publicKey: publicKey, nick: nick, x25519Key: x25519Key);
+                ws: ws,
+                publicKey: publicKey,
+                nick: nick,
+                x25519Key: x25519Key,
+                verified: isVerified);
             _users[publicKey] = user!;
             if (_isBotBlockedOrRevoked(publicKey)) {
               try {

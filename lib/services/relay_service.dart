@@ -72,6 +72,12 @@ class RelayService with WidgetsBindingObserver {
   /// Счётчик неудачных попыток подключения (для exp backoff).
   int _retryCount = 0;
 
+  /// Proof-of-possession handshake state for the current connection — see
+  /// the 'challenge' case in _onMessage and the register-send flow in
+  /// connect(). Reset per connection attempt.
+  bool _registrationSent = false;
+  Future<void> Function(String? proof)? _pendingRegisterSend;
+
   /// Rate limiting backoff timer
   Timer? _retryTimer;
   int _retryBackoffMs = 100; // Start with 100ms, exponential backoff
@@ -722,18 +728,36 @@ class RelayService with WidgetsBindingObserver {
         },
       );
 
-      // Register with server (include X25519 key for E2E encryption)
+      // Register with server (include X25519 key for E2E encryption). The
+      // server sends a one-time 'challenge' nonce right after connecting —
+      // signing it proves we actually hold this identity's private key
+      // ("verified"), which protects us from someone else registering under
+      // our public key later and evicting/impersonating us (see
+      // security-review, 2026-08-27). An older/self-hosted relay that
+      // doesn't send a challenge just gets an unsigned register after the
+      // grace period below, exactly as before this fix.
       final profile = ProfileService.instance.profile;
       final nick = profile?.nickname ?? '';
       final username = profile?.username ?? '';
       final x25519Key = CryptoService.instance.x25519PublicKeyBase64;
-      await _safeSend({
-        'type': 'register',
-        'publicKey': myKey,
-        'nick': nick,
-        if (username.isNotEmpty) 'username': username,
-        if (x25519Key.isNotEmpty) 'x25519': x25519Key,
-      }, context: 'register');
+      _registrationSent = false;
+      Future<void> sendRegister(String? proof) async {
+        if (_registrationSent) return;
+        _registrationSent = true;
+        await _safeSend({
+          'type': 'register',
+          'publicKey': myKey,
+          'nick': nick,
+          if (username.isNotEmpty) 'username': username,
+          if (x25519Key.isNotEmpty) 'x25519': x25519Key,
+          if (proof != null) 'proof': proof,
+        }, context: 'register');
+      }
+
+      _pendingRegisterSend = sendRegister;
+      Timer(const Duration(milliseconds: 500), () {
+        if (connectEpoch == _connectEpoch) unawaited(sendRegister(null));
+      });
 
       // Start ping timer (keep-alive every 30s) с pong-watchdog'ом.
       // Если за 70 сек не пришёл ни один pong — соединение мертво (tuna закрыла,
@@ -1292,6 +1316,16 @@ class RelayService with WidgetsBindingObserver {
     try {
       final type = msg['type']?.toString();
       switch (type) {
+        case 'challenge':
+          final nonce = msg['nonce'] as String?;
+          final sendRegister = _pendingRegisterSend;
+          if (nonce != null && nonce.isNotEmpty && sendRegister != null) {
+            unawaited(CryptoService.instance.signUtf8Message(nonce).then(
+                sendRegister,
+                onError: (_) => sendRegister(null)));
+          }
+          break;
+
         case 'registered':
           final count = _relayJsonInt(msg['onlineCount']);
           onlineCount.value = count;
