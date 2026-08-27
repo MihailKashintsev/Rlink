@@ -44,6 +44,12 @@ class BleService {
   final Map<String, bool> _ratchetCapable = {};
   // BLE device ID → last known RSSI (for radar distance estimation)
   final Map<String, int> _rssiValues = {};
+  // Ed25519 public key → (hops away, when observed) — derived from the TTL
+  // remaining on their last profile broadcast (see gossip_router.dart). Only
+  // meaningful for a little while: mesh topology moves, so a stale entry
+  // (see [_hopsStaleAfter]) is treated as unknown rather than shown as current.
+  final Map<String, (int, DateTime)> _hopsAway = {};
+  static const _hopsStaleAfter = Duration(minutes: 2);
 
   // Connect-attempt backoff: consecutive failures and the earliest time the
   // next attempt may run. Without this, a peer that's failing to connect
@@ -119,6 +125,7 @@ class BleService {
     _publicKeyToBleId.clear();
     _x25519Keys.clear();
     _ratchetCapable.clear();
+    _hopsAway.clear();
     debugPrint('[RLINK][BLE] Key mappings cleared');
     peerMappingsVersion.value++;
   }
@@ -136,6 +143,22 @@ class BleService {
   /// Возвращает X25519 публичный ключ пира (base64) или null если неизвестен.
   String? getPeerX25519Key(String publicKey) =>
       _x25519Keys[publicKey.toLowerCase()] ?? _x25519Keys[publicKey];
+
+  /// Записывает приблизительное число хопов до пира (для радара mesh-сети),
+  /// выведенное из TTL последнего profile-пакета.
+  void registerPeerHops(String publicKey, int hops) {
+    _hopsAway[publicKey.toLowerCase()] = (hops, DateTime.now());
+  }
+
+  /// Число хопов до пира, если наблюдение не устарело — иначе null (пир мог
+  /// уйти из радиуса mesh, старое значение вводило бы в заблуждение).
+  int? hopsAwayFor(String publicKey) {
+    final entry = _hopsAway[publicKey.toLowerCase()];
+    if (entry == null) return null;
+    final (hops, seenAt) = entry;
+    if (DateTime.now().difference(seenAt) > _hopsStaleAfter) return null;
+    return hops;
+  }
 
   /// Записывает, что пир анонсировал поддержку Double Ratchet в своём
   /// последнем profile-пакете.

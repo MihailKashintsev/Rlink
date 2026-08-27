@@ -93,6 +93,7 @@ void main() {
       supportsRatchet,
       linkedDeviceKey,
       sensitiveFieldsSigned,
+      hopsAway,
     ) {
       received = [publicKey, x25519Key, linkedDeviceKey, sensitiveFieldsSigned];
     };

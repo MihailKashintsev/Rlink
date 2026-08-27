@@ -1764,7 +1764,8 @@ Future<void> initServices() async {
       onProfile: (bleId, publicKey, nick, username, color, emoji, x25519Key,
           tags, statusEmojiPayload, statusEmojiAutoPayloadJson,
           nickColorPayload, birthdayPayload, supportsRatchetPeer,
-          linkedDeviceKeyPeer, sensitiveFieldsSigned) async {
+          linkedDeviceKeyPeer, sensitiveFieldsSigned, hopsAway) async {
+        BleService.instance.registerPeerHops(publicKey, hopsAway);
         if (statusEmojiAutoPayloadJson != null &&
             statusEmojiAutoPayloadJson.isNotEmpty) {
           try {
@@ -3183,8 +3184,10 @@ void _bindGossipFallbackHandlersIfMissing() {
       birthdayPayload,
       supportsRatchetPeer,
       linkedDeviceKeyPeer,
-      sensitiveFieldsSigned) {
+      sensitiveFieldsSigned,
+      hopsAway) {
     debugPrint('[RLINK][Fallback] Bind onProfileReceived from $nick');
+    BleService.instance.registerPeerHops(publicKey, hopsAway);
     // Register the peer's key mapping
     BleService.instance.registerPeerKey(bleId, publicKey);
     // Register the peer's X25519 key for E2E encryption

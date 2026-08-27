@@ -179,6 +179,7 @@ typedef OnProfileReceived = void Function(
   bool supportsRatchet,
   String? linkedDeviceKey,
   bool sensitiveFieldsSigned,
+  int hopsAway,
 );
 
 /// Canonical string signed over the security-sensitive profile fields (X25519
@@ -1914,6 +1915,13 @@ class GossipRouter {
             RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(publicKey);
 
         if (isValidKey && nick != null && nick.isNotEmpty && color != null) {
+          // Профили рассылаются с фиксированным стартовым TTL (_kProfileTtl)
+          // и каждый ретранслятор decrements его перед пересылкой — значит
+          // ttl в ПОЛУЧЕННОМ пакете говорит, сколько хопов он уже проехал:
+          // ttl == _kProfileTtl → мы первый хоп (прямой сосед отправителя).
+          // Приблизительно (топология меняется), но честно вычислено из
+          // реального поля протокола, а не выдумано — для радара mesh-сети.
+          final hopsAway = (_kProfileTtl - packet.ttl + 1).clamp(1, 99);
           // Профиль не подписывает отправитель канала/непрямой ретранслятор —
           // подпись всегда должна соответствовать заявленному id, иначе это
           // подделка чувствительных полей (x25519/linkedDeviceKey/ratchet) под
@@ -1946,7 +1954,8 @@ class GossipRouter {
               birthdayPayload,
               supportsRatchetPeer,
               linkedDeviceKeyPeer,
-              sensitiveFieldsSigned);
+              sensitiveFieldsSigned,
+              hopsAway);
         } else {
           debugPrint(
               '[RLINK][Gossip] Invalid profile packet: key=$publicKey nick=$nick');

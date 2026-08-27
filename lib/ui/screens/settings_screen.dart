@@ -50,6 +50,7 @@ import '../screens/premium_status_screen.dart';
 import '../../services/premium_service.dart';
 import '../screens/chat_screen.dart';
 import '../screens/diagnostics_screen.dart';
+import '../screens/mesh_radar_screen.dart';
 import '../screens/mesh_status_screen.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/update_restart_dialog.dart';
@@ -3603,6 +3604,18 @@ class _NetworkPageState extends State<_NetworkPage> {
               onTap: () => Navigator.push(
                 context,
                 rlinkOpaquePushRoute(const MeshStatusScreen()),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.radar, color: cs.primary),
+              title: const Text('Радар mesh-сети'),
+              subtitle: const Text(
+                'Кто рядом визуально: напрямую и через сеть',
+                style: TextStyle(fontSize: 12),
+              ),
+              onTap: () => Navigator.push(
+                context,
+                rlinkOpaquePushRoute(const MeshRadarScreen()),
               ),
             ),
             ListTile(
