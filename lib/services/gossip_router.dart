@@ -464,6 +464,9 @@ class GossipRouter {
   /// Закрепление в личном чате: { mid, a, from, r? }
   Future<void> Function(Map<String, dynamic> payload)? onDmPin;
 
+  /// Таймер исчезающих сообщений в личном чате: { sec, from, r? }
+  Future<void> Function(Map<String, dynamic> payload)? onDmEphemeral;
+
   /// poll_vote: { k: kind, t: targetId, v: voterId, c: [int] }
   void Function(Map<String, dynamic> payload)? onPollVote;
 
@@ -750,6 +753,34 @@ class GossipRouter {
       payload: {
         'mid': messageId,
         'a': add,
+        'from': fromId,
+        if (rid8 != null) 'r': rid8,
+      },
+    );
+    _markSeen(packet.id);
+    for (var i = 0; i < 2; i++) {
+      await _forward(packet);
+      if (i < 1) await Future.delayed(const Duration(milliseconds: 300));
+    }
+  }
+
+  /// Синхронизация таймера исчезающих сообщений в личном чате (симметрично —
+  /// применяется у обоих участников к новым сообщениям). [durationSeconds]
+  /// null/0 выключает таймер.
+  Future<void> sendDmEphemeralSetting({
+    required String recipientId,
+    required int? durationSeconds,
+    required String fromId,
+  }) async {
+    final rid8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : null;
+    final packet = GossipPacket(
+      id: _uuid.v4(),
+      type: 'dm_ephemeral',
+      ttl: 5,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      recipientId: recipientId,
+      payload: {
+        'sec': durationSeconds ?? 0,
         'from': fromId,
         if (rid8 != null) 'r': rid8,
       },
@@ -1985,6 +2016,14 @@ class GossipRouter {
 
       if (packet.type == 'dm_pin') {
         final handler = onDmPin;
+        if (handler != null) {
+          await handler(packet.payload);
+        }
+        return;
+      }
+
+      if (packet.type == 'dm_ephemeral') {
+        final handler = onDmEphemeral;
         if (handler != null) {
           await handler(packet.payload);
         }

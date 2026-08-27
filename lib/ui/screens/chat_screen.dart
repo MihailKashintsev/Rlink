@@ -45,6 +45,7 @@ import '../../models/shared_collab.dart';
 import '../../models/contact.dart';
 import '../../services/ai_bot_constants.dart';
 import '../../services/app_settings.dart';
+import '../../services/contact_trust_service.dart';
 import '../../services/gigachat_service.dart';
 import '../../services/lib_bot_service.dart';
 import '../../services/local_transcription_service.dart';
@@ -954,6 +955,63 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  /// A verified contact's encryption key changing is exactly the signal the
+  /// safety-number system exists to catch, but until now it only surfaced if
+  /// the user happened to manually reopen that screen — silent otherwise
+  /// (see security-review, 2026-08-27). Surface it the moment the chat opens
+  /// instead, the same way the bot-relay-mode banner above does.
+  Future<void> _checkKeyChangeWarning() async {
+    final changedAt =
+        await ContactTrustService.instance.keyChangedAt(_resolvedPeerId);
+    if (changedAt == null || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      messenger?.hideCurrentMaterialBanner();
+      messenger?.showMaterialBanner(
+        MaterialBanner(
+          content: Text(
+              'Ключ шифрования у ${widget.peerNickname} изменился с момента последней проверки. '
+              'Это может означать, что собеседник переустановил приложение — или что переписку перехватывают.'),
+          leading: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                messenger.hideCurrentMaterialBanner();
+                final c =
+                    await ChatStorageService.instance.getContact(_resolvedPeerId);
+                final x = RelayService.instance
+                        .getPeerX25519Key(_resolvedPeerId) ??
+                    c?.x25519Key ??
+                    '';
+                if (!mounted) return;
+                await Navigator.push<void>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SafetyNumberScreen(
+                      peerId: _resolvedPeerId,
+                      peerName: widget.peerNickname,
+                      peerX25519Key: x.trim(),
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Проверить'),
+            ),
+            TextButton(
+              onPressed: () {
+                unawaited(ContactTrustService.instance
+                    .acknowledgeChange(_resolvedPeerId));
+                messenger.hideCurrentMaterialBanner();
+              },
+              child: const Text('Скрыть'),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
   void _syncHeaderPathsFromWidgetAndRelay() {
     final pk = _looksLikePublicKey(_resolvedPeerId) ? _resolvedPeerId : null;
     final wA = widget.peerAvatarImagePath;
@@ -1067,6 +1125,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       });
     }
+    unawaited(_checkKeyChangeWarning());
     _pinsListener = () {
       if (mounted) unawaited(_reloadPins());
     };
@@ -6216,6 +6275,19 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (chosen == null || !mounted) return;
     await AppSettings.instance.setAutoDeleteForPeer(_resolvedPeerId, chosen);
+    // Sync to the peer so BOTH sides purge on the same timer — otherwise
+    // only this device's copy would ever disappear, which isn't really
+    // "disappearing messages" (see security-review follow-up, 2026-08-28).
+    if (_looksLikePublicKey(_resolvedPeerId)) {
+      final myId = CryptoService.instance.publicKeyHex;
+      if (myId.isNotEmpty) {
+        unawaited(GossipRouter.instance.sendDmEphemeralSetting(
+          recipientId: _resolvedPeerId,
+          durationSeconds: chosen,
+          fromId: myId,
+        ));
+      }
+    }
     await _sweepDisappearingMessages();
     if (!mounted) return;
     await ChatStorageService.instance.loadMessages(_resolvedPeerId);

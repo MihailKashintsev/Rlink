@@ -2852,6 +2852,16 @@ Future<void> initServices() async {
       }
     };
 
+    GossipRouter.instance.onDmEphemeral = (payload) async {
+      final from = payload['from'] as String?;
+      final sec = (payload['sec'] as num?)?.toInt() ?? 0;
+      final rid8 = payload['r'] as String?;
+      final myKey = CryptoService.instance.publicKeyHex;
+      if (from == null || myKey.isEmpty) return;
+      if (rid8 != null && !myKey.startsWith(rid8)) return;
+      await AppSettings.instance.setAutoDeleteForPeer(from, sec);
+    };
+
     GossipRouter.instance.onGroupInvite = (payload) {
       final groupId = payload['groupId'] as String?;
       final groupName = payload['groupName'] as String?;
