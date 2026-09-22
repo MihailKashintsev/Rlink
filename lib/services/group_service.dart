@@ -798,6 +798,32 @@ class GroupService {
     ));
   }
 
+  /// Renames a topic and/or changes its emoji.
+  Future<void> renameTopic({
+    required String groupId,
+    required String topicId,
+    required String name,
+    required String emoji,
+    required String by,
+  }) async {
+    await _ensureDbReady();
+    await _db!.update(
+      'group_topics',
+      {'name': name, 'emoji': emoji},
+      where: 'id = ? AND group_id = ?',
+      whereArgs: [topicId, groupId],
+    );
+    _bump();
+    unawaited(GossipRouter.instance.sendGroupTopicUpdate(
+      groupId: groupId,
+      topicId: topicId,
+      action: 'rename',
+      by: by,
+      name: name,
+      emoji: emoji,
+    ));
+  }
+
   /// Applies an incoming topic broadcast from another member — never
   /// re-broadcasts (that would loop).
   Future<void> applyIncomingTopicUpdate({
@@ -814,6 +840,16 @@ class GroupService {
           whereArgs: [groupId, topicId]);
       await _db!.delete('group_topics',
           where: 'id = ? AND group_id = ?', whereArgs: [topicId, groupId]);
+    } else if (action == 'rename') {
+      // Renaming an unknown topic (e.g. its own 'create' broadcast never
+      // arrived) is a no-op rather than fabricating a row with a fake
+      // creator/timestamp.
+      await _db!.update(
+        'group_topics',
+        {if (name != null) 'name': name, if (emoji != null) 'emoji': emoji},
+        where: 'id = ? AND group_id = ?',
+        whereArgs: [topicId, groupId],
+      );
     } else if (name != null) {
       await _db!.insert(
         'group_topics',

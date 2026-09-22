@@ -26,6 +26,7 @@ import '../../services/crypto_service.dart';
 import '../widgets/animated_transitions.dart';
 import '../../services/broadcast_outbox_service.dart';
 import '../../services/gossip_router.dart';
+import '../../services/google_drive_channel_backup.dart';
 import '../../services/group_backup_service.dart';
 import '../../services/group_service.dart';
 import '../../services/notification_service.dart';
@@ -614,6 +615,23 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       _topics = [..._topics, topic];
       _currentTopicId = topic.id;
     });
+    unawaited(_load());
+  }
+
+  Future<void> _editTopic(GroupTopic topic) async {
+    final result = await showDialog<({String name, String emoji})>(
+      context: context,
+      builder: (_) => _CreateTopicDialog(
+          initialName: topic.name, initialEmoji: topic.emoji),
+    );
+    if (result == null || result.name.trim().isEmpty) return;
+    await GroupService.instance.renameTopic(
+      groupId: _group.id,
+      topicId: topic.id,
+      name: result.name.trim(),
+      emoji: result.emoji,
+      by: _myId,
+    );
     unawaited(_load());
   }
 
@@ -2175,6 +2193,19 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   /// group_update — новые участники подтянут всю историю фоном.
   Future<void> _publishHistoryToDrive() async {
     final messenger = ScaffoldMessenger.of(context);
+    // publishBackup would just fail after a while and blame "check Settings"
+    // — check the same pairing it's about to use for the upload *before*
+    // showing a 30s "publishing…" spinner for something already known to
+    // fail with no account linked.
+    final hasAccount =
+        GoogleDriveChannelBackup.channelAccountPairing(_group.id) != null ||
+            GoogleDriveChannelBackup.activeRelayPairing != null;
+    if (!hasAccount) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text(
+              'Сначала привяжите Google Drive: Настройки → Google Drive')));
+      return;
+    }
     messenger.showSnackBar(const SnackBar(
         content: Text('Публикация истории в Google Drive…'),
         duration: Duration(seconds: 30)));
@@ -2699,7 +2730,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             _topicChip(cs,
                 label: '${t.emoji} ${t.name}',
                 selected: _currentTopicId == t.id,
-                onTap: () => _switchTopic(t.id)),
+                onTap: () => _switchTopic(t.id),
+                onLongPress: () => unawaited(_editTopic(t))),
           ActionChip(
             avatar: const Icon(Icons.add, size: 16),
             label: const Text('Тема'),
@@ -2714,8 +2746,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   Widget _topicChip(ColorScheme cs,
       {required String label,
       required bool selected,
-      required VoidCallback onTap}) {
-    return ChoiceChip(
+      required VoidCallback onTap,
+      VoidCallback? onLongPress}) {
+    final chip = ChoiceChip(
       label: Text(label),
       selected: selected,
       onSelected: (_) => onTap(),
@@ -2725,6 +2758,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
       ),
     );
+    if (onLongPress == null) return chip;
+    return GestureDetector(onLongPress: onLongPress, child: chip);
   }
 
   @override
@@ -3764,15 +3799,19 @@ class _GroupVideoFullScreenState extends State<_GroupVideoFullScreen> {
 }
 
 class _CreateTopicDialog extends StatefulWidget {
-  const _CreateTopicDialog();
+  final String? initialName;
+  final String? initialEmoji;
+  const _CreateTopicDialog({this.initialName, this.initialEmoji});
 
   @override
   State<_CreateTopicDialog> createState() => _CreateTopicDialogState();
 }
 
 class _CreateTopicDialogState extends State<_CreateTopicDialog> {
-  final _nameCtrl = TextEditingController();
-  final _emojiCtrl = TextEditingController(text: '💬');
+  late final _nameCtrl = TextEditingController(text: widget.initialName ?? '');
+  late final _emojiCtrl =
+      TextEditingController(text: widget.initialEmoji ?? '💬');
+  bool get _isEditing => widget.initialName != null;
 
   @override
   void dispose() {
@@ -3784,7 +3823,7 @@ class _CreateTopicDialogState extends State<_CreateTopicDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Новая тема'),
+      title: Text(_isEditing ? 'Изменить тему' : 'Новая тема'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3827,7 +3866,7 @@ class _CreateTopicDialogState extends State<_CreateTopicDialog> {
               (name: name, emoji: emoji.isEmpty ? '💬' : emoji),
             );
           },
-          child: const Text('Создать'),
+          child: Text(_isEditing ? 'Сохранить' : 'Создать'),
         ),
       ],
     );

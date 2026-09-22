@@ -3314,7 +3314,7 @@ class GossipRouter {
   Future<void> sendGroupTopicUpdate({
     required String groupId,
     required String topicId,
-    required String action, // 'create' | 'delete'
+    required String action, // 'create' | 'rename' | 'delete'
     required String by,
     String? name,
     String? emoji,
