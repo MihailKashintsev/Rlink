@@ -101,7 +101,7 @@ class GroupService {
     final path = await _dbPath('groups.db');
     _db = await openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: (db, v) async {
         await db.execute('''
           CREATE TABLE groups (
@@ -110,6 +110,7 @@ class GroupService {
             creator_id TEXT NOT NULL,
             members TEXT NOT NULL,
             moderators TEXT DEFAULT '',
+            read_only TEXT DEFAULT '',
             avatar_color INTEGER DEFAULT 0xFF5C6BC0,
             avatar_emoji TEXT DEFAULT '👥',
             avatar_img_path TEXT,
@@ -152,6 +153,12 @@ class GroupService {
         await _createGroupTopicsTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 10) {
+          try {
+            await db.execute(
+                "ALTER TABLE groups ADD COLUMN read_only TEXT DEFAULT ''");
+          } catch (_) {}
+        }
         if (oldVersion < 9) {
           try {
             await db
@@ -251,6 +258,7 @@ class GroupService {
       'creator_id': group.creatorId,
       'members': group.memberIds.join(','),
       'moderators': group.moderatorIds.join(','),
+      'read_only': group.readOnlyIds.join(','),
       'avatar_color': group.avatarColor,
       'avatar_emoji': group.avatarEmoji,
       'created_at': group.createdAt,
@@ -275,6 +283,10 @@ class GroupService {
                   .where((s) => s.isNotEmpty)
                   .toList(),
               moderatorIds: ((r['moderators'] as String?) ?? '')
+                  .split(',')
+                  .where((s) => s.isNotEmpty)
+                  .toList(),
+              readOnlyIds: ((r['read_only'] as String?) ?? '')
                   .split(',')
                   .where((s) => s.isNotEmpty)
                   .toList(),
@@ -392,6 +404,10 @@ class GroupService {
           .split(',')
           .where((s) => s.isNotEmpty)
           .toList(),
+      readOnlyIds: ((r['read_only'] as String?) ?? '')
+          .split(',')
+          .where((s) => s.isNotEmpty)
+          .toList(),
       avatarColor: r['avatar_color'] as int? ?? 0xFF5C6BC0,
       avatarEmoji: r['avatar_emoji'] as String? ?? '👥',
       avatarImagePath: r['avatar_img_path'] as String?,
@@ -410,6 +426,7 @@ class GroupService {
         'name': group.name,
         'members': group.memberIds.join(','),
         'moderators': group.moderatorIds.join(','),
+        'read_only': group.readOnlyIds.join(','),
         'avatar_color': group.avatarColor,
         'avatar_emoji': group.avatarEmoji,
         'avatar_img_path': group.avatarImagePath,
@@ -437,6 +454,7 @@ class GroupService {
       updaterId: CryptoService.instance.publicKeyHex,
       memberIds: group.memberIds,
       moderatorIds: group.moderatorIds,
+      readOnlyIds: group.readOnlyIds,
       avatarColor: group.avatarColor,
       avatarEmoji: group.avatarEmoji,
       driveBackupEnabled: group.driveBackupEnabled,
@@ -457,6 +475,24 @@ class GroupService {
       mods.remove(userId);
     }
     final updated = group.copyWith(moderatorIds: mods);
+    await updateGroup(updated);
+    broadcastGroupMeta(updated);
+    return updated;
+  }
+
+  /// Mutes/unmutes [userId] (usually a bot) — a read-only member is still a
+  /// full member (present, receives history) but their own outgoing
+  /// messages are ignored by every other client on receipt.
+  Future<Group?> setReadOnly(String groupId, String userId, bool readOnly) async {
+    final group = await getGroup(groupId);
+    if (group == null) return null;
+    final ro = List<String>.from(group.readOnlyIds);
+    if (readOnly) {
+      if (!ro.contains(userId)) ro.add(userId);
+    } else {
+      ro.remove(userId);
+    }
+    final updated = group.copyWith(readOnlyIds: ro);
     await updateGroup(updated);
     broadcastGroupMeta(updated);
     return updated;

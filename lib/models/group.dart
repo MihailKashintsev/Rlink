@@ -8,6 +8,10 @@ class Group {
   final List<String> memberIds; // publicKeyHex всех участников
   final List<String>
       moderatorIds; // publicKeyHex модераторов (могут всё, кроме удаления группы)
+  // publicKeyHex участников без права писать — присутствуют и читают, но их
+  // сообщения остальные клиенты молча игнорируют при приёме. Для ботов,
+  // которым нужен доступ на чтение без права постить самостоятельно.
+  final List<String> readOnlyIds;
   final int avatarColor;
   final String avatarEmoji;
   final String? avatarImagePath;
@@ -25,6 +29,7 @@ class Group {
     required this.creatorId,
     required this.memberIds,
     this.moderatorIds = const [],
+    this.readOnlyIds = const [],
     this.avatarColor = 0xFF5C6BC0,
     this.avatarEmoji = '👥',
     this.avatarImagePath,
@@ -39,12 +44,18 @@ class Group {
   bool canModerate(String userId) =>
       userId == creatorId || moderatorIds.contains(userId);
 
+  /// False for a member explicitly muted via [readOnlyIds] — their own
+  /// outgoing messages should be sent locally but ignored by everyone else
+  /// on receipt (see main.dart's onGroupMessage).
+  bool canPost(String userId) => !readOnlyIds.contains(userId);
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
         'creator': creatorId,
         'members': memberIds,
         if (moderatorIds.isNotEmpty) 'mods': moderatorIds,
+        if (readOnlyIds.isNotEmpty) 'ro': readOnlyIds,
         'color': avatarColor,
         'emoji': avatarEmoji,
         if (avatarImagePath != null) 'img': avatarImagePath,
@@ -62,6 +73,8 @@ class Group {
         memberIds: (j['members'] as List).cast<String>(),
         moderatorIds:
             j['mods'] != null ? (j['mods'] as List).cast<String>() : const [],
+        readOnlyIds:
+            j['ro'] != null ? (j['ro'] as List).cast<String>() : const [],
         avatarColor: j['color'] as int? ?? 0xFF5C6BC0,
         avatarEmoji: j['emoji'] as String? ?? '👥',
         avatarImagePath: j['img'] as String?,
@@ -86,6 +99,7 @@ class Group {
     String? name,
     List<String>? memberIds,
     List<String>? moderatorIds,
+    List<String>? readOnlyIds,
     int? avatarColor,
     String? avatarEmoji,
     String? avatarImagePath,
@@ -100,6 +114,7 @@ class Group {
         creatorId: creatorId,
         memberIds: memberIds ?? this.memberIds,
         moderatorIds: moderatorIds ?? this.moderatorIds,
+        readOnlyIds: readOnlyIds ?? this.readOnlyIds,
         avatarColor: avatarColor ?? this.avatarColor,
         avatarEmoji: avatarEmoji ?? this.avatarEmoji,
         avatarImagePath: avatarImagePath ?? this.avatarImagePath,

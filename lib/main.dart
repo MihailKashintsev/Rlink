@@ -2699,6 +2699,12 @@ Future<void> initServices() async {
       final lng = (payload['lng'] as num?)?.toDouble();
       final pj = payload['pj'] as String?;
       if (groupId == null || senderId == null || messageId == null) return;
+      // A member muted via readOnlyIds (typically a bot given read access
+      // without post rights) can still be present and receive — but every
+      // other client ignores anything they try to send, enforced here on
+      // receipt since there's no server to gate it centrally.
+      final groupForMute = await GroupService.instance.getGroup(groupId);
+      if (groupForMute != null && !groupForMute.canPost(senderId)) return;
       final hasMedia = payload['img'] == true ||
           payload['vid'] == true ||
           payload['file'] == true;
@@ -2924,6 +2930,9 @@ Future<void> initServices() async {
         final mods =
             (payload['moderatorIds'] as List<dynamic>?)?.cast<String>() ??
                 existing.moderatorIds;
+        final readOnly =
+            (payload['readOnlyIds'] as List<dynamic>?)?.cast<String>() ??
+                existing.readOnlyIds;
         // I was kicked → leave locally.
         if (myId.isNotEmpty &&
             existing.memberIds.contains(myId) &&
@@ -2937,6 +2946,7 @@ Future<void> initServices() async {
           name: payload['name'] as String?,
           memberIds: memberIds,
           moderatorIds: mods,
+          readOnlyIds: readOnly,
           avatarColor: payload['avatarColor'] as int?,
           avatarEmoji: payload['avatarEmoji'] as String?,
           driveBackupEnabled:

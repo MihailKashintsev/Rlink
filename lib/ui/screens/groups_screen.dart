@@ -37,6 +37,7 @@ import '../../services/sticker_collection_service.dart';
 import '../../services/invite_dm_service.dart';
 import '../../services/outbound_dm_text.dart';
 import '../../services/profile_service.dart';
+import '../../services/relay_service.dart';
 import 'location_map_screen.dart';
 import '../../utils/external_message_share.dart';
 import '../../utils/web_file_store.dart';
@@ -1983,95 +1984,155 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-  void _inviteMember() async {
-    final contacts = ChatStorageService.instance.contactsNotifier.value;
-    if (contacts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нет контактов для приглашения')),
-      );
-      return;
-    }
-
+  Future<void> _sendInvite(String targetPublicKey, String targetNick) async {
     final myProfile = ProfileService.instance.profile;
     final group = _group;
+    await GossipRouter.instance.sendGroupInvite(
+      groupId: group.id,
+      groupName: group.name,
+      inviterId: CryptoService.instance.publicKeyHex,
+      inviterNick: myProfile?.nickname ?? '',
+      creatorId: group.creatorId,
+      memberIds: group.memberIds,
+      targetPublicKey: targetPublicKey,
+      avatarColor: group.avatarColor,
+      avatarEmoji: group.avatarEmoji,
+      createdAt: group.createdAt,
+    );
+    await InviteDmService.sendGroupInviteDm(
+      targetPublicKey: targetPublicKey,
+      payload: {
+        'groupId': group.id,
+        'groupName': group.name,
+        'inviterId': CryptoService.instance.publicKeyHex,
+        'inviterNick': myProfile?.nickname ?? '',
+        'creatorId': group.creatorId,
+        'memberIds': group.memberIds,
+        'avatarColor': group.avatarColor,
+        'avatarEmoji': group.avatarEmoji,
+        'createdAt': group.createdAt,
+      },
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Приглашение отправлено $targetNick')),
+      );
+    }
+  }
+
+  void _inviteMember() async {
+    final contacts = ChatStorageService.instance.contactsNotifier.value;
+    final group = _group;
+    final searchCtrl = TextEditingController();
 
     showModalBottomSheet(
       context: context,
       // Длинный список контактов должен листаться (не влезал и не скроллился).
       isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(ctx).size.height * 0.75),
-          child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Пригласить в группу',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+      builder: (ctx) => StatefulBuilder(builder: (ctx2, setModal) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(ctx2).size.height * 0.75),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Пригласить в группу',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: searchCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Искать людей и ботов по нику',
+                      prefixIcon: Icon(Icons.search),
+                      isDense: true,
+                    ),
+                    onChanged: (q) {
+                      unawaited(RelayService.instance.searchUsers(q));
+                      setModal(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ValueListenableBuilder<List<RelayPeer>>(
+                    valueListenable: RelayService.instance.searchResults,
+                    builder: (_, results, __) {
+                      final query = searchCtrl.text.trim();
+                      final contactKeys =
+                          contacts.map((c) => c.publicKeyHex).toSet();
+                      final remoteOnly = results.where((p) =>
+                          !contactKeys.contains(p.publicKey) &&
+                          !group.memberIds.contains(p.publicKey));
+                      return ListView(
+                        shrinkWrap: true,
+                        children: [
+                          ...contacts
+                              .where((c) =>
+                                  !group.memberIds.contains(c.publicKeyHex))
+                              .where((c) => query.isEmpty ||
+                                  c.nickname
+                                      .toLowerCase()
+                                      .contains(query.toLowerCase()))
+                              .map((c) => ListTile(
+                                    leading: AvatarWidget(
+                                      initials: c.initials,
+                                      color: c.avatarColor,
+                                      emoji: c.avatarEmoji,
+                                      imagePath: c.avatarImagePath,
+                                      size: 40,
+                                    ),
+                                    title: Text(c.nickname),
+                                    onTap: () {
+                                      Navigator.pop(ctx2);
+                                      unawaited(_sendInvite(
+                                          c.publicKeyHex, c.nickname));
+                                    },
+                                  )),
+                          if (query.isNotEmpty && remoteOnly.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                              child: Text('Найдено в сети',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey)),
+                            ),
+                            ...remoteOnly.map((p) => ListTile(
+                                  leading: CircleAvatar(
+                                    child: Icon(p.isBot
+                                        ? Icons.smart_toy_outlined
+                                        : Icons.person_outline),
+                                  ),
+                                  title: Text(p.nick.isEmpty
+                                      ? p.shortId
+                                      : p.nick),
+                                  subtitle: p.isBot
+                                      ? const Text('Бот',
+                                          style: TextStyle(fontSize: 11))
+                                      : null,
+                                  onTap: () {
+                                    Navigator.pop(ctx2);
+                                    unawaited(_sendInvite(p.publicKey,
+                                        p.nick.isEmpty ? p.shortId : p.nick));
+                                  },
+                                )),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
             ),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-            ...contacts
-                .where((c) => !group.memberIds.contains(c.publicKeyHex))
-                .map((c) => ListTile(
-                      leading: AvatarWidget(
-                        initials: c.initials,
-                        color: c.avatarColor,
-                        emoji: c.avatarEmoji,
-                        imagePath: c.avatarImagePath,
-                        size: 40,
-                      ),
-                      title: Text(c.nickname),
-                      onTap: () async {
-                        Navigator.pop(ctx);
-                        await GossipRouter.instance.sendGroupInvite(
-                          groupId: group.id,
-                          groupName: group.name,
-                          inviterId: CryptoService.instance.publicKeyHex,
-                          inviterNick: myProfile?.nickname ?? '',
-                          creatorId: group.creatorId,
-                          memberIds: group.memberIds,
-                          targetPublicKey: c.publicKeyHex,
-                          avatarColor: group.avatarColor,
-                          avatarEmoji: group.avatarEmoji,
-                          createdAt: group.createdAt,
-                        );
-                        await InviteDmService.sendGroupInviteDm(
-                          targetPublicKey: c.publicKeyHex,
-                          payload: {
-                            'groupId': group.id,
-                            'groupName': group.name,
-                            'inviterId': CryptoService.instance.publicKeyHex,
-                            'inviterNick': myProfile?.nickname ?? '',
-                            'creatorId': group.creatorId,
-                            'memberIds': group.memberIds,
-                            'avatarColor': group.avatarColor,
-                            'avatarEmoji': group.avatarEmoji,
-                            'createdAt': group.createdAt,
-                          },
-                        );
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                                content: Text(
-                                    'Приглашение отправлено ${c.nickname}')),
-                          );
-                        }
-                      },
-                    )),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
           ),
-        ),
-      ),
-    );
+        );
+      }),
+    ).whenComplete(() => RelayService.instance.searchResults.value = []);
   }
 
   // ── Leave group ─────────────────────────────────────────────
@@ -2287,29 +2348,61 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       itemBuilder: (_, i) {
                         final uid = currentMembers[i];
                         final isMod = _group.moderatorIds.contains(uid);
+                        final isReadOnly = _group.readOnlyIds.contains(uid);
+                        final canManage =
+                            _isCreator || _group.canModerate(_myId);
                         return ListTile(
                           title: Text(nickFor(uid)),
                           subtitle: Text(
-                            isMod
-                                ? 'Модератор · ${uid.substring(0, 12)}…'
-                                : '${uid.substring(0, 12)}…',
+                            [
+                              if (isMod) 'Модератор',
+                              if (isReadOnly) 'Только чтение (бот)',
+                              '${uid.substring(0, 12)}…',
+                            ].join(' · '),
                             style: const TextStyle(
                                 fontSize: 11, color: Colors.grey),
                           ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.person_remove_outlined,
-                                color: Colors.red),
-                            tooltip: 'Исключить',
-                            onPressed: () async {
-                              await GroupService.instance
-                                  .removeMember(_group.id, uid);
-                              final grp = await GroupService.instance
-                                  .getGroup(_group.id);
-                              if (grp != null && mounted) {
-                                setState(() => _group = grp);
-                                setModal(() {});
-                              }
-                            },
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (canManage)
+                                IconButton(
+                                  icon: Icon(
+                                    isReadOnly
+                                        ? Icons.edit_note
+                                        : Icons.visibility_outlined,
+                                  ),
+                                  tooltip: isReadOnly
+                                      ? 'Разрешить писать'
+                                      : 'Только чтение (для ботов)',
+                                  onPressed: () async {
+                                    final grp = await GroupService.instance
+                                        .setReadOnly(
+                                            _group.id, uid, !isReadOnly);
+                                    if (grp != null && mounted) {
+                                      setState(() => _group = grp);
+                                      setModal(() {});
+                                    }
+                                  },
+                                ),
+                              if (canManage)
+                                IconButton(
+                                  icon: const Icon(
+                                      Icons.person_remove_outlined,
+                                      color: Colors.red),
+                                  tooltip: 'Исключить',
+                                  onPressed: () async {
+                                    await GroupService.instance
+                                        .removeMember(_group.id, uid);
+                                    final grp = await GroupService.instance
+                                        .getGroup(_group.id);
+                                    if (grp != null && mounted) {
+                                      setState(() => _group = grp);
+                                      setModal(() {});
+                                    }
+                                  },
+                                ),
+                            ],
                           ),
                         );
                       },
