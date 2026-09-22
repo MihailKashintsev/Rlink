@@ -207,6 +207,7 @@ class BroadcastOutboxService {
     String? pollJson,
     String? forwardFromId,
     String? forwardFromNick,
+    String? topicId,
   }) async {
     await _enqueue('group_message', {
       'groupId': groupId,
@@ -226,6 +227,7 @@ class BroadcastOutboxService {
         'ffid': forwardFromId,
       if (forwardFromNick != null && forwardFromNick.isNotEmpty)
         'ffn': forwardFromNick,
+      if (topicId != null && topicId.isNotEmpty) 'topicId': topicId,
     });
     unawaited(_pump());
   }
@@ -394,6 +396,7 @@ class BroadcastOutboxService {
             pollJson: payload['pollJson'] as String?,
             forwardFromId: payload['ffid'] as String?,
             forwardFromNick: payload['ffn'] as String?,
+            topicId: payload['topicId'] as String?,
           );
           break;
         case 'poll_vote':

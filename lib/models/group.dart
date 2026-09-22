@@ -128,6 +128,8 @@ class GroupMessage {
   final String? pollJson;
   final String? forwardFromId;
   final String? forwardFromNick;
+  /// null = the (always-present) General thread — see [GroupTopic].
+  final String? topicId;
 
   const GroupMessage({
     required this.id,
@@ -145,6 +147,7 @@ class GroupMessage {
     this.pollJson,
     this.forwardFromId,
     this.forwardFromNick,
+    this.topicId,
   });
 
   int get totalReactions {
@@ -171,6 +174,7 @@ class GroupMessage {
         'poll_json': pollJson,
         'forward_from_id': forwardFromId,
         'forward_from_nick': forwardFromNick,
+        'topic_id': topicId,
       };
 
   factory GroupMessage.fromMap(Map<String, dynamic> m) {
@@ -199,6 +203,7 @@ class GroupMessage {
       pollJson: m['poll_json'] as String?,
       forwardFromId: m['forward_from_id'] as String?,
       forwardFromNick: m['forward_from_nick'] as String?,
+      topicId: m['topic_id'] as String?,
     );
   }
 }

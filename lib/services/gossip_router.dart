@@ -461,6 +461,7 @@ class GossipRouter {
   void Function(Map<String, dynamic> payload)? onGroupAccept;
   void Function(Map<String, dynamic> payload)? onGroupHistoryReq;
   void Function(Map<String, dynamic> payload)? onGroupUpdate;
+  void Function(Map<String, dynamic> payload)? onGroupTopicUpdate;
 
   /// Закрепление в личном чате: { mid, a, from, r? }
   Future<void> Function(Map<String, dynamic> payload)? onDmPin;
@@ -2623,6 +2624,10 @@ class GossipRouter {
         onGroupUpdate?.call(packet.payload);
         return;
       }
+      if (packet.type == 'group_topic_update') {
+        onGroupTopicUpdate?.call(packet.payload);
+        return;
+      }
       if (packet.type == 'poll_vote') {
         onPollVote?.call(packet.payload);
         return;
@@ -3180,6 +3185,7 @@ class GossipRouter {
     String? pollJson,
     String? forwardFromId,
     String? forwardFromNick,
+    String? topicId,
   }) async {
     String? ffnShort(String? n) {
       if (n == null || n.isEmpty) return null;
@@ -3205,6 +3211,7 @@ class GossipRouter {
           if (hasImage) 'img': true,
           if (hasVideo) 'vid': true,
           if (hasFile) 'file': true,
+          if (topicId != null && topicId.isNotEmpty) 'topicId': topicId,
           if (fileName != null && fileName.isNotEmpty) 'fname': fileName,
           if (pollJson != null && pollJson.isNotEmpty) 'pj': pollJson,
           if (ffid != null) 'ffid': ffid,
@@ -3295,6 +3302,33 @@ class GossipRouter {
           'drvUrl': driveHistoryUrl,
         if (driveKeysUrl != null && driveKeysUrl.isNotEmpty)
           'drvKeys': driveKeysUrl,
+      },
+    );
+    await _forward(packet);
+  }
+
+  /// Broadcasts a topic create/delete to other group members — filtered by
+  /// groupId on receipt, same broadcast model as group_message/group_update.
+  Future<void> sendGroupTopicUpdate({
+    required String groupId,
+    required String topicId,
+    required String action, // 'create' | 'delete'
+    required String by,
+    String? name,
+    String? emoji,
+  }) async {
+    final packet = GossipPacket(
+      id: const Uuid().v4(),
+      type: 'group_topic_update',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: {
+        'groupId': groupId,
+        'topicId': topicId,
+        'action': action,
+        'by': by,
+        if (name != null) 'name': name,
+        if (emoji != null) 'emoji': emoji,
       },
     );
     await _forward(packet);

@@ -16,6 +16,7 @@ import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../models/group.dart';
+import '../../models/group_topic.dart';
 import '../../models/chat_message.dart';
 import '../../models/contact.dart';
 import '../../models/shared_collab.dart';
@@ -303,6 +304,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   double? _pendingLat;
   double? _pendingLng;
   bool _showFormatStrip = false;
+  List<GroupTopic> _topics = [];
+  // null = General.
+  String? _currentTopicId;
 
   String get _myId => CryptoService.instance.publicKeyHex;
   bool get _composeHasText => _controller.text.trim().isNotEmpty;
@@ -570,17 +574,46 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   Future<void> _load() async {
-    final msgs = await GroupService.instance.getMessages(_group.id);
+    final msgs = await GroupService.instance
+        .getMessages(_group.id, topicId: _currentTopicId);
     final grp = await GroupService.instance.getGroup(_group.id);
+    final topics = await GroupService.instance.getTopics(_group.id);
     if (mounted) {
       setState(() {
         _messages = msgs;
+        _topics = topics;
         if (grp != null) {
           _group = grp;
         }
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _onScrollFab());
     }
+  }
+
+  void _switchTopic(String? topicId) {
+    if (topicId == _currentTopicId) return;
+    setState(() => _currentTopicId = topicId);
+    unawaited(_load());
+  }
+
+  Future<void> _createTopic() async {
+    final result = await showDialog<({String name, String emoji})>(
+      context: context,
+      builder: (_) => const _CreateTopicDialog(),
+    );
+    if (result == null || result.name.trim().isEmpty) return;
+    final topic = await GroupService.instance.createTopic(
+      groupId: _group.id,
+      name: result.name.trim(),
+      emoji: result.emoji,
+      creatorId: _myId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _topics = [..._topics, topic];
+      _currentTopicId = topic.id;
+    });
+    unawaited(_load());
   }
 
   Future<void> _loadAndMarkRead() async {
@@ -643,6 +676,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           longitude: isFirst ? lng : null,
           isOutgoing: true,
           timestamp: now,
+          topicId: _currentTopicId,
         );
         await GroupService.instance.saveMessage(msg);
 
@@ -654,6 +688,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           timestamp: now,
           latitude: isFirst ? lat : null,
           longitude: isFirst ? lng : null,
+          topicId: _currentTopicId,
         );
       }
 
@@ -2532,6 +2567,50 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     return contact?.nickname ?? '${id.substring(0, 8)}...';
   }
 
+  Widget _buildTopicBar(ColorScheme cs) {
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+      ),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        children: [
+          _topicChip(cs, label: 'Общая', selected: _currentTopicId == null,
+              onTap: () => _switchTopic(null)),
+          for (final t in _topics)
+            _topicChip(cs,
+                label: '${t.emoji} ${t.name}',
+                selected: _currentTopicId == t.id,
+                onTap: () => _switchTopic(t.id)),
+          ActionChip(
+            avatar: const Icon(Icons.add, size: 16),
+            label: const Text('Тема'),
+            onPressed: _createTopic,
+          ),
+        ].map((w) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4), child: w)).toList(),
+      ),
+    );
+  }
+
+  Widget _topicChip(ColorScheme cs,
+      {required String label,
+      required bool selected,
+      required VoidCallback onTap}) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      selectedColor: cs.primaryContainer,
+      labelStyle: TextStyle(
+        color: selected ? cs.onPrimaryContainer : cs.onSurface,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -2566,6 +2645,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               if (v == 'mods') _manageModerators();
               if (v == 'members') _manageMembers();
               if (v == 'drive') unawaited(_publishHistoryToDrive());
+              if (v == 'topic') unawaited(_createTopic());
               if (v == 'leave') _leaveGroup();
             },
             itemBuilder: (_) => [
@@ -2578,6 +2658,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     Text(AppL10n.t('common_edit')),
                   ]),
                 ),
+              const PopupMenuItem(
+                value: 'topic',
+                child: Row(children: [
+                  Icon(Icons.forum_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Новая тема'),
+                ]),
+              ),
               if (_isCreator)
                 const PopupMenuItem(
                   value: 'mods',
@@ -2621,6 +2709,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
       body: Column(
         children: [
+          if (_topics.isNotEmpty) _buildTopicBar(cs),
           Expanded(
             child: _messages.isEmpty
                 ? Center(
@@ -3554,6 +3643,77 @@ class _GroupVideoFullScreenState extends State<_GroupVideoFullScreen> {
               )
             : const CircularProgressIndicator(color: Colors.white54),
       ),
+    );
+  }
+}
+
+class _CreateTopicDialog extends StatefulWidget {
+  const _CreateTopicDialog();
+
+  @override
+  State<_CreateTopicDialog> createState() => _CreateTopicDialogState();
+}
+
+class _CreateTopicDialogState extends State<_CreateTopicDialog> {
+  final _nameCtrl = TextEditingController();
+  final _emojiCtrl = TextEditingController(text: '💬');
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emojiCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Новая тема'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 56,
+                child: TextField(
+                  controller: _emojiCtrl,
+                  textAlign: TextAlign.center,
+                  maxLength: 2,
+                  decoration: const InputDecoration(counterText: ''),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _nameCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(hintText: 'Название темы'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = _nameCtrl.text.trim();
+            if (name.isEmpty) return;
+            final emoji = _emojiCtrl.text.trim();
+            Navigator.pop(
+              context,
+              (name: name, emoji: emoji.isEmpty ? '💬' : emoji),
+            );
+          },
+          child: const Text('Создать'),
+        ),
+      ],
     );
   }
 }

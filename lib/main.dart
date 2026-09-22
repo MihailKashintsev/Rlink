@@ -2706,6 +2706,7 @@ Future<void> initServices() async {
       final myKey = CryptoService.instance.publicKeyHex;
       final tsOriginal = payload['ts'] as int?;
       final rxJson = payload['rx'] as String?;
+      final topicId = payload['topicId'] as String?;
       Map<String, List<String>> reactions = const {};
       if (rxJson != null && rxJson.isNotEmpty) {
         try {
@@ -2775,6 +2776,7 @@ Future<void> initServices() async {
         pollJson: (pj != null && pj.isNotEmpty) ? pj : null,
         forwardFromId: payload['ffid'] as String?,
         forwardFromNick: payload['ffn'] as String?,
+        topicId: topicId,
       ));
 
       if (senderId != myKey) {
@@ -2956,6 +2958,23 @@ Future<void> initServices() async {
             imagePath: updated.avatarImagePath,
           );
         }
+      }());
+    };
+    GossipRouter.instance.onGroupTopicUpdate = (payload) {
+      final groupId = payload['groupId'] as String?;
+      final topicId = payload['topicId'] as String?;
+      final action = payload['action'] as String?;
+      if (groupId == null || topicId == null || action == null) return;
+      unawaited(() async {
+        final existing = await GroupService.instance.getGroup(groupId);
+        if (existing == null) return; // not a group I'm in
+        await GroupService.instance.applyIncomingTopicUpdate(
+          groupId: groupId,
+          topicId: topicId,
+          action: action,
+          name: payload['name'] as String?,
+          emoji: payload['emoji'] as String?,
+        );
       }());
     };
     GossipRouter.instance.onVerifyRequest = (payload) {

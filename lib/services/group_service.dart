@@ -9,6 +9,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/group.dart';
+import '../models/group_topic.dart';
 import '../models/message_poll.dart';
 import '../utils/reaction_emoji_key.dart';
 import '../utils/reaction_limit.dart';
@@ -39,6 +40,21 @@ Future<void> _backfillGroupReadCursors(Database db) async {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
+}
+
+Future<void> _createGroupTopicsTable(Database db) async {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS group_topics (
+      id         TEXT PRIMARY KEY,
+      group_id   TEXT NOT NULL,
+      name       TEXT NOT NULL,
+      emoji      TEXT NOT NULL DEFAULT '💬',
+      creator_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  ''');
+  await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_gt_group ON group_topics(group_id)');
 }
 
 Future<void> _tryDeleteGroupMediaFile(String? path) async {
@@ -85,7 +101,7 @@ class GroupService {
     final path = await _dbPath('groups.db');
     _db = await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: (db, v) async {
         await db.execute('''
           CREATE TABLE groups (
@@ -132,8 +148,17 @@ class GroupService {
             last_read_id TEXT NOT NULL DEFAULT ''
           )
         ''');
+        await db.execute('ALTER TABLE group_messages ADD COLUMN topic_id TEXT');
+        await _createGroupTopicsTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 9) {
+          try {
+            await db
+                .execute('ALTER TABLE group_messages ADD COLUMN topic_id TEXT');
+          } catch (_) {}
+          await _createGroupTopicsTable(db);
+        }
         if (oldVersion < 8) {
           for (final col in [
             "ALTER TABLE groups ADD COLUMN drive_enabled INTEGER DEFAULT 0",
@@ -650,17 +675,124 @@ class GroupService {
     _bump();
   }
 
+  /// [topicId] null = the General thread (topic_id IS NULL in storage).
+  /// Pass [anyTopic] true to ignore topics entirely (history-sync/backup
+  /// paths that predate topics and still want every message in the group).
   Future<List<GroupMessage>> getMessages(String groupId,
-      {int limit = 50, int offset = 0}) async {
+      {int limit = 50,
+      int offset = 0,
+      String? topicId,
+      bool anyTopic = false}) async {
+    final where = anyTopic
+        ? 'group_id = ?'
+        : (topicId == null
+            ? 'group_id = ? AND topic_id IS NULL'
+            : 'group_id = ? AND topic_id = ?');
+    final whereArgs = anyTopic || topicId == null
+        ? [groupId]
+        : [groupId, topicId];
     final rows = await _db!.query(
       'group_messages',
-      where: 'group_id = ?',
-      whereArgs: [groupId],
+      where: where,
+      whereArgs: whereArgs,
       orderBy: 'timestamp DESC',
       limit: limit,
       offset: offset,
     );
     return rows.reversed.map((r) => GroupMessage.fromMap(r)).toList();
+  }
+
+  // ── Topics ─────────────────────────────────────────────────────
+
+  Future<GroupTopic> createTopic({
+    required String groupId,
+    required String name,
+    String emoji = '💬',
+    required String creatorId,
+  }) async {
+    await _ensureDbReady();
+    final topic = GroupTopic(
+      id: const Uuid().v4(),
+      groupId: groupId,
+      name: name,
+      emoji: emoji,
+      creatorId: creatorId,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    await _db!.insert('group_topics', topic.toMap());
+    _bump();
+    unawaited(GossipRouter.instance.sendGroupTopicUpdate(
+      groupId: groupId,
+      topicId: topic.id,
+      action: 'create',
+      name: topic.name,
+      emoji: topic.emoji,
+      by: creatorId,
+    ));
+    return topic;
+  }
+
+  Future<List<GroupTopic>> getTopics(String groupId) async {
+    await _ensureDbReady();
+    final rows = await _db!.query(
+      'group_topics',
+      where: 'group_id = ?',
+      whereArgs: [groupId],
+      orderBy: 'created_at ASC',
+    );
+    return rows.map(GroupTopic.fromMap).toList();
+  }
+
+  /// Deletes a topic and re-homes its messages to General rather than
+  /// deleting them — losing a thread's organization is a much smaller
+  /// surprise than losing its messages.
+  Future<void> deleteTopic(String groupId, String topicId,
+      {required String by}) async {
+    await _ensureDbReady();
+    await _db!.update('group_messages', {'topic_id': null},
+        where: 'group_id = ? AND topic_id = ?', whereArgs: [groupId, topicId]);
+    await _db!.delete('group_topics',
+        where: 'id = ? AND group_id = ?', whereArgs: [topicId, groupId]);
+    _bump();
+    unawaited(GossipRouter.instance.sendGroupTopicUpdate(
+      groupId: groupId,
+      topicId: topicId,
+      action: 'delete',
+      by: by,
+    ));
+  }
+
+  /// Applies an incoming topic broadcast from another member — never
+  /// re-broadcasts (that would loop).
+  Future<void> applyIncomingTopicUpdate({
+    required String groupId,
+    required String topicId,
+    required String action,
+    String? name,
+    String? emoji,
+  }) async {
+    await _ensureDbReady();
+    if (action == 'delete') {
+      await _db!.update('group_messages', {'topic_id': null},
+          where: 'group_id = ? AND topic_id = ?',
+          whereArgs: [groupId, topicId]);
+      await _db!.delete('group_topics',
+          where: 'id = ? AND group_id = ?', whereArgs: [topicId, groupId]);
+    } else if (name != null) {
+      await _db!.insert(
+        'group_topics',
+        {
+          'id': topicId,
+          'group_id': groupId,
+          'name': name,
+          'emoji': emoji ?? '💬',
+          'creator_id': '',
+          'created_at': DateTime.now().millisecondsSinceEpoch,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    _bump();
   }
 
   Future<GroupMessage?> getMessage(String messageId) async {
