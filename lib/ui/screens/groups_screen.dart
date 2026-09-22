@@ -734,6 +734,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: lng,
         isOutgoing: true,
         timestamp: now,
+        topicId: _currentTopicId,
       );
       await GroupService.instance.saveMessage(msg);
       await BroadcastOutboxService.instance.enqueueGroupMessage(
@@ -744,6 +745,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         timestamp: now,
         latitude: lat,
         longitude: lng,
+        topicId: _currentTopicId,
       );
       _scrollToBottom();
     } finally {
@@ -763,6 +765,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       longitude: msg.longitude,
       reactionsJson: msg.reactions.isEmpty ? null : jsonEncode(msg.reactions),
       pollJson: msg.pollJson,
+      topicId: msg.topicId,
     );
     _load();
   }
@@ -852,6 +855,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: _pendingLng,
         isOutgoing: true,
         timestamp: now,
+        topicId: _currentTopicId,
       );
       await GroupService.instance.saveMessage(msg);
       await BroadcastOutboxService.instance.enqueueGroupMessage(
@@ -863,6 +867,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         latitude: _pendingLat,
         longitude: _pendingLng,
         hasVideo: true,
+        topicId: _currentTopicId,
       );
       _scrollToBottom();
       if (mounted) {
@@ -933,6 +938,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: _pendingLng,
         isOutgoing: true,
         timestamp: now,
+        topicId: _currentTopicId,
       );
       await GroupService.instance.saveMessage(msg);
       await BroadcastOutboxService.instance.enqueueGroupMessage(
@@ -944,6 +950,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         latitude: _pendingLat,
         longitude: _pendingLng,
         hasVideo: true,
+        topicId: _currentTopicId,
       );
       _scrollToBottom();
       if (mounted) {
@@ -1100,6 +1107,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         isOutgoing: true,
         timestamp: now,
         pollJson: pj,
+        topicId: _currentTopicId,
       );
       await GroupService.instance.saveMessage(msg);
       await BroadcastOutboxService.instance.enqueueGroupMessage(
@@ -1111,6 +1119,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         latitude: _pendingLat,
         longitude: _pendingLng,
         pollJson: pj,
+        topicId: _currentTopicId,
       );
       _scrollToBottom();
       if (mounted) {
@@ -1183,6 +1192,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: _pendingLng,
         isOutgoing: true,
         timestamp: now,
+        topicId: _currentTopicId,
       );
       await GroupService.instance.saveMessage(msg);
 
@@ -1196,6 +1206,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: _pendingLng,
         hasFile: true,
         fileName: originalName,
+        topicId: _currentTopicId,
       );
       _scrollToBottom();
       if (mounted) {
@@ -1423,6 +1434,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: _pendingLng,
         isOutgoing: true,
         timestamp: now,
+        topicId: _currentTopicId,
       );
       await GroupService.instance.saveMessage(msg);
       await BroadcastOutboxService.instance.enqueueGroupMessage(
@@ -1437,6 +1449,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         hasVideo: isVideo,
         hasFile: isFile,
         fileName: isFile ? fileName : null,
+        topicId: _currentTopicId,
       );
       _scrollToBottom();
       if (mounted) {
@@ -1512,6 +1525,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: _pendingLng,
         isOutgoing: true,
         timestamp: now,
+        topicId: _currentTopicId,
       );
       await GroupService.instance.saveMessage(msg);
       await BroadcastOutboxService.instance.enqueueGroupMessage(
@@ -1523,6 +1537,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         latitude: _pendingLat,
         longitude: _pendingLng,
         hasImage: true,
+        topicId: _currentTopicId,
       );
       _scrollToBottom();
       if (mounted) {
@@ -1610,6 +1625,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: _pendingLng,
         isOutgoing: true,
         timestamp: now,
+        topicId: _currentTopicId,
       );
       await GroupService.instance.saveMessage(msg);
       await BroadcastOutboxService.instance.enqueueGroupMessage(
@@ -1621,6 +1637,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         latitude: _pendingLat,
         longitude: _pendingLng,
         hasImage: true,
+        topicId: _currentTopicId,
       );
       _scrollToBottom();
       if (mounted) {
@@ -1697,6 +1714,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: _pendingLng,
         isOutgoing: true,
         timestamp: now,
+        topicId: _currentTopicId,
       );
       await GroupService.instance.saveMessage(msg);
       await BroadcastOutboxService.instance.enqueueGroupMessage(
@@ -1708,6 +1726,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         latitude: _pendingLat,
         longitude: _pendingLng,
         hasVideo: true,
+        topicId: _currentTopicId,
       );
       _scrollToBottom();
       if (mounted) {
@@ -1764,6 +1783,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       longitude: _pendingLng,
       isOutgoing: true,
       timestamp: now,
+      topicId: _currentTopicId,
     );
     await GroupService.instance.saveMessage(msg);
     await BroadcastOutboxService.instance.enqueueGroupMessage(
@@ -1775,6 +1795,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       latitude: _pendingLat,
       longitude: _pendingLng,
       hasImage: true,
+      topicId: _currentTopicId,
     );
     _scrollToBottom();
     if (mounted) {
@@ -1894,6 +1915,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: _pendingLng,
         isOutgoing: true,
         timestamp: now,
+        topicId: _currentTopicId,
       );
       await GroupService.instance.saveMessage(msg);
       await BroadcastOutboxService.instance.enqueueGroupMessage(
@@ -1906,6 +1928,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         longitude: _pendingLng,
         hasFile: true,
         fileName: originalName,
+        topicId: _currentTopicId,
       );
       _scrollToBottom();
       if (mounted) {
