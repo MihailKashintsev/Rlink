@@ -10,6 +10,8 @@ import 'image_service.dart';
 import 'relay_service.dart';
 import 'chat_storage_service.dart';
 import 'crypto_service.dart';
+import 'gossip_router.dart';
+import 'peer_key_directory.dart';
 import '../models/chat_message.dart';
 
 /// Status of an upload task.
@@ -262,22 +264,6 @@ class MediaUploadQueue {
       return;
     }
 
-    if (RelayService.instance.isPeerKnownOffline(task.recipientKey)) {
-      debugPrint('[UploadQueue] Recipient offline for ${task.msgId}; waiting');
-      await db.update(
-        'upload_queue',
-        {'status': UploadStatus.pending.index},
-        where: 'id = ?',
-        whereArgs: [task.id],
-      );
-      await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
-        task.msgId,
-        MessageStatus.sending,
-      );
-      _setProgress(task.msgId, 0);
-      return;
-    }
-
     final recipientX25519 = await _recipientX25519(task.recipientKey);
     if (recipientX25519 == null || recipientX25519.isEmpty) {
       final shortKey = task.recipientKey.length > 8
@@ -295,6 +281,19 @@ class MediaUploadQueue {
         MessageStatus.sending,
       );
       _setProgress(task.msgId, 0);
+      return;
+    }
+
+    // A peer the relay already knows is offline can never be reached via
+    // sendBlob — that path is relay-socket delivery only, and this task
+    // would otherwise just loop through the same failed relay attempt on
+    // every future retry forever (the exact "files never send" bug: text to
+    // the same BLE-only peer works fine because it always goes over the
+    // mesh, but media only ever tried the relay). Deliver over the mesh
+    // instead — the same chunked gossip transport chat_screen.dart's own
+    // relay-unavailable fallback already uses successfully.
+    if (RelayService.instance.isPeerKnownOffline(task.recipientKey)) {
+      await _deliverViaMesh(task, recipientX25519, db);
       return;
     }
 
@@ -348,7 +347,8 @@ class MediaUploadQueue {
         );
         await Future.delayed(const Duration(milliseconds: 300));
         if (recipientOffline) {
-          await _requeueAfterLiveDeliveryFailure(task);
+          await _deliverViaMesh(task, recipientX25519, db,
+              precomputedSealed: sealed);
           return;
         }
         if (showIsland) {
@@ -390,7 +390,8 @@ class MediaUploadQueue {
           );
           await Future.delayed(const Duration(milliseconds: 20));
           if (recipientOffline) {
-            await _requeueAfterLiveDeliveryFailure(task);
+            await _deliverViaMesh(task, recipientX25519, db,
+                precomputedSealed: sealed);
             return;
           }
           final frac = (i + 1) / total;
@@ -401,7 +402,8 @@ class MediaUploadQueue {
         }
         await Future.delayed(const Duration(milliseconds: 300));
         if (recipientOffline) {
-          await _requeueAfterLiveDeliveryFailure(task);
+          await _deliverViaMesh(task, recipientX25519, db,
+              precomputedSealed: sealed);
           return;
         }
         _setProgress(task.msgId, 0.99);
@@ -448,28 +450,87 @@ class MediaUploadQueue {
     }
   }
 
-  Future<void> _requeueAfterLiveDeliveryFailure(UploadTask task) async {
-    final db = _db;
-    if (db == null) return;
-    final nextRetry = task.retryCount + 1;
-    final failed = nextRetry >= _kMaxRetries;
-    await db.update(
-      'upload_queue',
-      {
-        'status':
-            failed ? UploadStatus.failed.index : UploadStatus.pending.index,
-        'retryCount': nextRetry,
-      },
-      where: 'id = ?',
-      whereArgs: [task.id],
-    );
-    _setProgress(task.msgId, 0);
-    await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
-      task.msgId,
-      failed ? MessageStatus.failed : MessageStatus.sending,
-    );
-    debugPrint('[UploadQueue] Live delivery failed for ${task.msgId}; '
-        '${failed ? 'retry limit reached' : 'requeued'}');
+  /// Delivers media over the mesh gossip layer (img_meta/img_chunk) instead
+  /// of the relay-socket-only blob path — the only way to actually reach a
+  /// peer the relay has given up on (offline, or just failed live delivery).
+  /// Same encrypt/seal step and wire format chat_screen.dart's own
+  /// relay-unavailable fallback already sends and receivers already handle.
+  /// Fire-and-forget like that fallback: gossip has no per-message delivery
+  /// ack to wait on, so the task is marked done once chunks are handed off,
+  /// rather than left "uploading" forever waiting for an ack that will never
+  /// come over this transport.
+  Future<void> _deliverViaMesh(
+    UploadTask task,
+    String recipientX25519,
+    Database db, {
+    Uint8List? precomputedSealed,
+  }) async {
+    try {
+      final sealed = precomputedSealed ??
+          await CryptoService.instance.sealMediaPayload(
+            plaintext: ImageService.instance
+                .compress(await File(task.filePath).readAsBytes()),
+            recipientX25519KeyBase64: recipientX25519,
+          );
+      final chunks = ImageService.instance.splitRawToBase64Chunks(sealed);
+      debugPrint(
+          '[UploadQueue] Relay unreachable for ${task.recipientKey.substring(0, 8)} — '
+          'delivering ${task.msgId} via mesh (${chunks.length} chunks)');
+      await GossipRouter.instance.sendImgMeta(
+        msgId: task.msgId,
+        totalChunks: chunks.length,
+        fromId: task.fromId,
+        recipientId: task.recipientKey,
+        isVoice: task.isVoice,
+        isVideo: task.isVideo,
+        isSquare: task.isSquare,
+        isFile: task.isFile,
+        isSticker: task.isSticker,
+        fileName: task.fileName,
+      );
+      for (var i = 0; i < chunks.length; i++) {
+        await GossipRouter.instance.sendImgChunk(
+          msgId: task.msgId,
+          index: i,
+          base64Data: chunks[i],
+          fromId: task.fromId,
+          recipientId: task.recipientKey,
+        );
+      }
+      await db.update(
+        'upload_queue',
+        {'status': UploadStatus.done.index},
+        where: 'id = ?',
+        whereArgs: [task.id],
+      );
+      await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+        task.msgId,
+        MessageStatus.sent,
+      );
+      _setProgress(task.msgId, 1.0);
+      onTaskCompleted?.call(task.msgId);
+    } catch (e) {
+      debugPrint('[UploadQueue] Mesh delivery failed for ${task.msgId}: $e');
+      final nextRetry = task.retryCount + 1;
+      final failed = nextRetry >= _kMaxRetries;
+      await db.update(
+        'upload_queue',
+        {
+          'status':
+              failed ? UploadStatus.failed.index : UploadStatus.pending.index,
+          'retryCount': nextRetry,
+        },
+        where: 'id = ?',
+        whereArgs: [task.id],
+      );
+      _setProgress(task.msgId, 0);
+      if (failed) {
+        await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
+          task.msgId,
+          MessageStatus.failed,
+        );
+      }
+    }
   }
 
   String _liveActivityLabel(UploadTask t) {
@@ -487,8 +548,12 @@ class MediaUploadQueue {
 
   Future<String?> _recipientX25519(String recipientKey) async {
     final key = recipientKey.trim().toLowerCase();
-    final relayKey = RelayService.instance.getPeerX25519Key(key);
-    if (relayKey != null && relayKey.isNotEmpty) return relayKey;
+    // PeerKeyDirectory also checks BleService's cache — a mesh-only peer
+    // (never seen via relay presence) otherwise looked permanently
+    // "unknown" here even though text sends to the same peer worked fine
+    // through that exact same BLE-known key (see the file-send-hangs bug).
+    final viaDirectory = PeerKeyDirectory.instance.getX25519(key);
+    if (viaDirectory != null && viaDirectory.isNotEmpty) return viaDirectory;
     final contact = await ChatStorageService.instance.getContact(key);
     final stored = contact?.x25519Key?.trim();
     return stored != null && stored.isNotEmpty ? stored : null;
