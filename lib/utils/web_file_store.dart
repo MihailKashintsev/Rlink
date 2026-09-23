@@ -18,6 +18,33 @@ String webVideoMimeForPath(String path, {String fallback = 'video/mp4'}) {
   return fallback;
 }
 
+/// General filename → mime for web-picked bytes (image/video/other). Used
+/// when writing picked gif/video/file bytes to OPFS so playback/rendering
+/// gets the right content-type.
+String webMimeForFileName(String name) {
+  final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'gif':
+      return 'image/gif';
+    case 'webp':
+      return 'image/webp';
+    case 'webm':
+      return 'video/webm';
+    case 'mov':
+      return 'video/quicktime';
+    case 'mp4':
+    case 'm4v':
+      return 'video/mp4';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
 List<String> webVideoMimeCandidatesForPath(String path) {
   final primary = webVideoMimeForPath(path);
   return <String>{

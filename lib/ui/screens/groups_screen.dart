@@ -52,6 +52,7 @@ import '../widgets/poll_message_card.dart';
 import '../widgets/shared_todo_message_card.dart';
 import '../widgets/shared_calendar_message_card.dart';
 import '../widgets/missing_local_media.dart';
+import '../widgets/web_media_picker_sheet.dart';
 import '../../utils/channel_mentions.dart';
 import 'collab_compose_dialogs.dart';
 import 'chat_screen.dart';
@@ -1255,6 +1256,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   Future<void> _openGroupMediaGallery() async {
     if (_isSending) return;
     if (!mounted) return;
+    if (kIsWeb) {
+      await _openGroupWebMediaPicker();
+      return;
+    }
     await showMediaGallerySendSheet(
       context,
       onPhotoPath: _groupGalleryPhoto,
@@ -1276,28 +1281,34 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   Future<void> _openGroupWebMediaPicker() async {
-    Widget tile(BuildContext ctx, IconData icon, String label, String value) {
-      final cs = Theme.of(ctx).colorScheme;
-      return ListTile(
-        leading: Icon(icon, color: cs.primary),
-        title: Text(label),
-        onTap: () => Navigator.pop(ctx, value),
-      );
-    }
-
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            tile(ctx, Icons.photo_library_rounded, 'Фото', 'photo'),
-            tile(ctx, Icons.gif_box_rounded, 'GIF', 'gif'),
-            tile(ctx, Icons.videocam_rounded, 'Видео', 'video'),
-            tile(ctx, Icons.insert_drive_file_rounded, 'Файл', 'file'),
-          ],
+    final choice = await showWebMediaPickerSheet(
+      context,
+      items: [
+        WebPickerItem(
+          icon: Icons.photo_library_rounded,
+          label: 'Фото',
+          value: 'photo',
+          color: Colors.green.shade700,
         ),
-      ),
+        WebPickerItem(
+          icon: Icons.videocam_rounded,
+          label: 'Видео',
+          value: 'video',
+          color: Colors.red.shade600,
+        ),
+        WebPickerItem(
+          icon: Icons.insert_drive_file_rounded,
+          label: 'Файл',
+          value: 'file',
+          color: Colors.blue.shade700,
+        ),
+        WebPickerItem(
+          icon: Icons.gif_box_rounded,
+          label: 'GIF',
+          value: 'gif',
+          color: Colors.pink.shade600,
+        ),
+      ],
     );
     if (!mounted || choice == null) return;
 
@@ -1344,29 +1355,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       ? '📷'
                       : _controller.text.trim()),
     );
-  }
-
-  static String _webMimeForName(String name) {
-    switch (p.extension(name).toLowerCase()) {
-      case '.jpg':
-      case '.jpeg':
-        return 'image/jpeg';
-      case '.png':
-        return 'image/png';
-      case '.gif':
-        return 'image/gif';
-      case '.webp':
-        return 'image/webp';
-      case '.webm':
-        return 'video/webm';
-      case '.mov':
-        return 'video/quicktime';
-      case '.mp4':
-      case '.m4v':
-        return 'video/mp4';
-      default:
-        return 'application/octet-stream';
-    }
   }
 
   static bool _isInlineWebUri(String value) =>
@@ -1435,7 +1423,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         );
         if (mounted) setState(() => _sendProgress = (i + 1) / chunks.length);
       }
-      final mime = _webMimeForName(fileName);
+      final mime = webMimeForFileName(fileName);
       final displayPath = isVideo || isFile
           ? await writeWebStoredFile(
               fileName: '${msgId}_$fileName',

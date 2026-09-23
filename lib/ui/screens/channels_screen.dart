@@ -49,6 +49,7 @@ import '../widgets/mesh_radar_widget.dart';
 import '../widgets/status_emoji_view.dart';
 import '../widgets/missing_local_media.dart';
 import '../widgets/channel_feed_image.dart';
+import '../widgets/web_media_picker_sheet.dart';
 import '../widgets/desktop_image_picker.dart';
 import '../widgets/chat_emoji_insert_sheet.dart';
 import '../widgets/media_gallery_send_sheet.dart';
@@ -2086,52 +2087,175 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     }
   }
 
-  /// Modern web media picker (matches the chat's), then posts the image.
+  /// Modern web media picker (matches chat/groups) — photo goes through the
+  /// existing edit-then-post flow; gif/video/file post raw bytes directly.
   Future<void> _openChannelWebMediaPicker() async {
-    final go = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        return SafeArea(
-          child: Container(
-            margin: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 8),
-                ListTile(
-                  leading: Icon(Icons.photo_library_outlined, color: cs.primary),
-                  title: Text(AppL10n.t('chn_photo_or_gif')),
-                  subtitle: Text(AppL10n.t('chn_pick_from_files')),
-                  onTap: () => Navigator.pop(ctx, true),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        );
-      },
+    final choice = await showWebMediaPickerSheet(
+      context,
+      items: [
+        WebPickerItem(
+          icon: Icons.photo_library_rounded,
+          label: 'Фото',
+          value: 'photo',
+          color: Colors.green.shade700,
+        ),
+        WebPickerItem(
+          icon: Icons.videocam_rounded,
+          label: 'Видео',
+          value: 'video',
+          color: Colors.red.shade600,
+        ),
+        WebPickerItem(
+          icon: Icons.insert_drive_file_rounded,
+          label: 'Файл',
+          value: 'file',
+          color: Colors.blue.shade700,
+        ),
+        WebPickerItem(
+          icon: Icons.gif_box_rounded,
+          label: 'GIF',
+          value: 'gif',
+          color: Colors.pink.shade600,
+        ),
+      ],
     );
-    if (go != true || !mounted) return;
+    if (choice == null || !mounted) return;
+
+    if (choice == 'photo') {
+      final r = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+      final bytes = r?.files.single.bytes;
+      if (bytes == null || !mounted) return;
+      // Open the photo editor (web-safe via data: URL), then post the result.
+      final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      final edited = await Navigator.push<Uint8List>(
+        context,
+        MaterialPageRoute(
+            builder: (_) => ImageEditorScreen(imagePath: dataUrl)),
+      );
+      if (edited == null || !mounted) return;
+      await _publishImageBytesPost(edited);
+      return;
+    }
+
     final r = await FilePicker.platform.pickFiles(
-      type: FileType.image,
+      type: choice == 'gif'
+          ? FileType.custom
+          : choice == 'video'
+              ? FileType.video
+              : FileType.any,
+      allowedExtensions: choice == 'gif' ? const ['gif'] : null,
       withData: true,
     );
-    final bytes = r?.files.single.bytes;
-    if (bytes == null || !mounted) return;
-    // Open the photo editor (web-safe via data: URL), then post the result.
-    final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-    final edited = await Navigator.push<Uint8List>(
-      context,
-      MaterialPageRoute(builder: (_) => ImageEditorScreen(imagePath: dataUrl)),
+    final picked = r?.files.firstOrNull;
+    final bytes = picked?.bytes;
+    if (bytes == null || bytes.isEmpty || !mounted) return;
+    final fileName = picked!.name.isNotEmpty
+        ? picked.name
+        : (choice == 'gif' ? 'animation.gif' : (choice == 'video' ? 'video.mp4' : 'file.bin'));
+    await _publishBytesPostWeb(
+      bytes: bytes,
+      fileName: fileName,
+      isVideo: choice == 'video',
+      isFile: choice == 'file',
+      isGif: choice == 'gif',
     );
-    if (edited == null || !mounted) return;
-    await _publishImageBytesPost(edited);
+  }
+
+  /// Publish picked gif/video/file bytes as a channel post (web only — the
+  /// native gallery sheet uses real file paths via its own handlers instead).
+  Future<void> _publishBytesPostWeb({
+    required Uint8List bytes,
+    required String fileName,
+    bool isVideo = false,
+    bool isFile = false,
+    bool isGif = false,
+  }) async {
+    if (_isSending) return;
+    setState(() {
+      _isSending = true;
+      _sendProgress = 0.0;
+    });
+    try {
+      final postId = _uuid.v4();
+      final mime = webMimeForFileName(fileName);
+      final stored = await writeWebStoredFile(
+        fileName: '${postId}_$fileName',
+        bytes: bytes,
+        mimeType: mime,
+      );
+      final chunks = ImageService.instance.splitToBase64Chunks(bytes);
+      await GossipRouter.instance.sendImgMeta(
+        msgId: postId,
+        totalChunks: chunks.length,
+        fromId: _myId,
+        isAvatar: false,
+        isVideo: isVideo,
+        isFile: isFile,
+        isChannelPost: true,
+        fileName: isFile ? fileName : null,
+      );
+      for (var i = 0; i < chunks.length; i++) {
+        await GossipRouter.instance.sendImgChunk(
+          msgId: postId,
+          index: i,
+          base64Data: chunks[i],
+          fromId: _myId,
+        );
+        if (mounted) setState(() => _sendProgress = (i + 1) / chunks.length);
+      }
+
+      final staffLabel = _channel.staffLabelForNewPost(_myId);
+      final text = isFile
+          ? '\u{1F4CE} $fileName'
+          : isGif
+              ? '🎞 GIF'
+              : isVideo
+                  ? ''
+                  : '';
+      final post = ChannelPost(
+        id: postId,
+        channelId: _channel.id,
+        authorId: _myId,
+        text: text,
+        imagePath: (!isVideo && !isFile) ? stored : null,
+        videoPath: isVideo ? stored : null,
+        filePath: isFile ? stored : null,
+        fileName: isFile ? fileName : null,
+        fileSize: isFile ? bytes.length : null,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        staffLabel: staffLabel,
+      );
+      await ChannelService.instance.savePost(post);
+      await BroadcastOutboxService.instance.enqueueChannelPost(
+        channelId: _channel.id,
+        postId: postId,
+        authorId: _myId,
+        text: post.text,
+        timestamp: post.timestamp,
+        hasImage: !isVideo && !isFile,
+        hasVideo: isVideo,
+        hasFile: isFile,
+        fileName: isFile ? fileName : null,
+        staffLabel: staffLabel,
+      );
+      _maybeAutoDriveBackupAfterOwnerPost();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+          _sendProgress = 0.0;
+        });
+      }
+    }
   }
 
   /// Discard the in-progress voice recording without sending (swipe-to-cancel).

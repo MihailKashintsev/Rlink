@@ -115,6 +115,7 @@ import 'contact_edit_screen.dart';
 import '../widgets/shared_todo_message_card.dart';
 import '../widgets/shared_calendar_message_card.dart';
 import '../widgets/missing_local_media.dart';
+import '../widgets/web_media_picker_sheet.dart';
 import '../widgets/rich_message_text.dart';
 import '../widgets/swipe_to_reply.dart';
 import 'peer_stickers_screen.dart';
@@ -3796,136 +3797,72 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _openWebMediaPicker(String myId) async {
-    Widget actionTile(
-      BuildContext ctx, {
-      required IconData icon,
-      required String label,
-      required String value,
-      Color? color,
-    }) {
-      final theme = Theme.of(ctx);
-      final accent = color ?? theme.colorScheme.primary;
-      return Material(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.56),
-        borderRadius: BorderRadius.circular(18),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => Navigator.pop(ctx, value),
-          child: SizedBox(
-            height: 96,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: accent.withOpacity(0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: accent),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge,
-                ),
-              ],
-            ),
-          ),
+    final choice = await showWebMediaPickerSheet(
+      context,
+      items: [
+        WebPickerItem(
+          icon: Icons.photo_library_rounded,
+          label: 'Фото',
+          value: 'photo',
+          color: Colors.green.shade700,
         ),
-      );
-    }
-
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return SafeArea(
-          child: Container(
-            margin: const EdgeInsets.all(12),
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(26),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.16),
-                  blurRadius: 28,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: theme.dividerColor.withOpacity(0.55),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                GridView.count(
-                  crossAxisCount: 4,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 0.92,
-                  children: [
-                    actionTile(
-                      ctx,
-                      icon: Icons.photo_library_rounded,
-                      label: 'Фото',
-                      value: 'photo',
-                      color: Colors.green.shade700,
-                    ),
-                    actionTile(
-                      ctx,
-                      icon: Icons.videocam_rounded,
-                      label: 'Видео',
-                      value: 'video',
-                      color: Colors.red.shade600,
-                    ),
-                    actionTile(
-                      ctx,
-                      icon: Icons.insert_drive_file_rounded,
-                      label: 'Файл',
-                      value: 'file',
-                      color: Colors.blue.shade700,
-                    ),
-                    actionTile(
-                      ctx,
-                      icon: Icons.gif_box_rounded,
-                      label: 'GIF',
-                      value: 'gif',
-                      color: Colors.pink.shade600,
-                    ),
-                    actionTile(
-                      ctx,
-                      icon: Icons.more_horiz_rounded,
-                      label: 'Еще',
-                      value: 'menu',
-                      color: Colors.deepPurple.shade500,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+        WebPickerItem(
+          icon: Icons.videocam_rounded,
+          label: 'Видео',
+          value: 'video',
+          color: Colors.red.shade600,
+        ),
+        WebPickerItem(
+          icon: Icons.insert_drive_file_rounded,
+          label: 'Файл',
+          value: 'file',
+          color: Colors.blue.shade700,
+        ),
+        WebPickerItem(
+          icon: Icons.gif_box_rounded,
+          label: 'GIF',
+          value: 'gif',
+          color: Colors.pink.shade600,
+        ),
+      ],
+      moreItems: [
+        WebPickerItem(
+          icon: _pendingLat != null
+              ? Icons.location_on
+              : Icons.location_on_outlined,
+          label: _pendingLat != null ? 'Убрать геометку' : 'Геометка',
+          value: 'location',
+        ),
+        if (!_isDmBot)
+          WebPickerItem(
+            icon: Icons.checklist_rtl,
+            label: AppL10n.t('cm_todo'),
+            value: 'todo',
           ),
-        );
-      },
+        if (!_isDmBot)
+          WebPickerItem(
+            icon: Icons.event_available_outlined,
+            label: AppL10n.t('cm_event'),
+            value: 'calendar',
+          ),
+      ],
     );
     if (choice == null || !mounted) return;
 
     if (choice == 'photo') {
       await _sendWebCompressedPhoto(myId);
+      return;
+    }
+    if (choice == 'location') {
+      await _toggleLocation();
+      return;
+    }
+    if (choice == 'todo') {
+      await _composeAndSendTodo();
+      return;
+    }
+    if (choice == 'calendar') {
+      await _composeAndSendCalendar();
       return;
     }
     if (choice == 'gif') {
@@ -3973,49 +3910,6 @@ class _ChatScreenState extends State<ChatScreen> {
         fileName: f.name.isNotEmpty ? f.name : 'video.mp4',
         myId: myId,
       );
-      return;
-    }
-    if (choice == 'menu') {
-      final menuChoice = await showModalBottomSheet<String>(
-        context: context,
-        builder: (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  _pendingLat != null
-                      ? Icons.location_on
-                      : Icons.location_on_outlined,
-                ),
-                title:
-                    Text(_pendingLat != null ? 'Убрать геометку' : 'Геометка'),
-                onTap: () => Navigator.pop(ctx, 'location'),
-              ),
-              if (!_isDmBot)
-                ListTile(
-                  leading: const Icon(Icons.checklist_rtl),
-                  title: Text(AppL10n.t('cm_todo')),
-                  onTap: () => Navigator.pop(ctx, 'todo'),
-                ),
-              if (!_isDmBot)
-                ListTile(
-                  leading: const Icon(Icons.event_available_outlined),
-                  title: Text(AppL10n.t('cm_event')),
-                  onTap: () => Navigator.pop(ctx, 'calendar'),
-                ),
-            ],
-          ),
-        ),
-      );
-      if (!mounted || menuChoice == null) return;
-      if (menuChoice == 'location') {
-        await _toggleLocation();
-      } else if (menuChoice == 'todo') {
-        await _composeAndSendTodo();
-      } else if (menuChoice == 'calendar') {
-        await _composeAndSendCalendar();
-      }
       return;
     }
     final r = await FilePicker.platform.pickFiles(
