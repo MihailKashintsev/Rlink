@@ -711,6 +711,11 @@ class GroupService {
     _bump();
   }
 
+  Future<void> deleteMessage(String messageId) async {
+    await _db!.delete('group_messages', where: 'id = ?', whereArgs: [messageId]);
+    _bump();
+  }
+
   /// [topicId] null = the General thread (topic_id IS NULL in storage).
   /// Pass [anyTopic] true to ignore topics entirely (history-sync/backup
   /// paths that predate topics and still want every message in the group).

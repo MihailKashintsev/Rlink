@@ -2943,6 +2943,13 @@ Future<void> initServices() async {
       await AppSettings.instance.setAutoDeleteForPeer(from, sec);
     };
 
+    GossipRouter.instance.onGroupMessageDelete = (payload) {
+      final messageId = payload['messageId'] as String?;
+      if (messageId != null) {
+        GroupService.instance.deleteMessage(messageId);
+      }
+    };
+
     GossipRouter.instance.onGroupInvite = (payload) {
       final groupId = payload['groupId'] as String?;
       final groupName = payload['groupName'] as String?;

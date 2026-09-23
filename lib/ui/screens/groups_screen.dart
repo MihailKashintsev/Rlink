@@ -2766,6 +2766,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               title: Text(AppL10n.t('cm_export')),
               onTap: () => Navigator.pop(ctx, 'share'),
             ),
+            if (m.senderId == CryptoService.instance.publicKeyHex ||
+                _group.canModerate(CryptoService.instance.publicKeyHex))
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: Text(AppL10n.t('chn_delete_post'),
+                    style: const TextStyle(color: Colors.red)),
+                onTap: () => Navigator.pop(ctx, 'delete'),
+              ),
           ],
         ),
       ),
@@ -2806,6 +2814,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       await _forwardGroupMessageToDm(m);
     } else if (action == 'share') {
       await shareGroupMessageExternally(context, m);
+    } else if (action == 'delete') {
+      await GroupService.instance.deleteMessage(m.id);
+      await GossipRouter.instance.sendGroupMessageDelete(
+        messageId: m.id,
+        groupId: _group.id,
+        byUserId: CryptoService.instance.publicKeyHex,
+      );
     }
   }
 

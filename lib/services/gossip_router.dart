@@ -457,6 +457,7 @@ class GossipRouter {
   Future<void> Function(GossipPacket packet)? onChannelBackupMeta;
   Future<void> Function(GossipPacket packet)? onChannelBackupChunk;
   void Function(Map<String, dynamic> payload)? onGroupMessage;
+  void Function(Map<String, dynamic> payload)? onGroupMessageDelete;
   void Function(Map<String, dynamic> payload)? onGroupInvite;
   void Function(Map<String, dynamic> payload)? onGroupAccept;
   void Function(Map<String, dynamic> payload)? onGroupHistoryReq;
@@ -2611,6 +2612,10 @@ class GossipRouter {
         onGroupMessage?.call(packet.payload);
         return;
       }
+      if (packet.type == 'group_message_delete') {
+        onGroupMessageDelete?.call(packet.payload);
+        return;
+      }
       if (packet.type == 'group_invite') {
         onGroupInvite?.call(packet.payload);
         return;
@@ -3016,6 +3021,25 @@ class GossipRouter {
         'postId': postId,
         if (channelId != null) 'channelId': channelId,
         if (authorId != null) 'authorId': authorId,
+      },
+    );
+    await _forward(packet);
+  }
+
+  Future<void> sendGroupMessageDelete({
+    required String messageId,
+    String? groupId,
+    String? byUserId,
+  }) async {
+    final packet = GossipPacket(
+      id: const Uuid().v4(),
+      type: 'group_message_delete',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: {
+        'messageId': messageId,
+        if (groupId != null) 'groupId': groupId,
+        if (byUserId != null) 'by': byUserId,
       },
     );
     await _forward(packet);
