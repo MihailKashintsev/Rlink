@@ -2460,6 +2460,24 @@ Future<void> initServices() async {
           ch.linkAdminIds.contains(me) ||
           ch.adminId == me;
       if (!amSubscriber) return;
+      // Ownership hand-over self-heal. The requester tells us who it thinks
+      // the admin is; if in OUR view that person was demoted to co-admin, our
+      // channel meta is the newer one (a transfer demotes the old owner to
+      // link-admin) — push it to them directly. The check is one-directional
+      // on purpose: a stale peer never matches (the requester's admin isn't a
+      // co-admin in its view), so it can't roll a fresher requester back. This
+      // recovers a transfer whose meta packet was lost (it used to be dropped
+      // as "too large" for any channel with more than a handful of people).
+      final claimedAdmin = payload['adminId'] as String?;
+      final staff = ch.adminId == me ||
+          ch.moderatorIds.contains(me) ||
+          ch.linkAdminIds.contains(me);
+      if (staff &&
+          claimedAdmin != null &&
+          claimedAdmin != ch.adminId &&
+          ch.linkAdminIds.contains(claimedAdmin)) {
+        unawaited(ch.broadcastGossipMeta(recipientId: requesterId));
+      }
       // If we're the admin and the requester sent their X25519 key, deliver the
       // channel backup key directly — covers a new subscriber who wasn't in the
       // published keys-file (so they can decrypt the Drive/gossip history).
