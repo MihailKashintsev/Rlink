@@ -98,6 +98,9 @@ class EtherBroadcastOptions extends ChangeNotifier {
   bool attachGeo = false;
   double? customLatitude;
   double? customLongitude;
+  // 'auto' (BLE + сервер, как раньше) | 'ble' (только рядом, mesh) | 'relay'
+  // (только через сервер). Игнорируется на web — там BLE всё равно нет.
+  String transport = 'auto';
 
   bool get hasCustomLocation =>
       customLatitude != null && customLongitude != null;
@@ -111,6 +114,12 @@ class EtherBroadcastOptions extends ChangeNotifier {
   void setAttachGeo(bool v) {
     if (attachGeo == v) return;
     attachGeo = v;
+    notifyListeners();
+  }
+
+  void setTransport(String v) {
+    if (transport == v) return;
+    transport = v;
     notifyListeners();
   }
 

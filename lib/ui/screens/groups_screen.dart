@@ -2364,6 +2364,77 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  // ── Group info sheet (tap the header) ───────────────────────
+
+  void _showGroupInfo() {
+    final cs = Theme.of(context).colorScheme;
+    final canManage = _isCreator || _group.canModerate(_myId);
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            AvatarWidget(
+              initials:
+                  _group.name.isNotEmpty ? _group.name[0].toUpperCase() : '?',
+              color: _group.avatarColor,
+              emoji: _group.avatarEmoji,
+              imagePath: _group.avatarImagePath,
+              size: 72,
+            ),
+            const SizedBox(height: 10),
+            Text(_group.name,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            Text('${_group.memberIds.length} участников',
+                style: TextStyle(
+                    fontSize: 13, color: cs.onSurface.withValues(alpha: 0.5))),
+            const SizedBox(height: 8),
+            if (canManage)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Редактировать группу'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _editGroup();
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.people_outline),
+              title: const Text('Участники'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _manageMembers();
+              },
+            ),
+            if (_isCreator)
+              ListTile(
+                leading: const Icon(Icons.manage_accounts_outlined),
+                title: const Text('Модераторы'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _manageModerators();
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.exit_to_app, color: Colors.red),
+              title:
+                  const Text('Покинуть группу', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _leaveGroup();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Manage members (kick) ───────────────────────────────────
 
   void _manageMembers() {
@@ -2801,14 +2872,37 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final hasSelection = sel.isValid && sel.baseOffset != sel.extentOffset;
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_group.name, style: const TextStyle(fontSize: 16)),
-            Text('${_group.memberIds.length} участников',
-                style: TextStyle(
-                    fontSize: 12, color: cs.onSurface.withValues(alpha: 0.5))),
-          ],
+        titleSpacing: 0,
+        title: InkWell(
+          onTap: _showGroupInfo,
+          child: Row(
+            children: [
+              AvatarWidget(
+                initials:
+                    _group.name.isNotEmpty ? _group.name[0].toUpperCase() : '?',
+                color: _group.avatarColor,
+                emoji: _group.avatarEmoji,
+                imagePath: _group.avatarImagePath,
+                size: 38,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_group.name,
+                        style: const TextStyle(fontSize: 16),
+                        overflow: TextOverflow.ellipsis),
+                    Text('${_group.memberIds.length} участников',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurface.withValues(alpha: 0.5))),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           IconButton(

@@ -144,6 +144,9 @@ class _EtherScreenState extends State<EtherScreen> {
       senderNick: senderNick,
       lat: lat,
       lng: lng,
+      scope: PlatformCapabilities.instance.supportsBleMesh
+          ? opts.transport
+          : 'relay',
     );
 
     EtherService.instance.addMessage(EtherMessage(
@@ -243,42 +246,74 @@ class _EtherScreenState extends State<EtherScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
-    // Эфир is a purely local Bluetooth broadcast — a post is only ever seen
-    // by phones physically nearby. On a platform with no native BLE mesh
-    // (desktop Windows/Linux — see PlatformCapabilities.supportsBleMesh),
-    // there's no one who could ever receive it, so the feed is functionally
-    // dead here; show that honestly instead of a feed that silently never
-    // reaches anyone.
-    if (!PlatformCapabilities.instance.supportsBleMesh) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.bluetooth_disabled, size: 72, color: Colors.grey.shade700),
-            const SizedBox(height: 16),
-            Text(
-              'Эфир недоступен на этом устройстве',
-              style: TextStyle(color: Colors.grey.shade300, fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Эфир — локальная BLE-рассылка для тех, кто физически рядом. '
-              'На этой платформе нет модуля Bluetooth-меша, поэтому сообщения '
-              'некому будет получить.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-            ),
-          ]),
-        ),
-      );
-    }
+    // No native BLE mesh here (web, Windows, Linux — see
+    // PlatformCapabilities.supportsBleMesh): Ether still works, just
+    // server-only — it reaches everyone currently connected via the relay
+    // instead of only phones physically nearby. Shown as a banner below
+    // rather than blocking the feed outright.
+    final bleAvailable = PlatformCapabilities.instance.supportsBleMesh;
 
     return Column(children: [
       // Info banner
-      ValueListenableBuilder<int>(
-        valueListenable: BleService.instance.peersCount,
-        builder: (_, count, __) => Container(
+      if (bleAvailable)
+        ValueListenableBuilder<int>(
+          valueListenable: BleService.instance.peersCount,
+          builder: (_, count, __) => Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  cs.primary.withValues(alpha: 0.10),
+                  cs.primary.withValues(alpha: 0.04),
+                ],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+            ),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(Icons.cell_tower, size: 14, color: cs.primary),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 380),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeOutCubic,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.04, 0),
+                        end: Offset.zero,
+                      ).animate(anim),
+                      child: child,
+                    ),
+                  ),
+                  child: Text(
+                    count > 0
+                        ? 'Слышат $count ${_peersWord(count)} · исчезает через 1 ч'
+                        : 'Никого рядом · сообщения исчезнут через 1 час',
+                    key: ValueKey<int>(count),
+                    style: TextStyle(
+                      fontSize: 12,
+                      letterSpacing: 0.1,
+                      color: cs.onSurface.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        )
+      else
+        Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
@@ -298,40 +333,22 @@ class _EtherScreenState extends State<EtherScreen> {
                 color: cs.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Icon(Icons.cell_tower, size: 14, color: cs.primary),
+              child: Icon(Icons.dns_outlined, size: 14, color: cs.primary),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 380),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeOutCubic,
-                transitionBuilder: (child, anim) => FadeTransition(
-                  opacity: anim,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0.04, 0),
-                      end: Offset.zero,
-                    ).animate(anim),
-                    child: child,
-                  ),
-                ),
-                child: Text(
-                  count > 0
-                      ? 'Слышат $count ${_peersWord(count)} · исчезает через 1 ч'
-                      : 'Никого рядом · сообщения исчезнут через 1 час',
-                  key: ValueKey<int>(count),
-                  style: TextStyle(
-                    fontSize: 12,
-                    letterSpacing: 0.1,
-                    color: cs.onSurface.withValues(alpha: 0.55),
-                  ),
+              child: Text(
+                'Режим: только через сервер (без BLE) — видят все, кто сейчас '
+                'в сети, а не только те, кто рядом · исчезает через 1 ч',
+                style: TextStyle(
+                  fontSize: 12,
+                  letterSpacing: 0.1,
+                  color: cs.onSurface.withValues(alpha: 0.55),
                 ),
               ),
             ),
           ]),
         ),
-      ),
 
       // Messages
       Expanded(

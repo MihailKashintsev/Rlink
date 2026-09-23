@@ -22,9 +22,17 @@ class DefaultPacketTransport implements PacketTransport {
   @override
   Future<void> forward(GossipPacket packet) async {
     final mode = AppSettings.instance.connectionMode;
+    // Per-message override for Ether ('auto'|'ble'|'relay') — lets a post be
+    // scoped to "people physically near me" or "everyone on the server"
+    // regardless of the app's general connection mode.
+    final etherScope =
+        packet.type == 'ether' ? packet.payload['scope'] as String? : null;
 
     // 1) Local mesh forwarding (native only; no-op on web).
-    await _meshForwarder.forward(packet, mode);
+    if (etherScope != 'relay') {
+      await _meshForwarder.forward(packet, mode);
+    }
+    if (etherScope == 'ble') return;
 
     // 2) Relay transport (works for mobile and web internet mode).
     if (mode < 1) {

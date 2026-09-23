@@ -1017,6 +1017,8 @@ class GossipRouter {
     String? senderNick,
     double? lat,
     double? lng,
+    // 'auto' (default, both transports) | 'ble' | 'relay'.
+    String scope = 'auto',
   }) async {
     final payload = <String, dynamic>{'text': text, 'col': color};
     if (senderId != null && senderNick != null) {
@@ -1027,6 +1029,7 @@ class GossipRouter {
       payload['lat'] = lat;
       payload['lng'] = lng;
     }
+    if (scope != 'auto') payload['scope'] = scope;
     final packet = GossipPacket(
       id: messageId,
       type: 'ether',

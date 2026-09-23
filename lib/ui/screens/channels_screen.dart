@@ -2685,6 +2685,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
 
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: 0,
         title: InkWell(
           onTap: () {
             Navigator.push(
@@ -2694,26 +2695,42 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               ),
             );
           },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                      child: Text(_channel.name,
-                          style: const TextStyle(fontSize: 16),
-                          overflow: TextOverflow.ellipsis)),
-                  if (_channel.verified) ...[
-                    const SizedBox(width: 4),
-                    const Icon(Icons.verified, size: 16, color: Colors.blue),
-                  ],
-                ],
+              AvatarWidget(
+                initials:
+                    _channel.name.isNotEmpty ? _channel.name[0].toUpperCase() : '?',
+                color: _channel.avatarColor,
+                emoji: _channel.avatarEmoji,
+                imagePath: _channel.avatarImagePath,
+                size: 38,
               ),
-              Text('${_channel.subscriberIds.length} подписчиков',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: cs.onSurface.withValues(alpha: 0.5))),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                            child: Text(_channel.name,
+                                style: const TextStyle(fontSize: 16),
+                                overflow: TextOverflow.ellipsis)),
+                        if (_channel.verified) ...[
+                          const SizedBox(width: 4),
+                          const Icon(Icons.verified, size: 16, color: Colors.blue),
+                        ],
+                      ],
+                    ),
+                    Text('${_channel.subscriberIds.length} подписчиков',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurface.withValues(alpha: 0.5))),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

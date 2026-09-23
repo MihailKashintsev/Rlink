@@ -386,6 +386,38 @@ class _ChatListScreenState extends State<ChatListScreen>
                       ],
                     ),
                   ),
+                  if (PlatformCapabilities.instance.supportsBleMesh) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                      child: Row(children: [
+                        Icon(Icons.settings_input_antenna_rounded,
+                            color: cs.primary, size: 20),
+                        const SizedBox(width: 10),
+                        const Text('Куда отправлять'),
+                      ]),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                              value: 'auto',
+                              label: Text('Авто'),
+                              icon: Icon(Icons.auto_awesome, size: 16)),
+                          ButtonSegment(
+                              value: 'ble',
+                              label: Text('Рядом'),
+                              icon: Icon(Icons.bluetooth, size: 16)),
+                          ButtonSegment(
+                              value: 'relay',
+                              label: Text('Сервер'),
+                              icon: Icon(Icons.dns_outlined, size: 16)),
+                        ],
+                        selected: {o.transport},
+                        onSelectionChanged: (s) => o.setTransport(s.first),
+                      ),
+                    ),
+                  ],
                   SwitchListTile(
                     value: o.anonymous,
                     title: const Text('Анонимно'),
@@ -1158,10 +1190,16 @@ class _MeTab extends StatefulWidget {
   State<_MeTab> createState() => _MeTabState();
 }
 
-class _MeTabState extends State<_MeTab> {
+class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
   // 0..1 how far the profile header is pulled open. Fed by touch overscroll
-  // and (on desktop) by the wheel once the list sits at the top.
-  final _pull = ValueNotifier<double>(0);
+  // and (on desktop) by the wheel once the list sits at the top. An
+  // AnimationController (not a plain ValueNotifier) so the *closing* snap can
+  // ease out instead of jumping straight to 0 in one frame — live drag
+  // tracking still sets .value directly, untouched.
+  late final _pull = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+  );
   final _listCtrl = ScrollController();
   static const double _pullSpan = 130;
 
@@ -1176,8 +1214,14 @@ class _MeTabState extends State<_MeTab> {
   // Snapping on scroll-end used to slam it shut the instant the gesture ended.
   bool _open = false;
 
-  void _setPull(double v) {
+  void _setPull(double v, {bool animate = false}) {
     final next = v.clamp(0.0, 1.0);
+    if (animate) {
+      if ((next - _pull.value).abs() < 0.002) return;
+      unawaited(_pull.animateTo(next, curve: Curves.easeOutCubic));
+      return;
+    }
+    _pull.stop();
     if ((next - _pull.value).abs() < 0.002) return;
     _pull.value = next;
   }
@@ -1186,10 +1230,11 @@ class _MeTabState extends State<_MeTab> {
     if (n.depth != 0) return false;
     final px = n.metrics.pixels;
     if (px > 4) {
-      // Scrolling down the list is the ONLY thing that closes it.
+      // Scrolling down the list is the ONLY thing that closes it — ease it
+      // shut instead of snapping, like letting go of a magnet.
       if (_open || _pull.value != 0) {
         _open = false;
-        _setPull(0);
+        _setPull(0, animate: true);
       }
       return false;
     }
@@ -1202,9 +1247,9 @@ class _MeTabState extends State<_MeTab> {
     if (n is ScrollEndNotification) {
       if (!_open && _pull.value > 0.45) {
         _open = true; // released past the threshold — latch open
-        _setPull(1);
+        _setPull(1, animate: true);
       } else if (!_open) {
-        _setPull(0);
+        _setPull(0, animate: true);
       }
     } else if (_open) {
       // Bouncing physics springs pixels back to 0; keep the latched state.
