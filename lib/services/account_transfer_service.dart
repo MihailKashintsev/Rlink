@@ -809,9 +809,10 @@ class AccountTransferService {
     final s = AppSettings.instance;
     return {
       'appPalette': s.appPalette,
-      'newDesign': s.newDesign,
-      'animatedGradient': s.animatedGradient,
-      'liquidGlass': s.liquidGlass,
+      'newDesign': s.newDesignPref,
+      'minimalist': s.minimalist,
+      'animatedGradient': s.animatedGradientPref,
+      'liquidGlass': s.liquidGlassPref,
       'chatBackground': s.chatBackground,
       'bubbleStyle': s.bubbleStyle,
       'clockFormat': s.clockFormat,
@@ -848,6 +849,7 @@ class AccountTransferService {
 
     await ifPresent<int>('appPalette', s.setAppPalette);
     await ifPresent<bool>('newDesign', s.setNewDesign);
+    await ifPresent<bool>('minimalist', s.setMinimalist);
     await ifPresent<bool>('animatedGradient', s.setAnimatedGradient);
     await ifPresent<bool>('liquidGlass', s.setLiquidGlass);
     await ifPresent<bool>('chatBackground', s.setChatBackground);

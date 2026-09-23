@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../design/rlink_design.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -83,13 +84,13 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor:
-          isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8),
+          RlinkDesign.screenBg(context, isDark),
       appBar: AppBar(
         title: Text(AppL10n.t('settings_data')),
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor:
-            isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2),
+            RlinkDesign.barBg(context, isDark),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

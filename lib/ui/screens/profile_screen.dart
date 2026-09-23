@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../design/rlink_design.dart';
 import '../../l10n/app_l10n.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -432,13 +433,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor:
-          isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8),
+          RlinkDesign.screenBg(context, isDark),
       appBar: AppBar(
         title: Text(AppL10n.t('cm_profile')),
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor:
-            isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2),
+            RlinkDesign.barBg(context, isDark),
         actions: [
           if (_editing)
             TextButton(
@@ -560,9 +561,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             padding: const EdgeInsets.all(3),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: isDark
-                                  ? const Color(0xFF0F0F0F)
-                                  : const Color(0xFFE8E8E8),
+                              color: RlinkDesign.screenBg(context, isDark),
                             ),
                             child: Stack(children: [
                               AvatarWidget(
@@ -594,9 +593,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         color: cs.primary,
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                            color: isDark
-                                                ? const Color(0xFF0F0F0F)
-                                                : const Color(0xFFE8E8E8),
+                                            color: RlinkDesign.screenBg(context, isDark),
                                             width: 2.5),
                                         boxShadow: [
                                           BoxShadow(

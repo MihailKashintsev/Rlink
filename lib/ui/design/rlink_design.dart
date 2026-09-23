@@ -17,6 +17,20 @@ class RlinkDesign {
   /// Единственный гейт нового дизайна.
   static bool get on => AppSettings.instance.newDesign;
 
+  /// Backdrop of a plain (non-aurora) screen. Classic look = fixed greys;
+  /// minimalism = the theme's own paper, so light mode is really paper-white
+  /// instead of a grey tint.
+  static Color screenBg(BuildContext context, bool isDark) =>
+      AppSettings.instance.minimalist
+          ? Theme.of(context).colorScheme.surface
+          : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8));
+
+  /// Same for app bars / bars that sit on [screenBg].
+  static Color barBg(BuildContext context, bool isDark) =>
+      AppSettings.instance.minimalist
+          ? Theme.of(context).colorScheme.surface
+          : (isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2));
+
   /// Градиент акцента текущей палитры (как бейджи в интро).
   static LinearGradient accentGradient(ColorScheme cs) {
     final g = paletteFor(AppSettings.instance.appPalette).gradient;

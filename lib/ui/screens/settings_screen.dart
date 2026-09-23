@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../design/rlink_design.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -83,7 +84,7 @@ Scaffold _subScaffold({
   final nd = AppSettings.instance.newDesign;
   final bg = nd
       ? Theme.of(context).colorScheme.surface
-      : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8));
+      : (RlinkDesign.screenBg(context, isDark));
   return Scaffold(
     backgroundColor: bg,
     appBar: AppBar(
@@ -92,7 +93,7 @@ Scaffold _subScaffold({
       scrolledUnderElevation: 0.5,
       backgroundColor: nd
           ? Theme.of(context).colorScheme.surface
-          : (isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2)),
+          : (RlinkDesign.barBg(context, isDark)),
     ),
     body: body,
   );
@@ -275,14 +276,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: AppSettings.instance.newDesign
           ? Theme.of(context).colorScheme.surface
-          : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
+          : (RlinkDesign.screenBg(context, isDark)),
       appBar: AppBar(
         title: Text(AppL10n.t('settings')),
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor: AppSettings.instance.newDesign
             ? Theme.of(context).colorScheme.surface
-            : (isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2)),
+            : (RlinkDesign.barBg(context, isDark)),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
@@ -332,14 +333,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: AppSettings.instance.newDesign
           ? Theme.of(context).colorScheme.surface
-          : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
+          : (RlinkDesign.screenBg(context, isDark)),
       appBar: AppBar(
         title: Text(AppL10n.t('settings')),
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor: AppSettings.instance.newDesign
             ? Theme.of(context).colorScheme.surface
-            : (isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2)),
+            : (RlinkDesign.barBg(context, isDark)),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
@@ -1502,6 +1503,16 @@ class _AppearancePageState extends State<_AppearancePage> {
           // ── Оформление ───────────────────────────────────────────
           const _SectionHeader('Оформление'),
           SwitchListTile(
+            secondary: Icon(Icons.crop_square_rounded, color: cs.primary),
+            title: const Text('Минимализм'),
+            subtitle: Text(
+                'Две краски — фон и акцент. Плоские поверхности, тонкие линии, '
+                'без свечения, градиентов и размытия. Акцент берётся из выбранной палитры.',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            value: settings.minimalist,
+            onChanged: (v) => settings.setMinimalist(v),
+          ),
+          SwitchListTile(
             secondary:
                 Icon(Icons.auto_awesome_mosaic_rounded, color: cs.primary),
             title: const Text('Новый дизайн'),
@@ -1509,8 +1520,9 @@ class _AppearancePageState extends State<_AppearancePage> {
                 'Обновлённый стиль в духе заставки: скругления, свечение, '
                 'плавные переходы. Выключи — вернётся прежний вид.',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            value: settings.newDesign,
-            onChanged: (v) => settings.setNewDesign(v),
+            value: settings.newDesignPref,
+            onChanged:
+                settings.minimalist ? null : (v) => settings.setNewDesign(v),
           ),
           SwitchListTile(
             secondary: Icon(Icons.wallpaper_rounded, color: cs.primary),
@@ -1530,8 +1542,9 @@ class _AppearancePageState extends State<_AppearancePage> {
                     ? 'Размытые «стеклянные» панели. Красиво, но снижает плавность — выключите, если подтормаживает'
                     : 'Полупрозрачные панели с размытием фона',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            value: settings.liquidGlass,
-            onChanged: (v) => settings.setLiquidGlass(v),
+            value: settings.liquidGlassPref,
+            onChanged:
+                settings.minimalist ? null : (v) => settings.setLiquidGlass(v),
           ),
           SwitchListTile(
             secondary: Icon(Icons.gradient_rounded, color: cs.primary),
@@ -1539,8 +1552,10 @@ class _AppearancePageState extends State<_AppearancePage> {
             subtitle: Text(
                 'Плавно переливающийся градиент. Выключен по умолчанию ради скорости',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            value: settings.animatedGradient,
-            onChanged: (v) => settings.setAnimatedGradient(v),
+            value: settings.animatedGradientPref,
+            onChanged: settings.minimalist
+                ? null
+                : (v) => settings.setAnimatedGradient(v),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),

@@ -75,6 +75,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyAnimatedGradient = 'animated_gradient';
   static const _keyLiquidGlass = 'liquid_glass';
   static const _keyNewDesign = 'new_design';
+  static const _keyMinimalist = 'minimalist_theme';
   static const _keyChatBackground = 'chat_background';
   static const _keySystemGallery = 'use_system_gallery';
   static const _keyAnimationLevel = 'animation_level'; // 0.0..1.0
@@ -204,6 +205,7 @@ class AppSettings extends ChangeNotifier {
   // умолчанию выключено там; на iOS/десктопе (быстрее) — включено.
   bool _liquidGlass = !RuntimePlatform.isAndroid;
   bool _newDesign = true;
+  bool _minimalist = false;
   bool _chatBackground = true;
   bool _useSystemGallery = false;
   double _animationLevel = 1.0;
@@ -266,9 +268,17 @@ class AppSettings extends ChangeNotifier {
   int get soundTheme => _soundTheme.clamp(0, 1);
 
   int get appPalette => _appPalette;
-  bool get animatedGradient => _animatedGradient;
-  bool get liquidGlass => _liquidGlass;
-  bool get newDesign => _newDesign;
+  // Minimalism is a separate, flat look: it switches the new-design effects
+  // (aurora glow, gradients, glass blur) off by overriding these getters, so
+  // every screen that already gates on them goes flat with no per-screen work.
+  // The raw user choices stay available for the settings switches.
+  bool get minimalist => _minimalist;
+  bool get animatedGradient => _animatedGradient && !_minimalist;
+  bool get liquidGlass => _liquidGlass && !_minimalist;
+  bool get newDesign => _newDesign && !_minimalist;
+  bool get animatedGradientPref => _animatedGradient;
+  bool get liquidGlassPref => _liquidGlass;
+  bool get newDesignPref => _newDesign;
   bool get chatBackground => _chatBackground;
 
   /// Pick media with the OS picker instead of Rlink's own gallery sheet.
@@ -506,6 +516,7 @@ class AppSettings extends ChangeNotifier {
     _animatedGradient = _prefs.getBool(_keyAnimatedGradient) ?? false;
     _liquidGlass = _prefs.getBool(_keyLiquidGlass) ?? !RuntimePlatform.isAndroid;
     _newDesign = _prefs.getBool(_keyNewDesign) ?? true;
+    _minimalist = _prefs.getBool(_keyMinimalist) ?? false;
     _chatBackground = _prefs.getBool(_keyChatBackground) ?? true;
     _useSystemGallery = _prefs.getBool(_keySystemGallery) ?? false;
     _animationLevel = (_prefs.getDouble(_keyAnimationLevel) ?? 1.0).clamp(0.0, 1.0);
@@ -750,6 +761,12 @@ class AppSettings extends ChangeNotifier {
   Future<void> setLiquidGlass(bool v) async {
     _liquidGlass = v;
     await _runPrefsWrite((p) => p.setBool(_keyLiquidGlass, v));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setMinimalist(bool v) async {
+    _minimalist = v;
+    await _runPrefsWrite((p) => p.setBool(_keyMinimalist, v));
     _notifySettingsChanged();
   }
 

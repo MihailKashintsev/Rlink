@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../design/rlink_design.dart';
 
 import '../../app_version.dart';
 import '../rlink_nav_routes.dart';
@@ -10,7 +11,7 @@ class DocumentationScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8);
+    final bg = RlinkDesign.screenBg(context, isDark);
 
     return DefaultTabController(
       length: 2,

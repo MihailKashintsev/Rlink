@@ -511,14 +511,14 @@ class _ChatListScreenState extends State<ChatListScreen>
       extendBody: settings.newDesign,
       backgroundColor: settings.newDesign
           ? Colors.transparent
-          : (isDark ? const Color(0xFF0F0F0F) : const Color(0xFFE8E8E8)),
+          : (RlinkDesign.screenBg(context, isDark)),
       appBar: AppBar(
         automaticallyImplyLeading: false,
         elevation: 0,
         scrolledUnderElevation: settings.newDesign ? 0 : 0.5,
         backgroundColor: settings.newDesign
             ? Colors.transparent
-            : (isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2)),
+            : (RlinkDesign.barBg(context, isDark)),
         flexibleSpace: settings.newDesign
             ? RlinkDesign.frosted(
                 context: context,
@@ -1131,7 +1131,7 @@ class _DesktopNavRail extends StatelessWidget {
       labelType: NavigationRailLabelType.all,
       groupAlignment: -0.9,
       backgroundColor:
-          isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F2),
+          RlinkDesign.barBg(context, isDark),
       indicatorColor: theme.colorScheme.primary.withValues(alpha: 0.15),
       indicatorShape:
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
