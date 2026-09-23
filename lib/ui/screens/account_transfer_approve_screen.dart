@@ -41,6 +41,7 @@ class AccountTransferApproveScreen extends StatefulWidget {
 class _AccountTransferApproveScreenState
     extends State<AccountTransferApproveScreen> {
   _Step _step = _Step.confirm;
+  bool _resending = false;
   bool _contacts = true;
   bool _channels = true;
   bool _groups = true;
@@ -70,6 +71,16 @@ class _AccountTransferApproveScreenState
     setState(() => _step = _Step.sending);
     AccountTransferService.instance.readyToWipe.addListener(_onAckReady);
     await AccountTransferService.instance.approveAndSend(_categories);
+  }
+
+  Future<void> _resend() async {
+    setState(() => _resending = true);
+    await AccountTransferService.instance.resendPending();
+    if (!mounted) return;
+    setState(() => _resending = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Отправлено ещё раз')),
+    );
   }
 
   void _onAckReady() {
@@ -347,6 +358,23 @@ class _AccountTransferApproveScreenState
             ),
             if (showForcedWipeFallback) ...[
               const SizedBox(height: 28),
+              // Safer than the forced-wipe fallback below: this doesn't
+              // require trusting a guess about the new device's state, it
+              // just tries delivery again — items are upserts on the
+              // receiving end, so resending is harmless even if most of it
+              // already arrived. Most useful exactly when both sides are
+              // two tabs on the same phone and were rarely online at once.
+              TextButton.icon(
+                onPressed: _resending ? null : _resend,
+                icon: _resending
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.refresh, size: 18),
+                label: Text(_resending ? 'Отправляю ещё раз…' : 'Отправить ещё раз'),
+              ),
+              const SizedBox(height: 4),
               TextButton(
                 onPressed: () => _wipe(forced: true),
                 child: Text(

@@ -133,6 +133,12 @@ class AccountTransferService {
   String? _pendingReqId;
   String? _verifiedAckProof;
 
+  // Remembers the last approveAndSend() target so resendPending() can
+  // re-run it without going through a fresh incoming-request approval.
+  String? _lastSentToDeviceId;
+  String? _lastSentXpk;
+  TransferCategories? _lastSentCategories;
+
   // New-device (receiver) state.
   String? _restoreTargetId;
   String? _activeReqId;
@@ -179,6 +185,7 @@ class AccountTransferService {
     GossipRouter.instance.onAccountTransferWiping = (sourceId, fromKey) {
       if (fromKey.trim().toLowerCase() != _restoreTargetId) return;
       adoptedIdentityLive.value = true;
+      _ackRetryTimer?.cancel();
     };
   }
 
@@ -192,6 +199,7 @@ class AccountTransferService {
 
   Future<void> requestTransfer(String targetId, {String? label}) async {
     final me = CryptoService.instance;
+    _ackRetryTimer?.cancel();
     _restoreTargetId = targetId.trim().toLowerCase();
     _activeReqId = null;
     _keysReceived = false;
@@ -241,6 +249,9 @@ class AccountTransferService {
     final newDeviceId = _pendingNewDeviceId;
     final xpk = _pendingXpk;
     if (newDeviceId == null || xpk == null) return;
+    _lastSentToDeviceId = newDeviceId;
+    _lastSentXpk = xpk;
+    _lastSentCategories = categories;
     _pendingReqId = DateTime.now().microsecondsSinceEpoch.toString();
     clearIncomingRequest();
 
@@ -273,6 +284,11 @@ class AccountTransferService {
     final myProfile = ProfileService.instance.profile;
     final payload = <String, dynamic>{
       ...keys,
+      // The completion ack must echo THIS id back (_handleAck checks it
+      // against _pendingReqId) — without sending it, the new device had no
+      // way to know it and generated its own instead, so the check almost
+      // never passed on either end of any transfer, same-device or not.
+      'reqId': _pendingReqId,
       // The receiver waits for exactly these kinds to complete before it
       // acks — must match what's actually sent below, category-for-category.
       'categoryKinds': categories.selectedKinds,
@@ -447,7 +463,12 @@ class AccountTransferService {
   /// call (`rlinkPerformAccountTransferWipe`), kept out of this service so
   /// this file stays about the protocol, not local storage teardown.
   Future<void> notifyWiping() async {
-    final target = _pendingNewDeviceId;
+    // NOT _pendingNewDeviceId — approveAndSend() already cleared that via
+    // clearIncomingRequest() long before the user ever reaches the wipe
+    // button, which made this a silent no-op every time (the new device
+    // never got told wiping had started, however successfully the ack
+    // itself had gone through).
+    final target = _lastSentToDeviceId;
     if (target == null) return;
     await GossipRouter.instance.sendAccountTransferWiping(
       fromPublicKey: CryptoService.instance.publicKeyHex,
@@ -456,6 +477,24 @@ class AccountTransferService {
   }
 
   bool get hasVerifiedAck => _verifiedAckProof != null;
+
+  bool get canResend => _lastSentToDeviceId != null;
+
+  /// Re-sends every category to the same target as the last approveAndSend
+  /// — safe to call repeatedly: every item on the receiving end is an
+  /// upsert/dedup-by-id, so a resend just fills in whatever didn't make it
+  /// across the first time. Meant for exactly the case two browser tabs on
+  /// ONE phone are rarely connected to the relay at the same moment, so the
+  /// first pass can easily leave gaps.
+  Future<void> resendPending() async {
+    final target = _lastSentToDeviceId;
+    final xpk = _lastSentXpk;
+    final categories = _lastSentCategories;
+    if (target == null || xpk == null || categories == null) return;
+    _pendingNewDeviceId = target;
+    _pendingXpk = xpk;
+    await approveAndSend(categories);
+  }
 
   // ───────────────────────── new device: receive ─────────────────────────
 
@@ -488,6 +527,12 @@ class AccountTransferService {
         );
         _expectedKinds =
             (k['categoryKinds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+        // Must echo this exact id back in the ack — the old device validates
+        // against it (see the 'reqId' doc comment in approveAndSend).
+        final sentReqId = k['reqId'] as String?;
+        if (sentReqId != null && sentReqId.isNotEmpty) {
+          _activeReqId = sentReqId;
+        }
         final nickname = (k['nickname'] as String?)?.trim();
         if (nickname != null && nickname.isNotEmpty) {
           if (!ProfileService.instance.hasProfile) {
@@ -541,6 +586,8 @@ class AccountTransferService {
     return (_receivedCounts[kind] ?? 0) >= expected;
   }
 
+  Timer? _ackRetryTimer;
+
   Future<void> _maybeSendAckIfComplete() async {
     if (!_keysReceived) return;
     for (final k in _expectedKinds) {
@@ -549,6 +596,24 @@ class AccountTransferService {
     final target = _restoreTargetId;
     final reqId = _activeReqId ??= DateTime.now().microsecondsSinceEpoch.toString();
     if (target == null) return;
+    await _sendAck(target, reqId);
+    progress.value = const TransferProgress(done: 1, total: 1, phase: 'Готово — ожидание старого устройства');
+    // The old device may not be reachable at this exact instant (this is
+    // most often two browser tabs on ONE phone, which iOS backgrounds
+    // aggressively — whichever side isn't in front loses its connection
+    // within seconds). Keep re-announcing completion until it actually
+    // lands, instead of sending once and hoping.
+    _ackRetryTimer?.cancel();
+    _ackRetryTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (adoptedIdentityLive.value) {
+        _ackRetryTimer?.cancel();
+        return;
+      }
+      unawaited(_sendAck(target, reqId));
+    });
+  }
+
+  Future<void> _sendAck(String target, String reqId) async {
     final nonce = 'rlink.xfer.ack.v1|$reqId';
     final proof = await CryptoService.instance.signUtf8Message(nonce);
     await GossipRouter.instance.sendAccountTransferAck(
@@ -557,7 +622,6 @@ class AccountTransferService {
       proof: proof,
       recipientId: target,
     );
-    progress.value = const TransferProgress(done: 1, total: 1, phase: 'Готово — ожидание старого устройства');
   }
 
   Future<void> _applyReceivedItem(String kind, String plaintextJson) async {
