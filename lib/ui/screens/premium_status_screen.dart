@@ -126,7 +126,7 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
                                     ? 'До ${until.day.toString().padLeft(2, '0')}.'
                                         '${until.month.toString().padLeft(2, '0')}.${until.year}'
                                         ' · осталось $days дн.'
-                                    : '50 ₽ в месяц или 500 ₽ в год',
+                                    : '48 ₽ в месяц или 496 ₽ в год',
                                 style: TextStyle(
                                     fontSize: 13, color: cs.onSurfaceVariant),
                               ),
@@ -170,7 +170,7 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
                   const SizedBox(height: 12),
                   _PlanCard(
                     title: '1 месяц',
-                    price: '50 ₽',
+                    price: '48 ₽',
                     note: '+30 дней',
                     enabled: !_busy,
                     onTap: () => _buy('month'),
@@ -178,8 +178,8 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
                   const SizedBox(height: 10),
                   _PlanCard(
                     title: '1 год',
-                    price: '500 ₽',
-                    note: '+365 дней · выгоднее на 2 месяца',
+                    price: '496 ₽',
+                    note: '+365 дней · выгоднее на 80 ₽ в год',
                     highlight: true,
                     enabled: !_busy,
                     onTap: () => _buy('year'),

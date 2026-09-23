@@ -239,12 +239,12 @@ class _GiftSheetState extends State<_GiftSheet> {
               FilledButton.tonalIcon(
                 onPressed: _busy ? null : () => _gift('month'),
                 icon: const Icon(Icons.workspace_premium_outlined),
-                label: const Text('Premium на месяц — 50 ₽'),
+                label: const Text('Premium на месяц — 48 ₽'),
               ),
               const SizedBox(height: 8),
               OutlinedButton(
                 onPressed: _busy ? null : () => _gift('year'),
-                child: const Text('Подарить на год — 500 ₽'),
+                child: const Text('Подарить на год — 496 ₽'),
               ),
             ],
             if (widget.onWrite != null) ...[

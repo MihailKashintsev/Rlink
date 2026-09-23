@@ -60,7 +60,7 @@ class PremiumRequired extends StatelessWidget {
                         builder: (_) => const PremiumStatusPage()),
                   ),
                   icon: const Icon(Icons.workspace_premium_outlined),
-                  label: const Text('Оформить — 50 ₽/мес или 500 ₽/год'),
+                  label: const Text('Оформить — 48 ₽/мес или 496 ₽/год'),
                 ),
                 const SizedBox(height: 10),
                 Text(

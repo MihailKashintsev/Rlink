@@ -29,8 +29,8 @@ bool get premiumConfigured => _shopId.isNotEmpty && _secretKey.isNotEmpty;
 
 /// Plan -> (price in roubles, days added, human name).
 const _plans = <String, ({String amount, int days, String title})>{
-  'month': (amount: '50.00', days: 30, title: 'Rlink Premium — 1 месяц'),
-  'year': (amount: '500.00', days: 365, title: 'Rlink Premium — 1 год'),
+  'month': (amount: '48.00', days: 30, title: 'Rlink Premium — 1 месяц'),
+  'year': (amount: '496.00', days: 365, title: 'Rlink Premium — 1 год'),
 };
 
 // Overridable so the logic can be exercised outside the container.
