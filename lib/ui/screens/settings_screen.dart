@@ -66,6 +66,7 @@ import '../screens/input_bar_button_order_settings.dart';
 import '../../main.dart' show sendProfileToAllContacts;
 import '../widgets/reactions.dart';
 import '../rlink_nav_routes.dart';
+import 'qr_contact_screen.dart' show QrScanScreen;
 import 'help_center_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -122,12 +123,28 @@ Future<void> doUnlinkDevice(BuildContext context) async {
 /// Pick a contact, send them a companion-device link request — used from
 /// both NetworkPage and the RID screen.
 Future<void> requestDeviceLink(BuildContext context) async {
-  final settings = AppSettings.instance;
   final myProfile = ProfileService.instance.profile;
   if (myProfile == null) return;
+  final useQr = await _pickLinkMethod(context);
+  if (useQr == null) return;
+  if (useQr) {
+    // The scanned device doesn't need to be an existing contact — the new
+    // device's own onboarding screen shows a QR of just its pubkey before
+    // it has any profile at all (see onboarding_screen.dart's
+    // "Это дополнительное устройство"). QrScanScreen sends the link
+    // request itself once a code resolves.
+    if (context.mounted) {
+      await Navigator.of(context).push(rlinkPushRoute(
+        const QrScanScreen(linkDeviceMode: true),
+      ));
+    }
+    return;
+  }
+  if (!context.mounted) return;
   final contact = await _pickContactForLink(context);
   if (contact == null) return;
 
+  final settings = AppSettings.instance;
   await settings.setConnectionMode(1);
   await applyConnectionTransport();
   await RelayService.instance.connect();
@@ -149,6 +166,42 @@ Future<void> requestDeviceLink(BuildContext context) async {
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(content: Text('Запрос на связку отправлен: ${contact.nickname}')),
+  );
+}
+
+/// null = cancelled, true = "scan a QR", false = "pick an existing contact".
+Future<bool?> _pickLinkMethod(BuildContext context) {
+  return showModalBottomSheet<bool>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Text('Привязать дочернее устройство',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.qr_code_scanner_rounded),
+            title: const Text('Сканировать QR'),
+            subtitle: const Text(
+                'На новом устройстве: «Это дополнительное устройство»',
+                style: TextStyle(fontSize: 12)),
+            onTap: () => Navigator.pop(ctx, true),
+          ),
+          ListTile(
+            leading: const Icon(Icons.people_outline),
+            title: const Text('Выбрать из контактов'),
+            subtitle: const Text('Устройство уже пользуется Rlink',
+                style: TextStyle(fontSize: 12)),
+            onTap: () => Navigator.pop(ctx, false),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
   );
 }
 

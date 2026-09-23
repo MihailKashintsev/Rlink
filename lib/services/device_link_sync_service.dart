@@ -69,6 +69,14 @@ class DeviceLinkSyncService {
   /// sync animation overlay. Cleared when the transfer finishes.
   final ValueNotifier<LinkSyncProgress?> progress =
       ValueNotifier<LinkSyncProgress?>(null);
+
+  /// True while a fresh, profile-less device is showing its "scan me to link
+  /// as a child device" QR during onboarding. A device_link request that
+  /// arrives while this is true is auto-accepted (showing the QR at all IS
+  /// the consent) instead of going through the normal in-chat approval card
+  /// — which a profile-less device stuck on the onboarding screen could
+  /// never reach anyway.
+  final ValueNotifier<bool> awaitingLinkAsChild = ValueNotifier<bool>(false);
   int _progressTotal = 0;
   int _progressDone = 0;
   final List<({String emoji, int color})> _progressAvatars = [];

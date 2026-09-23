@@ -2029,12 +2029,57 @@ Future<void> initServices() async {
 
     GossipRouter.instance.onDeviceLinkRequest = (_, publicKey, nick, username) {
       if (BlockService.instance.isBlocked(publicKey)) return;
-      final me = ProfileService.instance.profile;
-      if (me == null) return;
-      if (publicKey.toLowerCase() == me.publicKeyHex.toLowerCase()) {
+      if (publicKey.toLowerCase() ==
+          CryptoService.instance.publicKeyHex.toLowerCase()) {
         // Ignore own reflected request packets from mesh/relay.
         return;
       }
+
+      // A fresh, profile-less device showing its "link me as a child" QR
+      // during onboarding auto-accepts — showing the QR at all IS the
+      // consent, and this device could never reach the normal in-chat
+      // approval card below (no chat list to navigate to pre-onboarding).
+      // A device that already has a profile always falls through to the
+      // unchanged manual approve/decline flow further down.
+      if (ProfileService.instance.profile == null &&
+          DeviceLinkSyncService.instance.awaitingLinkAsChild.value) {
+        unawaited(() async {
+          final myKey = CryptoService.instance.publicKeyHex;
+          final settings = AppSettings.instance;
+          if (settings.isDeviceLinked || settings.isPrimaryDevice) {
+            await GossipRouter.instance.sendDeviceLinkAck(
+              publicKey: myKey,
+              nick: '',
+              recipientId: publicKey,
+              accepted: false,
+            );
+            return;
+          }
+          final deviceName = nick.trim().isNotEmpty ? nick.trim() : username.trim();
+          await settings.linkAsChildDevice(
+            devicePublicKey: publicKey,
+            deviceNickname: deviceName,
+          );
+          await ChatStorageService.instance.deleteAllDirectMessages();
+          await GroupService.instance.resetAll();
+          await ChannelService.instance.resetAll();
+          EtherService.instance.messages.value = const [];
+          EtherService.instance.unreadCount.value = 0;
+          await applyConnectionTransport();
+          await GossipRouter.instance.sendDeviceLinkAck(
+            publicKey: myKey,
+            nick: '',
+            recipientId: publicKey,
+            accepted: true,
+          );
+          await DeviceLinkSyncService.instance.onLinkedAsChild();
+          DeviceLinkSyncService.instance.awaitingLinkAsChild.value = false;
+        }());
+        return;
+      }
+
+      final me = ProfileService.instance.profile;
+      if (me == null) return;
 
       Future<void> sendAck(bool accepted) async {
         await GossipRouter.instance.sendDeviceLinkAck(

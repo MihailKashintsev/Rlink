@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/contact.dart';
 import '../../services/crypto_service.dart';
+import '../../services/gossip_router.dart';
 import '../../services/profile_service.dart';
 import '../../services/rlink_deep_link_service.dart';
 import '../../utils/rlink_deep_link.dart';
@@ -368,7 +369,12 @@ class _SweepPainter extends CustomPainter {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class QrScanScreen extends StatefulWidget {
-  const QrScanScreen({super.key});
+  /// When true, a successful scan sends a device-link request (targeting the
+  /// scanned pubkey directly — no need for that device to already be a
+  /// saved contact) instead of opening a chat with the newly added contact.
+  final bool linkDeviceMode;
+
+  const QrScanScreen({super.key, this.linkDeviceMode = false});
 
   @override
   State<QrScanScreen> createState() => _QrScanScreenState();
@@ -427,9 +433,26 @@ class _QrScanScreenState extends State<QrScanScreen>
     setState(() => _found = contact);
   }
 
-  void _onSuccessDone() {
+  Future<void> _onSuccessDone() async {
     final c = _found;
     if (!mounted || c == null) return;
+    if (widget.linkDeviceMode) {
+      final me = ProfileService.instance.profile;
+      if (me != null) {
+        await GossipRouter.instance.sendDeviceLinkRequest(
+          publicKey: me.publicKeyHex,
+          nick: me.nickname,
+          username: me.username,
+          recipientId: c.publicKeyHex,
+        );
+      }
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Запрос на связку отправлен: ${c.nickname}')),
+      );
+      return;
+    }
     Navigator.of(context).pushReplacement(rlinkPushRoute(ChatScreen(
       peerId: c.publicKeyHex,
       peerNickname: c.nickname,

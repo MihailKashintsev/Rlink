@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../models/user_profile.dart';
 import '../../services/account_transfer_service.dart';
@@ -11,6 +12,7 @@ import '../../services/ble_service.dart';
 import '../../services/channel_service.dart';
 import '../../services/chat_storage_service.dart';
 import '../../services/crypto_service.dart';
+import '../../services/device_link_sync_service.dart';
 import '../../services/gossip_router.dart';
 import '../../services/group_service.dart';
 import '../../services/image_service.dart';
@@ -483,6 +485,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     style: TextStyle(color: cs.onSurfaceVariant),
                   ),
                 ),
+                TextButton(
+                  onPressed: _loading
+                      ? null
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const _LinkAsChildScreen(),
+                            ),
+                          ),
+                  child: Text(
+                    'Это дополнительное устройство',
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  ),
+                ),
               ],
 
               const SizedBox(height: 32),
@@ -642,6 +657,100 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Fresh, profile-less device's side of "link as a child device without
+/// creating an account first": shows this device's own pubkey as a QR.
+/// The primary device scans it (Настройки → RID → «Привязать дочернее
+/// устройство» → «Сканировать QR») and sends a device_link request — which
+/// this screen auto-accepts (see main.dart's onDeviceLinkRequest handler:
+/// showing this QR at all is the consent) instead of going through the
+/// normal in-chat approval card, which a profile-less device could never
+/// reach anyway.
+class _LinkAsChildScreen extends StatefulWidget {
+  const _LinkAsChildScreen();
+
+  @override
+  State<_LinkAsChildScreen> createState() => _LinkAsChildScreenState();
+}
+
+class _LinkAsChildScreenState extends State<_LinkAsChildScreen> {
+  bool _linked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    DeviceLinkSyncService.instance.awaitingLinkAsChild.value = true;
+    AppSettings.instance.addListener(_onSettingsChanged);
+  }
+
+  void _onSettingsChanged() {
+    if (!mounted || _linked) return;
+    if (!AppSettings.instance.isLinkedChildDevice) return;
+    setState(() => _linked = true);
+    Future.delayed(const Duration(milliseconds: 700), () {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const ChatListScreen()),
+        (route) => false,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    DeviceLinkSyncService.instance.awaitingLinkAsChild.value = false;
+    AppSettings.instance.removeListener(_onSettingsChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final pubkey = CryptoService.instance.publicKeyHex;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Дополнительное устройство')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: _linked
+                ? [
+                    Icon(Icons.check_circle,
+                        color: Colors.green.shade400, size: 64),
+                    const SizedBox(height: 16),
+                    const Text('Привязано!', textAlign: TextAlign.center),
+                  ]
+                : [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: QrImageView(
+                        data: 'rlink://user/$pubkey',
+                        size: 220,
+                        padding: EdgeInsets.zero,
+                        errorCorrectionLevel: QrErrorCorrectLevel.H,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Отсканируйте этот код на основном устройстве:\n'
+                      'Настройки → RID → «Привязать дочернее устройство»',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 16),
+                    const CircularProgressIndicator(),
+                  ],
+          ),
+        ),
+      ),
     );
   }
 }
