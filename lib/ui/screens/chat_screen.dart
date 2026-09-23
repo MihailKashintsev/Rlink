@@ -109,6 +109,7 @@ import 'collab_compose_dialogs.dart';
 import 'channels_screen.dart';
 import 'call_screen.dart';
 import 'group_call_screen.dart';
+import '../widgets/dm_message_info_sheet.dart';
 import 'call_recording_playback_screen.dart';
 import 'groups_screen.dart';
 import 'location_map_screen.dart';
@@ -6319,6 +6320,11 @@ class _ChatScreenState extends State<ChatScreen> {
               label: 'В стикеры',
               onTap: () =>
                   unawaited(_importStickerFromMessage(stickerSourcePath))),
+        if (msg.isOutgoing && !_savedMessagesLocalOnly)
+          MessageMenuAction(
+              icon: Icons.info_outline,
+              label: 'Информация',
+              onTap: () => unawaited(showDmMessageInfo(context, msg))),
         if (msg.isOutgoing)
           MessageMenuAction(
               icon: Icons.edit,
@@ -9906,7 +9912,10 @@ class _MessageBubble extends StatelessWidget {
         child: Icon(Icons.done_all, size: 12, color: cs.onPrimary),
       );
     }
-    return _statusIcon(msg.status, cs);
+    final read = msg.status == MessageStatus.delivered &&
+        ChatStorageService.instance.peerReadTs(msg.peerId) >=
+            msg.timestamp.millisecondsSinceEpoch;
+    return _statusIcon(msg.status, cs, read: read);
   }
 
   String _fullTimestamp(DateTime dt) {
@@ -9916,7 +9925,7 @@ class _MessageBubble extends StatelessWidget {
     return '$d.$mo.${dt.year}, ${AppSettings.instance.formatTime(dt)}:$s';
   }
 
-  Widget _statusIcon(MessageStatus status, ColorScheme cs) {
+  Widget _statusIcon(MessageStatus status, ColorScheme cs, {bool read = false}) {
     final dimColor = cs.onPrimary.withValues(alpha: 0.6);
     final brightColor = cs.onPrimary;
     switch (status) {
@@ -9929,7 +9938,8 @@ class _MessageBubble extends StatelessWidget {
       case MessageStatus.sent:
         return Icon(Icons.check, size: 12, color: dimColor);
       case MessageStatus.delivered:
-        return Icon(Icons.done_all, size: 12, color: brightColor);
+        return Icon(Icons.done_all,
+            size: 12, color: read ? Colors.lightBlueAccent : brightColor);
       case MessageStatus.failed:
         return const Icon(Icons.error_outline, size: 12, color: Colors.red);
     }

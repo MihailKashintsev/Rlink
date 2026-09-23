@@ -11,7 +11,10 @@ import '../utils/reaction_emoji_key.dart';
 import '../utils/reaction_limit.dart';
 import '../utils/message_preview_formatter.dart';
 import '../models/contact.dart';
+import 'app_settings.dart';
 import 'contact_trust_service.dart';
+import 'crypto_service.dart';
+import 'gossip_router.dart';
 import 'image_service.dart';
 
 Future<void> _backfillDmReadCursors(Database db) async {
@@ -1384,9 +1387,79 @@ class ChatStorageService {
   }
 
   /// Marks the whole thread as read up to the latest stored message.
+  // ── Read receipts (peer -> me): how far the other side has read what I sent ──
+
+  final Map<String, int> _peerReadTs = {};
+  final Map<String, int> _lastSentReadTs = {};
+
+  Future<void> _ensurePeerReadTable() async {
+    await _db?.execute('''
+      CREATE TABLE IF NOT EXISTS dm_peer_read (
+        peer_id TEXT PRIMARY KEY,
+        read_ts INTEGER NOT NULL
+      )
+    ''');
+  }
+
+  /// Timestamp (ms) up to which [peerId] has read my messages; 0 = unknown.
+  /// Synchronous for the UI — kept warm by [loadMessages] / [applyPeerRead].
+  int peerReadTs(String peerId) => _peerReadTs[normalizeDmPeerId(peerId)] ?? 0;
+
+  Future<void> _loadPeerReadTs(String pid) async {
+    if (_db == null) return;
+    try {
+      await _ensurePeerReadTable();
+      final rows = await _db!.query('dm_peer_read',
+          where: 'peer_id = ?', whereArgs: [pid], limit: 1);
+      if (rows.isNotEmpty) {
+        _peerReadTs[pid] = (rows.first['read_ts'] as int?) ?? 0;
+      }
+    } catch (_) {}
+  }
+
+  /// Monotonic — a cursor never moves back.
+  Future<void> applyPeerRead(String peerId, int ts) async {
+    if (_db == null || ts <= 0) return;
+    final pid = normalizeDmPeerId(peerId);
+    if (!_peerReadTs.containsKey(pid)) await _loadPeerReadTs(pid);
+    if (ts <= (_peerReadTs[pid] ?? 0)) return;
+    await _ensurePeerReadTable();
+    await _db!.insert(
+      'dm_peer_read',
+      {'peer_id': pid, 'read_ts': ts},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    _peerReadTs[pid] = ts;
+    _notifyMessages(pid);
+  }
+
+  /// Tell [pid] we've read their messages, if the user allows read receipts.
+  /// Only the newest INCOMING message counts, and only when it moved forward.
+  Future<void> _sendReadReceipt(String pid) async {
+    if (!AppSettings.instance.showReadReceipts) return;
+    if (pid.length != 64) return;
+    final me = CryptoService.instance.publicKeyHex;
+    if (me.isEmpty || pid == me) return;
+    final rows = await _db!.query(
+      'messages',
+      columns: ['timestamp'],
+      where: 'peer_id = ? AND is_outgoing = 0',
+      whereArgs: [pid],
+      orderBy: 'timestamp DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return;
+    final ts = (rows.first['timestamp'] as int?) ?? 0;
+    if (ts <= 0 || ts <= (_lastSentReadTs[pid] ?? 0)) return;
+    _lastSentReadTs[pid] = ts;
+    unawaited(GossipRouter.instance
+        .sendDmRead(recipientId: pid, readTs: ts, fromId: me));
+  }
+
   Future<void> markDmRead(String peerId) async {
     if (_db == null) return;
     final pid = normalizeDmPeerId(peerId);
+    unawaited(_sendReadReceipt(pid));
     final key = 'dm:$pid';
     final rows = await _db!.query(
       'messages',
@@ -1427,6 +1500,7 @@ class ChatStorageService {
     await _ensureDbReady();
     final pid = normalizeDmPeerId(peerId);
     final msgs = await getMessages(pid);
+    await _loadPeerReadTs(pid);
     messagesNotifier(pid).value = msgs;
   }
 

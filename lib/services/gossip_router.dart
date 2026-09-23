@@ -49,7 +49,8 @@ bool _isLargePacketType(String type) =>
     type == 'channel_meta' ||
     type == 'group_message' ||
     type == 'group_update' ||
-    type == 'group_invite';
+    type == 'group_invite' ||
+    type == 'group_receipt';
 
 /// JSON numbers on dart2js are often [double]; gossip must still decode.
 int? _jsonIntLoose(dynamic v) {
@@ -481,6 +482,7 @@ class GossipRouter {
   Future<void> Function(GossipPacket packet)? onChannelBackupChunk;
   void Function(Map<String, dynamic> payload)? onGroupMessage;
   void Function(Map<String, dynamic> payload)? onGroupMessageDelete;
+  void Function(Map<String, dynamic> payload)? onGroupReceipt;
   void Function(Map<String, dynamic> payload)? onGroupInvite;
   void Function(Map<String, dynamic> payload)? onGroupAccept;
   void Function(Map<String, dynamic> payload)? onGroupHistoryReq;
@@ -489,6 +491,7 @@ class GossipRouter {
 
   /// Закрепление в личном чате: { mid, a, from, r? }
   Future<void> Function(Map<String, dynamic> payload)? onDmPin;
+  Future<void> Function(Map<String, dynamic> payload)? onDmRead;
 
   /// Таймер исчезающих сообщений в личном чате: { sec, from, r? }
   Future<void> Function(Map<String, dynamic> payload)? onDmEphemeral;
@@ -758,6 +761,31 @@ class GossipRouter {
       await _forwardEncrypted(packet);
       if (i < 2) await Future.delayed(const Duration(milliseconds: 400));
     }
+  }
+
+  /// Read receipt for a DM: "I've seen everything you sent up to [readTs]".
+  /// A cursor, not a per-message list — reading is chronological, so one
+  /// number covers a whole backlog. Directed at the sender only.
+  Future<void> sendDmRead({
+    required String recipientId,
+    required int readTs,
+    required String fromId,
+  }) async {
+    final rid8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : null;
+    final packet = GossipPacket(
+      id: _uuid.v4(),
+      type: 'dm_read',
+      ttl: 5,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      recipientId: recipientId,
+      payload: {
+        'ts': readTs,
+        'from': fromId,
+        if (rid8 != null) 'r': rid8,
+      },
+    );
+    _markSeen(packet.id);
+    await _forward(packet);
   }
 
   /// Синхронизация закрепления в личном чате (видят оба участника).
@@ -2100,6 +2128,14 @@ class GossipRouter {
         return;
       }
 
+      if (packet.type == 'dm_read') {
+        final handler = onDmRead;
+        if (handler != null) {
+          await handler(packet.payload);
+        }
+        return;
+      }
+
       if (packet.type == 'dm_pin') {
         final handler = onDmPin;
         if (handler != null) {
@@ -2720,6 +2756,10 @@ class GossipRouter {
         onGroupCallState?.call(packet.payload);
         return;
       }
+      if (packet.type == 'group_receipt') {
+        onGroupReceipt?.call(packet.payload);
+        return;
+      }
       if (packet.type == 'group_message_delete') {
         onGroupMessageDelete?.call(packet.payload);
         return;
@@ -3160,6 +3200,33 @@ class GossipRouter {
         'p': participantPrefixes,
         if (video) 'v': true,
         if (ended) 'e': true,
+      },
+    );
+    await _forward(packet);
+  }
+
+  /// Delivery / read receipt for group messages. [deliveredIds] are the ids
+  /// this device just received (exact, per message); [readTs] is a read cursor
+  /// (everything at or before that timestamp has been seen) — reading is
+  /// chronological, so one number covers it. Same broadcast model as
+  /// group_message: filtered by membership on receipt.
+  Future<void> sendGroupReceipt({
+    required String groupId,
+    required String userId,
+    List<String> deliveredIds = const [],
+    int readTs = 0,
+  }) async {
+    if (deliveredIds.isEmpty && readTs <= 0) return;
+    final packet = GossipPacket(
+      id: const Uuid().v4(),
+      type: 'group_receipt',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: {
+        'g': groupId,
+        'u': userId,
+        if (deliveredIds.isNotEmpty) 'd': deliveredIds,
+        if (readTs > 0) 'r': readTs,
       },
     );
     await _forward(packet);

@@ -39,6 +39,7 @@ import '../../services/sticker_collection_service.dart';
 import '../../services/invite_dm_service.dart';
 import '../../services/outbound_dm_text.dart';
 import '../../services/profile_service.dart';
+import '../../services/ble_service.dart';
 import '../../services/relay_service.dart';
 import 'location_map_screen.dart';
 import '../../utils/external_message_share.dart';
@@ -55,6 +56,7 @@ import '../widgets/missing_local_media.dart';
 import '../widgets/web_media_picker_sheet.dart';
 import 'group_call_screen.dart';
 import '../widgets/group_call_banner.dart';
+import '../widgets/group_message_info_sheet.dart';
 import '../../utils/channel_mentions.dart';
 import 'collab_compose_dialogs.dart';
 import 'chat_screen.dart';
@@ -305,6 +307,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   bool _isSending = false;
   double _sendProgress = 0.0;
   late Group _group;
+  int _onlineCount = 0;
   final _focusNode = FocusNode();
   bool _showScrollToBottomFab = false;
   double? _pendingLat;
@@ -336,6 +339,37 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     unawaited(GroupBackupService.instance.maybeBackgroundPull(_group));
     NotificationService.instance.currentRoute.value = 'group:${_group.id}';
     _controller.addListener(_onComposeChanged);
+    RelayService.instance.presenceVersion.addListener(_recountOnline);
+    RelayService.instance.state.addListener(_recountOnline);
+    BleService.instance.peersCount.addListener(_recountOnline);
+    _recountOnline();
+  }
+
+  /// Members reachable right now (relay presence or a direct Bluetooth link),
+  /// counting yourself — same signals the chat list uses for its online dot.
+  void _recountOnline() {
+    final me = _myId;
+    var n = 0;
+    for (final id in _group.memberIds) {
+      if (id == me) {
+        n++;
+      } else if (BleService.instance.isPeerConnected(id) ||
+          (RelayService.instance.isConnected &&
+              RelayService.instance.isPeerOnline(id))) {
+        n++;
+      }
+    }
+    if (n != _onlineCount && mounted) setState(() => _onlineCount = n);
+  }
+
+  static String _membersLabel(int n) {
+    final m10 = n % 10, m100 = n % 100;
+    final word = (m10 == 1 && m100 != 11)
+        ? 'участник'
+        : (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14))
+            ? 'участника'
+            : 'участников';
+    return '$n $word';
   }
 
   void _onComposeChanged() {
@@ -364,6 +398,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     unawaited(GroupService.instance.markGroupRead(_group.id));
     _scrollController.removeListener(_onScrollFab);
     GroupService.instance.version.removeListener(_load);
+    RelayService.instance.presenceVersion.removeListener(_recountOnline);
+    RelayService.instance.state.removeListener(_recountOnline);
+    BleService.instance.peersCount.removeListener(_recountOnline);
     _controller.removeListener(_onComposeChanged);
     _controller.dispose();
     _scrollController.dispose();
@@ -1311,8 +1348,49 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           color: Colors.pink.shade600,
         ),
       ],
+      // Same extras the native gallery sheet offers (location / poll / todo /
+      // event) — dropped when the web picker was unified, restored here.
+      moreItems: [
+        WebPickerItem(
+          icon: _pendingLat != null
+              ? Icons.location_on
+              : Icons.location_on_outlined,
+          label: _pendingLat != null ? 'Убрать геометку' : 'Геометка',
+          value: 'location',
+        ),
+        const WebPickerItem(
+          icon: Icons.poll_outlined,
+          label: 'Опрос',
+          value: 'poll',
+        ),
+        WebPickerItem(
+          icon: Icons.checklist_rtl,
+          label: AppL10n.t('cm_todo'),
+          value: 'todo',
+        ),
+        WebPickerItem(
+          icon: Icons.event_available_outlined,
+          label: AppL10n.t('cm_event'),
+          value: 'calendar',
+        ),
+      ],
     );
     if (!mounted || choice == null) return;
+
+    switch (choice) {
+      case 'location':
+        await _toggleLocation();
+        return;
+      case 'poll':
+        await _sendPoll();
+        return;
+      case 'todo':
+        await _composeAndSendTodo();
+        return;
+      case 'calendar':
+        await _composeAndSendCalendar();
+        return;
+    }
 
     FilePickerResult? result;
     if (choice == 'gif') {
@@ -2756,6 +2834,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               title: Text(AppL10n.t('cm_export')),
               onTap: () => Navigator.pop(ctx, 'share'),
             ),
+            if (m.senderId == CryptoService.instance.publicKeyHex)
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('Информация'),
+                onTap: () => Navigator.pop(ctx, 'info'),
+              ),
             if (m.senderId == CryptoService.instance.publicKeyHex ||
                 _group.canModerate(CryptoService.instance.publicKeyHex))
               ListTile(
@@ -2804,6 +2888,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       await _forwardGroupMessageToDm(m);
     } else if (action == 'share') {
       await shareGroupMessageExternally(context, m);
+    } else if (action == 'info') {
+      await showGroupMessageInfo(context, group: _group, message: m);
     } else if (action == 'delete') {
       await GroupService.instance.deleteMessage(m.id);
       await GossipRouter.instance.sendGroupMessageDelete(
@@ -2899,7 +2985,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     Text(_group.name,
                         style: const TextStyle(fontSize: 16),
                         overflow: TextOverflow.ellipsis),
-                    Text('${_group.memberIds.length} участников',
+                    Text(
+                        '${_membersLabel(_group.memberIds.length)} · $_onlineCount в сети',
                         style: TextStyle(
                             fontSize: 12,
                             color: cs.onSurface.withValues(alpha: 0.5))),

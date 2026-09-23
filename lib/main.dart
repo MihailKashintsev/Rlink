@@ -2898,6 +2898,7 @@ Future<void> initServices() async {
       ));
 
       if (senderId != myKey) {
+        GroupService.instance.noteDelivered(groupId, messageId);
         final g = await GroupService.instance.getGroup(groupId);
         if (g != null && g.canModerate(myKey) && g.driveBackupEnabled) {
           _scheduleGroupBackupRepublish(groupId);
@@ -2976,6 +2977,16 @@ Future<void> initServices() async {
       }
     };
 
+    GossipRouter.instance.onDmRead = (payload) async {
+      final from = payload['from'] as String?;
+      final ts = (payload['ts'] as num?)?.toInt() ?? 0;
+      final rid8 = payload['r'] as String?;
+      final myKey = CryptoService.instance.publicKeyHex;
+      if (from == null || myKey.isEmpty || ts <= 0) return;
+      if (rid8 != null && !myKey.startsWith(rid8)) return;
+      await ChatStorageService.instance.applyPeerRead(from, ts);
+    };
+
     GossipRouter.instance.onDmEphemeral = (payload) async {
       final from = payload['from'] as String?;
       final sec = (payload['sec'] as num?)?.toInt() ?? 0;
@@ -2984,6 +2995,23 @@ Future<void> initServices() async {
       if (from == null || myKey.isEmpty) return;
       if (rid8 != null && !myKey.startsWith(rid8)) return;
       await AppSettings.instance.setAutoDeleteForPeer(from, sec);
+    };
+
+    GossipRouter.instance.onGroupReceipt = (payload) async {
+      final gid = payload['g'] as String?;
+      final uid = payload['u'] as String?;
+      final me = CryptoService.instance.publicKeyHex;
+      if (gid == null || uid == null || me.isEmpty || uid == me) return;
+      final g = await GroupService.instance.getGroup(gid);
+      if (g == null || !g.memberIds.contains(me) || !g.memberIds.contains(uid)) {
+        return;
+      }
+      await GroupService.instance.applyReceipt(
+        groupId: gid,
+        userId: uid,
+        deliveredIds: (payload['d'] as List?)?.cast<String>() ?? const [],
+        readTs: (payload['r'] as num?)?.toInt() ?? 0,
+      );
     };
 
     GossipRouter.instance.onGroupMessageDelete = (payload) {
@@ -4908,10 +4936,10 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
           : (paletteFor(settings.appPalette).dark!
               ? ThemeMode.dark
               : ThemeMode.light),
-      theme: _buildTheme(
-          paletteFor(settings.appPalette), Brightness.light, settings.newDesign),
-      darkTheme: _buildTheme(
-          paletteFor(settings.appPalette), Brightness.dark, settings.newDesign),
+      theme: _buildTheme(paletteFor(settings.appPalette), Brightness.light,
+          settings.newDesign, settings.minimalist),
+      darkTheme: _buildTheme(paletteFor(settings.appPalette), Brightness.dark,
+          settings.newDesign, settings.minimalist),
       locale: settings.resolvedLocale,
       supportedLocales: const [
         Locale('ru'),
@@ -4935,27 +4963,47 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
     );
   }
 
-  ThemeData _buildTheme(
-      AppPalette palette, Brightness fallbackBrightness, bool newDesign) {
+  ThemeData _buildTheme(AppPalette palette, Brightness fallbackBrightness,
+      bool newDesign, bool minimal) {
     final accent = palette.accentColor;
     final isDark = palette.dark ?? (fallbackBrightness == Brightness.dark);
     final brightness = isDark ? Brightness.dark : Brightness.light;
     final Color? paletteBg = palette.background;
     final base = isDark ? ThemeData.dark() : ThemeData.light();
+
+    // Minimalism = exactly two tones: PAPER (background) and the palette's
+    // ACCENT. Text is neutral ink picked for contrast against the paper, and
+    // every other surface/line is a thin mix of paper and ink — no tinted
+    // shadows, no accent-coloured surfaces.
+    final Color paper = paletteBg ??
+        (isDark ? const Color(0xFF0C0C0D) : const Color(0xFFFAFAF8));
+    final bool paperIsDark = paper.computeLuminance() < 0.4;
+    final Color ink =
+        paperIsDark ? const Color(0xFFEDEDED) : const Color(0xFF141414);
+    Color mix(double t) => Color.lerp(paper, ink, t)!;
+
     // Surfaces derived from a pinned palette background (else the standard look).
-    final Color scaffoldBg =
-        paletteBg ?? (isDark ? Colors.black : Colors.white);
-    final Color surfaceBg = paletteBg == null
-        ? (isDark ? const Color(0xFF121212) : Colors.white)
-        : (isDark
-            ? _lighten(paletteBg, 0.04)
-            : _darken(paletteBg, 0.03));
-    final Color surfaceHigh = paletteBg == null
-        ? (isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F0F0))
-        : (isDark ? _lighten(paletteBg, 0.09) : _darken(paletteBg, 0.07));
-    final Color onSurface = isDark ? Colors.white : const Color(0xFF161616);
+    final Color scaffoldBg = minimal
+        ? paper
+        : (paletteBg ?? (isDark ? Colors.black : Colors.white));
+    final Color surfaceBg = minimal
+        ? paper
+        : (paletteBg == null
+            ? (isDark ? const Color(0xFF121212) : Colors.white)
+            : (isDark
+                ? _lighten(paletteBg, 0.04)
+                : _darken(paletteBg, 0.03)));
+    final Color surfaceHigh = minimal
+        ? mix(0.07)
+        : (paletteBg == null
+            ? (isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F0F0))
+            : (isDark ? _lighten(paletteBg, 0.09) : _darken(paletteBg, 0.07)));
+    final Color onSurface =
+        minimal ? ink : (isDark ? Colors.white : const Color(0xFF161616));
     // New-design shape language: soft, generous radii + accent-tinted depth.
-    final double r = newDesign ? 20 : 12;
+    // Minimalism goes the other way: small radii and hairlines.
+    final double r = minimal ? 10 : (newDesign ? 20 : 12);
+    final Color hairline = mix(0.14);
 
     TextTheme scaled = GoogleFonts.googleSansTextTheme(base.textTheme);
 
@@ -5000,16 +5048,32 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       surfaceContainerHigh: surfaceHigh,
       surfaceContainerHighest: surfaceHigh,
       onSurface: onSurface,
-      onSurfaceVariant: isDark ? Colors.white70 : Colors.black54,
+      onSurfaceVariant: minimal ? mix(0.62) : (isDark ? Colors.white70 : Colors.black54),
       primary: accent,
       onPrimary: onAccent,
       secondary: accent,
+    ).copyWith(
+      // Two-tone: neutral containers (paper/ink mixes), accent only where
+      // something is interactive or selected.
+      surfaceContainerLowest: minimal ? paper : null,
+      surfaceContainerLow: minimal ? mix(0.03) : null,
+      surfaceContainer: minimal ? mix(0.05) : null,
+      outline: minimal ? mix(0.30) : null,
+      outlineVariant: minimal ? hairline : null,
+      primaryContainer: minimal ? Color.lerp(paper, accent, 0.14) : null,
+      onPrimaryContainer: minimal ? ink : null,
+      secondaryContainer: minimal ? Color.lerp(paper, accent, 0.14) : null,
+      onSecondaryContainer: minimal ? ink : null,
+      tertiary: minimal ? accent : null,
+      shadow: minimal ? Colors.transparent : null,
     );
 
     // App-bar/nav background: blend into the palette bg when one is pinned.
-    final Color barBg = paletteBg == null
-        ? (isDark ? const Color(0xFF121212) : Colors.white)
-        : scaffoldBg;
+    final Color barBg = minimal
+        ? paper
+        : (paletteBg == null
+            ? (isDark ? const Color(0xFF121212) : Colors.white)
+            : scaffoldBg);
     final RoundedRectangleBorder roundShape =
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(r));
 
@@ -5036,37 +5100,47 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       ),
       cardTheme: CardThemeData(
         color: surfaceBg,
-        elevation: newDesign ? 0 : 1,
-        shadowColor: accent.withValues(alpha: 0.25),
+        elevation: minimal ? 0 : (newDesign ? 0 : 1),
+        shadowColor: minimal ? Colors.transparent : accent.withValues(alpha: 0.25),
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(newDesign ? 22 : 12)),
+            borderRadius: BorderRadius.circular(minimal ? 10 : (newDesign ? 22 : 12)),
+            side: minimal ? BorderSide(color: hairline) : BorderSide.none),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: surfaceBg,
         surfaceTintColor: Colors.transparent,
+        elevation: minimal ? 0 : null,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(newDesign ? 26 : 16)),
+            borderRadius: BorderRadius.circular(minimal ? 14 : (newDesign ? 26 : 16)),
+            side: minimal ? BorderSide(color: hairline) : BorderSide.none),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: surfaceBg,
         surfaceTintColor: Colors.transparent,
+        elevation: minimal ? 0 : null,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(
-                top: Radius.circular(newDesign ? 28 : 20))),
+                top: Radius.circular(minimal ? 14 : (newDesign ? 28 : 20))),
+            side: minimal ? BorderSide(color: hairline) : BorderSide.none),
       ),
+      dividerTheme: minimal
+          ? DividerThemeData(color: hairline, thickness: 1, space: 1)
+          : null,
+      splashColor: minimal ? accent.withValues(alpha: 0.08) : null,
+      highlightColor: minimal ? Colors.transparent : null,
       inputDecorationTheme: InputDecorationTheme(
-        filled: true,
+        filled: !minimal,
         fillColor: surfaceHigh,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(newDesign ? 16 : 10),
-            borderSide: BorderSide.none),
+            borderRadius: BorderRadius.circular(minimal ? 10 : (newDesign ? 16 : 10)),
+            borderSide: minimal ? BorderSide(color: mix(0.28)) : BorderSide.none),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(newDesign ? 16 : 10),
-            borderSide: BorderSide.none),
+            borderRadius: BorderRadius.circular(minimal ? 10 : (newDesign ? 16 : 10)),
+            borderSide: minimal ? BorderSide(color: mix(0.28)) : BorderSide.none),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(newDesign ? 16 : 10),
-            borderSide: BorderSide(color: accent, width: 1.6)),
+            borderRadius: BorderRadius.circular(minimal ? 10 : (newDesign ? 16 : 10)),
+            borderSide: BorderSide(color: accent, width: minimal ? 1.4 : 1.6)),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -5078,6 +5152,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
+          elevation: minimal ? 0 : null,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(newDesign ? 16 : 10)),
         ),
@@ -5085,8 +5160,13 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: accent,
         foregroundColor: onAccent,
+        elevation: minimal ? 0 : null,
+        focusElevation: minimal ? 0 : null,
+        hoverElevation: minimal ? 0 : null,
+        highlightElevation: minimal ? 0 : null,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(newDesign ? 20 : 16)),
+            borderRadius:
+                BorderRadius.circular(minimal ? 14 : (newDesign ? 20 : 16))),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: barBg,
@@ -5113,15 +5193,16 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       appBarTheme: AppBarTheme(
         backgroundColor: barBg,
         elevation: 0,
-        scrolledUnderElevation: newDesign ? 0 : 1,
+        scrolledUnderElevation: minimal ? 0 : (newDesign ? 0 : 1),
         surfaceTintColor: Colors.transparent,
         foregroundColor: onSurface,
+        shape: minimal ? Border(bottom: BorderSide(color: hairline)) : null,
         iconTheme: IconThemeData(color: onSurface),
         actionsIconTheme: IconThemeData(color: onSurface),
         titleTextStyle: (scaled.titleLarge ?? const TextStyle()).copyWith(
           color: onSurface,
-          fontWeight: FontWeight.w700,
-          fontSize: 20,
+          fontWeight: minimal ? FontWeight.w600 : FontWeight.w700,
+          fontSize: minimal ? 18 : 20,
         ),
       ),
       tabBarTheme: TabBarThemeData(

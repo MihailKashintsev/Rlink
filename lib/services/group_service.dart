@@ -14,6 +14,7 @@ import '../models/message_poll.dart';
 import '../utils/reaction_emoji_key.dart';
 import '../utils/reaction_limit.dart';
 import 'channel_service.dart';
+import 'app_settings.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
 import 'image_service.dart';
@@ -222,9 +223,143 @@ class GroupService {
         }
       },
     );
+    await _ensureReceiptTables(_db!);
     // Notify listeners the DB is ready so a chat list rendered before init
     // finished (slow migration after an update) reloads groups.
     _bump();
+  }
+
+  // ── Delivery / read receipts ───────────────────────────────────
+
+  /// Idempotent (no schema-version bump): per-message "delivered to" and a
+  /// per-member read cursor.
+  Future<void> _ensureReceiptTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS group_msg_delivered (
+        message_id TEXT NOT NULL,
+        user_id    TEXT NOT NULL,
+        PRIMARY KEY (message_id, user_id)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS group_member_read (
+        group_id TEXT NOT NULL,
+        user_id  TEXT NOT NULL,
+        read_ts  INTEGER NOT NULL,
+        PRIMARY KEY (group_id, user_id)
+      )
+    ''');
+  }
+
+  /// Record a member's receipt (monotonic: a read cursor never moves back).
+  Future<void> applyReceipt({
+    required String groupId,
+    required String userId,
+    List<String> deliveredIds = const [],
+    int readTs = 0,
+  }) async {
+    if (_db == null) return;
+    if (deliveredIds.isNotEmpty) {
+      final batch = _db!.batch();
+      for (final id in deliveredIds) {
+        batch.insert(
+          'group_msg_delivered',
+          {'message_id': id, 'user_id': userId},
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+      await batch.commit(noResult: true);
+    }
+    if (readTs > 0) {
+      // Read-then-write rather than SQL upsert: older Android system SQLite
+      // (< 3.24) doesn't have ON CONFLICT DO UPDATE.
+      final cur = await _db!.query('group_member_read',
+          where: 'group_id = ? AND user_id = ?',
+          whereArgs: [groupId, userId],
+          limit: 1);
+      final old = cur.isEmpty ? 0 : (cur.first['read_ts'] as int?) ?? 0;
+      if (readTs > old) {
+        await _db!.insert(
+          'group_member_read',
+          {'group_id': groupId, 'user_id': userId, 'read_ts': readTs},
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    }
+    _bump();
+  }
+
+  /// Per member: has [messageId] (sent at [messageTs]) been read / delivered?
+  /// Reading implies delivery.
+  Future<Map<String, ({bool delivered, bool read})>> getMessageReceipts(
+    String groupId,
+    String messageId,
+    int messageTs,
+  ) async {
+    if (_db == null) return const {};
+    final out = <String, ({bool delivered, bool read})>{};
+    final reads = await _db!.query('group_member_read',
+        where: 'group_id = ?', whereArgs: [groupId]);
+    final deliveredRows = await _db!.query('group_msg_delivered',
+        where: 'message_id = ?', whereArgs: [messageId]);
+    final delivered = {for (final r in deliveredRows) r['user_id'] as String};
+    final readers = <String>{
+      for (final r in reads)
+        if (((r['read_ts'] as int?) ?? 0) >= messageTs) r['user_id'] as String,
+    };
+    for (final u in {...delivered, ...readers}) {
+      out[u] = (delivered: true, read: readers.contains(u));
+    }
+    return out;
+  }
+
+  final Map<String, Timer> _receiptTimers = {};
+  final Map<String, Set<String>> _pendingDelivered = {};
+
+  /// Remember that we received [messageId] and tell the group shortly (batched:
+  /// a burst of messages becomes one packet).
+  void noteDelivered(String groupId, String messageId) {
+    _pendingDelivered.putIfAbsent(groupId, () => <String>{}).add(messageId);
+    scheduleReceipt(groupId);
+  }
+
+  /// Debounced: flushes pending delivered ids and the current read cursor.
+  void scheduleReceipt(String groupId) {
+    _receiptTimers[groupId]?.cancel();
+    _receiptTimers[groupId] = Timer(const Duration(milliseconds: 1500), () {
+      _receiptTimers.remove(groupId);
+      unawaited(_sendReceipt(groupId));
+    });
+  }
+
+  Future<void> _sendReceipt(String groupId) async {
+    final me = CryptoService.instance.publicKeyHex;
+    if (me.isEmpty || _db == null) return;
+    final g = await getGroup(groupId);
+    // Every member broadcasting for every message is O(n^2) in fan-out; huge
+    // groups don't get receipts.
+    if (g == null || !g.memberIds.contains(me) || g.memberIds.length > 100) {
+      _pendingDelivered.remove(groupId);
+      return;
+    }
+    final ids = (_pendingDelivered.remove(groupId) ?? <String>{}).toList();
+    var readTs = 0;
+    if (AppSettings.instance.showReadReceipts) {
+      final rows = await _db!.query('group_read_cursor',
+          where: 'group_id = ?', whereArgs: [groupId], limit: 1);
+      if (rows.isNotEmpty) readTs = (rows.first['last_read_ts'] as int?) ?? 0;
+    }
+    // 40 ids per packet keeps each well inside the large-packet cap.
+    for (var i = 0; i < ids.length || (i == 0 && readTs > 0); i += 40) {
+      final chunk = ids.skip(i).take(40).toList();
+      await GossipRouter.instance.sendGroupReceipt(
+        groupId: groupId,
+        userId: me,
+        deliveredIds: chunk,
+        readTs: i == 0 ? readTs : 0,
+      );
+      if (ids.isEmpty) break;
+    }
   }
 
   Future<void> _ensureDbReady() async {
@@ -1053,6 +1188,7 @@ class GroupService {
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+      scheduleReceipt(groupId);
     }
     _bump();
   }

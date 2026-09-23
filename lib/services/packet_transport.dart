@@ -80,6 +80,7 @@ class DefaultPacketTransport implements PacketTransport {
           'edit',
           'delete',
           'dm_pin',
+          'dm_read',
           'dm_ephemeral',
           'xfer_request',
           'xfer_denied',
