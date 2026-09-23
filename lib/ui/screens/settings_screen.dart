@@ -422,6 +422,7 @@ class _CategoryItem {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final String? badge;
 
   const _CategoryItem({
     required this.icon,
@@ -429,6 +430,7 @@ class _CategoryItem {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.badge,
   });
 }
 
@@ -478,8 +480,30 @@ class _CategoryGroup extends StatelessWidget {
         ),
         child: Icon(item.icon, size: 19, color: item.color),
       ),
-      title: Text(item.title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w400)),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(item.title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w400)),
+          if (item.badge != null) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                item.badge!,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ],
+      ),
       subtitle: Text(
         item.subtitle,
         style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
@@ -663,12 +687,24 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             icon: Icons.cloud_outlined,
             color: const Color(0xFF0078D4),
             title: 'OneDrive',
-            subtitle: 'Привязка аккаунта для резервных копий',
-            onTap: () => _open(
-              context,
-              _CloudProviderPage(
-                title: 'OneDrive',
-                link: OneDriveBackup.instance.link,
+            subtitle: 'Пока недоступно',
+            badge: 'Скоро',
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('OneDrive — скоро'),
+                content: const Text(
+                  'Привязка OneDrive ещё не готова — ждём регистрацию '
+                  'приложения в Microsoft. Резервные копии пока доступны '
+                  'через Google Drive и Dropbox.',
+                  style: TextStyle(fontSize: 13),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('ОК'),
+                  ),
+                ],
               ),
             ),
           ),
