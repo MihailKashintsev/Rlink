@@ -40,9 +40,13 @@ class ProfileService {
     if (RuntimePlatform.isWeb) {
       await WebAccountBundle.layeredWrite(_kProfileKey, value);
       await WebAccountBundle.mergeProfileIntoBundle(value);
-      unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs(
+      // Awaited, not fire-and-forget: a backgrounded/closed tab right after
+      // this call (very plausible right after onboarding or a profile edit)
+      // would otherwise leave OPFS holding whatever profile it had before —
+      // stale name/avatar reappearing on next boot.
+      await WebIdentityPortable.syncIdentitySnapshotToOpfs(
         profileJsonOverride: value,
-      ));
+      );
       return;
     }
     if (_isMobile) {
@@ -174,9 +178,8 @@ class ProfileService {
     _profile = profile;
     profileNotifier.value = profile;
     unawaited(_syncProfileMirrorToBrowserChatCache(profile));
-    if (RuntimePlatform.isWeb) {
-      unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
-    }
+    // _write() already synced this profile to OPFS (awaited) — no need to
+    // repeat it here.
     return profile;
   }
 
@@ -227,9 +230,8 @@ class ProfileService {
     _profile = updated;
     profileNotifier.value = updated;
     unawaited(_syncProfileMirrorToBrowserChatCache(updated));
-    if (RuntimePlatform.isWeb) {
-      unawaited(WebIdentityPortable.syncIdentitySnapshotToOpfs());
-    }
+    // _write() already synced this profile to OPFS (awaited) — no need to
+    // repeat it here.
     return updated;
   }
 }

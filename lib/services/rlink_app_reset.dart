@@ -46,14 +46,18 @@ Future<void> rlinkPerformFullAppReset(BuildContext context) async {
   try {
     await GigachatService.instance.clear();
   } catch (_) {}
+  // Before regenerateKeys(): that call's own (web) OPFS sync reads whatever
+  // profile is currently stored — clearing it first means that sync only
+  // ever sees "no profile", instead of a brief window where it'd bundle the
+  // new keys together with the still-old name/avatar/emoji.
+  try {
+    await ProfileService.instance.clearProfile();
+  } catch (_) {}
   try {
     await CryptoService.instance.regenerateKeys();
   } catch (_) {}
   try {
     RelayService.instance.reconnect();
-  } catch (_) {}
-  try {
-    await ProfileService.instance.clearProfile();
   } catch (_) {}
   if (!context.mounted) return;
   Navigator.of(context).pushAndRemoveUntil(
