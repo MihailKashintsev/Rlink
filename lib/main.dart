@@ -42,6 +42,7 @@ import 'services/chat_inbox_service.dart';
 import 'services/channel_service.dart';
 import 'services/channel_backup_service.dart';
 import 'services/call_service.dart';
+import 'services/group_call_service.dart';
 import 'services/channel_directory_relay.dart';
 import 'services/ether_service.dart';
 import 'services/ble_service.dart';
@@ -103,6 +104,7 @@ import 'ui/mention_nav.dart';
 import 'ui/screens/call_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
 import 'ui/widgets/incoming_call_fullscreen_banner.dart';
+import 'ui/screens/group_call_screen.dart';
 
 final incomingMessageController = StreamController<IncomingMessage>.broadcast();
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -221,6 +223,26 @@ void _bindIncomingCallOverlay() {
 
   CallService.instance.incomingCall.addListener(tryShow);
   NotificationService.instance.isInBackground.addListener(tryShow);
+}
+
+bool _groupCallInviteDialogOpen = false;
+
+void _bindGroupCallInvites() {
+  GroupCallService.instance.bindSignaling();
+  GroupCallService.instance.incomingInvite.addListener(() async {
+    final invite = GroupCallService.instance.incomingInvite.value;
+    if (invite == null || _groupCallInviteDialogOpen) return;
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return;
+    _groupCallInviteDialogOpen = true;
+    try {
+      final group = await GroupService.instance.getGroup(invite.groupId);
+      if (!ctx.mounted) return;
+      await showGroupCallInviteDialog(ctx, invite, group?.name ?? 'Группа');
+    } finally {
+      _groupCallInviteDialogOpen = false;
+    }
+  });
 }
 
 Future<void> _showIncomingCallOverlay(
@@ -2022,6 +2044,7 @@ Future<void> initServices() async {
       },
     );
     CallService.instance.bindSignaling();
+    _bindGroupCallInvites();
     _bindIncomingCallOverlay();
     NotificationService.instance.onNotificationResponse =
         _handleNotificationResponse;

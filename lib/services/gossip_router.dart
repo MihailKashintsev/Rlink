@@ -429,6 +429,7 @@ class GossipRouter {
   OnAccountTransferWiping? onAccountTransferWiping;
   OnTypingReceived? onTypingReceived;
   OnCallSignal? onCallSignal;
+  OnCallSignal? onGroupCallSignal;
 
   /// Lightweight bootstrap to guarantee forwarding path without overwriting
   /// existing message/pair/ether handlers.
@@ -1683,6 +1684,55 @@ class GossipRouter {
     await _forwardCallSig(packet);
   }
 
+  /// Same shape as [sendCallSignal], distinct wire type so a group-call mesh
+  /// handshake never collides with (or gets bound over) the 1:1 call
+  /// signaling — each is its own gossip callback (`onGroupCallSignal` vs
+  /// `onCallSignal`), so both services can bind independently.
+  Future<void> sendGroupCallSignal({
+    required String fromId,
+    required String recipientId,
+    required String groupCallId,
+    required String signalType,
+    required String recipientX25519KeyBase64,
+    Map<String, dynamic> payload = const <String, dynamic>{},
+  }) async {
+    final rid8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : null;
+    if (recipientX25519KeyBase64.trim().isEmpty) {
+      debugPrint(
+          '[RLINK][Gossip] group_call_sig: no recipient X25519 key — refusing to send plaintext signaling');
+      return;
+    }
+    final inner = <String, dynamic>{
+      'from': fromId,
+      'cid': groupCallId,
+      'st': signalType,
+      if (payload.isNotEmpty) 'd': payload,
+    };
+    EncryptedMessage encrypted;
+    try {
+      encrypted = await CryptoService.instance.encryptMessage(
+        plaintext: jsonEncode(inner),
+        recipientX25519KeyBase64: recipientX25519KeyBase64,
+      );
+    } catch (e) {
+      debugPrint('[RLINK][Gossip] group_call_sig encrypt failed: $e');
+      return;
+    }
+    final packet = GossipPacket(
+      id: _uuid.v4(),
+      type: 'group_call_sig',
+      ttl: 2,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      recipientId: recipientId,
+      payload: <String, dynamic>{
+        ...encrypted.toJson(),
+        if (rid8 != null) 'r': rid8,
+      },
+    );
+    _markSeen(packet.id);
+    await _forwardCallSig(packet);
+  }
+
   /// SDP offer/answer для звонка может быть до 2-3 КБ (особенно с видео).
   /// Идёт через relay-WebSocket или direct route, BLE-mesh не используется
   /// (offer/answer ≫ MTU 512), поэтому не подпадает под `_kMaxPayloadBytes`.
@@ -1808,7 +1858,7 @@ class GossipRouter {
       // Остальное — BLE-mesh лимит _kMaxPayloadBytes.
       if (packet.type == 'msg') {
         await _forwardEncrypted(packet.decremented());
-      } else if (packet.type == 'call_sig') {
+      } else if (packet.type == 'call_sig' || packet.type == 'group_call_sig') {
         await _forwardCallSig(packet.decremented());
       } else {
         await _forward(packet.decremented());
@@ -2504,6 +2554,38 @@ class GossipRouter {
         return;
       }
 
+      if (packet.type == 'group_call_sig') {
+        final rid8 = packet.payload['r'] as String?;
+        if (!_matchesRid8(myPublicKey, rid8)) {
+          return;
+        }
+        final encrypted = EncryptedMessage.fromJson(packet.payload);
+        if (encrypted.ephemeralPublicKey.isEmpty ||
+            encrypted.nonce.isEmpty ||
+            encrypted.cipherText.isEmpty ||
+            encrypted.mac.isEmpty) {
+          debugPrint('[RLINK][Gossip] Dropping plaintext/malformed group_call_sig');
+          return;
+        }
+        if (!await CryptoService.instance.verifyEncryptedEnvelope(encrypted)) {
+          debugPrint('[RLINK][Gossip] Dropping group_call_sig with bad signature');
+          return;
+        }
+        final plain = await CryptoService.instance.decryptMessage(encrypted);
+        if (plain == null || plain.isEmpty) return;
+        final decoded = jsonDecode(plain);
+        if (decoded is! Map) return;
+        final callMap = Map<String, dynamic>.from(decoded);
+        final from = callMap['from'] as String?;
+        final groupCallId = callMap['cid'] as String?;
+        final signalType = callMap['st'] as String?;
+        if (from == null || groupCallId == null || signalType == null) return;
+        final data = (callMap['d'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+        onGroupCallSignal?.call(from, groupCallId, signalType, data);
+        return;
+      }
+
       if (packet.type == 'img_chunk') {
         final msgId = packet.payload['msgId'] as String?;
         final index = _jsonIntLoose(packet.payload['idx']);
@@ -2674,9 +2756,9 @@ class GossipRouter {
   }
 
   Future<void> _forward(GossipPacket packet) async {
-    // call_sig никогда не должен попадать сюда (BLE MTU), но если попал —
-    // иначе SDP offer/answer молча отбрасывается лимитом ниже.
-    if (packet.type == 'call_sig') {
+    // call_sig/group_call_sig никогда не должны попадать сюда (BLE MTU), но
+    // если попали — иначе SDP offer/answer молча отбрасывается лимитом ниже.
+    if (packet.type == 'call_sig' || packet.type == 'group_call_sig') {
       await _forwardCallSig(packet);
       return;
     }
