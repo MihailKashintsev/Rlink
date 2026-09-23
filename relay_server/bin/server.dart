@@ -2989,6 +2989,43 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
           {'ok': false, 'error': 'proxy_failed', 'detail': '$e'}, status: 502);
     }
   }
+  // Stream a public Google Drive file (channel/group backup snapshot, avatar,
+  // banner — anything but audio) with CORS so web clients can fetch it. Drive's
+  // own download endpoint 403s on web (browser sends Sec-Fetch-Site: cross-site,
+  // which drive.usercontent rejects) and never sends CORS headers either way —
+  // same root cause as drive-audio above, just for non-audio backup content.
+  if (request.url.path == 'drive-proxy') {
+    final id = _driveFileId(request.url.queryParameters['id'] ?? '');
+    if (id == null) {
+      return _jsonResponse({'ok': false, 'error': 'bad_id'}, status: 400);
+    }
+    final upstream = Uri.parse(
+        'https://drive.usercontent.google.com/download?id=$id&export=download&confirm=t');
+    try {
+      final req = await _proxyClient.getUrl(upstream);
+      req.headers.set('user-agent', 'Mozilla/5.0 (compatible; RlinkRelay)');
+      final resp = await req.close();
+      if (resp.statusCode >= 400) {
+        await resp.drain<void>();
+        return _jsonResponse(
+            {'ok': false, 'error': 'upstream_${resp.statusCode}'},
+            status: 502);
+      }
+      final ct = resp.headers.contentType?.mimeType ?? 'application/octet-stream';
+      final headers = <String, String>{
+        'content-type': ct,
+        'access-control-allow-origin': '*',
+        'cache-control': 'public, max-age=3600',
+      };
+      if (resp.contentLength >= 0) {
+        headers['content-length'] = '${resp.contentLength}';
+      }
+      return shelf.Response(resp.statusCode, body: resp, headers: headers);
+    } catch (e) {
+      return _jsonResponse(
+          {'ok': false, 'error': 'proxy_failed', 'detail': '$e'}, status: 502);
+    }
+  }
   if (request.url.path == 'push/public_key') {
     if (!_webPushConfigured) {
       return _jsonResponse({'enabled': false, 'publicKey': ''}, status: 503);
