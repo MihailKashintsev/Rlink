@@ -6,6 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../services/call_service.dart';
 import '../../services/call_proximity_service.dart';
+import '../../services/screen_share_helper.dart';
 import '../../services/sound_effects_service.dart' show CallFxSound;
 import '../widgets/avatar_widget.dart';
 import '../widgets/wave_line.dart';
@@ -48,6 +49,7 @@ class _CallScreenState extends State<CallScreen>
   VoidCallback? _streamListener;
   VoidCallback? _remoteGenListener;
   VoidCallback? _speakerListener;
+  VoidCallback? _shareListener;
 
   /// В видеозвонке: true — большой кадр собеседника, false — большой свой.
   bool _mainShowsPeer = true;
@@ -144,6 +146,11 @@ class _CallScreenState extends State<CallScreen>
       setState(() {});
     };
     CallService.instance.speakerOn.addListener(_speakerListener!);
+    _shareListener = () {
+      if (mounted) setState(() {});
+    };
+    CallService.instance.peerIsSharing.addListener(_shareListener!);
+    CallService.instance.screenSharing.addListener(_shareListener!);
     if (CallService.instance.phase.value == CallPhase.connected &&
         !_initialRouteApplied) {
       _initialRouteApplied = true;
@@ -308,6 +315,11 @@ class _CallScreenState extends State<CallScreen>
       CallService.instance.speakerOn.removeListener(_speakerListener!);
       _speakerListener = null;
     }
+    if (_shareListener != null) {
+      CallService.instance.peerIsSharing.removeListener(_shareListener!);
+      CallService.instance.screenSharing.removeListener(_shareListener!);
+      _shareListener = null;
+    }
     if (_fxListener != null) {
       CallService.instance.fxSignal.removeListener(_fxListener!);
       _fxListener = null;
@@ -319,6 +331,11 @@ class _CallScreenState extends State<CallScreen>
     super.dispose();
   }
 
+  void _screenShareFailedSnack() {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Демонстрация экрана недоступна на этом устройстве')));
+  }
+
   Future<void> _end() async {
     await CallService.instance.endCall();
     if (mounted) {
@@ -328,7 +345,9 @@ class _CallScreenState extends State<CallScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.session.videoEnabled) {
+    // An audio call flips to the video layout while the peer shares a screen.
+    if (!widget.session.videoEnabled &&
+        !CallService.instance.peerIsSharing.value) {
       return _buildAudioCallUi(context);
     }
     return _buildVideoCallUi(context);
@@ -638,6 +657,27 @@ class _CallScreenState extends State<CallScreen>
             onTap: _openFxSheet,
           ),
           const SizedBox(width: 18),
+          if (ScreenShareHelper.supported) ...[
+            ValueListenableBuilder<bool>(
+              valueListenable: CallService.instance.screenSharing,
+              builder: (_, sharing, __) => _CallButton(
+                icon: sharing
+                    ? Icons.stop_screen_share_rounded
+                    : Icons.screen_share_rounded,
+                label: sharing ? 'Стоп' : 'Экран',
+                active: sharing,
+                onTap: () async {
+                  if (sharing) {
+                    await CallService.instance.stopScreenShare();
+                  } else if (!await CallService.instance.startScreenShare() &&
+                      mounted) {
+                    _screenShareFailedSnack();
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 18),
+          ],
           ValueListenableBuilder<bool>(
             valueListenable: CallService.instance.speakerOn,
             builder: (_, speaker, __) {
@@ -702,7 +742,9 @@ class _CallScreenState extends State<CallScreen>
       return RTCVideoView(
         r,
         mirror: mirror,
-        objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+        objectFit: (!isLocal && CallService.instance.peerIsSharing.value)
+            ? RTCVideoViewObjectFit.RTCVideoViewObjectFitContain
+            : RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
       );
     }
 
@@ -795,6 +837,27 @@ class _CallScreenState extends State<CallScreen>
                           onTap: _openFxSheet,
                         ),
                         const SizedBox(width: 12),
+                        if (ScreenShareHelper.supported) ...[
+                          ValueListenableBuilder<bool>(
+                            valueListenable: CallService.instance.screenSharing,
+                            builder: (_, sharing, __) => _videoCtl(
+                              sharing
+                                  ? Icons.stop_screen_share_rounded
+                                  : Icons.screen_share_rounded,
+                              active: sharing,
+                              onTap: () async {
+                                if (sharing) {
+                                  await CallService.instance.stopScreenShare();
+                                } else if (!await CallService.instance
+                                        .startScreenShare() &&
+                                    mounted) {
+                                  _screenShareFailedSnack();
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
                         _videoCtl(
                           _camOn
                               ? Icons.videocam_rounded

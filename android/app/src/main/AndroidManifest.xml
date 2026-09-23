@@ -47,6 +47,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- Запрос на исключение из оптимизации батареи — без него Doze/OEM-киллеры
          рано или поздно останавливают приём сообщений в фоне. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -115,6 +116,11 @@
             android:name=".RlinkForegroundService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice|dataSync" />
+
+        <service
+            android:name=".ScreenShareService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <receiver
             android:name=".RlinkStartupReceiver"

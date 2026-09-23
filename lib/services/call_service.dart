@@ -15,6 +15,7 @@ import 'gossip_router.dart';
 import 'chat_storage_service.dart';
 import 'notification_service.dart';
 import 'relay_service.dart';
+import 'screen_share_helper.dart';
 import 'sound_effects_service.dart';
 import '../utils/web_file_store.dart';
 import '../utils/web_object_url.dart';
@@ -75,6 +76,17 @@ class CallService {
 
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
+
+  /// Screen share. In a video call the existing video sender's track is
+  /// swapped (no renegotiation); in an audio call a video track is added and
+  /// the call renegotiated (offer flagged `reneg` so a stale re-sent invite
+  /// offer can never be mistaken for it).
+  final ValueNotifier<bool> screenSharing = ValueNotifier(false);
+  final ValueNotifier<bool> peerIsSharing = ValueNotifier(false);
+  MediaStream? _screenStream;
+  RTCRtpSender? _shareSender;
+  MediaStreamTrack? _shareOriginalTrack;
+  bool _shareAddedTrack = false;
   final Map<String, dynamic> _pendingOffers = <String, dynamic>{};
   final Map<String, List<Map<String, dynamic>>> _pendingIce =
       <String, List<Map<String, dynamic>>>{};
@@ -630,6 +642,108 @@ class CallService {
     await _cleanup(CallPhase.ended);
   }
 
+  /// Returns false if sharing couldn't start (declined / unsupported here).
+  Future<bool> startScreenShare() async {
+    final pc = _pc;
+    final peer = _activePeerId;
+    final callId = _activeCallId;
+    if (pc == null ||
+        peer == null ||
+        callId == null ||
+        phase.value != CallPhase.connected ||
+        screenSharing.value) {
+      return false;
+    }
+    MediaStream? stream;
+    try {
+      stream = await ScreenShareHelper.start();
+    } catch (e) {
+      debugPrint('[RLINK][Call] screen share failed: $e');
+    }
+    final track = stream?.getVideoTracks().firstOrNull;
+    if (stream == null || track == null) {
+      if (stream != null) await ScreenShareHelper.stop(stream);
+      return false;
+    }
+    track.onEnded = () => unawaited(stopScreenShare());
+    _screenStream = stream;
+    RTCRtpSender? videoSender;
+    for (final s in await pc.getSenders()) {
+      if (s.track?.kind == 'video') {
+        videoSender = s;
+        break;
+      }
+    }
+    try {
+      if (videoSender != null) {
+        _shareSender = videoSender;
+        _shareOriginalTrack = videoSender.track;
+        _shareAddedTrack = false;
+        await videoSender.replaceTrack(track);
+      } else {
+        _shareSender = await pc.addTrack(track, stream);
+        _shareAddedTrack = true;
+        await _renegotiate();
+      }
+    } catch (e) {
+      debugPrint('[RLINK][Call] screen share attach failed: $e');
+      await stopScreenShare();
+      return false;
+    }
+    screenSharing.value = true;
+    unawaited(_sendSignal(peer, callId, 'share', {'on': true}));
+    return true;
+  }
+
+  Future<void> stopScreenShare() async {
+    final stream = _screenStream;
+    if (stream == null) return;
+    _screenStream = null;
+    final wasSharing = screenSharing.value;
+    screenSharing.value = false;
+    final pc = _pc;
+    final sender = _shareSender;
+    if (pc != null && sender != null) {
+      try {
+        if (_shareAddedTrack) {
+          await pc.removeTrack(sender);
+          await _renegotiate();
+        } else {
+          await sender.replaceTrack(_shareOriginalTrack);
+        }
+      } catch (e) {
+        debugPrint('[RLINK][Call] screen share detach failed: $e');
+      }
+    }
+    _shareSender = null;
+    _shareOriginalTrack = null;
+    _shareAddedTrack = false;
+    await ScreenShareHelper.stop(stream);
+    final peer = _activePeerId;
+    final callId = _activeCallId;
+    if (wasSharing && peer != null && callId != null) {
+      unawaited(_sendSignal(peer, callId, 'share', {'on': false}));
+    }
+  }
+
+  Future<void> _renegotiate() async {
+    final pc = _pc;
+    final peerId = _activePeerId;
+    final callId = _activeCallId;
+    if (pc == null || peerId == null || callId == null) return;
+    final offer = await pc.createOffer(<String, dynamic>{
+      'offerToReceiveAudio': true,
+      'offerToReceiveVideo': true,
+    });
+    await pc.setLocalDescription(offer);
+    final local = await pc.getLocalDescription();
+    await _sendSignal(peerId, callId, 'offer', <String, dynamic>{
+      'sdp': local?.sdp ?? offer.sdp,
+      'type': local?.type ?? offer.type,
+      'reneg': true,
+    });
+  }
+
   Future<void> toggleMic(bool enabled) async {
     for (final t
         in _localStream?.getAudioTracks() ?? const <MediaStreamTrack>[]) {
@@ -1012,6 +1126,15 @@ class CallService {
         unawaited(SoundEffectsService.instance.startIncomingRingtone());
         break;
       case 'offer':
+        if (payload['reneg'] == true) {
+          if (phase.value == CallPhase.connected &&
+              _activeCallId == callId &&
+              _activePeerId == fromId &&
+              _pc != null) {
+            await _applyOfferAndAnswer(callId, fromId, payload);
+          }
+          break;
+        }
         _pendingOffers[callId] = payload;
         if (_acceptedAwaitingOffer &&
             _activeCallId == callId &&
@@ -1052,6 +1175,10 @@ class CallService {
             }
           }
         }
+        break;
+      case 'share':
+        if (_activeCallId != callId || _activePeerId != fromId) break;
+        peerIsSharing.value = payload['on'] == true;
         break;
       case 'recording':
         if (_activeCallId != callId || _activePeerId != fromId) {
@@ -1219,6 +1346,14 @@ class CallService {
     _iceDiagTimer = null;
     _stopAcceptResendLoop();
     _stopOfferResendLoop();
+    final shareStream = _screenStream;
+    _screenStream = null;
+    _shareSender = null;
+    _shareOriginalTrack = null;
+    _shareAddedTrack = false;
+    screenSharing.value = false;
+    peerIsSharing.value = false;
+    if (shareStream != null) unawaited(ScreenShareHelper.stop(shareStream));
     try {
       await _pc?.close();
     } catch (_) {}

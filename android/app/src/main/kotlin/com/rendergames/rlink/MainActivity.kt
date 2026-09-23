@@ -247,6 +247,27 @@ class MainActivity : FlutterActivity() {
                         setLockScreenCallMode(false)
                         result.success(null)
                     }
+                    "startScreenShareService" -> {
+                        try {
+                            ContextCompat.startForegroundService(
+                                this,
+                                Intent(this, ScreenShareService::class.java)
+                            )
+                            result.success(true)
+                        } catch (e: Exception) {
+                            Log.w("Rlink", "screen share service: ${e.message}")
+                            result.success(false)
+                        }
+                    }
+                    "stopScreenShareService" -> {
+                        try {
+                            startService(
+                                Intent(this, ScreenShareService::class.java)
+                                    .setAction(ScreenShareService.ACTION_STOP)
+                            )
+                        } catch (_: Exception) { }
+                        result.success(null)
+                    }
                     else -> result.notImplemented()
                 }
             }
