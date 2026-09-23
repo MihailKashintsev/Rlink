@@ -102,6 +102,11 @@ jobs:
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   Rlink-${V}-arm64.apk
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Rlink-${V}-arm32.apk
       - name: Upload to Rlink-releases
+        # Skip on a manual workflow_dispatch test run (no real version tag to
+        # publish under, and github.ref_name would be a branch name like
+        # "main") — only a real `v*.*.*` tag push should touch the public
+        # release.
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           repository: MihailKashintsev/Rlink-releases
@@ -222,6 +227,7 @@ jobs:
           cd build/macos/Build/Products/Release
           zip -r "$GITHUB_WORKSPACE/rlink_${{ github.ref_name }}_macos.zip" Rlink.app
       - name: Upload to Rlink-releases
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           repository: MihailKashintsev/Rlink-releases
@@ -238,7 +244,10 @@ jobs:
     # Runs as long as Android built; a flaky Windows/macOS or a down relay must
     # not block it. The relay is best-effort (source of truth is the GitHub
     # release) — if it fails, re-sync manually the same way this job does.
-    if: ${{ always() && needs.build-android.result == 'success' }}
+    # event_name == 'push': a manual workflow_dispatch test run has no real
+    # version tag (github.ref_name would be a branch name) and must never
+    # publish a bogus manifest to the live production update server.
+    if: ${{ always() && needs.build-android.result == 'success' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -283,7 +292,13 @@ jobs:
             assets:{android:$au, android_arm32:$a32, windows:$wu, macos:$mu, linux:"", web:$v}
           }' > manifest.json
           $SSH $HOST "mkdir -p $DIR"
-          for f in "Rlink-${V}.apk" "rlink_${V}_windows.zip" "rlink_${V}_macos.zip"; do
+          # Was "Rlink-${V}.apk" -- a file that never existed once builds
+          # split into arm64/arm32 (the actual output is Rlink-${V}-arm64.apk
+          # / Rlink-${V}-arm32.apk, see the manifest fields above, which
+          # already referenced the right names). Every copy silently no-opped
+          # here ("skip missing"), so the manifest pointed at APK URLs that
+          # 404'd -- this is why installs from the update server failed.
+          for f in "Rlink-${V}-arm64.apk" "Rlink-${V}-arm32.apk" "rlink_${V}_windows.zip" "rlink_${V}_macos.zip"; do
             if [ -f "artifacts/$f" ]; then $SCP "artifacts/$f" "$HOST:$DIR/$f"; else echo "skip missing $f"; fi
           done
           $SCP manifest.json "$HOST:$DIR/manifest.json"
