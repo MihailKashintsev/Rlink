@@ -44,6 +44,7 @@ import '../widgets/animated_transitions.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/bubble_actions.dart';
 import '../widgets/message_actions_overlay.dart';
+import '../widgets/platform_layout.dart';
 import '../widgets/mesh_radar_widget.dart';
 import '../widgets/status_emoji_view.dart';
 import '../widgets/missing_local_media.dart';
@@ -853,13 +854,26 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     super.dispose();
   }
 
+  bool _didInitialFeedScroll = false;
+
   Future<void> _load() async {
     final ch = await ChannelService.instance.getChannel(_channel.id);
     if (ch != null && mounted) setState(() => _channel = ch);
     final posts = await ChannelService.instance.getPosts(_channel.id);
     if (mounted) {
       setState(() => _posts = posts);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _onFeedScroll());
+      // Открытие канала должно сразу показывать последние посты (как в
+      // личном чате), а не начало ленты — прыгаем на низ один раз, без
+      // анимации, чтобы не было видно проскролленного пути.
+      final firstScroll = !_didInitialFeedScroll;
+      _didInitialFeedScroll = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (firstScroll && _feedScrollController.hasClients) {
+          _feedScrollController
+              .jumpTo(_feedScrollController.position.maxScrollExtent);
+        }
+        _onFeedScroll();
+      });
     }
   }
 
@@ -4651,38 +4665,44 @@ class _ChannelInlineVideoState extends State<_ChannelInlineVideo> {
     final ar = (_initialized && _ctrl != null && _ctrl!.value.aspectRatio > 0)
         ? _ctrl!.value.aspectRatio
         : 16 / 9;
-    const w = 220.0;
-    final h = (w / ar).clamp(80.0, 280.0);
-    return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => _ChannelVideoFullScreen(path: p),
+    // Same principle as ChannelFeedImage: the block hugs the video's own
+    // aspect ratio (shrinks to fit within a max box) instead of stamping
+    // every video into one fixed 220x280 box and cropping to fill it.
+    final pc = isDesktopShell();
+    final maxW = pc ? 280.0 : MediaQuery.sizeOf(context).width;
+    final maxH = pc ? 280.0 : MediaQuery.sizeOf(context).height * 0.55;
+    var w = maxW;
+    var h = w / ar;
+    if (h > maxH) {
+      h = maxH;
+      w = h * ar;
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: GestureDetector(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => _ChannelVideoFullScreen(path: p),
+          ),
         ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: SizedBox(
-          width: w,
-          height: h,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Container(color: const Color(0xFF111111)),
-              if (_initialized && _ctrl != null)
-                FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: _ctrl!.value.size.width,
-                    height: _ctrl!.value.size.height,
-                    child: VideoPlayer(_ctrl!),
-                  ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: w,
+            height: h,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Container(color: const Color(0xFF111111)),
+                if (_initialized && _ctrl != null)
+                  AspectRatio(aspectRatio: ar, child: VideoPlayer(_ctrl!)),
+                Container(color: Colors.black.withValues(alpha: 0.28)),
+                const Center(
+                  child: Icon(Icons.play_circle_fill,
+                      color: Colors.white, size: 54),
                 ),
-              Container(color: Colors.black.withValues(alpha: 0.28)),
-              const Center(
-                child:
-                    Icon(Icons.play_circle_fill, color: Colors.white, size: 54),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

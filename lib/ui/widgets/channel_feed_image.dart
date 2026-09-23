@@ -242,19 +242,15 @@ class ChannelFeedImage extends StatelessWidget {
     if (isSticker && !pc) {
       return storedImage(resolvedPath, width: 132, height: 132, fit: BoxFit.cover);
     }
-    if (!pc) {
-      // Cap the height: an uncapped tall screenshot filled the whole comments
-      // screen and there was nothing left to scroll to. Cropped here, full
-      // size still available by tapping through to the viewer.
-      final maxH = MediaQuery.sizeOf(context).height * 0.55;
-      return ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxH),
-        child: storedImage(resolvedPath,
-            width: double.infinity, fit: BoxFit.cover),
-      );
-    }
-    final maxW = isSticker ? 180.0 : (sw * 0.38).clamp(200.0, 360.0);
-    final maxH = isSticker ? 180.0 : 280.0;
+    // Below this point isSticker only happens on desktop. No forced width/
+    // height on the Image itself — with only maxWidth/maxHeight constraints
+    // and BoxFit.contain, the block hugs the photo's own aspect ratio
+    // (shrinks to fit, never crops, never letterboxes with empty space)
+    // instead of stamping every photo into one fixed box shape.
+    final maxW = isSticker ? 180.0 : (pc ? (sw * 0.38).clamp(200.0, 360.0) : sw);
+    final maxH = isSticker
+        ? 180.0
+        : (pc ? 280.0 : MediaQuery.sizeOf(context).height * 0.55);
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(

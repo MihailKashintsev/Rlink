@@ -8240,6 +8240,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                     child:
                                                                         _MessageBubble(
                                                                       msg: msg,
+                                                                      isSavedMessages:
+                                                                          _savedMessagesLocalOnly,
                                                                       bulkSelectMode:
                                                                           _bulkSelectMode,
                                                                       groupedWithPrev: i > 0 &&
@@ -9249,9 +9251,11 @@ class _MessageBubble extends StatelessWidget {
       onCustomEmojiTap;
   final Future<void> Function(String sourcePeerId)? onStickerTapFromPeer;
   final Future<void> Function(String imagePath)? onStickerTapFromLocal;
+  final bool isSavedMessages;
 
   const _MessageBubble({
     required this.msg,
+    this.isSavedMessages = false,
     this.replyPreviewText,
     this.bulkSelectMode = false,
     this.groupedWithPrev = false,
@@ -9870,7 +9874,7 @@ class _MessageBubble extends StatelessWidget {
                         ),
                         if (isOut) ...[
                           const SizedBox(width: 4),
-                          _sendStateAction(msg, cs),
+                          _sendStateAction(context, msg, cs),
                         ],
                       ],
                     ),
@@ -9887,7 +9891,7 @@ class _MessageBubble extends StatelessWidget {
                   ),
                   if (isOut) ...[
                     const SizedBox(width: 4),
-                    _sendStateAction(msg, cs),
+                    _sendStateAction(context, msg, cs),
                   ],
                 ],
               ],
@@ -9898,7 +9902,7 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _sendStateAction(ChatMessage msg, ColorScheme cs) {
+  Widget _sendStateAction(BuildContext context, ChatMessage msg, ColorScheme cs) {
     if (msg.status == MessageStatus.sending) {
       final expired = DateTime.now().difference(msg.timestamp) >=
           const Duration(minutes: 1);
@@ -9978,7 +9982,29 @@ class _MessageBubble extends StatelessWidget {
     if (!AppSettings.instance.showReadReceipts) {
       return const SizedBox.shrink();
     }
+    // В избранном нет настоящего получателя — статус "доставлено/прочитано"
+    // не имеет смысла, поэтому всегда показываем две галочки, а по тапу
+    // раскрываем точное время отправки.
+    if (isSavedMessages) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Отправлено: ${_fullTimestamp(msg.timestamp)}'),
+            duration: const Duration(seconds: 2),
+          ),
+        ),
+        child: Icon(Icons.done_all, size: 12, color: cs.onPrimary),
+      );
+    }
     return _statusIcon(msg.status, cs);
+  }
+
+  String _fullTimestamp(DateTime dt) {
+    final d = dt.day.toString().padLeft(2, '0');
+    final mo = dt.month.toString().padLeft(2, '0');
+    final s = dt.second.toString().padLeft(2, '0');
+    return '$d.$mo.${dt.year}, ${AppSettings.instance.formatTime(dt)}:$s';
   }
 
   Widget _statusIcon(MessageStatus status, ColorScheme cs) {
