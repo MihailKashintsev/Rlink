@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_message.dart';
+import '../models/channel.dart';
 import '../models/contact.dart';
 import '../models/group.dart';
 import '../utils/web_file_store.dart';
@@ -18,6 +19,7 @@ import 'gossip_router.dart';
 import 'emoji_pack_service.dart';
 import 'group_service.dart';
 import 'image_service.dart';
+import 'profile_service.dart';
 import 'relay_service.dart';
 
 /// Reassembly buffer for a chunked avatar/banner during a link snapshot.
@@ -251,6 +253,24 @@ class DeviceLinkSyncService {
           allMessages.length;
       await send('link_begin', {'total': total});
 
+      // The child adopts the primary's own display identity — a companion
+      // device is meant to present as the same person, not show up
+      // nameless. Previously never sent at all, so a child linked with no
+      // profile yet (e.g. the QR-from-onboarding flow) stayed stuck without
+      // one.
+      final myProfile = ProfileService.instance.profile;
+      if (myProfile != null) {
+        await send('profile', {
+          'nickname': myProfile.nickname,
+          'username': myProfile.username,
+          'avatarColor': myProfile.avatarColor,
+          'avatarEmoji': myProfile.avatarEmoji,
+          'tags': myProfile.tags,
+          'statusEmoji': myProfile.statusEmoji,
+        });
+        await _sendMediaChunks(send, myKey, 'p', myProfile.avatarImagePath);
+      }
+
       for (final c in contacts) {
         await send('ct', _encodeContact(c));
         await _sendMediaChunks(send, c.publicKeyHex, 'a', c.avatarImagePath);
@@ -264,6 +284,15 @@ class DeviceLinkSyncService {
           'col': ch.avatarColor,
           'em': ch.avatarEmoji,
           'adm': ch.adminId,
+          'un': ch.username,
+          'ca': ch.createdAt,
+          // Without these the child can't fetch the channel's history at
+          // all — same gap the account-transfer path had (see
+          // account_transfer_service.dart).
+          'drvUrl': ch.driveFileUrl,
+          'drvKeys': ch.driveKeysUrl,
+          'drvRev': ch.driveBackupRev,
+          'drvOn': ch.driveBackupEnabled,
         });
         await Future.delayed(const Duration(milliseconds: 8));
       }
@@ -345,6 +374,9 @@ class DeviceLinkSyncService {
         _progressDone = 0;
         _progressAvatars.clear();
         _emitProgress('Перенос профиля…');
+        return;
+      case 'profile':
+        await _applyProfile(data);
         return;
       case 'ct':
         final c = _decodeContact(data);
@@ -434,6 +466,30 @@ class DeviceLinkSyncService {
     _emitProgress(phase);
   }
 
+  /// Child applies the parent's profile fields (nickname/username/avatar/etc).
+  Future<void> _applyProfile(Map<String, dynamic> data) async {
+    try {
+      final nickname = data['nickname'] as String?;
+      if (nickname == null || nickname.isEmpty) return;
+      final myKey = CryptoService.instance.publicKeyHex;
+      if (ProfileService.instance.profile == null) {
+        await ProfileService.instance
+            .createProfile(publicKeyHex: myKey, nickname: nickname);
+      }
+      await ProfileService.instance.updateProfile(
+        nickname: nickname,
+        username: data['username'] as String?,
+        avatarColor: (data['avatarColor'] as num?)?.toInt(),
+        avatarEmoji: data['avatarEmoji'] as String?,
+        tags: (data['tags'] as List?)?.map((e) => e.toString()).toList(),
+        statusEmoji: data['statusEmoji'] as String?,
+      );
+      _bumpProgress('Профиль');
+    } catch (e) {
+      debugPrint('[RLINK][LinkSync] applyProfile failed: $e');
+    }
+  }
+
   /// Child applies a channel the parent shared: ensure it exists locally and
   /// subscribe to it (best-effort; admin co-ownership is not transferred).
   Future<void> _applyChannel(Map<String, dynamic> data) async {
@@ -441,19 +497,44 @@ class DeviceLinkSyncService {
     if (id == null || id.isEmpty) return;
     try {
       final myId = CryptoService.instance.publicKeyHex;
+      // A fresh child device has no local channel row at all — waiting on
+      // "the relay directory snapshot" to add it wasn't actually reliable
+      // (that's why channels never showed up). Upsert a full row, Drive
+      // fields included, the same way _applyGroup below already does.
       final existing = await ChannelService.instance.getChannel(id);
-      if (existing != null) {
-        if (!existing.subscriberIds.contains(myId)) {
-          await ChannelService.instance.subscribe(id, myId);
-          unawaited(GossipRouter.instance.broadcastChannelSubscribe(
-            channelId: id,
-            userId: myId,
-            x25519: CryptoService.instance.x25519PublicKeyBase64,
-          ));
-        }
+      final adminId = (data['adm'] as String?) ?? existing?.adminId ?? '';
+      final channel = Channel(
+        id: id,
+        name: (data['n'] as String?) ?? existing?.name ?? '',
+        adminId: adminId,
+        subscriberIds: {...?existing?.subscriberIds, adminId, myId}
+            .where((s) => s.isNotEmpty)
+            .toList(),
+        moderatorIds: existing?.moderatorIds ?? const [],
+        avatarColor:
+            (data['col'] as num?)?.toInt() ?? existing?.avatarColor ?? 0xFF42A5F5,
+        avatarEmoji: (data['em'] as String?) ?? existing?.avatarEmoji ?? '📢',
+        username: (data['un'] as String?) ?? existing?.username ?? '',
+        createdAt: (data['ca'] as num?)?.toInt() ??
+            existing?.createdAt ??
+            DateTime.now().millisecondsSinceEpoch,
+        isPublic: existing?.isPublic ?? true,
+        driveFileUrl: (data['drvUrl'] as String?) ?? existing?.driveFileUrl,
+        driveKeysUrl: (data['drvKeys'] as String?) ?? existing?.driveKeysUrl,
+        driveBackupRev:
+            (data['drvRev'] as num?)?.toInt() ?? existing?.driveBackupRev ?? 0,
+        driveBackupEnabled:
+            (data['drvOn'] as bool?) ?? existing?.driveBackupEnabled ?? false,
+      );
+      await ChannelService.instance.upsertChannelsFromBackup([channel]);
+      if (!channel.subscriberIds.contains(myId) || existing == null) {
+        await ChannelService.instance.subscribe(id, myId);
+        unawaited(GossipRouter.instance.broadcastChannelSubscribe(
+          channelId: id,
+          userId: myId,
+          x25519: CryptoService.instance.x25519PublicKeyBase64,
+        ));
       }
-      // If not present locally yet, the relay directory snapshot will add it;
-      // the child can then join via the channel id.
     } catch (e) {
       debugPrint('[RLINK][LinkSync] applyChannel failed: $e');
     }
@@ -585,6 +666,13 @@ class DeviceLinkSyncService {
         if (g != null) {
           await GroupService.instance
               .upsertGroupsFromBackup([g.copyWith(avatarImagePath: path)]);
+        }
+      } else if (kind == 'p') {
+        final path =
+            await ImageService.instance.saveContactAvatar(ownerId, bytes);
+        if (ProfileService.instance.profile != null) {
+          await ProfileService.instance.updateProfile(
+              avatarImagePath: path, setAvatarImagePath: true);
         }
       } else if (kind == 'epk') {
         final payload = jsonDecode(utf8.decode(bytes));
