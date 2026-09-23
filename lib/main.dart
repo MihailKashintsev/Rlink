@@ -2859,6 +2859,9 @@ Future<void> initServices() async {
 
       if (senderId != myKey) {
         final g = await GroupService.instance.getGroup(groupId);
+        if (g != null && g.canModerate(myKey) && g.driveBackupEnabled) {
+          _scheduleGroupBackupRepublish(groupId);
+        }
         final contact = await ChatStorageService.instance.getContact(senderId);
         final author = contact?.nickname ??
             '${senderId.substring(0, senderId.length.clamp(0, 8))}…';
@@ -3714,6 +3717,18 @@ void _scheduleAdminChannelBackupRepublish(String channelId) {
     _adminChannelBackupDebounce.remove(channelId);
     unawaited(ChannelBackupService.instance
         .publishBackupIfAdminDriveEnabled(channelId));
+  });
+}
+
+/// Same debounce, for groups: any member's message reaching a moderator's
+/// device with Drive backup already enabled schedules a republish.
+final Map<String, Timer> _groupBackupDebounce = <String, Timer>{};
+
+void _scheduleGroupBackupRepublish(String groupId) {
+  _groupBackupDebounce[groupId]?.cancel();
+  _groupBackupDebounce[groupId] = Timer(const Duration(seconds: 12), () {
+    _groupBackupDebounce.remove(groupId);
+    unawaited(GroupBackupService.instance.publishBackupIfEnabled(groupId));
   });
 }
 

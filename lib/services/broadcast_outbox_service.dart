@@ -13,6 +13,7 @@ import 'app_settings.dart';
 import 'emoji_pack_dm_service.dart';
 import 'ble_service.dart';
 import 'gossip_router.dart';
+import 'group_backup_service.dart';
 import 'relay_service.dart';
 import 'wifi_direct_service.dart';
 
@@ -230,6 +231,20 @@ class BroadcastOutboxService {
       if (topicId != null && topicId.isNotEmpty) 'topicId': topicId,
     });
     unawaited(_pump());
+    // Single chokepoint for every local group-message send (13 call sites in
+    // groups_screen.dart) — same auto-backup-after-my-own-post behavior
+    // channels get, without touching each call site.
+    _scheduleOwnGroupBackupRepublish(groupId);
+  }
+
+  static final Map<String, Timer> _ownGroupBackupDebounce = <String, Timer>{};
+
+  static void _scheduleOwnGroupBackupRepublish(String groupId) {
+    _ownGroupBackupDebounce[groupId]?.cancel();
+    _ownGroupBackupDebounce[groupId] = Timer(const Duration(seconds: 12), () {
+      _ownGroupBackupDebounce.remove(groupId);
+      unawaited(GroupBackupService.instance.publishBackupIfEnabled(groupId));
+    });
   }
 
   Future<void> enqueuePollVote({

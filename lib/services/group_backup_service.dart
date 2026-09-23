@@ -97,6 +97,18 @@ class GroupBackupService {
 
   /// Публикация истории группы в Drive. Возвращает обновлённую группу
   /// (с новым rev и публичными ссылками) или null при ошибке.
+  /// After any message from a member (or after an action of ours): republish
+  /// if we can moderate this group AND it already had Drive backup enabled —
+  /// same gate as [ChannelBackupService.publishBackupIfAdminDriveEnabled].
+  /// Never turns backup on by itself.
+  Future<void> publishBackupIfEnabled(String groupId) async {
+    final myId = CryptoService.instance.publicKeyHex;
+    if (myId.isEmpty) return;
+    final g = await GroupService.instance.getGroup(groupId);
+    if (g == null || !g.canModerate(myId) || !g.driveBackupEnabled) return;
+    await publishBackup(g);
+  }
+
   Future<Group?> publishBackup(Group group) async {
     final myId = CryptoService.instance.publicKeyHex;
     if (!group.canModerate(myId)) return null;
