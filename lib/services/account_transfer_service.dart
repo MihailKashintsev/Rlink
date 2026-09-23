@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_message.dart';
+import '../models/channel.dart';
 import '../models/contact.dart';
 import '../models/group.dart';
 import 'app_settings.dart';
@@ -319,6 +320,15 @@ class AccountTransferService {
             'col': ch.avatarColor,
             'em': ch.avatarEmoji,
             'adm': ch.adminId,
+            'ca': ch.createdAt,
+            'un': ch.username,
+            // Drive fields — without these the new device has no idea where
+            // to fetch the channel's history from; it would show subscribed
+            // but with an empty, unrestoreable feed.
+            'drvUrl': ch.driveFileUrl,
+            'drvKeys': ch.driveKeysUrl,
+            'drvRev': ch.driveBackupRev,
+            'drvOn': ch.driveBackupEnabled,
           }),
           total: i == 0 ? channels.length : null,
           done: i == channels.length - 1,
@@ -624,8 +634,38 @@ class AccountTransferService {
     final id = data['id'] as String?;
     if (id == null || id.isEmpty) return;
     final myId = CryptoService.instance.publicKeyHex;
+    // A genuinely new device has no local channel row at all yet — unlike
+    // groups (upsertGroupsFromBackup), this used to only subscribe an
+    // ALREADY-existing local channel, so on a fresh device the whole
+    // category silently did nothing. Upsert a full row (Drive fields
+    // included) the same way group restore does, then subscribe.
     final existing = await ChannelService.instance.getChannel(id);
-    if (existing != null && !existing.subscriberIds.contains(myId)) {
+    final adminId = (data['adm'] as String?) ?? existing?.adminId ?? '';
+    final channel = Channel(
+      id: id,
+      name: (data['n'] as String?) ?? existing?.name ?? '',
+      adminId: adminId,
+      subscriberIds: {...?existing?.subscriberIds, adminId, myId}
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      moderatorIds: existing?.moderatorIds ?? const [],
+      avatarColor:
+          (data['col'] as num?)?.toInt() ?? existing?.avatarColor ?? 0xFF42A5F5,
+      avatarEmoji: (data['em'] as String?) ?? existing?.avatarEmoji ?? '📢',
+      username: (data['un'] as String?) ?? existing?.username ?? '',
+      createdAt: (data['ca'] as num?)?.toInt() ??
+          existing?.createdAt ??
+          DateTime.now().millisecondsSinceEpoch,
+      isPublic: existing?.isPublic ?? true,
+      driveFileUrl: (data['drvUrl'] as String?) ?? existing?.driveFileUrl,
+      driveKeysUrl: (data['drvKeys'] as String?) ?? existing?.driveKeysUrl,
+      driveBackupRev:
+          (data['drvRev'] as num?)?.toInt() ?? existing?.driveBackupRev ?? 0,
+      driveBackupEnabled:
+          (data['drvOn'] as bool?) ?? existing?.driveBackupEnabled ?? false,
+    );
+    await ChannelService.instance.upsertChannelsFromBackup([channel]);
+    if (!channel.subscriberIds.contains(myId) || existing == null) {
       await ChannelService.instance.subscribe(id, myId);
       unawaited(GossipRouter.instance.broadcastChannelSubscribe(
         channelId: id,
