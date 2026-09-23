@@ -108,6 +108,7 @@ import 'story_viewer_screen.dart';
 import 'collab_compose_dialogs.dart';
 import 'channels_screen.dart';
 import 'call_screen.dart';
+import 'group_call_screen.dart';
 import 'call_recording_playback_screen.dart';
 import 'groups_screen.dart';
 import 'location_map_screen.dart';
@@ -7513,6 +7514,11 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                           if (!_isDmBot && !_savedMessagesLocalOnly)
                             const PopupMenuItem(
+                              value: 'group_call',
+                              child: Text('Групповой звонок'),
+                            ),
+                          if (!_isDmBot && !_savedMessagesLocalOnly)
+                            const PopupMenuItem(
                               value: 'safety',
                               child: Text('Код безопасности'),
                             ),
@@ -7555,6 +7561,15 @@ class _ChatScreenState extends State<ChatScreen> {
                             break;
                           case 'disappearing':
                             await _showDisappearingPicker();
+                            break;
+                          case 'group_call':
+                            if (!context.mounted) break;
+                            unawaited(startAdHocCall(
+                              context,
+                              peerId: _resolvedPeerId,
+                              title: widget.peerNickname,
+                              video: true,
+                            ));
                             break;
                           case 'safety':
                             final c = await ChatStorageService.instance

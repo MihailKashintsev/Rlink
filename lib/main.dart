@@ -105,6 +105,7 @@ import 'ui/screens/call_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
 import 'ui/widgets/incoming_call_fullscreen_banner.dart';
 import 'ui/screens/group_call_screen.dart';
+import 'ui/widgets/group_call_banner.dart';
 
 final incomingMessageController = StreamController<IncomingMessage>.broadcast();
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -236,9 +237,7 @@ void _bindGroupCallInvites() {
     if (ctx == null) return;
     _groupCallInviteDialogOpen = true;
     try {
-      final group = await GroupService.instance.getGroup(invite.groupId);
-      if (!ctx.mounted) return;
-      await showGroupCallInviteDialog(ctx, invite, group?.name ?? 'Группа');
+      await showGroupCallInviteDialog(ctx, invite);
     } finally {
       _groupCallInviteDialogOpen = false;
     }
@@ -4856,6 +4855,13 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
               const SquareVideoQueuePip(),
               const LinkSyncOverlay(),
               const InAppNotificationOverlay(),
+              GroupCallReturnPill(onTap: () {
+                final ctx = navigatorKey.currentContext;
+                if (ctx != null) {
+                  openGroupCallScreen(
+                      ctx, GroupCallService.instance.roomTitle.value);
+                }
+              }),
               ValueListenableBuilder<double?>(
                 valueListenable: AudioQueueMiniPlayerLayout.instance.barTop,
                 builder: (ctx, top, _) {

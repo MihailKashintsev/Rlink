@@ -430,6 +430,7 @@ class GossipRouter {
   OnTypingReceived? onTypingReceived;
   OnCallSignal? onCallSignal;
   OnCallSignal? onGroupCallSignal;
+  void Function(Map<String, dynamic> payload)? onGroupCallState;
 
   /// Lightweight bootstrap to guarantee forwarding path without overwriting
   /// existing message/pair/ether handlers.
@@ -2694,6 +2695,10 @@ class GossipRouter {
         onGroupMessage?.call(packet.payload);
         return;
       }
+      if (packet.type == 'group_call_state') {
+        onGroupCallState?.call(packet.payload);
+        return;
+      }
       if (packet.type == 'group_message_delete') {
         onGroupMessageDelete?.call(packet.payload);
         return;
@@ -3103,6 +3108,37 @@ class GossipRouter {
         'postId': postId,
         if (channelId != null) 'channelId': channelId,
         if (authorId != null) 'authorId': authorId,
+      },
+    );
+    await _forward(packet);
+  }
+
+  /// Room presence for the "join the call" banner in a group chat. Same
+  /// broadcast model as group_message: filtered by group membership on
+  /// receipt. Participants go as 8-char key prefixes (resolved against the
+  /// group's member list) to stay well under the payload cap.
+  Future<void> sendGroupCallState({
+    required String groupId,
+    String? topicId,
+    required String creatorId,
+    required String announcerId,
+    required List<String> participantPrefixes,
+    required bool video,
+    bool ended = false,
+  }) async {
+    final packet = GossipPacket(
+      id: const Uuid().v4(),
+      type: 'group_call_state',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: {
+        'g': groupId,
+        if (topicId != null && topicId.isNotEmpty) 't': topicId,
+        'cr': creatorId,
+        'by': announcerId,
+        'p': participantPrefixes,
+        if (video) 'v': true,
+        if (ended) 'e': true,
       },
     );
     await _forward(packet);

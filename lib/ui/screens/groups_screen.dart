@@ -54,6 +54,7 @@ import '../widgets/shared_calendar_message_card.dart';
 import '../widgets/missing_local_media.dart';
 import '../widgets/web_media_picker_sheet.dart';
 import 'group_call_screen.dart';
+import '../widgets/group_call_banner.dart';
 import '../../utils/channel_mentions.dart';
 import 'collab_compose_dialogs.dart';
 import 'chat_screen.dart';
@@ -2912,20 +2913,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           PopupMenuButton<bool>(
             icon: const Icon(Icons.call_outlined),
             tooltip: 'Групповой звонок',
-            onSelected: (video) {
-              if (_group.memberIds.length > 5 && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text(
-                        'Звонок работает напрямую между участниками — комфортно до ~5 человек')));
-              }
-              unawaited(startGroupCallAndOpen(
-                context,
-                groupId: _group.id,
-                groupName: _group.name,
-                memberIds: _group.memberIds,
-                video: video,
-              ));
-            },
+            onSelected: (video) => unawaited(startOrJoinGroupCall(
+              context,
+              groupId: _group.id,
+              groupName: _group.name,
+              topicId: _currentTopicId,
+              video: video,
+            )),
             itemBuilder: (_) => const [
               PopupMenuItem(value: true, child: Text('Видеозвонок')),
               PopupMenuItem(value: false, child: Text('Аудиозвонок')),
@@ -3023,6 +3017,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       body: Column(
         children: [
           if (_topics.isNotEmpty) _buildTopicBar(cs),
+          GroupCallChatBanner(
+            key: const ValueKey('group_call_banner'),
+            groupId: _group.id,
+            groupName: _group.name,
+            topicId: _currentTopicId,
+          ),
           Expanded(
             child: _messages.isEmpty
                 ? Center(
