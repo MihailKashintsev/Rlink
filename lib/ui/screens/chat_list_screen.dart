@@ -42,6 +42,8 @@ import '../widgets/profile_photo_actions.dart';
 import '../widgets/animated_transitions.dart';
 import '../widgets/mesh_radar_widget.dart';
 import '../widgets/birthday_banner.dart';
+import '../widgets/premium_suggestion_banner.dart';
+import '../../services/premium_service.dart';
 import '../widgets/nav_glyph.dart';
 import '../widgets/premium_gate.dart';
 import '../widgets/status_emoji_view.dart';
@@ -1552,6 +1554,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
 
   List<_ChatItem> _items = [];
   Contact? _birthdayContact; // a contact whose birthday is today, if any
+  bool _showPremiumSuggestion = false;
   StreamSubscription<IncomingMessage>? _sub;
   Timer? _loadDebounce;
   VoidCallback? _groupListener;
@@ -1775,6 +1778,11 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
       }
     }
     _birthdayContact = bd;
+    // Birthday keeps the one banner slot above the list; only consider the
+    // Premium nudge when there's no birthday and no active subscription.
+    _showPremiumSuggestion = bd == null &&
+        !PremiumService.instance.isActive &&
+        await shouldShowPremiumSuggestion();
 
     // 1) Личные чаты
     final summaries = await ChatStorageService.instance.getChatSummaries();
@@ -2462,6 +2470,10 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
                 peerAvatarImagePath: _birthdayContact!.avatarImagePath,
               )),
             ),
+          )
+        else if (_showPremiumSuggestion)
+          PremiumSuggestionBanner(
+            onDismissed: () => setState(() => _showPremiumSuggestion = false),
           ),
         _miniPlayerGap(),
         Expanded(
