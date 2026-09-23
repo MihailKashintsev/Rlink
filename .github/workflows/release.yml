@@ -17,6 +17,9 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # Lets a single job (e.g. build-windows while debugging its CI setup) run
+  # without cutting a real version tag/release.
+  workflow_dispatch: {}
 
 # CallService reads TURN over String.fromEnvironment, so a build without these
 # ships with no TURN server at all — only public STUN. Every released build was
@@ -166,17 +169,26 @@ jobs:
       # CL env var injects the define into every cl.exe call so plugins that pull
       # <experimental/coroutine> (audioplayers/gal/permission_handler/…) don't hard-error.
       - name: Build
-        # bash, not the Windows default pwsh: `${VAR}` and the `\` line
-        # continuation below are bash syntax and silently produce empty
-        # dart-defines under PowerShell.
-        shell: bash
+        # pwsh, not bash: ilammy/msvc-dev-cmd sets up cl.exe's PATH/INCLUDE/LIB
+        # via $GITHUB_ENV/$GITHUB_PATH, which Git Bash's own path translation
+        # on Windows runners can mangle (semicolon-separated C:\... entries),
+        # so cl.exe silently isn't found there even though the previous step
+        # succeeded — CMake then reports "No CMAKE_CXX_COMPILER could be
+        # found". pwsh is what ilammy/msvc-dev-cmd is actually built/tested
+        # against. Use $env:VAR for the dart-defines (bash's ${VAR} is not
+        # valid PowerShell and would silently produce empty defines here).
+        shell: pwsh
         env:
           CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
-        run: flutter build windows --release --dart-define="TURN_HOST=${TURN_HOST}" --dart-define="TURN_USER=${TURN_USER}" --dart-define="TURN_PASSWORD=${TURN_PASSWORD}"
+        run: flutter build windows --release --dart-define="TURN_HOST=$env:TURN_HOST" --dart-define="TURN_USER=$env:TURN_USER" --dart-define="TURN_PASSWORD=$env:TURN_PASSWORD"
       - name: ZIP
         shell: pwsh
         run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "rlink_${{ github.ref_name }}_windows.zip"
       - name: Upload to Rlink-releases
+        # Skip on a manual workflow_dispatch test run (no real version tag to
+        # publish under) — only a real `v*.*.*` tag push should touch the
+        # public release.
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           repository: MihailKashintsev/Rlink-releases
