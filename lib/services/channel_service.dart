@@ -463,6 +463,8 @@ class ChannelService {
     await addColumn('drive_avatar_url', 'drive_avatar_url TEXT');
     await addColumn('drive_banner_file_id', 'drive_banner_file_id TEXT');
     await addColumn('drive_banner_url', 'drive_banner_url TEXT');
+    await addColumn(
+        'backup_provider', "backup_provider TEXT DEFAULT 'google'");
   }
 
   Future<void> _ensureDbReady() async {
@@ -536,6 +538,7 @@ class ChannelService {
       'drive_banner_url': channel.driveBannerUrl,
       'allow_mods_manage_drive_account':
           channel.allowModeratorsManageDriveAccount ? 1 : 0,
+      'backup_provider': channel.backupProvider,
     });
     _bump();
     unawaited(publishAccountChannelSubscriptions());
@@ -600,6 +603,7 @@ class ChannelService {
             'drive_banner_url': ch.driveBannerUrl,
             'allow_mods_manage_drive_account':
                 ch.allowModeratorsManageDriveAccount ? 1 : 0,
+            'backup_provider': ch.backupProvider,
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
@@ -882,6 +886,7 @@ class ChannelService {
         driveBannerUrl: r['drive_banner_url'] as String?,
         allowModeratorsManageDriveAccount:
             (r['allow_mods_manage_drive_account'] as int?) == 1,
+        backupProvider: (r['backup_provider'] as String?) ?? 'google',
       );
 
   Future<void> updateChannel(Channel ch) async {
@@ -919,6 +924,7 @@ class ChannelService {
         'drive_banner_url': ch.driveBannerUrl,
         'allow_mods_manage_drive_account':
             ch.allowModeratorsManageDriveAccount ? 1 : 0,
+        'backup_provider': ch.backupProvider,
       },
       where: 'id = ?',
       whereArgs: [ch.id],
@@ -1230,6 +1236,7 @@ class ChannelService {
       'drive_banner_url': ch.driveBannerUrl,
       'allow_mods_manage_drive_account':
           ch.allowModeratorsManageDriveAccount ? 1 : 0,
+      'backup_provider': ch.backupProvider,
     });
     _bump();
   }

@@ -11,6 +11,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/channel.dart';
+import 'backup_provider.dart';
 import 'ble_service.dart';
 import 'channel_service.dart';
 import 'chat_storage_service.dart';
@@ -313,13 +314,19 @@ class ChannelBackupService {
     var clearBanner = false;
 
     if (channel.driveBackupEnabled) {
-      final pairing =
-          GoogleDriveChannelBackup.channelAccountPairing(channel.id);
+      final provider = channel.backupProvider;
+      // Google Drive keeps its own per-channel account picker; OneDrive/Dropbox
+      // have one active linked account for now (same split as groups).
+      final pairing = provider == 'google'
+          ? (GoogleDriveChannelBackup.channelAccountPairing(channel.id) ??
+              GoogleDriveChannelBackup.activeRelayPairing)
+          : BackupProviders.activePairing(provider);
       // Everything for this channel lives in Rlink/<channelId>/ with clean names.
       String cid() => channel.id;
 
       // Encrypted save file (history + content).
-      fileId = await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
+      fileId = await BackupProviders.upload(
+        provider,
         fileName: 'backup.bin',
         ciphertext: sealed,
         existingFileId: channel.driveFileId,
@@ -327,8 +334,7 @@ class ChannelBackupService {
         channelId: cid(),
       );
       if (fileId != null) {
-        fileUrl =
-            await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(fileId);
+        fileUrl = await BackupProviders.makePublic(provider, fileId);
       }
 
       // Per-subscriber wrapped keys.
@@ -340,7 +346,8 @@ class ChannelBackupService {
           'keys': wrappedKeys,
         })));
         final existingKeysFileId = await _readKeysFileId(channel.id);
-        keysFileId = await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
+        keysFileId = await BackupProviders.upload(
+          provider,
           fileName: 'keys.json',
           ciphertext: keysBytes,
           existingFileId: existingKeysFileId,
@@ -349,9 +356,7 @@ class ChannelBackupService {
         );
         if (keysFileId != null) {
           await _writeKeysFileId(channel.id, keysFileId);
-          keysFileUrl =
-              await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(
-                  keysFileId);
+          keysFileUrl = await BackupProviders.makePublic(provider, keysFileId);
         }
       }
 
@@ -372,8 +377,8 @@ class ChannelBackupService {
         }),
       ));
       final existingSettingsId = await _readSettingsFileId(channel.id);
-      final settingsId =
-          await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
+      final settingsId = await BackupProviders.upload(
+        provider,
         fileName: 'settings.json',
         ciphertext: settingsBytes,
         existingFileId: existingSettingsId,
@@ -388,8 +393,8 @@ class ChannelBackupService {
         final avatarBytes =
             await _readChannelVisualBytes(channel.avatarImagePath);
         if (avatarBytes != null && avatarBytes.isNotEmpty) {
-          avatarFileId =
-              await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
+          avatarFileId = await BackupProviders.upload(
+            provider,
             fileName: 'avatar.jpg',
             ciphertext: avatarBytes,
             existingFileId: channel.driveAvatarFileId,
@@ -398,13 +403,11 @@ class ChannelBackupService {
             mimeType: 'image/jpeg',
           );
           if (avatarFileId != null) {
-            avatarUrl =
-                await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(
-                    avatarFileId);
+            avatarUrl = await BackupProviders.makePublic(provider, avatarFileId);
           }
         }
       } else if (channel.driveAvatarFileId != null) {
-        await GoogleDriveChannelBackup.deleteFileById(channel.driveAvatarFileId,
+        await BackupProviders.delete(provider, channel.driveAvatarFileId,
             accountPairing: pairing);
         clearAvatar = true;
       }
@@ -414,8 +417,8 @@ class ChannelBackupService {
         final bannerBytes =
             await _readChannelVisualBytes(channel.bannerImagePath);
         if (bannerBytes != null && bannerBytes.isNotEmpty) {
-          bannerFileId =
-              await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
+          bannerFileId = await BackupProviders.upload(
+            provider,
             fileName: 'banner.jpg',
             ciphertext: bannerBytes,
             existingFileId: channel.driveBannerFileId,
@@ -424,13 +427,11 @@ class ChannelBackupService {
             mimeType: 'image/jpeg',
           );
           if (bannerFileId != null) {
-            bannerUrl =
-                await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(
-                    bannerFileId);
+            bannerUrl = await BackupProviders.makePublic(provider, bannerFileId);
           }
         }
       } else if (channel.driveBannerFileId != null) {
-        await GoogleDriveChannelBackup.deleteFileById(channel.driveBannerFileId,
+        await BackupProviders.delete(provider, channel.driveBannerFileId,
             accountPairing: pairing);
         clearBanner = true;
       }

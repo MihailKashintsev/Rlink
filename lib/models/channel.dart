@@ -62,6 +62,11 @@ class Channel {
   /// Разрешить модераторам перепривязывать Google-аккаунт резерва в общих настройках.
   final bool allowModeratorsManageDriveAccount;
 
+  /// Куда публикуется резерв: 'google' | 'onedrive' | 'dropbox' (как у групп).
+  /// Локальное решение админа — не передаётся по сети, подписчикам достаточно
+  /// уже опубликованной публичной ссылки независимо от провайдера.
+  final String backupProvider;
+
   /// Админы «ссылок» — могут публиковать наравне с модераторами (роль для делегирования).
   final List<String> linkAdminIds;
 
@@ -104,6 +109,7 @@ class Channel {
     this.driveBannerFileId,
     this.driveBannerUrl,
     this.allowModeratorsManageDriveAccount = false,
+    this.backupProvider = 'google',
   });
 
   bool get isAdmin => false; // checked externally via adminId
@@ -245,6 +251,7 @@ class Channel {
     bool clearDriveAvatar = false,
     bool clearDriveBanner = false,
     bool? allowModeratorsManageDriveAccount,
+    String? backupProvider,
   }) =>
       Channel(
         id: id,
@@ -290,6 +297,7 @@ class Channel {
             clearDriveBanner ? null : (driveBannerUrl ?? this.driveBannerUrl),
         allowModeratorsManageDriveAccount: allowModeratorsManageDriveAccount ??
             this.allowModeratorsManageDriveAccount,
+        backupProvider: backupProvider ?? this.backupProvider,
       );
 }
 

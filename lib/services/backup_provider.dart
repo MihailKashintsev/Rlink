@@ -43,6 +43,9 @@ class BackupProviders {
     String? existingFileId,
     String? accountPairing,
     String? channelId,
+    // Only Google's API needs this; OneDrive/Dropbox infer content-type and
+    // ignore it. Cosmetic (Drive's own file browser), never read back by us.
+    String mimeType = 'application/octet-stream',
   }) {
     switch (id) {
       case 'onedrive':
@@ -68,6 +71,7 @@ class BackupProviders {
           existingFileId: existingFileId,
           accountPairing: accountPairing,
           channelId: channelId,
+          mimeType: mimeType,
         );
     }
   }

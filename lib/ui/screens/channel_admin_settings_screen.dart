@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
 
 import '../../models/channel.dart';
+import '../../services/backup_provider.dart';
 import '../../services/channel_backup_service.dart';
 import '../../services/channel_service.dart';
 import '../../services/chat_storage_service.dart';
@@ -178,6 +179,38 @@ class _ChannelAdminSettingsScreenState
       },
     );
     await _load();
+  }
+
+  /// Выбор хранилища резервной копии среди привязанных провайдеров (как у групп).
+  Future<void> _pickBackupProvider() async {
+    final ch = _channel;
+    if (ch == null) return;
+    final linked = BackupProviders.ids.where(BackupProviders.isLinked).toList();
+    if (linked.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Сначала привяжите Google Drive, OneDrive или Dropbox в Настройках')));
+      return;
+    }
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Хранилище резервной копии'),
+        children: [
+          for (final id in linked)
+            RadioListTile<String>(
+              value: id,
+              groupValue: ch.backupProvider,
+              title: Text(BackupProviders.label(id)),
+              onChanged: (v) => Navigator.pop(ctx, v),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || chosen == ch.backupProvider) return;
+    final updated = ch.copyWith(backupProvider: chosen);
+    await ChannelService.instance.updateChannel(updated);
+    if (mounted) setState(() => _channel = updated);
   }
 
   void _manageSubscribers() {
@@ -563,6 +596,15 @@ class _ChannelAdminSettingsScreenState
                     : theme.colorScheme.error,
               ),
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.swap_horiz_outlined),
+            title: const Text('Хранилище резервной копии'),
+            subtitle: Text('Сейчас: ${BackupProviders.label(ch.backupProvider)}',
+                style: TextStyle(
+                    fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => unawaited(_pickBackupProvider()),
           ),
           const Divider(height: 24),
 
