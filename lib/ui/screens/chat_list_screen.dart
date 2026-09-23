@@ -516,7 +516,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             : AnimatedSwitcher(
                 duration: const Duration(milliseconds: 320),
                 switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
+                switchOutCurve: Curves.easeOutCubic,
                 transitionBuilder: (child, anim) => FadeTransition(
                   opacity: anim,
                   child: SlideTransition(
@@ -3624,7 +3624,7 @@ class _NearbyTabState extends State<_NearbyTab> {
         return AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
           switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
+          switchOutCurve: Curves.easeOut,
           child: showRadar
               ? MeshRadarWidget(
                   key: const ValueKey('radar'),

@@ -129,19 +129,24 @@ class _MessageActionsLayer extends StatelessWidget {
                     : null,
                 child: Opacity(
                   opacity: t,
-                  child: _ReactionBar(
-                    emojis: quickReactions,
-                    cs: cs,
-                    onReact: (e) {
-                      dismiss();
-                      onReact!(e);
-                    },
-                    onMore: onMoreReactions == null
-                        ? null
-                        : () {
-                            dismiss();
-                            onMoreReactions!();
-                          },
+                  // Isolates the reaction bar's own repaints from this
+                  // AnimatedBuilder's every-frame rebuild while the menu
+                  // opens/closes (improve-animations audit, 2026-09-23).
+                  child: RepaintBoundary(
+                    child: _ReactionBar(
+                      emojis: quickReactions,
+                      cs: cs,
+                      onReact: (e) {
+                        dismiss();
+                        onReact!(e);
+                      },
+                      onMore: onMoreReactions == null
+                          ? null
+                          : () {
+                              dismiss();
+                              onMoreReactions!();
+                            },
+                    ),
                   ),
                 ),
               ),
@@ -177,11 +182,14 @@ class _MessageActionsLayer extends StatelessWidget {
                   : null,
               child: Opacity(
                 opacity: t,
-                child: _ActionMenu(
-                  width: menuWidth,
-                  actions: actions,
-                  cs: cs,
-                  onPick: dismiss,
+                // Same reasoning as the reaction bar above.
+                child: RepaintBoundary(
+                  child: _ActionMenu(
+                    width: menuWidth,
+                    actions: actions,
+                    cs: cs,
+                    onPick: dismiss,
+                  ),
                 ),
               ),
             ),

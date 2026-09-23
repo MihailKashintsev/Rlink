@@ -61,7 +61,10 @@ class _RlinkChatEnterFade extends StatelessWidget {
       opacity: CurvedAnimation(
         parent: animation,
         curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
+        // easeIn on the closing half delays the fade right when it starts —
+        // exits read as responsive with ease-out too (see improve-animations
+        // audit, 2026-09-23).
+        reverseCurve: Curves.easeOutCubic,
       ),
       child: child,
     );

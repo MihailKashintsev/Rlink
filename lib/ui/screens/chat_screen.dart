@@ -425,6 +425,13 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _bulkSelectMode = false;
   final LinkedHashSet<String> _selectedMsgIds = LinkedHashSet<String>();
 
+  /// Message ids that have already played their entrance animation. The
+  /// list's ListView.builder disposes/recreates rows that scroll outside
+  /// cacheExtent, so without this a row's OneShotSlideFade would replay
+  /// every time it scrolls back into view instead of just once on arrival
+  /// (improve-animations audit, 2026-09-23).
+  final Set<String> _animatedMessageIds = <String>{};
+
   Timer? _draftPersistDebounce;
 
   /// Автодополнение slash-команд для relay-бота (см. [_onComposeBotSlashHints]).
@@ -8061,10 +8068,20 @@ class _ChatScreenState extends State<ChatScreen> {
                                       final showDate = i == 0 ||
                                           !_sameDay(messages[i - 1].timestamp,
                                               msg.timestamp);
+                                      // Only animate a row the first time its
+                                      // id is built — ListView.builder
+                                      // disposes rows outside cacheExtent, so
+                                      // without this the entrance animation
+                                      // replayed on every scroll instead of
+                                      // once on arrival (improve-animations
+                                      // audit, 2026-09-23).
+                                      final alreadyAnimated =
+                                          !_animatedMessageIds.add(msg.id);
                                       return RepaintBoundary(
                                         key:
                                             ValueKey<String>('dmrow_${msg.id}'),
                                         child: OneShotSlideFade(
+                                          skip: alreadyAnimated,
                                           beginOffset: Offset(
                                             msg.isOutgoing ? 0.08 : -0.08,
                                             0.02,
@@ -11991,7 +12008,10 @@ class _CrumbleAwayState extends State<_CrumbleAway>
       animation: _c,
       builder: (context, child) {
         final t = _c.value;
-        final fade = (1.0 - Curves.easeIn.transform(t)).clamp(0.0, 1.0);
+        // easeOut so the fade starts immediately instead of holding
+        // opacity high at the start of the delete (improve-animations
+        // audit, 2026-09-23).
+        final fade = (1.0 - Curves.easeOut.transform(t)).clamp(0.0, 1.0);
         return Stack(
           clipBehavior: Clip.none,
           children: [

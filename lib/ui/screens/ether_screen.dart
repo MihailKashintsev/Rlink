@@ -305,7 +305,7 @@ class _EtherScreenState extends State<EtherScreen> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 380),
                 switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
+                switchOutCurve: Curves.easeOutCubic,
                 transitionBuilder: (child, anim) => FadeTransition(
                   opacity: anim,
                   child: SlideTransition(

@@ -432,7 +432,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
           icon: AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
             switchInCurve: Curves.easeOutBack,
-            switchOutCurve: Curves.easeIn,
+            switchOutCurve: Curves.easeOutCubic,
             transitionBuilder: (child, anim) => RotationTransition(
               turns: Tween<double>(begin: 0.75, end: 1).animate(anim),
               child: ScaleTransition(scale: anim, child: child),

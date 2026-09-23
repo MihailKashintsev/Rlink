@@ -13,7 +13,9 @@ class SmoothPageRoute<T> extends PageRouteBuilder<T> {
             final curvedAnimation = CurvedAnimation(
               parent: animation,
               curve: Curves.easeOutCubic,
-              reverseCurve: Curves.easeInCubic,
+              // easeIn always delays the exit right as it starts (improve-
+              // animations audit, 2026-09-23) — ease-out both ways.
+              reverseCurve: Curves.easeOutCubic,
             );
             return SlideTransition(
               position: Tween<Offset>(
@@ -44,7 +46,10 @@ class ScaleFadeRoute<T> extends PageRouteBuilder<T> {
             final curvedAnimation = CurvedAnimation(
               parent: animation,
               curve: Curves.easeOutBack,
-              reverseCurve: Curves.easeIn,
+              // easeIn always delays the exit right as it starts (improve-
+              // animations audit, 2026-09-23) — plain ease-out closes fast
+              // without the entrance's overshoot looking odd in reverse.
+              reverseCurve: Curves.easeOutCubic,
             );
             return ScaleTransition(
               scale:
@@ -71,7 +76,9 @@ class SlideUpRoute<T> extends PageRouteBuilder<T> {
             final curvedAnimation = CurvedAnimation(
               parent: animation,
               curve: Curves.easeOutCubic,
-              reverseCurve: Curves.easeInCubic,
+              // easeIn always delays the exit right as it starts (improve-
+              // animations audit, 2026-09-23) — ease-out both ways.
+              reverseCurve: Curves.easeOutCubic,
             );
             return SlideTransition(
               position: Tween<Offset>(
@@ -105,6 +112,9 @@ class StaggeredListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return child;
+    }
     final delay = Duration(
       milliseconds: (index * 60).clamp(0, maxDelay.inMilliseconds),
     );
@@ -137,6 +147,13 @@ class OneShotSlideFade extends StatefulWidget {
   final Duration duration;
   final Duration delay;
   final Curve curve;
+  /// Skip the animation and render [child] immediately — for a caller that
+  /// already knows this exact instance shouldn't animate (e.g. a
+  /// ListView.builder row whose id already played its entrance once; without
+  /// this, a row disposed/recreated by scrolling outside cacheExtent would
+  /// replay its "one-shot" animation every time it scrolls back into view —
+  /// see improve-animations audit, 2026-09-23).
+  final bool skip;
 
   const OneShotSlideFade({
     super.key,
@@ -145,6 +162,7 @@ class OneShotSlideFade extends StatefulWidget {
     this.duration = const Duration(milliseconds: 260),
     this.delay = Duration.zero,
     this.curve = Curves.easeOutCubic,
+    this.skip = false,
   });
 
   @override
@@ -153,11 +171,12 @@ class OneShotSlideFade extends StatefulWidget {
 
 class _OneShotSlideFadeState extends State<OneShotSlideFade>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+  AnimationController? _controller;
 
   @override
   void initState() {
     super.initState();
+    if (widget.skip) return;
     _controller = AnimationController(
       vsync: this,
       duration: widget.duration + widget.delay,
@@ -166,20 +185,23 @@ class _OneShotSlideFadeState extends State<OneShotSlideFade>
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) {
+    final controller = _controller;
+    if (widget.skip ||
+        controller == null ||
+        MediaQuery.disableAnimationsOf(context)) {
       return widget.child;
     }
 
-    final totalMs = _controller.duration?.inMilliseconds ?? 1;
+    final totalMs = controller.duration?.inMilliseconds ?? 1;
     final start = (widget.delay.inMilliseconds / totalMs).clamp(0.0, 0.95);
     final animation = CurvedAnimation(
-      parent: _controller,
+      parent: controller,
       curve: Interval(start, 1, curve: widget.curve),
     );
 
@@ -211,6 +233,9 @@ class ScaleIn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return child;
+    }
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: duration + delay,
