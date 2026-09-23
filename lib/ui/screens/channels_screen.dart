@@ -3403,18 +3403,16 @@ class _PostCardState extends State<_PostCard> {
               if (!missing && post.imagePath != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Builder(builder: (context) {
-                      final p = ImageService.instance
-                          .resolveStoredPath(post.imagePath);
-                      if (p == null) return const SizedBox.shrink();
-                      return ChannelFeedImage(
-                        resolvedPath: p,
-                        isSticker: post.isSticker,
-                      );
-                    }),
-                  ),
+                  child: Builder(builder: (context) {
+                    final p = ImageService.instance
+                        .resolveStoredPath(post.imagePath);
+                    if (p == null) return const SizedBox.shrink();
+                    return ChannelFeedImage(
+                      resolvedPath: p,
+                      isSticker: post.isSticker,
+                      borderRadius: 14,
+                    );
+                  }),
                 ),
               if (!missing && post.videoPath != null)
                 Padding(
@@ -4262,18 +4260,16 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                 if (!postMissing && widget.post.imagePath != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Builder(builder: (_) {
-                        final p = ImageService.instance
-                            .resolveStoredPath(widget.post.imagePath);
-                        if (p == null) return const SizedBox.shrink();
-                        return ChannelFeedImage(
-                          resolvedPath: p,
-                          isSticker: widget.post.isSticker,
-                        );
-                      }),
-                    ),
+                    child: Builder(builder: (_) {
+                      final p = ImageService.instance
+                          .resolveStoredPath(widget.post.imagePath);
+                      if (p == null) return const SizedBox.shrink();
+                      return ChannelFeedImage(
+                        resolvedPath: p,
+                        isSticker: widget.post.isSticker,
+                        borderRadius: 8,
+                      );
+                    }),
                   ),
                 if (!postMissing && widget.post.videoPath != null)
                   Padding(

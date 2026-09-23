@@ -30,6 +30,27 @@ const _kMaxCallSigBytes = 65536;
 /// the BLE-MTU-conscious 780-byte cap so mesh forwarding stays reliable.
 int get _encCap => kIsWeb ? _kMaxCallSigBytes : _kMaxEncPayloadBytes;
 
+/// Packets that legitimately outgrow the 700-byte mesh cap and must go
+/// through [GossipRouter._forwardCallSig] (64 KB cap; BLE frames them, the
+/// relay takes up to 256 KB). Call signaling always did. Everything else here
+/// was silently dropped ("Packet too large") once it got big enough:
+/// - user text (channel post / comment / group message): the author saw it
+///   locally, nobody else did — and for a moderator's post the admin never
+///   received it, so the Drive backup didn't carry it either;
+/// - channel_meta / group_update / group_invite carry the FULL member and
+///   subscriber id lists (64 hex chars each), so past ~6 people they never
+///   left the device — an ownership transfer, a new moderator or a new member
+///   simply didn't propagate in any channel/group of real size.
+bool _isLargePacketType(String type) =>
+    type == 'call_sig' ||
+    type == 'group_call_sig' ||
+    type == 'channel_post' ||
+    type == 'channel_comment' ||
+    type == 'channel_meta' ||
+    type == 'group_message' ||
+    type == 'group_update' ||
+    type == 'group_invite';
+
 /// JSON numbers on dart2js are often [double]; gossip must still decode.
 int? _jsonIntLoose(dynamic v) {
   if (v is int) return v;
@@ -1859,7 +1880,7 @@ class GossipRouter {
       // Остальное — BLE-mesh лимит _kMaxPayloadBytes.
       if (packet.type == 'msg') {
         await _forwardEncrypted(packet.decremented());
-      } else if (packet.type == 'call_sig' || packet.type == 'group_call_sig') {
+      } else if (_isLargePacketType(packet.type)) {
         await _forwardCallSig(packet.decremented());
       } else {
         await _forward(packet.decremented());
@@ -2763,7 +2784,7 @@ class GossipRouter {
   Future<void> _forward(GossipPacket packet) async {
     // call_sig/group_call_sig никогда не должны попадать сюда (BLE MTU), но
     // если попали — иначе SDP offer/answer молча отбрасывается лимитом ниже.
-    if (packet.type == 'call_sig' || packet.type == 'group_call_sig') {
+    if (_isLargePacketType(packet.type)) {
       await _forwardCallSig(packet);
       return;
     }
@@ -3371,7 +3392,7 @@ class GossipRouter {
         timestamp: DateTime.now().millisecondsSinceEpoch,
         payload: buildPayload(),
       );
-      if (packet.encode().length <= _kMaxPayloadBytes) {
+      if (packet.encode().length <= _kMaxCallSigBytes) {
         await _forward(packet);
         return;
       }

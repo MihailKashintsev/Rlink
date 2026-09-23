@@ -229,18 +229,33 @@ class ChannelFeedImage extends StatelessWidget {
   final String resolvedPath;
   final bool isSticker;
 
+  /// Rounds the image itself. Must live here, not on a ClipRRect wrapped
+  /// around this widget: the Align below stretches to the full column width,
+  /// so an outer clip rounds that wide empty box and the photo — which hugs
+  /// the left — only ever got its left corners rounded.
+  final double borderRadius;
+
   const ChannelFeedImage({
     super.key,
     required this.resolvedPath,
     this.isSticker = false,
+    this.borderRadius = 0,
   });
 
   @override
   Widget build(BuildContext context) {
     final pc = isDesktopShell();
     final sw = MediaQuery.sizeOf(context).width;
+    Widget round(Widget child) => borderRadius > 0
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(borderRadius), child: child)
+        : child;
     if (isSticker && !pc) {
-      return storedImage(resolvedPath, width: 132, height: 132, fit: BoxFit.cover);
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: round(storedImage(resolvedPath,
+            width: 132, height: 132, fit: BoxFit.cover)),
+      );
     }
     // Below this point isSticker only happens on desktop. No forced width/
     // height on the Image itself — with only maxWidth/maxHeight constraints
@@ -255,8 +270,8 @@ class ChannelFeedImage extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
-        child: storedImage(resolvedPath,
-            fit: isSticker ? BoxFit.cover : BoxFit.contain),
+        child: round(storedImage(resolvedPath,
+            fit: isSticker ? BoxFit.cover : BoxFit.contain)),
       ),
     );
   }
