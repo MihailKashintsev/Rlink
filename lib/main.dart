@@ -2559,6 +2559,20 @@ Future<void> initServices() async {
         reactions: clampReactionsMapPerUser(reactions),
       ));
       await ChannelService.instance.flushPendingMediaForComment(commentId);
+
+      // Same as a moderator's post: any subscriber's comment reaching the
+      // admin's device gets folded into the next Drive snapshot, so the
+      // backup a new device restores from actually has the comments.
+      final myKey = CryptoService.instance.publicKeyHex;
+      if (authorId != myKey) {
+        final post = await ChannelService.instance.getPost(postId);
+        if (post != null) {
+          final ch = await ChannelService.instance.getChannel(post.channelId);
+          if (ch != null && ch.adminId == myKey && ch.driveBackupEnabled) {
+            _scheduleAdminChannelBackupRepublish(post.channelId);
+          }
+        }
+      }
     };
     GossipRouter.instance.onChannelCommentDelete = (payload) async {
       final channelId = payload['channelId'] as String?;
