@@ -26,7 +26,6 @@ import 'emoji_bindings_screen.dart';
 import 'profile_privacy_screen.dart';
 import '../../services/app_icon_service.dart';
 import '../../services/google_drive_channel_backup.dart';
-import '../../services/onedrive_backup.dart';
 import '../../services/dropbox_backup.dart';
 import '../../services/relay_oauth_link.dart';
 import '../../services/transcription_engine.dart';
@@ -709,7 +708,7 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             ),
           ),
           _CategoryItem(
-            icon: Icons.cloud_outlined,
+            icon: Icons.inventory_2_outlined,
             color: const Color(0xFF0061FF),
             title: 'Dropbox',
             subtitle: 'Привязка аккаунта для резервных копий',

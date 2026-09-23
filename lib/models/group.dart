@@ -22,6 +22,10 @@ class Group {
   final int driveBackupRev;
   final String? driveHistoryUrl;
   final String? driveKeysUrl;
+  // Куда публикуется резерв: 'google' | 'onedrive' | 'dropbox'. Выбирает
+  // модератор среди аккаунтов, привязанных лично у него — остальным
+  // участникам достаточно публичной ссылки, от них ничего не требуется.
+  final String backupProvider;
 
   const Group({
     required this.id,
@@ -38,6 +42,7 @@ class Group {
     this.driveBackupRev = 0,
     this.driveHistoryUrl,
     this.driveKeysUrl,
+    this.backupProvider = 'google',
   });
 
   /// Returns true if [userId] is an admin (creator) or moderator.
@@ -64,6 +69,7 @@ class Group {
         if (driveBackupRev > 0) 'drvRev': driveBackupRev,
         if (driveHistoryUrl != null) 'drvUrl': driveHistoryUrl,
         if (driveKeysUrl != null) 'drvKeys': driveKeysUrl,
+        if (backupProvider != 'google') 'bp': backupProvider,
       };
 
   factory Group.fromJson(Map<String, dynamic> j) => Group(
@@ -83,6 +89,7 @@ class Group {
         driveBackupRev: (j['drvRev'] as num?)?.toInt() ?? 0,
         driveHistoryUrl: j['drvUrl'] as String?,
         driveKeysUrl: j['drvKeys'] as String?,
+        backupProvider: j['bp'] as String? ?? 'google',
       );
 
   String encode() => jsonEncode(toJson());
@@ -107,6 +114,7 @@ class Group {
     int? driveBackupRev,
     String? driveHistoryUrl,
     String? driveKeysUrl,
+    String? backupProvider,
   }) =>
       Group(
         id: id,
@@ -123,6 +131,7 @@ class Group {
         driveBackupRev: driveBackupRev ?? this.driveBackupRev,
         driveHistoryUrl: driveHistoryUrl ?? this.driveHistoryUrl,
         driveKeysUrl: driveKeysUrl ?? this.driveKeysUrl,
+        backupProvider: backupProvider ?? this.backupProvider,
       );
 }
 

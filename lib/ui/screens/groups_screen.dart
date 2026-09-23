@@ -26,6 +26,7 @@ import '../../services/crypto_service.dart';
 import '../widgets/animated_transitions.dart';
 import '../../services/broadcast_outbox_service.dart';
 import '../../services/gossip_router.dart';
+import '../../services/backup_provider.dart';
 import '../../services/google_drive_channel_backup.dart';
 import '../../services/group_backup_service.dart';
 import '../../services/group_service.dart';
@@ -2188,27 +2189,29 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   // ── Edit group profile ──────────────────────────────────────
 
-  /// Публикация истории группы в Google Drive (создатель/модератор): снапшот
-  /// шифруется групповым ключом, ссылки разлетаются участникам через
+  /// Публикация истории группы в выбранное хранилище (создатель/модератор):
+  /// снапшот шифруется групповым ключом, ссылки разлетаются участникам через
   /// group_update — новые участники подтянут всю историю фоном.
-  Future<void> _publishHistoryToDrive() async {
+  Future<void> _publishHistoryToBackup() async {
     final messenger = ScaffoldMessenger.of(context);
+    final provider = _group.backupProvider;
+    final label = BackupProviders.label(provider);
     // publishBackup would just fail after a while and blame "check Settings"
     // — check the same pairing it's about to use for the upload *before*
     // showing a 30s "publishing…" spinner for something already known to
     // fail with no account linked.
-    final hasAccount =
-        GoogleDriveChannelBackup.channelAccountPairing(_group.id) != null ||
-            GoogleDriveChannelBackup.activeRelayPairing != null;
+    final hasAccount = provider == 'google'
+        ? (GoogleDriveChannelBackup.channelAccountPairing(_group.id) != null ||
+            GoogleDriveChannelBackup.activeRelayPairing != null)
+        : BackupProviders.isLinked(provider);
     if (!hasAccount) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text(
-              'Сначала привяжите Google Drive: Настройки → Google Drive')));
+      messenger.showSnackBar(
+          SnackBar(content: Text('Сначала привяжите $label: Настройки → $label')));
       return;
     }
-    messenger.showSnackBar(const SnackBar(
-        content: Text('Публикация истории в Google Drive…'),
-        duration: Duration(seconds: 30)));
+    messenger.showSnackBar(SnackBar(
+        content: Text('Публикация истории в $label…'),
+        duration: const Duration(seconds: 30)));
     final updated = await GroupBackupService.instance.publishBackup(_group);
     if (!mounted) return;
     messenger.hideCurrentSnackBar();
@@ -2218,10 +2221,39 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           content: Text(
               'История опубликована (rev ${updated.driveBackupRev}). Новые участники получат её автоматически.')));
     } else {
-      messenger.showSnackBar(const SnackBar(
-          content: Text(
-              'Не удалось опубликовать. Проверьте привязку Google Drive в Настройках.')));
+      messenger.showSnackBar(SnackBar(
+          content: Text('Не удалось опубликовать. Проверьте привязку $label в Настройках.')));
     }
+  }
+
+  /// Выбор хранилища резервной копии среди привязанных провайдеров.
+  Future<void> _pickBackupProvider() async {
+    final linked = BackupProviders.ids.where(BackupProviders.isLinked).toList();
+    if (linked.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Сначала привяжите Google Drive, OneDrive или Dropbox в Настройках')));
+      return;
+    }
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Хранилище резервной копии'),
+        children: [
+          for (final id in linked)
+            RadioListTile<String>(
+              value: id,
+              groupValue: _group.backupProvider,
+              title: Text(BackupProviders.label(id)),
+              onChanged: (v) => Navigator.pop(ctx, v),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || chosen == _group.backupProvider) return;
+    final updated = _group.copyWith(backupProvider: chosen);
+    await GroupService.instance.updateGroup(updated);
+    if (mounted) setState(() => _group = updated);
   }
 
   void _editGroup() {
@@ -2795,7 +2827,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               if (v == 'edit') _editGroup();
               if (v == 'mods') _manageModerators();
               if (v == 'members') _manageMembers();
-              if (v == 'drive') unawaited(_publishHistoryToDrive());
+              if (v == 'drive') unawaited(_publishHistoryToBackup());
+              if (v == 'drive_provider') unawaited(_pickBackupProvider());
               if (v == 'topic') unawaited(_createTopic());
               if (v == 'leave') _leaveGroup();
             },
@@ -2826,17 +2859,26 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     Text('Модераторы'),
                   ]),
                 ),
-              if (_isCreator || _group.canModerate(_myId))
+              if (_isCreator || _group.canModerate(_myId)) ...[
                 PopupMenuItem(
                   value: 'drive',
                   child: Row(children: [
                     const Icon(Icons.cloud_upload_outlined, size: 18),
                     const SizedBox(width: 8),
                     Text(_group.driveBackupEnabled
-                        ? 'Обновить историю в Drive'
-                        : 'История в Google Drive'),
+                        ? 'Обновить историю в ${BackupProviders.label(_group.backupProvider)}'
+                        : 'История в ${BackupProviders.label(_group.backupProvider)}'),
                   ]),
                 ),
+                PopupMenuItem(
+                  value: 'drive_provider',
+                  child: Row(children: [
+                    const Icon(Icons.swap_horiz_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Text('Хранилище: ${BackupProviders.label(_group.backupProvider)}'),
+                  ]),
+                ),
+              ],
               if (_isCreator || _group.canModerate(_myId))
                 const PopupMenuItem(
                   value: 'members',

@@ -9,6 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/group.dart';
+import 'backup_provider.dart';
 import 'channel_backup_service.dart';
 import 'chat_storage_service.dart';
 import 'crypto_service.dart';
@@ -129,13 +130,17 @@ class GroupBackupService {
       }
 
       final prefs = await SharedPreferences.getInstance();
-      // Для групп по-канальный аккаунт обычно не задан — берём активный.
-      final pairing =
-          GoogleDriveChannelBackup.channelAccountPairing(group.id) ??
-              GoogleDriveChannelBackup.activeRelayPairing;
+      final provider = group.backupProvider;
+      // Google Drive keeps its per-group account picker; other providers
+      // have one active account for now.
+      final pairing = provider == 'google'
+          ? (GoogleDriveChannelBackup.channelAccountPairing(group.id) ??
+              GoogleDriveChannelBackup.activeRelayPairing)
+          : BackupProviders.activePairing(provider);
       final folder = 'group_${group.id}';
 
-      final fileId = await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
+      final fileId = await BackupProviders.upload(
+        provider,
         fileName: 'backup.bin',
         ciphertext: sealed,
         existingFileId: prefs.getString(_fidKey(group.id)),
@@ -144,8 +149,7 @@ class GroupBackupService {
       );
       if (fileId == null) return null;
       await prefs.setString(_fidKey(group.id), fileId);
-      final fileUrl =
-          await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(fileId);
+      final fileUrl = await BackupProviders.makePublic(provider, fileId);
       if (fileUrl == null) return null;
 
       String? keysUrl;
@@ -156,8 +160,8 @@ class GroupBackupService {
           'rev': rev,
           'keys': wrappedKeys,
         })));
-        final keysFileId =
-            await GoogleDriveChannelBackup.uploadOrUpdateEncryptedFile(
+        final keysFileId = await BackupProviders.upload(
+          provider,
           fileName: 'keys.json',
           ciphertext: keysBytes,
           existingFileId: prefs.getString(_kidKey(group.id)),
@@ -166,8 +170,7 @@ class GroupBackupService {
         );
         if (keysFileId != null) {
           await prefs.setString(_kidKey(group.id), keysFileId);
-          keysUrl = await GoogleDriveChannelBackup.makePublicAndGetDownloadUrl(
-              keysFileId);
+          keysUrl = await BackupProviders.makePublic(provider, keysFileId);
         }
       }
 
