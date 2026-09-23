@@ -2937,8 +2937,8 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
       },
     );
   }
-  // Durable Google Drive linking: /oauth/google/{start,callback,token}.
-  final oauthResp = await handleGoogleOauth(request);
+  // Durable cloud-storage linking: /oauth/{google,onedrive,dropbox}/{start,callback,token}.
+  final oauthResp = await handleCloudOauth(request);
   if (oauthResp != null) return oauthResp;
   // Premium subscriptions: /premium/{create,check,webhook,status}.
   final premiumResp = await handlePremium(request);

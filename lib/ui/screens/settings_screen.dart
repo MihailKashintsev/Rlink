@@ -26,6 +26,9 @@ import 'emoji_bindings_screen.dart';
 import 'profile_privacy_screen.dart';
 import '../../services/app_icon_service.dart';
 import '../../services/google_drive_channel_backup.dart';
+import '../../services/onedrive_backup.dart';
+import '../../services/dropbox_backup.dart';
+import '../../services/relay_oauth_link.dart';
 import '../../services/transcription_engine.dart';
 import '../../services/model_download_service.dart';
 import '../app_palettes.dart';
@@ -656,6 +659,32 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             subtitle: 'Привязка аккаунта, резерв и место',
             onTap: () => _open(context, const _GoogleDrivePage()),
           ),
+          _CategoryItem(
+            icon: Icons.cloud_outlined,
+            color: const Color(0xFF0078D4),
+            title: 'OneDrive',
+            subtitle: 'Привязка аккаунта для резервных копий',
+            onTap: () => _open(
+              context,
+              _CloudProviderPage(
+                title: 'OneDrive',
+                link: OneDriveBackup.instance.link,
+              ),
+            ),
+          ),
+          _CategoryItem(
+            icon: Icons.cloud_outlined,
+            color: const Color(0xFF0061FF),
+            title: 'Dropbox',
+            subtitle: 'Привязка аккаунта для резервных копий',
+            onTap: () => _open(
+              context,
+              _CloudProviderPage(
+                title: 'Dropbox',
+                link: DropboxBackup.instance.link,
+              ),
+            ),
+          ),
           if (RuntimePlatform.isWeb)
             _CategoryItem(
               icon: Icons.ios_share_rounded,
@@ -1035,6 +1064,167 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
                       'потребуется войти заново.'
                   : 'Аккаунт используется для резервного копирования каналов '
                       '(если в настройках канала включён резерв).',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Sub-screen: generic cloud provider (OneDrive, Dropbox — same relay-linked
+// OAuth flow as Google Drive, but without a driver here for a signed-in SDK,
+// so no quota display; just link/switch/unlink accounts).
+// ─────────────────────────────────────────────────────────────────────
+
+class _CloudProviderPage extends StatefulWidget {
+  const _CloudProviderPage({required this.title, required this.link});
+  final String title;
+  final RelayOauthLink link;
+
+  @override
+  State<_CloudProviderPage> createState() => _CloudProviderPageState();
+}
+
+class _CloudProviderPageState extends State<_CloudProviderPage> {
+  bool _busy = false;
+
+  Future<void> _linkRelay() async {
+    final uri = Uri.tryParse(widget.link.startLink());
+    if (uri == null) return;
+    if (kIsWeb) {
+      await launchUrl(uri, webOnlyWindowName: '_blank');
+    } else {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+    if (!mounted) return;
+    final done = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Привязка через сервер'),
+        content: Text(
+          'В открывшемся окне войдите в ${widget.title} и разрешите доступ, '
+          'затем вернитесь сюда и нажмите «Готово».\n\n'
+          'Токен хранится на сервере — привязка не слетит после перезахода.',
+          style: const TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppL10n.t('common_cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Готово'),
+          ),
+        ],
+      ),
+    );
+    if (done != true || !mounted) return;
+    setState(() => _busy = true);
+    final ok = await widget.link.finishLink();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? '${widget.title} привязан (постоянно)'
+            : 'Не удалось завершить привязку — попробуйте ещё раз'),
+      ),
+    );
+  }
+
+  Future<void> _disconnect(String pairing) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Отвязать аккаунт ${widget.title}?'),
+        content: const Text('Привязка будет удалена на этом устройстве.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppL10n.t('common_cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppL10n.t('cm_unlink')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await widget.link.removeAccount(pairing);
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final accounts = widget.link.accounts;
+    final active = widget.link.activePairing;
+    return _subScaffold(
+      context: context,
+      title: widget.title,
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
+        children: [
+          const _SectionHeader('Аккаунты'),
+          if (accounts.isEmpty)
+            const ListTile(
+              leading: Icon(Icons.account_circle_outlined),
+              title: Text('Аккаунт не привязан'),
+            )
+          else
+            for (final a in accounts)
+              Builder(builder: (_) {
+                final pairing = a['pairing'] ?? '';
+                final email =
+                    (a['email'] ?? '').isNotEmpty ? a['email']! : 'Аккаунт';
+                final isActive = pairing == active;
+                return ListTile(
+                  leading: Icon(
+                    isActive
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: isActive ? cs.primary : null,
+                  ),
+                  title: Text(email),
+                  subtitle: isActive
+                      ? const Text('Активный — для резервных копий',
+                          style: TextStyle(fontSize: 11))
+                      : null,
+                  onTap: _busy || isActive
+                      ? null
+                      : () async {
+                          await widget.link.setActiveAccount(pairing);
+                          if (!mounted) return;
+                          setState(() {});
+                        },
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: _busy ? null : () => _disconnect(pairing),
+                  ),
+                );
+              }),
+          const SizedBox(height: 8),
+          const _SectionHeader('Привязка'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+            child: FilledButton.icon(
+              onPressed: _busy ? null : _linkRelay,
+              icon: const Icon(Icons.add_link),
+              label: Text('Привязать ${widget.title}'),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Text(
+              'Аккаунт используется для резервного копирования каналов и '
+              'групп (если в настройках канала/группы выбран ${widget.title} '
+              'как место хранения).',
               style: const TextStyle(fontSize: 12),
             ),
           ),

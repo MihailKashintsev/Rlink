@@ -36,6 +36,8 @@ import 'services/premium_service.dart';
 import 'services/app_lock_service.dart';
 import 'services/motion_controller.dart';
 import 'services/google_drive_channel_backup.dart';
+import 'services/onedrive_backup.dart';
+import 'services/dropbox_backup.dart';
 import 'services/chat_inbox_service.dart';
 import 'services/channel_service.dart';
 import 'services/channel_backup_service.dart';
@@ -762,6 +764,8 @@ Future<void> initServices() async {
     if (RuntimePlatform.isWeb) {
       unawaited(GoogleDriveChannelBackup.restoreManualToken());
     }
+    unawaited(OneDriveBackup.instance.init());
+    unawaited(DropboxBackup.instance.init());
     await _restoreAdminPasswordFromSealedIfNeeded();
     await ProfileService.instance.init();
     if (RuntimePlatform.isWeb) {
