@@ -5,8 +5,10 @@ import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../l10n/app_l10n.dart';
+import '../../models/quick_video.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../services/app_settings.dart';
 import '../../services/image_service.dart';
 import '../../services/embedded_video_pause_bus.dart';
 import '../../services/voice_service.dart';
@@ -125,7 +127,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
   Future<void> _setupController(int cameraIndex) async {
     final controller = CameraController(
       _cameras[cameraIndex],
-      ResolutionPreset.low,
+      AppSettings.instance.quickVideoQuality.preset,
       enableAudio: true,
       imageFormatGroup: ImageFormatGroup.jpeg,
     );
@@ -463,6 +465,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
                     : null,
                 recordingPaused: _recordingPaused,
                 pausePreview: _pausePreviewCtrl,
+                shape: AppSettings.instance.quickVideoShape,
               )
             : SizedBox(
                 width: squareSize + 6,

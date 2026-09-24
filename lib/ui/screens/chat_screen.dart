@@ -148,8 +148,13 @@ import '../widgets/nick_text.dart';
 import '../widgets/wheel_time_picker.dart';
 import '../widgets/settings_profile_header.dart' show ProfileCard;
 import '../widgets/composer_input_bar.dart';
+import '../widgets/quick_video_recording_overlay.dart';
+import '../../models/quick_video.dart';
 import '../widgets/message_actions_overlay.dart';
 import '../mention_nav.dart';
+
+/// Longest quick video (hold or locked), like Telegram's 1 minute.
+const _kQuickVideoMaxSeconds = 60.0;
 
 bool _dmVideoPathIsSquare(String path) {
   final lower = p.basename(path).toLowerCase();
@@ -383,8 +388,8 @@ class _ChatScreenState extends State<ChatScreen> {
   int _dmHoldSession = 0;
 
   /// Видео в режиме «зажим» (свайп вверх).
-  bool _dmHoldLockedWhileVideo = false;
   final _dmHoldVideoPausedNotifier = ValueNotifier<bool>(false);
+  final _dmHoldFlashOn = ValueNotifier<bool>(false);
   List<CameraDescription> _dmHoldCameraList = [];
   int _dmHoldCameraIndex = 0;
   final List<String> _dmHoldVideoSegments = [];
@@ -1419,6 +1424,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     _dmHoldPausePreview?.dispose();
     _dmHoldVideoPausedNotifier.dispose();
+    _dmHoldFlashOn.dispose();
     _voicePausedNotifier.dispose();
     _recordingSecondsNotifier.dispose();
     if (widget.peerId == kLibBotPeerId) {
@@ -1938,7 +1944,6 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_dmHoldVideoCam != null) {
       final ctrl = _dmHoldVideoCam;
       _dmHoldVideoCam = null;
-      _dmHoldLockedWhileVideo = false;
       _dmHoldVideoPausedNotifier.value = false;
       await _disposeDmHoldPausePreview();
       for (final path in _dmHoldVideoSegments) {
@@ -1995,8 +2000,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_isSending) return;
     if (!mounted) return;
     final session = ++_dmHoldSession;
-    _dmHoldLockedWhileVideo = false;
     _dmHoldVideoPausedNotifier.value = false;
+    _dmHoldFlashOn.value = false;
     setState(() => _dmHoldVideoStarting = true);
 
     CameraController? ctrl;
@@ -2024,7 +2029,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _dmHoldCameraIndex = idx;
       ctrl = CameraController(
         _dmHoldCameraList[idx],
-        ResolutionPreset.low,
+        AppSettings.instance.quickVideoQuality.preset,
         enableAudio: true,
         imageFormatGroup: ImageFormatGroup.jpeg,
       );
@@ -2053,7 +2058,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!mounted || _dmHoldVideoCam == null) return;
         if (_dmHoldVideoPausedNotifier.value) return;
         _recordingSecondsNotifier.value += 0.25;
-        if (_recordingSecondsNotifier.value >= 15) {
+        if (_recordingSecondsNotifier.value >= _kQuickVideoMaxSeconds) {
           unawaited(_finishDmHoldSquareVideo(send: true));
         }
       });
@@ -2088,7 +2093,6 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _finishDmHoldSquareVideo({required bool send}) async {
     _recordingTimer?.cancel();
     _recordingTimer = null;
-    _dmHoldLockedWhileVideo = false;
     _dmHoldVideoPausedNotifier.value = false;
     await _disposeDmHoldPausePreview();
 
@@ -2178,10 +2182,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _onHoldRecordingLockChanged(bool locked) {
     if (!locked) return;
-    if (_dmHoldVideoCam != null) {
-      setState(() => _dmHoldLockedWhileVideo = true);
-      return;
-    }
+    if (_dmHoldVideoCam != null) return;
     setState(() => _voiceHoldLocked = true);
   }
 
@@ -2281,6 +2282,23 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Back camera → real torch; the front camera has none, so the overlay turns
+  /// the screen bright white instead.
+  Future<void> _applyDmHoldTorch() async {
+    final cam = _dmHoldVideoCam;
+    if (cam == null || !cam.value.isInitialized) return;
+    if (cam.description.lensDirection != CameraLensDirection.back) return;
+    try {
+      await cam.setFlashMode(
+          _dmHoldFlashOn.value ? FlashMode.torch : FlashMode.off);
+    } catch (_) {}
+  }
+
+  void _toggleDmHoldFlash() {
+    _dmHoldFlashOn.value = !_dmHoldFlashOn.value;
+    unawaited(_applyDmHoldTorch());
+  }
+
   Future<void> _switchDmHoldCamera() async {
     final session = _dmHoldSession;
     final ctrl = _dmHoldVideoCam;
@@ -2314,7 +2332,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _dmHoldCameraIndex = next;
       newCam = CameraController(
         _dmHoldCameraList[next],
-        ResolutionPreset.low,
+        AppSettings.instance.quickVideoQuality.preset,
         enableAudio: true,
         imageFormatGroup: ImageFormatGroup.jpeg,
       );
@@ -2351,6 +2369,7 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
       setState(() => _dmHoldVideoCam = newCam);
+      unawaited(_applyDmHoldTorch());
     } catch (e) {
       debugPrint('[DmHoldVideo] switch cam: $e');
       await newCam?.dispose();
@@ -2401,12 +2420,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() => _isSending = true);
     try {
-      final msgId = _uuid.v4();
+      final shape = AppSettings.instance.quickVideoShape;
+      final msgId = shape.tagId(_uuid.v4());
       final String path;
       if (!kIsWeb) {
         path = await ImageService.instance.saveVideo(
           rawVideoPath,
           isSquare: true,
+          shape: shape,
         );
       } else if (_isInlineWebUri(rawVideoPath) &&
           !rawVideoPath.startsWith('opfs://rlink/')) {
@@ -8288,6 +8309,42 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                           ),
                         ),
+                      if (_dmHoldVideoCam != null)
+                        ValueListenableBuilder<bool>(
+                          valueListenable: _dmHoldVideoPausedNotifier,
+                          builder: (_, paused, __) =>
+                              ValueListenableBuilder<bool>(
+                            valueListenable: _dmHoldFlashOn,
+                            builder: (_, flash, __) => ListenableBuilder(
+                              listenable: _dmHoldVideoCam!,
+                              builder: (_, __) {
+                                final cam = _dmHoldVideoCam;
+                                if (cam == null || !cam.value.isInitialized) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Positioned.fill(
+                                  child: QuickVideoRecordingOverlay(
+                                    controller: cam,
+                                    shape:
+                                        AppSettings.instance.quickVideoShape,
+                                    seconds: _recordingSecondsNotifier,
+                                    maxSeconds: _kQuickVideoMaxSeconds,
+                                    paused: paused,
+                                    pausePreview: _dmHoldPausePreview,
+                                    isFront: cam.description.lensDirection ==
+                                        CameraLensDirection.front,
+                                    flashOn: flash,
+                                    canFlip: _dmHoldCameraList.length > 1,
+                                    switching: _dmHoldSwitchingCam,
+                                    onToggleFlash: _toggleDmHoldFlash,
+                                    onFlip: () =>
+                                        unawaited(_switchDmHoldCamera()),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -8470,72 +8527,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     voicePausedListenable: _voicePausedNotifier,
                     onHoldRecordingLockChanged: _onHoldRecordingLockChanged,
                     onHoldVideoLockedPauseToggle: _toggleDmHoldVideoPause,
+                    voicePauseSupported: true,
                     mentionCandidates: _chatMentionCandidates,
                   ),
                 ],
               ]),
-              if (_dmHoldVideoCam != null)
-                ValueListenableBuilder<bool>(
-                  valueListenable: _dmHoldVideoPausedNotifier,
-                  builder: (ctx, paused, __) {
-                    return ListenableBuilder(
-                      listenable: _dmHoldVideoCam!,
-                      builder: (ctx2, _) {
-                        final cam = _dmHoldVideoCam;
-                        if (cam == null || !cam.value.isInitialized) {
-                          return const SizedBox.shrink();
-                        }
-                        final w = MediaQuery.sizeOf(ctx2).width;
-                        final squareSize = w * 0.82;
-                        return Positioned.fill(
-                          child: Material(
-                            color: Colors.black.withValues(alpha: 0.72),
-                            child: SafeArea(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SquareVideoFramedCameraView(
-                                    controller: cam,
-                                    squareSize: squareSize,
-                                    isRecording: true,
-                                    recordingSeconds: _recordingSecondsNotifier,
-                                    maxDuration: 15,
-                                    showFlipButton:
-                                        _dmHoldCameraList.length > 1,
-                                    onFlipCamera: () =>
-                                        unawaited(_switchDmHoldCamera()),
-                                    isSwitchingCamera: _dmHoldSwitchingCam,
-                                    pulseController: null,
-                                    recordingPaused: paused,
-                                    isPaused: paused,
-                                    onToggleRecordingPause: () =>
-                                        unawaited(_toggleDmHoldVideoPause()),
-                                    pausePreview: _dmHoldPausePreview,
-                                  ),
-                                  const SizedBox(height: 20),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 24),
-                                    child: Text(
-                                      _dmHoldLockedWhileVideo
-                                          ? AppL10n.t('Закреплено: сверху отправка, пауза или удаление')
-                                          : AppL10n.t('Отпустите палец — отправить · вверх — закрепить'),
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.grey.shade400,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
             ],
           ),
         ),
@@ -11526,6 +11522,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
         : null;
     final localReady = _initialized && _ctrl != null;
     final ctrl = vsCtrl ?? (localReady ? _ctrl : null);
+    final shape = QuickVideoShapeX.fromPath(widget.videoPath);
 
     return GestureDetector(
       onTap: exists ? _togglePlay : null,
@@ -11536,10 +11533,10 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
             }
           : null,
       child: SizedBox(
-        width: 160,
-        height: 160,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+        width: shape == QuickVideoShape.square ? 160 : 176,
+        height: shape == QuickVideoShape.square ? 160 : 176,
+        child: QuickVideoClip(
+          shape: shape,
           child: Stack(
             fit: StackFit.expand,
             children: [

@@ -1,13 +1,101 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
+import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderMetaData;
 import 'package:flutter/services.dart';
 import '../../l10n/app_l10n.dart';
 
-/// Как в Telegram: короткое нажатие переключает голос ↔ видеоквадратик;
-/// удержание — запись, отпускание — отправка; вверх — закрепить; в закрепе — отправка/пауза/корзина сверху.
+/// Наблюдаемое состояние одного жеста «удержание → запись». Общее для кнопки
+/// записи и строки записи в поле ввода (таймер, «Влево, отмена», «Отмена»…).
+class RecordGesture extends ChangeNotifier {
+  /// Дистанция вверх (px), после которой запись закрепляется.
+  static const lockDistance = 80.0;
+
+  /// Дистанция влево (px), после которой запись отменяется (палец).
+  static const cancelDistance = 110.0;
+
+  bool holding = false;
+  bool locked = false;
+
+  /// Жест начат мышью → тексты и отмена как на ПК (по «выходу за поле»).
+  bool mouse = false;
+
+  /// Мышь: курсор сейчас вне поля ввода (отпустить = отмена).
+  bool outside = false;
+
+  /// Смещение пальца/курсора от точки нажатия.
+  Offset drag = Offset.zero;
+
+  double get lockProgress => (-drag.dy / lockDistance).clamp(0.0, 1.0);
+  double get cancelProgress => (-drag.dx / cancelDistance).clamp(0.0, 1.0);
+
+  void begin({required bool mouse}) {
+    holding = true;
+    locked = false;
+    this.mouse = mouse;
+    outside = false;
+    drag = Offset.zero;
+    notifyListeners();
+  }
+
+  void moved(Offset d, {bool? outside}) {
+    drag = d;
+    if (outside != null) this.outside = outside;
+    notifyListeners();
+  }
+
+  void lock() {
+    locked = true;
+    outside = false;
+    drag = Offset.zero;
+    notifyListeners();
+  }
+
+  void reset() {
+    if (!holding && !locked && drag == Offset.zero && !outside) return;
+    holding = false;
+    locked = false;
+    outside = false;
+    drag = Offset.zero;
+    notifyListeners();
+  }
+}
+
+class _RecordKeepTag {
+  const _RecordKeepTag();
+}
+
+const _keep = _RecordKeepTag();
+
+/// Всё, что обёрнуто в [RecordKeep], считается «внутри поля»: на ПК отпустить
+/// курсор / нажать за его пределами = отмена записи.
+class RecordKeep extends StatelessWidget {
+  final Widget child;
+  const RecordKeep({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) => MetaData(
+        metaData: _keep,
+        behavior: HitTestBehavior.translucent,
+        child: child,
+      );
+}
+
+bool _insideRecordField(BuildContext context, Offset pos) {
+  final result = HitTestResult();
+  WidgetsBinding.instance.hitTestInView(result, pos, View.of(context).viewId);
+  return result.path.any((e) =>
+      e.target is RenderMetaData &&
+      (e.target as RenderMetaData).metaData == _keep);
+}
+
+/// Как в Telegram: короткое нажатие переключает голос ↔ быстрое видео;
+/// удержание — запись, отпускание — отправка; вверх — закрепить (над кнопкой
+/// появляется пауза); влево — отмена. На ПК отмена — отпустить/нажать вне поля.
 class TelegramMediaRecordButton extends StatefulWidget {
+  final RecordGesture gesture;
   final bool isSending;
   final bool isRecording;
   final bool isHoldVideoStarting;
@@ -17,22 +105,20 @@ class TelegramMediaRecordButton extends StatefulWidget {
   final Future<void> Function() onHoldReleaseSend;
   final Future<void> Function() onHoldCancelDiscard;
 
-  /// Вызывается при свайпе вверх в закреп (и для голоса, и для видео).
+  /// Вызывается при закреплении (и для голоса, и для видео).
   final void Function(bool locked)? onHoldLockChanged;
 
-  /// Пауза/продолжение записи видео только в закреплённом режиме.
+  /// Пауза/продолжение записи видео (только в закреплённом режиме).
   final Future<void> Function()? onLockedVideoPauseToggle;
   final ValueListenable<bool>? lockedVideoPausedListenable;
 
-  /// Пауза/продолжение записи голоса только в закреплённом режиме.
+  /// Пауза/продолжение записи голоса (только в закреплённом режиме).
   final Future<void> Function()? onLockedVoicePauseToggle;
   final ValueListenable<bool>? lockedVoicePausedListenable;
 
-  /// Обрезать последний сегмент записи голоса в закреплённом режиме.
-  final Future<void> Function()? onLockedVoiceTrimLastPart;
-
   const TelegramMediaRecordButton({
     super.key,
+    required this.gesture,
     required this.isSending,
     required this.isRecording,
     required this.isHoldVideoStarting,
@@ -46,7 +132,6 @@ class TelegramMediaRecordButton extends StatefulWidget {
     this.lockedVideoPausedListenable,
     this.onLockedVoicePauseToggle,
     this.lockedVoicePausedListenable,
-    this.onLockedVoiceTrimLastPart,
   });
 
   @override
@@ -55,23 +140,26 @@ class TelegramMediaRecordButton extends StatefulWidget {
 }
 
 class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
-  static const _holdMs = 280;
-  static const _lockDy = -34.0;
+  static const _holdMs = 260;
 
   bool _videoMode = false;
-  bool _holdActivated = false;
-  bool _locked = false;
+  bool _holdFired = false;
+  int? _pointer;
+  Offset _down = Offset.zero;
   Timer? _holdTimer;
-  Offset _armDownGlobal = Offset.zero;
+  final _link = LayerLink();
+  OverlayEntry? _hint;
+  OverlayEntry? _pause;
+  bool _routeAdded = false;
 
-  OverlayEntry? _gestureShield;
-  OverlayEntry? _lockHud;
+  RecordGesture get g => widget.gesture;
 
   @override
   void dispose() {
     _holdTimer?.cancel();
-    _removeGestureShield();
-    _removeLockHud();
+    _removeHint();
+    _removePause();
+    _removeRoute();
     super.dispose();
   }
 
@@ -79,255 +167,256 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
   void didUpdateWidget(covariant TelegramMediaRecordButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isRecording && !widget.isRecording) {
-      _locked = false;
-      _holdActivated = false;
+      // Recording ended by itself (max length, error, cancelled from the bar).
       _holdTimer?.cancel();
-      _removeGestureShield();
-      _removeLockHud();
+      _pointer = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _removeHint();
+        _removePause();
+        _removeRoute();
+        g.reset();
+      });
     }
   }
 
-  void _removeGestureShield() {
-    _gestureShield?.remove();
-    _gestureShield = null;
+  // ── overlays ────────────────────────────────────────────────────────────
+
+  void _removeHint() {
+    _hint?.remove();
+    _hint = null;
   }
 
-  void _removeLockHud() {
-    _lockHud?.remove();
-    _lockHud = null;
+  void _removePause() {
+    _pause?.remove();
+    _pause = null;
   }
 
-  void _insertGestureShield() {
-    if (_gestureShield != null) return;
-    final overlay = Overlay.maybeOf(context);
-    if (overlay == null) return;
-    _gestureShield = OverlayEntry(
-      builder: (ctx) {
-        return Material(
-          type: MaterialType.transparency,
-          child: SizedBox.expand(
-            child: Listener(
-              behavior: HitTestBehavior.translucent,
-              onPointerMove: _onGlobalMove,
-              onPointerUp: _onGlobalUp,
-              onPointerCancel: _onGlobalUp,
-            ),
-          ),
-        );
-      },
-    );
-    overlay.insert(_gestureShield!);
-  }
-
-  void _showLockHud() {
-    if (_lockHud != null) return;
+  void _showHint() {
+    if (_hint != null) return;
     final overlay = Overlay.maybeOf(context);
     if (overlay == null) return;
     final cs = widget.colorScheme;
-    _lockHud = OverlayEntry(
-      builder: (ctx) {
-        Widget? pauseBtn;
-        if (_videoMode &&
-            widget.onLockedVideoPauseToggle != null &&
-            widget.lockedVideoPausedListenable != null) {
-          pauseBtn = ValueListenableBuilder<bool>(
-            valueListenable: widget.lockedVideoPausedListenable!,
-            builder: (_, paused, __) {
-              return IconButton(
-                tooltip: paused ? AppL10n.t('Продолжить') : AppL10n.t('Пауза'),
-                icon: Icon(
-                  paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                  color: cs.onSurface,
-                ),
-                onPressed: () => unawaited(widget.onLockedVideoPauseToggle!()),
-              );
-            },
-          );
-        } else if (!_videoMode &&
-            widget.onLockedVoicePauseToggle != null &&
-            widget.lockedVoicePausedListenable != null) {
-          pauseBtn = ValueListenableBuilder<bool>(
-            valueListenable: widget.lockedVoicePausedListenable!,
-            builder: (_, paused, __) {
-              return IconButton(
-                tooltip: paused ? AppL10n.t('Продолжить') : AppL10n.t('Пауза'),
-                icon: Icon(
-                  paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                  color: cs.onSurface,
-                ),
-                onPressed: () => unawaited(widget.onLockedVoicePauseToggle!()),
-              );
-            },
-          );
-        }
+    // Align loosens the overlay's tight constraints so the hint keeps its size.
+    _hint = OverlayEntry(
+      builder: (_) => Align(
+        alignment: Alignment.topLeft,
+        child: CompositedTransformFollower(
+          link: _link,
+          showWhenUnlinked: false,
+          targetAnchor: Alignment.topCenter,
+          followerAnchor: Alignment.bottomCenter,
+          offset: const Offset(0, -12),
+          child: IgnorePointer(
+            child: ListenableBuilder(
+              listenable: g,
+              builder: (_, __) => _LockHint(progress: g.lockProgress, cs: cs),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(_hint!);
+  }
 
-        Widget? trimBtn;
-        if (!_videoMode && widget.onLockedVoiceTrimLastPart != null) {
-          trimBtn = IconButton(
-            tooltip: AppL10n.t('Обрезать'),
-            icon: Icon(Icons.content_cut_rounded, color: cs.onSurface),
-            onPressed: () => unawaited(widget.onLockedVoiceTrimLastPart!()),
-          );
-        }
+  bool get _canPause => _videoMode
+      ? widget.onLockedVideoPauseToggle != null &&
+          widget.lockedVideoPausedListenable != null
+      : widget.onLockedVoicePauseToggle != null &&
+          widget.lockedVoicePausedListenable != null;
 
-        return SafeArea(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(28),
-                color: cs.surfaceContainerHigh,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _videoMode ? Icons.videocam_rounded : Icons.mic_rounded,
-                        size: 22,
+  void _showPause() {
+    if (_pause != null || !_canPause) return;
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
+    final cs = widget.colorScheme;
+    final paused = _videoMode
+        ? widget.lockedVideoPausedListenable!
+        : widget.lockedVoicePausedListenable!;
+    final toggle = _videoMode
+        ? widget.onLockedVideoPauseToggle!
+        : widget.onLockedVoicePauseToggle!;
+    _pause = OverlayEntry(
+      builder: (_) => Align(
+        alignment: Alignment.topLeft,
+        child: CompositedTransformFollower(
+          link: _link,
+          showWhenUnlinked: false,
+          targetAnchor: Alignment.topCenter,
+          followerAnchor: Alignment.bottomCenter,
+          offset: const Offset(0, -10),
+          child: RecordKeep(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.6, end: 1),
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutBack,
+              builder: (_, v, child) => Transform.scale(
+                scale: v,
+                child: Opacity(opacity: v.clamp(0.0, 1.0), child: child),
+              ),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: paused,
+                builder: (_, isPaused, __) => Material(
+                  color: cs.surfaceContainerHighest,
+                  elevation: 4,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => unawaited(toggle()),
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Icon(
+                        isPaused
+                            ? Icons.play_arrow_rounded
+                            : Icons.pause_rounded,
                         color: cs.onSurface,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _videoMode ? AppL10n.t('Видео') : AppL10n.t('Голосовое'),
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (pauseBtn != null) pauseBtn,
-                      if (trimBtn != null) trimBtn,
-                      IconButton(
-                        tooltip: AppL10n.t('Отправить'),
-                        icon: Icon(Icons.send_rounded, color: cs.primary),
-                        onPressed: () => unawaited(_onLockedSend()),
-                      ),
-                      IconButton(
-                        tooltip: AppL10n.t('Удалить'),
-                        icon: Icon(Icons.delete_outline, color: cs.error),
-                        onPressed: () => unawaited(_onLockedCancel()),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
-    overlay.insert(_lockHud!);
+    overlay.insert(_pause!);
   }
 
-  Future<void> _onLockedSend() async {
-    await widget.onHoldReleaseSend();
-    if (!mounted) return;
-    _removeLockHud();
-    setState(() {
-      _locked = false;
-      _holdActivated = false;
-    });
+  // ── desktop: click outside the field cancels a locked recording ─────────
+
+  void _addRoute() {
+    if (_routeAdded) return;
+    _routeAdded = true;
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointer);
   }
 
-  Future<void> _onLockedCancel() async {
-    await widget.onHoldCancelDiscard();
-    if (!mounted) return;
-    _removeLockHud();
-    setState(() {
-      _locked = false;
-      _holdActivated = false;
-    });
+  void _removeRoute() {
+    if (!_routeAdded) return;
+    _routeAdded = false;
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointer);
   }
 
-  void _onHoldTimerFire() {
+  void _onGlobalPointer(PointerEvent e) {
+    if (e is! PointerDownEvent || !g.locked || !g.mouse || !mounted) return;
+    if (_insideRecordField(context, e.position)) return;
+    _cancel();
+  }
+
+  // ── gesture ─────────────────────────────────────────────────────────────
+
+  void _onHoldFire() {
     if (!mounted || widget.isSending) return;
-    _holdActivated = true;
-    _insertGestureShield();
+    _holdFired = true;
+    g.begin(mouse: _mouseDown);
+    _showHint();
+    HapticFeedback.selectionClick();
     if (_videoMode) {
       unawaited(widget.onVideoHoldStart());
     } else {
       widget.onVoiceHoldStart();
     }
-    // On web (mouse) you can't keep the button held AND tap the pause control —
-    // releasing the pointer would send. Swipe-up-to-lock is touch-only. So for
-    // the video circle, auto-lock immediately: recording continues and the
-    // pause / send / delete controls are usable without an accidental send.
-    if (kIsWeb && _videoMode) {
-      _locked = true;
-      widget.onHoldLockChanged?.call(true);
-      _removeGestureShield();
-      _showLockHud();
-      if (mounted) setState(() {});
-    }
   }
 
-  void _onButtonPointerDown(PointerDownEvent e) {
+  bool _mouseDown = false;
+
+  void _onPointerDown(PointerDownEvent e) {
     if (widget.isSending || widget.isHoldVideoStarting) return;
-    if (widget.isRecording && _locked) return;
-
-    _armDownGlobal = e.position;
+    if (widget.isRecording && g.locked) return; // taps handled by onTap
+    if (e.kind == PointerDeviceKind.mouse && e.buttons != kPrimaryButton)
+      return;
+    _holdFired = false;
+    _pointer = e.pointer;
+    _down = e.position;
+    _mouseDown = e.kind == PointerDeviceKind.mouse;
     _holdTimer?.cancel();
-    _holdTimer = Timer(const Duration(milliseconds: _holdMs), _onHoldTimerFire);
+    _holdTimer = Timer(const Duration(milliseconds: _holdMs), _onHoldFire);
   }
 
-  void _onButtonPointerUp(PointerUpEvent e) => _onButtonShortTapEnd();
-
-  void _onButtonShortTapEnd() {
-    _holdTimer?.cancel();
-    if (!_holdActivated) {
-      if (widget.isRecording || widget.isHoldVideoStarting) return;
-      setState(() => _videoMode = !_videoMode);
-    }
-  }
-
-  void _onGlobalMove(PointerMoveEvent e) {
-    if (!_holdActivated || _locked || !widget.isRecording) return;
-    final dy = e.position.dy - _armDownGlobal.dy;
-    if (dy < _lockDy) {
+  void _onPointerMove(PointerMoveEvent e) {
+    if (e.pointer != _pointer || !g.holding || g.locked) return;
+    final d = e.position - _down;
+    g.moved(d,
+        outside: g.mouse ? !_insideRecordField(context, e.position) : null);
+    if (-d.dy >= RecordGesture.lockDistance) {
+      _lock();
+    } else if (!g.mouse && -d.dx >= RecordGesture.cancelDistance) {
       HapticFeedback.mediumImpact();
-      setState(() => _locked = true);
-      widget.onHoldLockChanged?.call(true);
-      _removeGestureShield();
-      _showLockHud();
+      _cancel();
     }
   }
 
-  void _onGlobalUp(PointerEvent e) {
+  void _onPointerUp(PointerUpEvent e) {
+    if (e.pointer != _pointer) return;
+    _pointer = null;
     _holdTimer?.cancel();
-    if (!_holdActivated) {
-      _removeGestureShield();
+    if (!_holdFired) {
+      // Short tap: switch voice ↔ video.
+      if (!widget.isRecording && !widget.isHoldVideoStarting) {
+        setState(() => _videoMode = !_videoMode);
+      }
       return;
     }
-    if (_locked) {
-      _removeGestureShield();
-      return;
+    if (g.locked) return; // finger lifted after locking — keep recording
+    final outside = g.mouse && !_insideRecordField(context, e.position);
+    if (outside) {
+      _cancel();
+    } else {
+      unawaited(_sendWhenReady());
     }
-    unawaited(_completeHoldOnRelease());
   }
 
-  Future<void> _completeHoldOnRelease() async {
-    if (widget.isHoldVideoStarting) {
-      for (var i = 0; i < 125; i++) {
-        await Future.delayed(const Duration(milliseconds: 40));
-        if (!mounted) return;
-        if (!widget.isHoldVideoStarting) break;
-      }
+  void _onPointerCancel(PointerCancelEvent e) {
+    if (e.pointer != _pointer) return;
+    _pointer = null;
+    _holdTimer?.cancel();
+    if (_holdFired && !g.locked) _cancel();
+  }
+
+  void _lock() {
+    HapticFeedback.mediumImpact();
+    g.lock();
+    widget.onHoldLockChanged?.call(true);
+    _removeHint();
+    _showPause();
+    if (g.mouse) _addRoute();
+  }
+
+  void _endGesture() {
+    _holdTimer?.cancel();
+    _removeHint();
+    _removePause();
+    _removeRoute();
+    g.reset();
+  }
+
+  void _cancel() {
+    _endGesture();
+    unawaited(widget.onHoldCancelDiscard());
+  }
+
+  Future<void> _sendWhenReady() async {
+    _endGesture();
+    // Recording may still be starting (camera init / mic permission).
+    final maxTicks = widget.isHoldVideoStarting ? 125 : 25;
+    for (var i = 0; i < maxTicks; i++) {
+      if (!mounted) return;
+      if (widget.isRecording && !widget.isHoldVideoStarting) break;
+      await Future.delayed(const Duration(milliseconds: 40));
     }
     if (!mounted) return;
-    if (widget.isHoldVideoStarting) {
+    if (widget.isHoldVideoStarting && !widget.isRecording) {
       await widget.onHoldCancelDiscard();
-      _removeGestureShield();
       return;
     }
-    if (!widget.isRecording) {
-      _removeGestureShield();
-      return;
-    }
+    if (!widget.isRecording) return;
     await widget.onHoldReleaseSend();
-    if (mounted) _removeGestureShield();
+  }
+
+  void _onTap() {
+    if (!g.locked || !widget.isRecording) return;
+    unawaited(_sendWhenReady());
   }
 
   @override
@@ -337,37 +426,139 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
 
     return Tooltip(
       message: _videoMode
-          ? AppL10n.t('Короткое нажатие — голос; удерживайте для видеокружка')
+          ? AppL10n.t(
+              'Короткое нажатие — голос; удерживайте для быстрого видео')
           : AppL10n.t('Короткое нажатие — видео; удерживайте для голоса'),
-      child: Listener(
-        onPointerDown: _onButtonPointerDown,
-        onPointerUp: _onButtonPointerUp,
-        onPointerCancel: (_) => _onButtonShortTapEnd(),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: widget.isRecording ? Colors.redAccent : cs.primary,
-            shape: BoxShape.circle,
-          ),
-          child: busy
-              ? Padding(
-                  padding: const EdgeInsets.all(11),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: cs.onPrimary,
-                  ),
-                )
-              : Icon(
-                  widget.isRecording
-                      ? Icons.fiber_manual_record
+      triggerMode: TooltipTriggerMode.manual,
+      child: CompositedTransformTarget(
+        link: _link,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _onTap,
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: _onPointerDown,
+            onPointerMove: _onPointerMove,
+            onPointerUp: _onPointerUp,
+            onPointerCancel: _onPointerCancel,
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: ListenableBuilder(
+                listenable: g,
+                builder: (_, __) {
+                  final active = g.holding || g.locked || widget.isRecording;
+                  final follow = g.holding && !g.locked
+                      ? Offset(g.drag.dx.clamp(-140.0, 0.0),
+                          g.drag.dy.clamp(-90.0, 0.0))
+                      : Offset.zero;
+                  final IconData icon = g.locked
+                      ? Icons.arrow_upward_rounded
                       : (_videoMode
                           ? Icons.videocam_rounded
-                          : Icons.mic_rounded),
-                  color: cs.onPrimary,
-                  size: 22,
+                          : Icons.mic_rounded);
+                  return Transform.translate(
+                    offset: follow,
+                    child: AnimatedScale(
+                      scale: g.holding && !g.locked ? 1.35 : 1.0,
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOutCubic,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        decoration: BoxDecoration(
+                          color: active ? Colors.redAccent : cs.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: busy
+                            ? Padding(
+                                padding: const EdgeInsets.all(11),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: cs.onPrimary,
+                                ),
+                              )
+                            : Icon(icon, color: cs.onPrimary, size: 22),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// «Замочек» над кнопкой: подсказывает, куда тянуть. Чем ближе палец к закрепу,
+/// тем ниже он уходит и тем прозрачнее становится.
+class _LockHint extends StatefulWidget {
+  final double progress;
+  final ColorScheme cs;
+  const _LockHint({required this.progress, required this.cs});
+
+  @override
+  State<_LockHint> createState() => _LockHintState();
+}
+
+class _LockHintState extends State<_LockHint>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bob = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _bob.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = widget.cs;
+    final p = widget.progress;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      builder: (_, appear, child) => Opacity(
+        opacity: (appear * (1 - p)).clamp(0.0, 1.0),
+        child: Transform.translate(
+          offset: Offset(0, (1 - appear) * 14 + p * 56),
+          child: child,
+        ),
+      ),
+      child: Container(
+        width: 40,
+        height: 78,
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              p > 0.6 ? Icons.lock_rounded : Icons.lock_open_rounded,
+              size: 20,
+              color: cs.onSurface,
+            ),
+            const SizedBox(height: 4),
+            AnimatedBuilder(
+              animation: _bob,
+              builder: (_, __) => Transform.translate(
+                offset: Offset(0, -5 * _bob.value),
+                child: Opacity(
+                  opacity: 0.45 + 0.4 * _bob.value,
+                  child: Icon(Icons.keyboard_arrow_up_rounded,
+                      size: 22, color: cs.onSurfaceVariant),
                 ),
+              ),
+            ),
+          ],
         ),
       ),
     );

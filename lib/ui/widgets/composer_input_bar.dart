@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/app_settings.dart';
@@ -91,6 +92,10 @@ class ComposerInputBar extends StatefulWidget {
   final void Function(bool locked) onHoldRecordingLockChanged;
   final Future<void> Function() onHoldVideoLockedPauseToggle;
 
+  /// The host can pause/resume a locked voice recording (DM). When false the
+  /// pause button above the locked record button is not shown for voice.
+  final bool voicePauseSupported;
+
   /// When provided, typing `@` opens a contact picker above the input.
   final List<MentionCandidate> Function()? mentionCandidates;
 
@@ -138,6 +143,7 @@ class ComposerInputBar extends StatefulWidget {
     required this.voicePausedListenable,
     required this.onHoldRecordingLockChanged,
     required this.onHoldVideoLockedPauseToggle,
+    this.voicePauseSupported = false,
     this.mentionCandidates,
     this.onStickerSuggestionAccepted,
   });
@@ -148,6 +154,10 @@ class ComposerInputBar extends StatefulWidget {
 
 class ComposerInputBarState extends State<ComposerInputBar> {
   final _focusNode = FocusNode();
+  final _rec = RecordGesture();
+
+  /// Keeps the record button's State alive while the other buttons hide.
+  final _recordKey = GlobalKey();
   late final VoidCallback _controllerListener;
 
   /// Панель B/I/S… не перекрывает поле — открывается кнопкой при выделении.
@@ -365,6 +375,8 @@ class ComposerInputBarState extends State<ComposerInputBar> {
       final side = buttonConfig['side'] as String;
 
       if (side != (leftSide ? 'left' : 'right')) continue;
+      // While recording only the record button stays (Telegram-style bar).
+      if (widget.isRecording && buttonId != 'voice_video_square') continue;
 
       switch (buttonId) {
         case 'voice_video_square':
@@ -395,8 +407,149 @@ class ComposerInputBarState extends State<ComposerInputBar> {
     return buttons;
   }
 
+  /// Recording bar that replaces the text field while a voice / quick video is
+  /// being recorded: dot + timer, then the cancel hint for the current mode.
+  Widget _buildRecordingBar(ColorScheme cs) {
+    final video = !widget.isVoiceRecordingMode;
+    final pausedListenable =
+        video ? widget.holdVideoPausedListenable : widget.voicePausedListenable;
+    final hint = TextStyle(
+      fontSize: 15,
+      color: cs.onSurface.withValues(alpha: 0.75),
+    );
+    return ListenableBuilder(
+      listenable: Listenable.merge([_rec, pausedListenable]),
+      builder: (_, __) {
+        final paused = pausedListenable.value;
+        final Widget middle;
+        Widget? trailing;
+        if (_rec.locked && _rec.mouse) {
+          middle = Center(
+              child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(AppL10n.t('Для отмены нажмите вне поля'),
+                      style: hint, maxLines: 1)));
+        } else if (_rec.locked) {
+          final cancel = TextButton(
+            onPressed: () => unawaited(widget.onHoldCancelDiscard()),
+            style: TextButton.styleFrom(
+              foregroundColor: cs.primary,
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            child: Text(AppL10n.t('Отмена'),
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w600)),
+          );
+          if (video) {
+            middle = Center(child: cancel);
+          } else {
+            middle = ValueListenableBuilder<List<double>>(
+              valueListenable: widget.recordingWaveformNotifier,
+              builder: (_, bars, __) => SizedBox(
+                height: 36,
+                child: CustomPaint(
+                  painter: _LiveRecordingWaveformPainter(
+                    bars: bars,
+                    color: cs.primary,
+                    paused: paused,
+                  ),
+                ),
+              ),
+            );
+            trailing = Row(mainAxisSize: MainAxisSize.min, children: [
+              if (widget.voiceControlsEnabled && paused) ...[
+                ValueListenableBuilder<String?>(
+                  valueListenable: VoiceService.instance.currentlyPlaying,
+                  builder: (_, playing, __) {
+                    final previewing = playing != null && playing.isNotEmpty;
+                    return IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => unawaited(widget.onVoicePreview()),
+                      icon: Icon(
+                        previewing
+                            ? Icons.stop_circle_outlined
+                            : Icons.play_circle_outline,
+                        color: cs.primary,
+                      ),
+                    );
+                  },
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => unawaited(widget.onVoiceTrimLastPart()),
+                  icon: Icon(Icons.content_cut_rounded, color: cs.secondary),
+                ),
+              ],
+              cancel,
+            ]);
+          }
+        } else if (_rec.holding && _rec.mouse) {
+          middle = Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                AppL10n.t('Для отмены отпустите курсор вне поля'),
+                style: hint.copyWith(
+                    color: _rec.outside ? cs.error : hint.color),
+                maxLines: 1,
+              ),
+            ),
+          );
+        } else if (_rec.holding) {
+          final p = _rec.cancelProgress;
+          middle = Center(
+            child: Transform.translate(
+              offset: Offset(_rec.drag.dx.clamp(-120.0, 0.0) * 0.6, 0),
+              child: Opacity(
+                opacity: 1 - p * 0.75,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _NudgeLeft(
+                        child: Icon(Icons.chevron_left_rounded,
+                            size: 22, color: p > 0.6 ? cs.error : hint.color)),
+                    Text(AppL10n.t('Влево, отмена'),
+                        style:
+                            hint.copyWith(color: p > 0.6 ? cs.error : hint.color)),
+                  ],
+                ),
+              ),
+            ),
+          );
+        } else {
+          middle = const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              _RecDot(paused: paused),
+              const SizedBox(width: 8),
+              RecordingTimerText(
+                seconds: widget.recordingSecondsNotifier,
+                paused: paused,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: middle),
+              if (trailing != null) trailing,
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildVoiceVideoButton(ColorScheme cs) {
     return TelegramMediaRecordButton(
+      key: _recordKey,
+      gesture: _rec,
       isSending: widget.isSending,
       isRecording: widget.isRecording,
       isHoldVideoStarting: widget.isHoldVideoStarting,
@@ -408,9 +561,13 @@ class ComposerInputBarState extends State<ComposerInputBar> {
       onHoldLockChanged: widget.onHoldRecordingLockChanged,
       onLockedVideoPauseToggle: widget.onHoldVideoLockedPauseToggle,
       lockedVideoPausedListenable: widget.holdVideoPausedListenable,
-      onLockedVoicePauseToggle: widget.onVoicePause,
-      lockedVoicePausedListenable: widget.voicePausedListenable,
-      onLockedVoiceTrimLastPart: widget.onVoiceTrimLastPart,
+      onLockedVoicePauseToggle: widget.voicePauseSupported
+          ? () => widget.voicePausedListenable.value
+              ? widget.onVoiceResume()
+              : widget.onVoicePause()
+          : null,
+      lockedVoicePausedListenable:
+          widget.voicePauseSupported ? widget.voicePausedListenable : null,
     );
   }
 
@@ -492,6 +649,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
     AppSettings.instance.removeListener(_onAppSettingsChanged);
     widget.controller.removeListener(_controllerListener);
     _focusNode.dispose();
+    _rec.dispose();
     super.dispose();
   }
 
@@ -707,7 +865,8 @@ class ComposerInputBarState extends State<ComposerInputBar> {
             if (_mentionQuery != null && _filteredMentions.isNotEmpty)
               _buildMentionList(cs),
             if (_emojiSuggestionGlyph != null) _buildEmojiSuggestionRow(cs),
-            Row(children: [
+            RecordKeep(
+                child: Row(children: [
               if (!widget.aiTextOnlyComposer) ...[
                 ..._buildButtonsInOrder(cs, leftSide: true),
                 const SizedBox(width: 2),
@@ -718,126 +877,8 @@ class ComposerInputBarState extends State<ComposerInputBar> {
                     color: cs.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  child: widget.isVoiceRecordingMode
-                      ? Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                onTap: widget.voiceControlsEnabled
-                                    ? (widget.recordingPaused
-                                        ? () =>
-                                            unawaited(widget.onVoiceResume())
-                                        : () =>
-                                            unawaited(widget.onVoicePause()))
-                                    : null,
-                                child: Icon(
-                                  widget.recordingPaused
-                                      ? Icons.play_circle_fill_rounded
-                                      : Icons.pause_circle_filled_rounded,
-                                  color: widget.voiceControlsEnabled
-                                      ? cs.primary
-                                      : cs.onSurfaceVariant
-                                          .withValues(alpha: 0.45),
-                                  size: 30,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: ValueListenableBuilder<List<double>>(
-                                  valueListenable:
-                                      widget.recordingWaveformNotifier,
-                                  builder: (_, bars, __) {
-                                    return SizedBox(
-                                      height: 36,
-                                      child: CustomPaint(
-                                        painter: _LiveRecordingWaveformPainter(
-                                          bars: bars,
-                                          color: cs.primary,
-                                          paused: widget.recordingPaused,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ValueListenableBuilder<double>(
-                                valueListenable:
-                                    widget.recordingSecondsNotifier,
-                                builder: (_, secs, __) {
-                                  final mm =
-                                      (secs ~/ 60).toString().padLeft(2, '0');
-                                  final ss = (secs.floor() % 60)
-                                      .toString()
-                                      .padLeft(2, '0');
-                                  return Text(
-                                    '$mm:$ss',
-                                    style: TextStyle(
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
-                                      fontWeight: FontWeight.w700,
-                                      color: cs.onSurface,
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(width: 6),
-                              if (widget.voiceControlsEnabled &&
-                                  widget.recordingPaused)
-                                ValueListenableBuilder<String?>(
-                                  valueListenable:
-                                      VoiceService.instance.currentlyPlaying,
-                                  builder: (_, playing, __) {
-                                    final isPreviewing =
-                                        playing != null && playing.isNotEmpty;
-                                    return GestureDetector(
-                                      onTap: () => unawaited(
-                                        widget.onVoicePreview(),
-                                      ),
-                                      child: Icon(
-                                        isPreviewing
-                                            ? Icons.stop_circle_outlined
-                                            : Icons.play_circle_outline,
-                                        color: cs.primary,
-                                        size: 24,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              if (widget.voiceControlsEnabled &&
-                                  widget.recordingPaused)
-                                const SizedBox(width: 6),
-                              GestureDetector(
-                                onTap: widget.voiceControlsEnabled &&
-                                        widget.recordingPaused
-                                    ? () => unawaited(
-                                          widget.onVoiceTrimLastPart(),
-                                        )
-                                    : null,
-                                child: Icon(
-                                  Icons.content_cut_rounded,
-                                  color: widget.recordingPaused
-                                      ? cs.secondary
-                                      : cs.onSurfaceVariant
-                                          .withValues(alpha: 0.4),
-                                  size: 22,
-                                ),
-                              ),
-                              if (!widget.voiceControlsEnabled) ...[
-                                const SizedBox(width: 4),
-                                Icon(
-                                  Icons.lock_outline_rounded,
-                                  size: 16,
-                                  color: cs.onSurfaceVariant
-                                      .withValues(alpha: 0.55),
-                                ),
-                              ],
-                            ],
-                          ),
-                        )
+                  child: widget.isRecording
+                      ? _buildRecordingBar(cs)
                       : ValueListenableBuilder<double>(
                           valueListenable: widget.recordingSecondsNotifier,
                           builder: (_, secs, __) {
@@ -942,22 +983,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
                   widget.allowMediaRecord &&
                   !_hasConfiguredRecordButton &&
                   !hasText) ...[
-                TelegramMediaRecordButton(
-                  isSending: widget.isSending,
-                  isRecording: widget.isRecording,
-                  isHoldVideoStarting: widget.isHoldVideoStarting,
-                  colorScheme: cs,
-                  onVoiceHoldStart: widget.onVoiceHoldStart,
-                  onVideoHoldStart: widget.onVideoHoldStart,
-                  onHoldReleaseSend: widget.onHoldReleaseSend,
-                  onHoldCancelDiscard: widget.onHoldCancelDiscard,
-                  onHoldLockChanged: widget.onHoldRecordingLockChanged,
-                  onLockedVideoPauseToggle: widget.onHoldVideoLockedPauseToggle,
-                  lockedVideoPausedListenable: widget.holdVideoPausedListenable,
-                  onLockedVoicePauseToggle: widget.onVoicePause,
-                  lockedVoicePausedListenable: widget.voicePausedListenable,
-                  onLockedVoiceTrimLastPart: widget.onVoiceTrimLastPart,
-                ),
+                _buildVoiceVideoButton(cs),
                 const SizedBox(width: 8),
               ],
               if (hasText || widget.isSending)
@@ -1036,7 +1062,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
                             color: cs.onPrimary, size: 20),
                   ),
                 ),
-            ]),
+            ])),
           ],
         ),
       ),
@@ -1753,3 +1779,126 @@ class _TableSizeDialogState extends State<_TableSizeDialog> {
 }
 
 // ── Stranger Banner Action Button ─────────────────────────────
+
+/// Pulsing recording dot (amber and still while paused).
+class _RecDot extends StatefulWidget {
+  final bool paused;
+  const _RecDot({required this.paused});
+
+  @override
+  State<_RecDot> createState() => _RecDotState();
+}
+
+class _RecDotState extends State<_RecDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 900))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _c,
+        builder: (_, __) => Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: (widget.paused ? Colors.amber : Colors.redAccent)
+                .withValues(alpha: widget.paused ? 1 : 0.45 + 0.55 * _c.value),
+            shape: BoxShape.circle,
+          ),
+        ),
+      );
+}
+
+/// `mm:ss,cc` recording timer. The host ticks the value every 250–500 ms; this
+/// extrapolates between ticks so the hundredths run smoothly.
+class RecordingTimerText extends StatefulWidget {
+  final ValueListenable<double> seconds;
+  final bool paused;
+  final TextStyle style;
+  const RecordingTimerText({
+    super.key,
+    required this.seconds,
+    required this.paused,
+    required this.style,
+  });
+
+  @override
+  State<RecordingTimerText> createState() => _RecordingTimerTextState();
+}
+
+class _RecordingTimerTextState extends State<RecordingTimerText>
+    with SingleTickerProviderStateMixin {
+  final _sw = Stopwatch()..start();
+  late Ticker _ticker;
+  double _base = 0;
+  Duration _baseAt = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _base = widget.seconds.value;
+    widget.seconds.addListener(_onValue);
+    _ticker = createTicker((_) => setState(() {}))..start();
+  }
+
+  void _onValue() {
+    _base = widget.seconds.value;
+    _baseAt = _sw.elapsed;
+  }
+
+  @override
+  void dispose() {
+    widget.seconds.removeListener(_onValue);
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final extra = widget.paused
+        ? 0.0
+        : ((_sw.elapsed - _baseAt).inMilliseconds / 1000).clamp(0.0, 0.6);
+    final t = _base + extra;
+    final mm = (t ~/ 60).toString().padLeft(2, '0');
+    final ss = (t.floor() % 60).toString().padLeft(2, '0');
+    final cc = ((t % 1) * 100).floor().toString().padLeft(2, '0');
+    return Text('$mm:$ss,$cc', style: widget.style);
+  }
+}
+
+/// Gently nudges its child to the left, repeatedly ("swipe left" affordance).
+class _NudgeLeft extends StatefulWidget {
+  final Widget child;
+  const _NudgeLeft({required this.child});
+
+  @override
+  State<_NudgeLeft> createState() => _NudgeLeftState();
+}
+
+class _NudgeLeftState extends State<_NudgeLeft>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 700))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _c,
+        builder: (_, child) => Transform.translate(
+            offset: Offset(-5 * Curves.easeInOut.transform(_c.value), 0),
+            child: child),
+        child: widget.child,
+      );
+}

@@ -11,6 +11,7 @@ import 'web_account_bundle.dart';
 import 'web_identity_portable.dart';
 import '../utils/reaction_emoji_key.dart';
 import '../l10n/app_l10n.dart';
+import '../models/quick_video.dart';
 
 /// Глобальные настройки приложения — тема, уведомления, акцентный цвет.
 /// Является ChangeNotifier: виджеты перестраиваются при изменениях.
@@ -28,6 +29,8 @@ class AppSettings extends ChangeNotifier {
   static const _keyAutoDeletePrefix = 'autodel_';
   static const _keyLocale = 'locale'; // 'system','ru','en','es','de','fr'
   static const _keyFontSize = 'font_size'; // 0=small,1=medium,2=large
+  static const _keyQuickVideoShape = 'quick_video_shape';
+  static const _keyQuickVideoQuality = 'quick_video_quality';
   static const _keySendOnEnter = 'send_on_enter';
   static const _keyShowReadReceipts = 'show_read_receipts';
   static const _keyHasSeenIntro = 'has_seen_intro';
@@ -125,6 +128,8 @@ class AppSettings extends ChangeNotifier {
       'chatBgMap': _chatBgMap,
       'locale': _locale,
       'fontSize': _fontSize,
+      'quickVideoShape': _quickVideoShape.name,
+      'quickVideoQuality': _quickVideoQuality.name,
       'sendOnEnter': _sendOnEnter,
       'showReadReceipts': _showReadReceipts,
       'showOnlineStatus': _showOnlineStatus,
@@ -175,6 +180,8 @@ class AppSettings extends ChangeNotifier {
   bool _emojiSuggestionsEnabled = true;
   String _emojiSuggestionsMode = 'both';
   int _fontSize = 1; // 0=small, 1=medium, 2=large
+  QuickVideoShape _quickVideoShape = QuickVideoShape.circle;
+  QuickVideoQuality _quickVideoQuality = QuickVideoQuality.standard;
   bool _sendOnEnter = true; // false = send button, true = Enter sends
   bool _hasSeenIntro = false; // animated promo/intro shown once per device
   bool _showReadReceipts = true;
@@ -241,6 +248,8 @@ class AppSettings extends ChangeNotifier {
   bool get emojiSuggestionsShowCustomEmoji =>
       _emojiSuggestionsEnabled && _emojiSuggestionsMode != 'stickers';
   int get fontSize => _fontSize;
+  QuickVideoShape get quickVideoShape => _quickVideoShape;
+  QuickVideoQuality get quickVideoQuality => _quickVideoQuality;
   bool get sendOnEnter => _sendOnEnter;
   bool get hasSeenIntro => _hasSeenIntro;
   bool get showReadReceipts => _showReadReceipts;
@@ -447,6 +456,10 @@ class AppSettings extends ChangeNotifier {
     _emojiSuggestionsEnabled = _prefs.getBool(_keyEmojiSuggestionsEnabled) ?? true;
     _emojiSuggestionsMode = _prefs.getString(_keyEmojiSuggestionsMode) ?? 'both';
     _fontSize = (_prefs.getInt(_keyFontSize) ?? 1).clamp(0, 2);
+    _quickVideoShape =
+        QuickVideoShapeX.fromName(_prefs.getString(_keyQuickVideoShape));
+    _quickVideoQuality =
+        QuickVideoQualityX.fromName(_prefs.getString(_keyQuickVideoQuality));
     _sendOnEnter = _prefs.getBool(_keySendOnEnter) ?? true;
     _hasSeenIntro = _prefs.getBool(_keyHasSeenIntro) ?? false;
     _showReadReceipts = _prefs.getBool(_keyShowReadReceipts) ?? true;
@@ -627,6 +640,12 @@ class AppSettings extends ChangeNotifier {
       _notifVibration = m['notifVibration'] as bool? ?? _notifVibration;
       _locale = m['locale'] as String? ?? _locale;
       _fontSize = ((m['fontSize'] as num?)?.toInt() ?? _fontSize).clamp(0, 2);
+      _quickVideoShape = m.containsKey('quickVideoShape')
+          ? QuickVideoShapeX.fromName(m['quickVideoShape'] as String?)
+          : _quickVideoShape;
+      _quickVideoQuality = m.containsKey('quickVideoQuality')
+          ? QuickVideoQualityX.fromName(m['quickVideoQuality'] as String?)
+          : _quickVideoQuality;
       _sendOnEnter = m['sendOnEnter'] as bool? ?? _sendOnEnter;
       _showReadReceipts = m['showReadReceipts'] as bool? ?? _showReadReceipts;
       _showOnlineStatus = m['showOnlineStatus'] as bool? ?? _showOnlineStatus;
@@ -983,6 +1002,18 @@ class AppSettings extends ChangeNotifier {
   Future<void> setFontSize(int size) async {
     _fontSize = size.clamp(0, 2);
     await _runPrefsWrite((p) => p.setInt(_keyFontSize, _fontSize));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setQuickVideoShape(QuickVideoShape v) async {
+    _quickVideoShape = v;
+    await _runPrefsWrite((p) => p.setString(_keyQuickVideoShape, v.name));
+    _notifySettingsChanged();
+  }
+
+  Future<void> setQuickVideoQuality(QuickVideoQuality v) async {
+    _quickVideoQuality = v;
+    await _runPrefsWrite((p) => p.setString(_keyQuickVideoQuality, v.name));
     _notifySettingsChanged();
   }
 

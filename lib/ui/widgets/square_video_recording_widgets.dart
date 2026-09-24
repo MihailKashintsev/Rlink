@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../models/quick_video.dart';
+
 /// Размер превью «квадратика»: на широком окне ПК (в т.ч. в браузере) не
 /// растягивается на всю ширину.
 double squareVideoPreviewSize(BuildContext context) {
@@ -202,6 +204,15 @@ class SquareVideoFramedCameraView extends StatelessWidget {
   /// place of the live camera so the user can review without leaving).
   final VideoPlayerController? pausePreview;
 
+  /// Форма рамки/маски (по настройке «Быстрое видео»).
+  final QuickVideoShape shape;
+
+  /// Чип с таймером внутри кадра (в личных чатах таймер живёт в поле ввода).
+  final bool showTimer;
+
+  /// Цвет рамки в состоянии записи (по умолчанию красный).
+  final Color? recordingColor;
+
   const SquareVideoFramedCameraView({
     super.key,
     required this.controller,
@@ -217,184 +228,193 @@ class SquareVideoFramedCameraView extends StatelessWidget {
     this.onToggleRecordingPause,
     this.recordingPaused = false,
     this.pausePreview,
+    this.shape = QuickVideoShape.square,
+    this.showTimer = true,
+    this.recordingColor,
   });
 
   Color get _borderColor {
     if (!isRecording) return Colors.white24;
     if (recordingPaused || isPaused) return Colors.amber;
-    return Colors.red;
+    return recordingColor ?? Colors.red;
   }
 
   @override
   Widget build(BuildContext context) {
-    const radius = 20.0;
+    const border = 3.0;
+    final outer = squareSize + border * 2;
     return Center(
-      child: Container(
-        width: squareSize + 6,
-        height: squareSize + 6,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(radius + 3),
-          border: Border.all(color: _borderColor, width: 3),
-        ),
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
-          child: SizedBox(
-            width: squareSize,
-            height: squareSize,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // While paused with a ready preview, show the recorded-so-far
-                // (looping) instead of the live camera.
-                if (pausePreview != null &&
-                    pausePreview!.value.isInitialized)
-                  ClipRect(
-                    child: FittedBox(
-                      fit: BoxFit.cover,
-                      clipBehavior: Clip.hardEdge,
-                      child: SizedBox(
-                        width: pausePreview!.value.size.width,
-                        height: pausePreview!.value.size.height,
-                        child: VideoPlayer(pausePreview!),
-                      ),
-                    ),
-                  )
-                else
-                  _SquareVideoCameraPreviewInner(controller: controller),
-                if (isRecording)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: ValueListenableBuilder<double>(
-                      valueListenable: recordingSeconds,
-                      builder: (_, rec, __) {
-                        return LinearProgressIndicator(
-                          value: (rec / maxDuration).clamp(0.0, 1.0),
-                          minHeight: 3,
-                          color: Colors.red,
-                          backgroundColor: Colors.white24,
-                        );
-                      },
-                    ),
-                  ),
-                if (showFlipButton && onFlipCamera != null)
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: GestureDetector(
-                      onTap: isSwitchingCamera ? null : onFlipCamera,
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white24, width: 1),
-                        ),
-                        child: AnimatedRotation(
-                          turns: isSwitchingCamera ? 0.5 : 0,
-                          duration: const Duration(milliseconds: 300),
-                          child: const Icon(
-                            Icons.flip_camera_ios_rounded,
-                            color: Colors.white,
-                            size: 20,
+      child: SizedBox(
+        width: outer,
+        height: outer,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(border),
+              child: QuickVideoClip(
+                shape: shape,
+                child: SizedBox(
+                  width: squareSize,
+                  height: squareSize,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // While paused with a ready preview, show the
+                      // recorded-so-far (looping) instead of the live camera.
+                      if (pausePreview != null &&
+                          pausePreview!.value.isInitialized)
+                        ClipRect(
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            clipBehavior: Clip.hardEdge,
+                            child: SizedBox(
+                              width: pausePreview!.value.size.width,
+                              height: pausePreview!.value.size.height,
+                              child: VideoPlayer(pausePreview!),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
-                  ),
-                if (isRecording && onToggleRecordingPause != null)
-                  Positioned(
-                    bottom: 10,
-                    right: 10,
-                    child: Material(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        onTap: onToggleRecordingPause,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Icon(
-                            recordingPaused
-                                ? Icons.play_arrow_rounded
-                                : Icons.pause_rounded,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                if (isRecording)
-                  Positioned(
-                    bottom: 10,
-                    left: 12,
-                    child: ValueListenableBuilder<double>(
-                      valueListenable: recordingSeconds,
-                      builder: (_, rec, __) {
-                        final secs = rec.floor();
-                        final tenths = ((rec % 1) * 10).floor();
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (pulseController != null)
-                                AnimatedBuilder(
-                                  animation: pulseController!,
-                                  builder: (_, ___) => Container(
-                                    width: 7,
-                                    height: 7,
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withValues(
-                                        alpha: 0.5 +
-                                            pulseController!.value * 0.5,
-                                      ),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                )
-                              else
-                                Container(
-                                  width: 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withValues(alpha: 0.85),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '0:${secs.toString().padLeft(2, '0')}.$tenths',
-                                style: const TextStyle(
+                        )
+                      else
+                        _SquareVideoCameraPreviewInner(controller: controller),
+                      if (showFlipButton && onFlipCamera != null)
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: GestureDetector(
+                            onTap: isSwitchingCamera ? null : onFlipCamera,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(12),
+                                border:
+                                    Border.all(color: Colors.white24, width: 1),
+                              ),
+                              child: AnimatedRotation(
+                                turns: isSwitchingCamera ? 0.5 : 0,
+                                duration: const Duration(milliseconds: 300),
+                                child: const Icon(
+                                  Icons.flip_camera_ios_rounded,
                                   color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  fontFeatures: [FontFeature.tabularFigures()],
+                                  size: 20,
                                 ),
                               ),
-                            ],
+                            ),
                           ),
-                        );
-                      },
+                        ),
+                      if (isRecording && onToggleRecordingPause != null)
+                        Positioned(
+                          bottom: 10,
+                          right: 10,
+                          child: Material(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              onTap: onToggleRecordingPause,
+                              borderRadius: BorderRadius.circular(12),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Icon(
+                                  recordingPaused
+                                      ? Icons.play_arrow_rounded
+                                      : Icons.pause_rounded,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (isRecording && showTimer)
+                        Positioned(
+                          bottom: 10,
+                          left: 12,
+                          child: _recordingChip(),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Outline (+ progress along the perimeter while recording).
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ValueListenableBuilder<double>(
+                  valueListenable: recordingSeconds,
+                  builder: (_, rec, __) => CustomPaint(
+                    painter: QuickVideoOutlinePainter(
+                      shape: shape,
+                      color: _borderColor,
+                      trackColor: isRecording
+                          ? _borderColor.withValues(alpha: 0.25)
+                          : Colors.white24,
+                      width: border,
+                      progress: isRecording && maxDuration > 0
+                          ? (rec / maxDuration).clamp(0.0, 1.0)
+                          : null,
                     ),
                   ),
-              ],
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _recordingChip() {
+    return ValueListenableBuilder<double>(
+      valueListenable: recordingSeconds,
+      builder: (_, rec, __) {
+        final secs = rec.floor();
+        final tenths = ((rec % 1) * 10).floor();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.black54,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (pulseController != null)
+                AnimatedBuilder(
+                  animation: pulseController!,
+                  builder: (_, ___) => Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: Colors.red
+                          .withValues(alpha: 0.5 + pulseController!.value * 0.5),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.85),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              const SizedBox(width: 6),
+              Text(
+                '0:${secs.toString().padLeft(2, '0')}.$tenths',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

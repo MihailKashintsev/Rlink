@@ -22,6 +22,7 @@ import '../../models/contact.dart';
 import '../../models/shared_collab.dart';
 import '../../models/message_poll.dart';
 import '../../services/app_settings.dart';
+import '../../models/quick_video.dart';
 import '../../services/crypto_service.dart';
 import '../widgets/animated_transitions.dart';
 import '../../services/broadcast_outbox_service.dart';
@@ -881,10 +882,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     });
     try {
       final myId = _myId;
-      final path = await ImageService.instance.saveVideo(raw, isSquare: true);
+      final shape = AppSettings.instance.quickVideoShape;
+      final path = await ImageService.instance
+          .saveVideo(raw, isSquare: true, shape: shape);
       final bytes = await File(path).readAsBytes();
       final chunks = ImageService.instance.splitToBase64Chunks(bytes);
-      final msgId = const Uuid().v4();
+      final msgId = shape.tagId(const Uuid().v4());
       final now = DateTime.now().millisecondsSinceEpoch;
 
       await GossipRouter.instance.sendImgMeta(
@@ -3894,8 +3897,8 @@ class _GroupInlineVideoState extends State<_GroupInlineVideo> {
         child: SizedBox(
           width: 160,
           height: 160,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+          child: QuickVideoClip(
+            shape: QuickVideoShapeX.fromPath(widget.storedPath),
             child: Stack(
               fit: StackFit.expand,
               children: [

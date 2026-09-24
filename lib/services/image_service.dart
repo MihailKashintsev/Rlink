@@ -17,6 +17,8 @@ import '../utils/web_object_url.dart';
 import '../utils/web_file_store.dart';
 import '../utils/web_video_frames.dart';
 import '../utils/web_log.dart';
+import '../models/quick_video.dart';
+import 'app_settings.dart';
 import 'crypto_service.dart';
 
 /// Сколько байт сырых данных помещается в один img_chunk-пакет.
@@ -788,12 +790,16 @@ class ImageService {
   Future<String> saveVideo(
     String sourcePath, {
     bool isSquare = false,
+    QuickVideoShape shape = QuickVideoShape.square,
     Duration? trimStart,
     Duration? trimEnd,
     bool includeAudio = true,
   }) async {
     final dir = await _videosDir();
-    final suffix = isSquare ? '_sq' : '';
+    // Quick videos carry their shape in the file name (`…_shstar_sq.mp4`).
+    final suffix = isSquare
+        ? (shape == QuickVideoShape.square ? '_sq' : '_sh${shape.name}_sq')
+        : '';
     final name = '${_uuid.v4()}$suffix.mp4';
     final targetPath = p.join(dir.path, name);
 
@@ -835,7 +841,9 @@ class ImageService {
     try {
       final mediaInfo = await VideoCompress.compressVideo(
         inputForCompress,
-        quality: VideoQuality.MediumQuality,
+        quality: isSquare
+            ? AppSettings.instance.quickVideoQuality.compress
+            : VideoQuality.MediumQuality,
         includeAudio: includeAudio,
         deleteOrigin: false,
         startTime: startSec,

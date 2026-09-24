@@ -71,6 +71,8 @@ import '../widgets/reactions.dart';
 import '../rlink_nav_routes.dart';
 import 'qr_contact_screen.dart' show QrScanScreen;
 import 'help_center_screen.dart';
+import 'quick_video_settings_screen.dart';
+import '../../models/quick_video.dart';
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared top-level helpers
@@ -3212,6 +3214,17 @@ class _MessagingPageState extends State<_MessagingPage> {
             ),
             value: settings.emojiSuggestionsEnabled,
             onChanged: (v) => settings.setEmojiSuggestionsEnabled(v),
+          ),
+          ListTile(
+            leading: Icon(Icons.motion_photos_on_rounded, color: cs.primary),
+            title: Text(AppL10n.t('Быстрое видео')),
+            subtitle: Text(
+              '${settings.quickVideoShape.label} · ${settings.quickVideoQuality.label}',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => const QuickVideoSettingsScreen())),
           ),
           if (settings.emojiSuggestionsEnabled) ...[
             Padding(

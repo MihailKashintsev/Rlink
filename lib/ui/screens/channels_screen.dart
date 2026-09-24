@@ -24,6 +24,7 @@ import '../../utils/channel_mentions.dart';
 import '../../utils/external_message_share.dart';
 import '../../utils/rlink_deep_link.dart';
 import '../../services/app_settings.dart';
+import '../../models/quick_video.dart';
 import '../widgets/premium_gate.dart';
 import '../../services/broadcast_outbox_service.dart';
 import '../../services/channel_backup_service.dart';
@@ -1242,7 +1243,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       _sendProgress = 0.0;
     });
     try {
-      final postId = _uuid.v4();
+      final shape = AppSettings.instance.quickVideoShape;
+      final postId = shape.tagId(_uuid.v4());
       final Uint8List bytes;
       final String storedPath;
       if (kIsWeb) {
@@ -1259,7 +1261,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
             )) ??
             raw;
       } else {
-        storedPath = await ImageService.instance.saveVideo(raw, isSquare: true);
+        storedPath = await ImageService.instance
+            .saveVideo(raw, isSquare: true, shape: shape);
         bytes = await File(storedPath).readAsBytes();
       }
       final chunks = ImageService.instance.splitToBase64Chunks(bytes);
@@ -3855,10 +3858,12 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       _commentSendProgress = 0;
     });
     try {
-      final path = await ImageService.instance.saveVideo(raw, isSquare: true);
+      final shape = AppSettings.instance.quickVideoShape;
+      final path = await ImageService.instance
+          .saveVideo(raw, isSquare: true, shape: shape);
       final bytes = await File(path).readAsBytes();
       final chunks = ImageService.instance.splitToBase64Chunks(bytes);
-      final commentId = const Uuid().v4();
+      final commentId = shape.tagId(const Uuid().v4());
       await _runCommentChunks(
         commentId: commentId,
         chunks: chunks,
@@ -4822,8 +4827,8 @@ class _ChannelInlineVideoState extends State<_ChannelInlineVideo> {
         child: SizedBox(
           width: s,
           height: s,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+          child: QuickVideoClip(
+            shape: QuickVideoShapeX.fromPath(widget.storedPath),
             child: Stack(
               fit: StackFit.expand,
               children: [

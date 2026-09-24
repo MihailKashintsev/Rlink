@@ -665,14 +665,18 @@ class RelayService with WidgetsBindingObserver {
     String? connectedUrl;
     Exception? lastConnectError;
     for (final url in _urlsToTry) {
+      WebSocketChannel? pending;
       try {
         if (kIsWeb) {
           final httpBase = url.replaceFirst('wss://', 'https://');
           await warmupRelayWebSession(httpBase);
         }
         debugPrint('[RLINK][Relay] Connecting to $url');
-        final ws = WebSocketChannel.connect(Uri.parse(url));
-        await ws.ready;
+        final ws = pending = WebSocketChannel.connect(Uri.parse(url));
+        // A network that silently drops the TLS handshake (DPI / bad VPN exit)
+        // never errors: without a timeout the state stayed "connecting" for
+        // minutes and no retry ran. Fail fast → backoff reconnect.
+        await ws.ready.timeout(const Duration(seconds: 12));
         if (connectEpoch != _connectEpoch) {
           try {
             await ws.sink.close(_kCloseNormal, 'superseded_connect');
@@ -684,6 +688,10 @@ class RelayService with WidgetsBindingObserver {
         connectedUrl = url;
         break;
       } catch (e) {
+        // Not awaited: closing a socket that never connected can itself hang.
+        try {
+          pending?.sink.close(_kCloseNormal, 'connect_failed').ignore();
+        } catch (_) {}
         try {
           await _channel?.sink.close(_kCloseNormal, 'connect_failed');
         } catch (_) {}

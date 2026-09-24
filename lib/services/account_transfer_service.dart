@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_message.dart';
+import '../models/quick_video.dart';
 import '../models/channel.dart';
 import '../models/contact.dart';
 import '../models/group.dart';
@@ -820,6 +821,8 @@ class AccountTransferService {
       'compactMode': s.compactMode,
       'accentColorIndex': s.accentColorIndex,
       'fontSize': s.fontSize,
+      'quickVideoShape': s.quickVideoShape.name,
+      'quickVideoQuality': s.quickVideoQuality.name,
       'locale': s.locale,
       'sendOnEnter': s.sendOnEnter,
       'notificationsEnabled': s.notificationsEnabled,
@@ -858,6 +861,10 @@ class AccountTransferService {
     await ifPresent<bool>('compactMode', s.setCompactMode);
     await ifPresent<int>('accentColorIndex', s.setAccentColor);
     await ifPresent<int>('fontSize', s.setFontSize);
+    await ifPresent<String>('quickVideoShape',
+        (v) => s.setQuickVideoShape(QuickVideoShapeX.fromName(v)));
+    await ifPresent<String>('quickVideoQuality',
+        (v) => s.setQuickVideoQuality(QuickVideoQualityX.fromName(v)));
     await ifPresent<String>('locale', s.setLocale);
     await ifPresent<bool>('sendOnEnter', s.setSendOnEnter);
     await ifPresent<bool>('notificationsEnabled', s.setNotificationsEnabled);
