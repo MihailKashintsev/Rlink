@@ -632,98 +632,114 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _audioControls() {
-    // Horizontally scrollable: with the FX button this row can run past a
-    // narrow phone's width, and scrolling is a much smaller regression than
-    // an overflow clip would be.
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _CallButton(
-            icon: _micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
-            label: _micOn ? AppL10n.t('Микрофон') : AppL10n.t('Без звука'),
-            active: !_micOn,
-            onTap: () async {
-              _micOn = !_micOn;
-              await CallService.instance.toggleMic(_micOn);
-              if (mounted) setState(() {});
-            },
-          ),
-          const SizedBox(width: 18),
-          _CallButton(
-            icon: Icons.theater_comedy_rounded,
-            label: AppL10n.t('Эффект'),
-            onTap: _openFxSheet,
-          ),
-          const SizedBox(width: 18),
-          if (ScreenShareHelper.supported) ...[
-            ValueListenableBuilder<bool>(
-              valueListenable: CallService.instance.screenSharing,
-              builder: (_, sharing, __) => _CallButton(
-                icon: sharing
-                    ? Icons.stop_screen_share_rounded
-                    : Icons.screen_share_rounded,
-                label: sharing ? AppL10n.t('Стоп') : AppL10n.t('Экран'),
-                active: sharing,
-                onTap: () async {
-                  if (sharing) {
-                    await CallService.instance.stopScreenShare();
-                  } else if (!await CallService.instance.startScreenShare() &&
-                      mounted) {
-                    _screenShareFailedSnack();
-                  }
-                },
-              ),
+    final screenShare = ScreenShareHelper.supported;
+    return LayoutBuilder(builder: (context, box) {
+      // Buttons shrink to fit ONE row on any width and stay centred (a scroll
+      // view here left-aligned the row on wide desktop windows).
+      final n = screenShare ? 6 : 5;
+      final gap = box.maxWidth >= 520 ? 18.0 : 6.0;
+      final size =
+          ((box.maxWidth - 24 - gap * (n - 1)) / n).clamp(44.0, 64.0);
+      final buttons = <Widget>[
+        _CallButton(
+          size: size,
+          icon: _micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
+          label: _micOn ? AppL10n.t('Микрофон') : AppL10n.t('Без звука'),
+          active: !_micOn,
+          onTap: () async {
+            _micOn = !_micOn;
+            await CallService.instance.toggleMic(_micOn);
+            if (mounted) setState(() {});
+          },
+        ),
+        _CallButton(
+          size: size,
+          icon: Icons.theater_comedy_rounded,
+          label: AppL10n.t('Эффект'),
+          onTap: _openFxSheet,
+        ),
+        if (screenShare)
+          ValueListenableBuilder<bool>(
+            valueListenable: CallService.instance.screenSharing,
+            builder: (_, sharing, __) => _CallButton(
+              size: size,
+              icon: sharing
+                  ? Icons.stop_screen_share_rounded
+                  : Icons.screen_share_rounded,
+              label: sharing ? AppL10n.t('Стоп') : AppL10n.t('Экран'),
+              active: sharing,
+              onTap: () async {
+                if (sharing) {
+                  await CallService.instance.stopScreenShare();
+                } else if (!await CallService.instance.startScreenShare() &&
+                    mounted) {
+                  _screenShareFailedSnack();
+                }
+              },
             ),
-            const SizedBox(width: 18),
-          ],
-          ValueListenableBuilder<bool>(
-            valueListenable: CallService.instance.speakerOn,
-            builder: (_, speaker, __) {
-              return _CallButton(
-                icon: speaker
-                    ? Icons.volume_up_rounded
-                    : Icons.volume_down_rounded,
-                label: AppL10n.t('Динамик'),
-                active: speaker,
-                onTap: () async {
-                  await CallService.instance.setSpeakerphone(!speaker);
-                  await _syncProximityMonitoring();
-                },
-              );
-            },
           ),
-          const SizedBox(width: 18),
-          ValueListenableBuilder<bool>(
-            valueListenable: CallService.instance.localRecording,
-            builder: (_, rec, __) {
-              return _CallButton(
-                icon: rec
-                    ? Icons.stop_rounded
-                    : Icons.fiber_manual_record_rounded,
-                label: rec ? AppL10n.t('Стоп') : AppL10n.t('Запись'),
-                active: rec,
-                activeColor: Colors.red,
-                onTap: () async {
-                  await CallService.instance.setCallRecording(!rec);
-                  if (mounted) setState(() {});
-                },
-              );
-            },
+        ValueListenableBuilder<bool>(
+          valueListenable: CallService.instance.speakerOn,
+          builder: (_, speaker, __) {
+            return _CallButton(
+              size: size,
+              icon: speaker
+                  ? Icons.volume_up_rounded
+                  : Icons.volume_down_rounded,
+              label: AppL10n.t('Динамик'),
+              active: speaker,
+              onTap: () async {
+                await CallService.instance.setSpeakerphone(!speaker);
+                await _syncProximityMonitoring();
+              },
+            );
+          },
+        ),
+        ValueListenableBuilder<bool>(
+          valueListenable: CallService.instance.localRecording,
+          builder: (_, rec, __) {
+            return _CallButton(
+              size: size,
+              icon:
+                  rec ? Icons.stop_rounded : Icons.fiber_manual_record_rounded,
+              label: rec ? AppL10n.t('Стоп') : AppL10n.t('Запись'),
+              active: rec,
+              activeColor: Colors.red,
+              onTap: () async {
+                await CallService.instance.setCallRecording(!rec);
+                if (mounted) setState(() {});
+              },
+            );
+          },
+        ),
+        _CallButton(
+          size: size,
+          icon: Icons.call_end_rounded,
+          label: AppL10n.t('Завершить'),
+          onTap: _end,
+          background: Colors.red,
+          foreground: Colors.white,
+        ),
+      ];
+      return Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < buttons.length; i++) ...[
+                  if (i > 0) SizedBox(width: gap),
+                  buttons[i],
+                ],
+              ],
+            ),
           ),
-          const SizedBox(width: 18),
-          _CallButton(
-            icon: Icons.call_end_rounded,
-            label: AppL10n.t('Завершить'),
-            onTap: _end,
-            background: Colors.red,
-            foreground: Colors.white,
-          ),
-        ],
-      ),
-    );
+        ),
+      );
+    });
   }
 
   Widget _buildVideoCallUi(BuildContext context) {
@@ -808,11 +824,10 @@ class _CallScreenState extends State<CallScreen>
               right: 0,
               bottom: 22,
               child: Center(
-                child: SingleChildScrollView(
-                  // Six controls in a fixed-width pill risks overflow on a
-                  // narrow phone — scrolling degrades gracefully, an overflow
-                  // clip doesn't.
-                  scrollDirection: Axis.horizontal,
+                child: FittedBox(
+                  // Controls shrink to fit a narrow phone in one row (a scroll
+                  // view left-aligned the pill on wide desktop windows).
+                  fit: BoxFit.scaleDown,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 12),
@@ -968,8 +983,10 @@ class _CallButton extends StatefulWidget {
   final Color? activeColor;
   final Color? background;
   final Color? foreground;
+  final double size;
 
   const _CallButton({
+    this.size = 60,
     required this.icon,
     required this.label,
     required this.onTap,
@@ -1009,21 +1026,22 @@ class _CallButtonState extends State<_CallButton> {
             duration: const Duration(milliseconds: 120),
             curve: Curves.easeOut,
             child: Container(
-              width: 60,
-              height: 60,
+              width: widget.size,
+              height: widget.size,
               decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-              child: Icon(widget.icon, color: fg, size: 26),
+              child: Icon(widget.icon, color: fg, size: widget.size * 0.43),
             ),
           ),
           const SizedBox(height: 8),
           SizedBox(
-            width: 72,
-            child: Text(
-              widget.label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            width: widget.size + 12,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                widget.label,
+                maxLines: 1,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
             ),
           ),
         ],

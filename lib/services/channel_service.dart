@@ -1055,6 +1055,14 @@ class ChannelService {
     return false;
   }
 
+  /// True if our stored hand-over certificates prove [from] handed the channel
+  /// over (directly or via a chain) to [to].
+  Future<bool> ownerHandedOver(String channelId, String from, String to) async {
+    await _ensureOwnerChains();
+    return _ownerPathValid(
+        channelId, from, to, _ownerChains[channelId] ?? const []);
+  }
+
   Future<void> _rememberOwnerChain(
       String channelId, List<dynamic> incoming) async {
     await _ensureOwnerChains();
@@ -1411,7 +1419,7 @@ class ChannelService {
   }
 
   /// Передача владения каналом (только текущий [adminId]).
-  /// [newAdminId] должен быть в подписчиках. Бывший владелец остаётся в подписчиках.
+  /// [newAdminId] должен быть в подписчиках. Бывший владелец становится обычным подписчиком.
   Future<Channel?> transferOwnership({
     required String channelId,
     required String newAdminId,
@@ -1436,11 +1444,11 @@ class ChannelService {
     mods.remove(newAdminId);
     mods.remove(currentAdminId);
 
-    // The previous owner stays on as a co-admin (link-admin) so they keep
-    // posting rights — "передал владение → стал дочерним админом".
+    // The previous owner becomes a plain subscriber: no posting rights left
+    // (the new owner can re-appoint them as a moderator if wanted).
     var links = List<String>.from(ch.linkAdminIds);
     links.remove(newAdminId);
-    if (!links.contains(currentAdminId)) links.add(currentAdminId);
+    links.remove(currentAdminId);
 
     final staffLabels = Map<String, String>.from(ch.staffLabels);
     staffLabels.remove(newAdminId);
