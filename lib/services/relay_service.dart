@@ -104,15 +104,18 @@ class RelayService with WidgetsBindingObserver {
   /// Default public relay server — always tried, so a broken custom relay
   /// (see [AppSettings.relayServerUrl]) degrades to "slower to connect",
   /// never "no connectivity at all".
-  static const defaultServerUrl = 'wss://relay.rendergames.online';
+  static const defaultServerUrl = 'wss://185.244.172.90.nip.io';
 
-  /// Same server under its old name. Some networks stall the TLS handshake for
-  /// `*.nip.io` names (SNI filtering), others may do so for the new domain, so
-  /// both are raced on connect and old app versions keep working.
-  static const legacyServerUrl = 'wss://185.244.172.90.nip.io';
+  /// The same server under its own domain. Some networks stall the TLS
+  /// handshake for `*.nip.io` names (SNI filtering), so both names are raced on
+  /// connect. NOT live until the A record + certificate exist (see
+  /// relay_server/deploy/nginx_domain.sh); until then its DNS lookup just fails
+  /// fast and the connection goes through [defaultServerUrl]. Once it is live,
+  /// swap the two constants so HTTP APIs (translate, premium, …) use it too.
+  static const alternateServerUrl = 'wss://relay.rendergames.online';
   static const List<String> fallbackServerUrls = <String>[
     defaultServerUrl,
-    legacyServerUrl,
+    alternateServerUrl,
   ];
 
   /// True for any hostname of the official relay (it is one server).
