@@ -3027,27 +3027,20 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               ),
             ),
           if (_channel.description != null)
-            // Pinned-bar look (Telegram): rounded card with an accent edge, in the
-            // same centred column as the feed.
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh.withValues(alpha: 0.75),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border(
-                        left: BorderSide(color: cs.primary, width: 3)),
-                  ),
-                  child: Text(_channel.description!,
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: cs.onSurface.withValues(alpha: 0.75))),
-                ),
+            // Pinned-bar look (Telegram): full-width rounded card with an accent edge.
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHigh.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(14),
+                border: Border(left: BorderSide(color: cs.primary, width: 3)),
               ),
+              child: Text(_channel.description!,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: cs.onSurface.withValues(alpha: 0.75))),
             ),
           Expanded(
             child: _visiblePosts.isEmpty
@@ -3055,41 +3048,37 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                 : Stack(
                     fit: StackFit.expand,
                     children: [
-                      // Keep the feed a comfortable reading width — narrow,
-                      // centered column on desktop; full-width on phone.
-                      Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 680),
-                          child: ListView.builder(
-                            controller: _feedScrollController,
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            cacheExtent: 1200,
-                            addRepaintBoundaries: false,
-                            itemCount: _visiblePosts.length,
-                            itemBuilder: (_, i) {
-                              final post = _visiblePosts[i];
-                              final showComments = _channel.commentsEnabled ||
-                                  (post.authorId == _myId &&
-                                      _channel.canPost(_myId));
-                              return RepaintBoundary(
-                                key: ValueKey('post_${post.id}'),
-                                child: _PostCard(
-                                  key: ValueKey('postcard_${post.id}'),
-                                  post: post,
-                                  isAdmin: _isAdmin,
-                                  commentsEnabled: showComments,
-                                  nickFor: _nickFor,
-                                  onDelete: _channel.canPost(_myId)
-                                      ? () => _deletePost(post.id)
-                                      : null,
-                                  channelId: _channel.id,
-                                  channelName: _channel.name,
-                                  channelAdminId: _channel.adminId,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
+                      // Bubbles hug the LEFT edge like Telegram (each post caps its
+                      // own width); the list spans the full width so the
+                      // scrollbar sits at the window edge.
+                      ListView.builder(
+                        controller: _feedScrollController,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        cacheExtent: 1200,
+                        addRepaintBoundaries: false,
+                        itemCount: _visiblePosts.length,
+                        itemBuilder: (_, i) {
+                          final post = _visiblePosts[i];
+                          final showComments = _channel.commentsEnabled ||
+                              (post.authorId == _myId &&
+                                  _channel.canPost(_myId));
+                          return RepaintBoundary(
+                            key: ValueKey('post_${post.id}'),
+                            child: _PostCard(
+                              key: ValueKey('postcard_${post.id}'),
+                              post: post,
+                              isAdmin: _isAdmin,
+                              commentsEnabled: showComments,
+                              nickFor: _nickFor,
+                              onDelete: _channel.canPost(_myId)
+                                  ? () => _deletePost(post.id)
+                                  : null,
+                              channelId: _channel.id,
+                              channelName: _channel.name,
+                              channelAdminId: _channel.adminId,
+                            ),
+                          );
+                        },
                       ),
                       ValueListenableBuilder<bool>(
                         valueListenable: _showScrollToBottomFab,
