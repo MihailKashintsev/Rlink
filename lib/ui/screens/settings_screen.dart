@@ -72,6 +72,7 @@ import '../rlink_nav_routes.dart';
 import 'qr_contact_screen.dart' show QrScanScreen;
 import 'help_center_screen.dart';
 import 'quick_video_settings_screen.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../models/quick_video.dart';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -3948,7 +3949,13 @@ class _NetworkPageState extends State<_NetworkPage> {
                 final relayState = RelayService.instance.state.value.name;
                 final online = RelayService.instance.onlineCount.value;
                 final err = RelayService.instance.lastError.value ?? '-';
+                String ver = '-';
+                try {
+                  final info = await PackageInfo.fromPlatform();
+                  ver = '${info.version}+${info.buildNumber}';
+                } catch (_) {}
                 final diag = [
+                  'app=$ver${kIsWeb ? ' (web)' : ''}',
                   'pk=${pk.isEmpty ? 'empty' : pk}',
                   'relay=$relayState',
                   'online=$online',

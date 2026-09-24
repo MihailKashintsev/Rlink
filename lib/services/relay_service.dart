@@ -745,8 +745,9 @@ class RelayService with WidgetsBindingObserver {
     lastError.value = null;
 
     String? connectedUrl;
-    Exception? lastConnectError;
-    final won = await _openFirstReady(_urlsToTry, (e) => lastConnectError = e);
+    final connectErrors = <String>[];
+    final won = await _openFirstReady(
+        _urlsToTry, (e) => connectErrors.add(e.toString()));
     if (connectEpoch != _connectEpoch) {
       try {
         won?.ws.sink.close(_kCloseNormal, 'superseded_connect').ignore();
@@ -759,8 +760,11 @@ class RelayService with WidgetsBindingObserver {
       connectedUrl = won.url;
     }
     if (connectedUrl == null || _channel == null) {
-      final msg = (lastConnectError ?? Exception('No relay endpoint available'))
-          .toString();
+      // Every attempted address with its own error (not just the last one), so
+      // the diagnostics show which names fail and how.
+      final msg = connectErrors.isEmpty
+          ? Exception('No relay endpoint available').toString()
+          : connectErrors.join(' | ');
       debugPrint('[RLINK][Relay] Connection failed: $msg');
       lastError.value = msg;
       state.value = RelayState.disconnected;
