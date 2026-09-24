@@ -788,6 +788,36 @@ class ImageService {
     }
   }
 
+  /// Quick videos ("кружки") are drawn as a shape with `BoxFit.cover`, so the
+  /// file needs no square crop, and a short clip is already small: skipping the
+  /// native crop + re-encode saves seconds before the send can even start.
+  /// Clips above [maxRawBytes] (long / high-quality) still go through
+  /// [saveVideo] to keep the upload reasonable.
+  Future<String> saveQuickVideoFast(
+    String sourcePath, {
+    QuickVideoShape shape = QuickVideoShape.square,
+    int maxRawBytes = 8 * 1024 * 1024,
+  }) async {
+    final src = File(sourcePath);
+    if (await src.length() > maxRawBytes) {
+      return saveVideo(sourcePath, isSquare: true, shape: shape);
+    }
+    final dir = await _videosDir();
+    final suffix =
+        shape == QuickVideoShape.square ? '_sq' : '_sh${shape.name}_sq';
+    final target = p.join(dir.path, '${_uuid.v4()}$suffix.mp4');
+    try {
+      await src.rename(target);
+    } catch (_) {
+      // rename fails across volumes (temp dir → app dir): copy + drop the temp.
+      await src.copy(target);
+      try {
+        await src.delete();
+      } catch (_) {}
+    }
+    return target;
+  }
+
   Future<String> saveVideo(
     String sourcePath, {
     bool isSquare = false,

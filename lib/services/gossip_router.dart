@@ -493,6 +493,9 @@ class GossipRouter {
   Future<void> Function(Map<String, dynamic> payload)? onDmPin;
   Future<void> Function(Map<String, dynamic> payload)? onDmRead;
 
+  /// A recipient played our quick video ([sendQuickVideoSeen]).
+  Future<void> Function(Map<String, dynamic> payload)? onQuickVideoSeen;
+
   /// Таймер исчезающих сообщений в личном чате: { sec, from, r? }
   Future<void> Function(Map<String, dynamic> payload)? onDmEphemeral;
 
@@ -780,6 +783,30 @@ class GossipRouter {
       recipientId: recipientId,
       payload: {
         'ts': readTs,
+        'from': fromId,
+        if (rid8 != null) 'r': rid8,
+      },
+    );
+    _markSeen(packet.id);
+    await _forward(packet);
+  }
+
+  /// "I played your quick video [messageId] with sound" — clears the unwatched
+  /// dot on the sender's side. Directed at the sender only.
+  Future<void> sendQuickVideoSeen({
+    required String recipientId,
+    required String messageId,
+    required String fromId,
+  }) async {
+    final rid8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : null;
+    final packet = GossipPacket(
+      id: _uuid.v4(),
+      type: 'qv_seen',
+      ttl: 5,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      recipientId: recipientId,
+      payload: {
+        'mid': messageId,
         'from': fromId,
         if (rid8 != null) 'r': rid8,
       },
@@ -2133,6 +2160,11 @@ class GossipRouter {
         if (handler != null) {
           await handler(packet.payload);
         }
+        return;
+      }
+
+      if (packet.type == 'qv_seen') {
+        await onQuickVideoSeen?.call(packet.payload);
         return;
       }
 

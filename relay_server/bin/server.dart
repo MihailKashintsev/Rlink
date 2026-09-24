@@ -1996,6 +1996,18 @@ Future<int> _sendWebPush(
   return resp.statusCode;
 }
 
+/// Message ids of chunked `blob` transfers that already produced a push.
+final Set<String> _pushedBlobMsgIds = <String>{};
+
+/// A media transfer is hundreds of `blob` messages. Only its first chunk (and
+/// only once per msgId — a client resend repeats chunk 0) may notify.
+bool _shouldPushForBlob(Map<String, dynamic> msg, String relayMsgId) {
+  final cIdx = msg['cIdx'];
+  if (cIdx is int && cIdx != 0) return false;
+  if (_pushedBlobMsgIds.length > 5000) _pushedBlobMsgIds.clear();
+  return _pushedBlobMsgIds.add(relayMsgId);
+}
+
 Future<void> _notifyRecipientQueued({
   required String recipientKey,
   required String senderKey,
@@ -2029,6 +2041,9 @@ Future<void> _notifyRecipientQueued({
   _pendingCooldownPush.remove(recipientKey)?.cancel();
   final subs = _pushSubscriptions[recipientKey];
   if (subs == null || subs.isEmpty) return;
+  // Mark NOW, before any await: otherwise a burst of queued packets all pass
+  // the cooldown check above while the first push is still in flight.
+  _lastPushForRecipient[recipientKey] = now;
   final body = switch (kind) {
     'call' => 'Входящий звонок',
     'account_transfer' => 'Кто-то пытается перенести ваш аккаунт',
@@ -2635,7 +2650,7 @@ void _handleBlob(_User sender, Map<String, dynamic> msg) {
 
   final recipient = _users[routeKey];
   if (recipient == null) {
-    if (!noPush) {
+    if (!noPush && _shouldPushForBlob(msg, relayMsgId)) {
       unawaited(_notifyRecipientQueued(
         recipientKey: routeKey,
         senderKey: sender.publicKey,

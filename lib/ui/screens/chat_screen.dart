@@ -149,6 +149,7 @@ import '../widgets/wheel_time_picker.dart';
 import '../widgets/settings_profile_header.dart' show ProfileCard;
 import '../widgets/composer_input_bar.dart';
 import '../widgets/quick_video_recording_overlay.dart';
+import '../../services/quick_video_seen_service.dart';
 import '../../models/quick_video.dart';
 import '../widgets/message_actions_overlay.dart';
 import '../mention_nav.dart';
@@ -188,7 +189,8 @@ bool isGroupablePhotoPair(ChatMessage a, ChatMessage b) {
 Future<Uint8List?> readBytesFromStoredPath(String path) async {
   if (kIsWeb) {
     if (isWebStoredFile(path)) return readWebStoredFile(path.split('#').first);
-    if (path.startsWith('data:')) return _ChatScreenState._bytesFromDataUri(path);
+    if (path.startsWith('data:'))
+      return _ChatScreenState._bytesFromDataUri(path);
     return null;
   }
   try {
@@ -512,7 +514,7 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Relay chunk size for large media — 500 KB raw → ~667 KB after base64.
   /// Safely under relay server's 10 MB limit. Faster transfers for large files.
   static const _kRelayChunkBytes = 500 * 1024;
-  static const _kWebRelayChunkBytes = 48 * 1024;
+  static const _kWebRelayChunkBytes = 96 * 1024;
 
   static int _relayChunkBytesFor(int size) =>
       kIsWeb ? _kWebRelayChunkBytes : _kRelayChunkBytes;
@@ -536,7 +538,8 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              AppL10n.t('Нет ключа шифрования получателя. Откройте чат, дождитесь online/presence и повторите.'),
+              AppL10n.t(
+                  'Нет ключа шифрования получателя. Откройте чат, дождитесь online/presence и повторите.'),
             ),
           ),
         );
@@ -790,7 +793,7 @@ class _ChatScreenState extends State<ChatScreen> {
           // Gentle pacing: mobile browsers and proxies are more stable with
           // smaller, less bursty WebSocket frames.
           await Future.delayed(
-            const Duration(milliseconds: kIsWeb ? 40 : 50),
+            const Duration(milliseconds: kIsWeb ? 20 : 50),
           );
         }
         if (RelayService.instance.connectionGeneration == generation) break;
@@ -1017,19 +1020,20 @@ class _ChatScreenState extends State<ChatScreen> {
       messenger?.hideCurrentMaterialBanner();
       messenger?.showMaterialBanner(
         MaterialBanner(
-          content: Text(
-              AppL10n.f('Ключ шифрования у {0} изменился с момента последней проверки. Это может означать, что собеседник переустановил приложение — или что переписку перехватывают.', [widget.peerNickname])),
+          content: Text(AppL10n.f(
+              'Ключ шифрования у {0} изменился с момента последней проверки. Это может означать, что собеседник переустановил приложение — или что переписку перехватывают.',
+              [widget.peerNickname])),
           leading: const Icon(Icons.warning_amber_rounded, color: Colors.red),
           actions: [
             TextButton(
               onPressed: () async {
                 messenger.hideCurrentMaterialBanner();
-                final c =
-                    await ChatStorageService.instance.getContact(_resolvedPeerId);
-                final x = RelayService.instance
-                        .getPeerX25519Key(_resolvedPeerId) ??
-                    c?.x25519Key ??
-                    '';
+                final c = await ChatStorageService.instance
+                    .getContact(_resolvedPeerId);
+                final x =
+                    RelayService.instance.getPeerX25519Key(_resolvedPeerId) ??
+                        c?.x25519Key ??
+                        '';
                 if (!mounted) return;
                 await Navigator.push<void>(
                   context,
@@ -1158,8 +1162,8 @@ class _ChatScreenState extends State<ChatScreen> {
         messenger?.hideCurrentMaterialBanner();
         messenger?.showMaterialBanner(
           MaterialBanner(
-            content: Text(
-                AppL10n.t('Этот бот отвечает через интернет — в режиме «только Bluetooth» ответа не будет.')),
+            content: Text(AppL10n.t(
+                'Этот бот отвечает через интернет — в режиме «только Bluetooth» ответа не будет.')),
             leading: const Icon(Icons.wifi_off_rounded, color: Colors.amber),
             actions: [
               TextButton(
@@ -1316,8 +1320,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (lastSeen == null) return AppL10n.t('не в сети');
     final diff = DateTime.now().difference(lastSeen);
     if (diff.inSeconds < 60) return AppL10n.t('был(а) только что');
-    if (diff.inMinutes < 60) return AppL10n.f('был(а) {0} мин назад', [diff.inMinutes]);
-    if (diff.inHours < 24) return AppL10n.f('был(а) {0} ч назад', [diff.inHours]);
+    if (diff.inMinutes < 60)
+      return AppL10n.f('был(а) {0} мин назад', [diff.inMinutes]);
+    if (diff.inHours < 24)
+      return AppL10n.f('был(а) {0} ч назад', [diff.inHours]);
     if (diff.inDays < 7) return AppL10n.f('был(а) {0} дн назад', [diff.inDays]);
     return AppL10n.t('не в сети');
   }
@@ -1483,8 +1489,8 @@ class _ChatScreenState extends State<ChatScreen> {
       // explanation for why the call can't start.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-              AppL10n.t('Звонки недоступны в режиме «только Bluetooth» — нужен интернет. Переключите режим связи в Настройки → Сеть.')),
+          content: Text(AppL10n.t(
+              'Звонки недоступны в режиме «только Bluetooth» — нужен интернет. Переключите режим связи в Настройки → Сеть.')),
         ),
       );
       return;
@@ -1506,9 +1512,11 @@ class _ChatScreenState extends State<ChatScreen> {
       if (reason == 'peer_offline') {
         msg = AppL10n.t('Собеседник офлайн в relay. Звонок недоступен.');
       } else if (reason == 'invalid_recipient') {
-        msg = AppL10n.t('Некорректный peerId. Откройте чат из контактов заново.');
+        msg =
+            AppL10n.t('Некорректный peerId. Откройте чат из контактов заново.');
       } else if (reason == 'media_init_failed') {
-        msg = AppL10n.t('Не удалось запустить камеру/микрофон. Проверь разрешения iOS.');
+        msg = AppL10n.t(
+            'Не удалось запустить камеру/микрофон. Проверь разрешения iOS.');
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1685,7 +1693,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (VoiceService.instance.currentlyPlaying.value == path) {
         await VoiceService.instance.stopPlayback();
       } else {
-        await VoiceService.instance.play(path, title: AppL10n.t('Предпросмотр'));
+        await VoiceService.instance
+            .play(path, title: AppL10n.t('Предпросмотр'));
       }
     } catch (e) {
       debugPrint('[Voice] preview paused recording failed: $e');
@@ -2335,8 +2344,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (cam == null || !cam.value.isInitialized) return;
     if (cam.description.lensDirection != CameraLensDirection.back) return;
     try {
-      await cam.setFlashMode(
-          _dmHoldFlashOn.value ? FlashMode.torch : FlashMode.off);
+      await cam
+          .setFlashMode(_dmHoldFlashOn.value ? FlashMode.torch : FlashMode.off);
     } catch (_) {}
   }
 
@@ -2515,11 +2524,10 @@ class _ChatScreenState extends State<ChatScreen> {
       final msgId = shape.tagId(_uuid.v4());
       final String path;
       if (!kIsWeb) {
-        path = await ImageService.instance.saveVideo(
-          rawVideoPath,
-          isSquare: true,
-          shape: shape,
-        );
+        // Fast path: no crop / re-encode for normal clips (the circle already
+        // crops when drawing) — this was seconds of waiting before the send.
+        path = await ImageService.instance
+            .saveQuickVideoFast(rawVideoPath, shape: shape);
       } else if (_isInlineWebUri(rawVideoPath) &&
           !rawVideoPath.startsWith('opfs://rlink/')) {
         // The recorder hands back a session-only blob:/data: URL; it dies on
@@ -2554,9 +2562,27 @@ class _ChatScreenState extends State<ChatScreen> {
           ? _resolvedPeerId
           : widget.peerId;
 
-      var wasQueued = false;
+      final viaQueue = !_savedMessagesLocalOnly &&
+          RelayService.instance.isConnected &&
+          !kIsWeb;
+      // Show the circle in the chat right away (Telegram-style); the upload
+      // carries on in the background and flips the status when it is done.
+      await _saveAndTrack(
+        ChatMessage(
+          id: msgId,
+          peerId: targetPeerId,
+          text: '⬛ Видео',
+          isOutgoing: true,
+          timestamp: DateTime.now(),
+          status: _savedMessagesLocalOnly
+              ? MessageStatus.sent
+              : MessageStatus.sending,
+          videoPath: path,
+        ),
+        wasQueued: viaQueue,
+      );
       if (!_savedMessagesLocalOnly) {
-        if (RelayService.instance.isConnected && !kIsWeb) {
+        if (viaQueue) {
           unawaited(
             MediaUploadQueue.instance.enqueue(
               msgId: msgId,
@@ -2567,41 +2593,41 @@ class _ChatScreenState extends State<ChatScreen> {
               isSquare: true,
             ),
           );
-          wasQueued = true;
         } else {
-          final bytes = await _readLocalOrWebMediaBytes(path);
-          if (bytes == null || bytes.isEmpty) {
-            throw StateError('video_bytes_empty');
-          }
-          await _sendMedia(
-            bytes: bytes,
-            msgId: msgId,
-            myId: myId,
-            isVideo: true,
-            isSquare: true,
-            filePath: kIsWeb ? null : path,
-          );
+          // Web / relay currently down: stream from memory in the background.
+          unawaited(() async {
+            try {
+              final bytes = await _readLocalOrWebMediaBytes(path);
+              if (bytes == null || bytes.isEmpty) {
+                throw StateError('video_bytes_empty');
+              }
+              await _sendMedia(
+                bytes: bytes,
+                msgId: msgId,
+                myId: myId,
+                isVideo: true,
+                isSquare: true,
+                filePath: kIsWeb ? null : path,
+              );
+              await ChatStorageService.instance
+                  .updateMessageStatusPreserveDelivered(
+                      msgId, MessageStatus.sent);
+            } catch (e) {
+              debugPrint('[QuickVideo] background send failed: $e');
+              await ChatStorageService.instance
+                  .updateMessageStatusPreserveDelivered(
+                      msgId, MessageStatus.failed);
+            }
+          }());
         }
       }
-
-      await _saveAndTrack(
-        ChatMessage(
-          id: msgId,
-          peerId: targetPeerId,
-          text: '⬛ Видео',
-          isOutgoing: true,
-          timestamp: DateTime.now(),
-          status: wasQueued ? MessageStatus.sending : MessageStatus.sent,
-          videoPath: path,
-        ),
-        wasQueued: wasQueued,
-      );
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(AppL10n.f('Ошибка видео: {0}', [e])), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка видео: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -3221,7 +3247,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted && showErrorSnack) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Пересылка: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Пересылка: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
       return false;
@@ -3526,7 +3554,8 @@ class _ChatScreenState extends State<ChatScreen> {
         final botMsg = ChatMessage(
           id: _uuid.v4(),
           peerId: kLibBotPeerId,
-          text: AppL10n.t('Lib работает только через интернет-соединение relay. Включите режим Интернет/Both и дождитесь подключения relay.'),
+          text: AppL10n.t(
+              'Lib работает только через интернет-соединение relay. Включите режим Интернет/Both и дождитесь подключения relay.'),
           isOutgoing: false,
           timestamp: DateTime.now(),
           status: MessageStatus.delivered,
@@ -3678,7 +3707,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 ? AppL10n.t('В чате с Lib доступен только обычный текст')
                 : _isGigachatBot
                     ? AppL10n.t('В чате с ИИ доступен только обычный текст')
-                    : AppL10n.t('В чате с ботом доступен только обычный текст')),
+                    : AppL10n.t(
+                        'В чате с ботом доступен только обычный текст')),
           ),
         );
       }
@@ -3712,7 +3742,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Ошибка: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -3741,7 +3773,8 @@ class _ChatScreenState extends State<ChatScreen> {
       debugPrint('_openChatCalendar getMessages failed: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppL10n.f('Не удалось загрузить события: {0}', [e]))),
+        SnackBar(
+            content: Text(AppL10n.f('Не удалось загрузить события: {0}', [e]))),
       );
       return;
     }
@@ -3768,8 +3801,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       final dt = DateTime.fromMillisecondsSinceEpoch(e.startMs);
                       return ListTile(
                         dense: true,
-                        title:
-                            Text(e.title.isEmpty ? AppL10n.t('(без названия)') : e.title),
+                        title: Text(e.title.isEmpty
+                            ? AppL10n.t('(без названия)')
+                            : e.title),
                         subtitle: Text(
                           '${dt.day.toString().padLeft(2, '0')}.'
                           '${dt.month.toString().padLeft(2, '0')}.${dt.year} '
@@ -3857,8 +3891,14 @@ class _ChatScreenState extends State<ChatScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(
-                AppL10n.f('Сообщение запланировано: {0}.{1}.{2} {3}:{4}', [when.day, when.month, when.year, when.hour.toString().padLeft(2, '0'), when.minute.toString().padLeft(2, '0')]))),
+            content:
+                Text(AppL10n.f('Сообщение запланировано: {0}.{1}.{2} {3}:{4}', [
+          when.day,
+          when.month,
+          when.year,
+          when.hour.toString().padLeft(2, '0'),
+          when.minute.toString().padLeft(2, '0')
+        ]))),
       );
     }
   }
@@ -3941,7 +3981,9 @@ class _ChatScreenState extends State<ChatScreen> {
           icon: _pendingLat != null
               ? Icons.location_on
               : Icons.location_on_outlined,
-          label: _pendingLat != null ? AppL10n.t('Убрать геометку') : AppL10n.t('Геометка'),
+          label: _pendingLat != null
+              ? AppL10n.t('Убрать геометку')
+              : AppL10n.t('Геометка'),
           value: 'location',
         ),
         if (!_isDmBot)
@@ -4078,7 +4120,8 @@ class _ChatScreenState extends State<ChatScreen> {
           if (!mounted) return;
           final bytes = await x.readAsBytes();
           if (bytes.isEmpty) continue;
-          final fileName = x.name.trim().isNotEmpty ? x.name.trim() : 'photo.jpg';
+          final fileName =
+              x.name.trim().isNotEmpty ? x.name.trim() : 'photo.jpg';
           await _sendWebBytesAsFile(
             bytes: bytes,
             fileName: fileName,
@@ -4122,7 +4165,13 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   static String _humanSize(int b) {
-    final u = [AppL10n.t('Б'), AppL10n.t('КБ'), AppL10n.t('МБ'), AppL10n.t('ГБ'), AppL10n.t('ТБ')];
+    final u = [
+      AppL10n.t('Б'),
+      AppL10n.t('КБ'),
+      AppL10n.t('МБ'),
+      AppL10n.t('ГБ'),
+      AppL10n.t('ТБ')
+    ];
     var v = b.toDouble();
     var i = 0;
     while (v >= 1024 && i < u.length - 1) {
@@ -4139,7 +4188,9 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(AppL10n.t('cm_large_file')),
         content: Text(
-          AppL10n.f('Файл {0}. Отправить через Google Drive (быстро) или напрямую через Rlink (медленно, по частям)?\n\nЧерез Drive: файл загрузится на ваш Google Drive, собеседник скачает его по ссылке прямо в чате.', [_humanSize(size)]),
+          AppL10n.f(
+              'Файл {0}. Отправить через Google Drive (быстро) или напрямую через Rlink (медленно, по частям)?\n\nЧерез Drive: файл загрузится на ваш Google Drive, собеседник скачает его по ссылке прямо в чате.',
+              [_humanSize(size)]),
         ),
         actions: [
           TextButton(
@@ -4163,8 +4214,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  AppL10n.f('Загрузка {0} на Google Drive…', [_humanSize(bytes.length)]))),
+              content: Text(AppL10n.f('Загрузка {0} на Google Drive…',
+                  [_humanSize(bytes.length)]))),
         );
       }
       final mime = _mimeTypeForFileName(fileName,
@@ -4177,13 +4228,14 @@ class _ChatScreenState extends State<ChatScreen> {
       if (url == null) {
         if (mounted) {
           _showErrorSnack(GoogleDriveChannelBackup.lastSignInError ??
-              AppL10n.t('Не удалось загрузить на Google Drive. Привяжите аккаунт в Настройки → Google Drive.'));
+              AppL10n.t(
+                  'Не удалось загрузить на Google Drive. Привяжите аккаунт в Настройки → Google Drive.'));
         }
         return;
       }
       // Deliver the link as a normal (linkified) message via the text path.
-      _controller.text =
-          AppL10n.f('📎 {0} ({1})\nСкачать с Google Drive: {2}', [fileName, _humanSize(bytes.length), url]);
+      _controller.text = AppL10n.f('📎 {0} ({1})\nСкачать с Google Drive: {2}',
+          [fileName, _humanSize(bytes.length), url]);
       await _send();
     } catch (e) {
       if (mounted) _showErrorSnack(AppL10n.f('Ошибка: {0}', [e]));
@@ -4352,7 +4404,8 @@ class _ChatScreenState extends State<ChatScreen> {
     required String myId,
   }) async {
     if (bytes.isEmpty) {
-      _showErrorSnack(AppL10n.t('Видео пустое или не было прочитано браузером'));
+      _showErrorSnack(
+          AppL10n.t('Видео пустое или не было прочитано браузером'));
       return;
     }
     final reviewed = await _reviewVideoWeb(bytes, fileName);
@@ -4418,7 +4471,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(AppL10n.f('Ошибка видео: {0}', [e])), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка видео: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -4776,7 +4830,9 @@ class _ChatScreenState extends State<ChatScreen> {
       debugPrint('[RLINK][Sticker] Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Стикер: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Стикер: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -5029,7 +5085,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Стикер: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Стикер: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -5114,7 +5172,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(AppL10n.f('Ошибка видео: {0}', [e])), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка видео: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -5215,7 +5274,8 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Send a pre-composed greeting-card PNG as an image message (no preview /
   /// picker). Used to auto-deliver a birthday card when the chat opens.
   Future<void> _deliverCardImage(Uint8List bytes) =>
-      _sendImageBytesWithCaption(bytes, caption: AppL10n.t('🎉 С Днём Рождения!'));
+      _sendImageBytesWithCaption(bytes,
+          caption: AppL10n.t('🎉 С Днём Рождения!'));
 
   /// Send a composed image (collage) from the fullscreen editor, honoring the
   /// chosen text position: media-on-top → one image message with the text as
@@ -5286,7 +5346,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Ошибка изображения: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Ошибка изображения: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -5372,7 +5434,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Ошибка: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -5393,7 +5457,8 @@ class _ChatScreenState extends State<ChatScreen> {
         bytes: bytes,
         fileName: picked.name.isNotEmpty ? picked.name : 'photo.jpg',
         myId: myId,
-        textFallback: '📎 ${picked.name.isNotEmpty ? picked.name : AppL10n.t('Фото')}',
+        textFallback:
+            '📎 ${picked.name.isNotEmpty ? picked.name : AppL10n.t('Фото')}',
       );
       return;
     }
@@ -5443,7 +5508,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Ошибка: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -5819,7 +5886,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(AppL10n.f('Ошибка удаления: {0}', [e])), backgroundColor: Colors.red),
+            content: Text(AppL10n.f('Ошибка удаления: {0}', [e])),
+            backgroundColor: Colors.red),
       );
       await ChatStorageService.instance.loadMessages(_resolvedPeerId);
     }
@@ -5916,7 +5984,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
     if (failCount == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppL10n.f('Переслано сообщений: {0}', [okCount]))),
+        SnackBar(
+            content: Text(AppL10n.f('Переслано сообщений: {0}', [okCount]))),
       );
       _exitBulkSelect();
     } else {
@@ -5953,7 +6022,9 @@ class _ChatScreenState extends State<ChatScreen> {
         content: Text(
           outgoing.length == 1
               ? AppL10n.t('Сообщение исчезнет у собеседника.')
-              : AppL10n.f('Удалить {0} своих сообщений? Они исчезнут у собеседника.', [outgoing.length]),
+              : AppL10n.f(
+                  'Удалить {0} своих сообщений? Они исчезнут у собеседника.',
+                  [outgoing.length]),
         ),
         actions: [
           TextButton(
@@ -6072,7 +6143,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 : AppL10n.f('Приглашение в группу: {0}', [name]));
           } else if (k == 'emoji_pack') {
             final name = (inv['name'] as String?)?.trim() ?? '';
-            lines.add(name.isEmpty ? AppL10n.t('Набор эмодзи') : AppL10n.f('Набор эмодзи: {0}', [name]));
+            lines.add(name.isEmpty
+                ? AppL10n.t('Набор эмодзи')
+                : AppL10n.f('Набор эмодзи: {0}', [name]));
           }
           final t = msg.text.trim();
           if (t.isNotEmpty) lines.add(t);
@@ -6097,7 +6170,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (msg.filePath != null && msg.filePath!.trim().isNotEmpty) {
       final n = msg.fileName?.trim();
-      lines.add(n != null && n.isNotEmpty ? AppL10n.f('[Файл: {0}]', [n]) : AppL10n.t('[Файл]'));
+      lines.add(n != null && n.isNotEmpty
+          ? AppL10n.f('[Файл: {0}]', [n])
+          : AppL10n.t('[Файл]'));
     }
     if (msg.latitude != null && msg.longitude != null) {
       lines.add(AppL10n.f('[Гео: {0}, {1}]', [msg.latitude, msg.longitude]));
@@ -6127,8 +6202,9 @@ class _ChatScreenState extends State<ChatScreen> {
             for (final a in accounts)
               ListTile(
                 leading: const Icon(Icons.account_circle_outlined),
-                title: Text(
-                    (a['email'] ?? '').isNotEmpty ? a['email']! : AppL10n.t('Аккаунт')),
+                title: Text((a['email'] ?? '').isNotEmpty
+                    ? a['email']!
+                    : AppL10n.t('Аккаунт')),
                 onTap: () => Navigator.pop(ctx, a['pairing']),
               ),
           ],
@@ -6186,7 +6262,8 @@ class _ChatScreenState extends State<ChatScreen> {
           content: Text(ok
               ? AppL10n.t('Сохранено на Google Drive ✓ (папка «Rlink»)')
               : (GoogleDriveChannelBackup.lastSignInError ??
-                  AppL10n.t('Не удалось сохранить. Привяжите аккаунт в Настройки → Google Drive.'))),
+                  AppL10n.t(
+                      'Не удалось сохранить. Привяжите аккаунт в Настройки → Google Drive.'))),
         ),
       );
     } catch (e) {
@@ -6229,7 +6306,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppL10n.f('Не удалось: {0}', [e])), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text(AppL10n.f('Не удалось: {0}', [e])),
+            backgroundColor: Colors.red),
       );
     }
   }
@@ -6265,7 +6344,8 @@ class _ChatScreenState extends State<ChatScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
-                AppL10n.t('Сообщения старше выбранного срока удаляются с этого устройства при открытии чата. Меньше следов на устройстве.'),
+                AppL10n.t(
+                    'Сообщения старше выбранного срока удаляются с этого устройства при открытии чата. Меньше следов на устройстве.'),
                 style: TextStyle(
                     fontSize: 12,
                     color: Theme.of(ctx).colorScheme.onSurfaceVariant),
@@ -6394,7 +6474,9 @@ class _ChatScreenState extends State<ChatScreen> {
             icon: _pinnedMsgIds.contains(msg.id)
                 ? Icons.push_pin_outlined
                 : Icons.push_pin,
-            label: _pinnedMsgIds.contains(msg.id) ? AppL10n.t('Открепить') : AppL10n.t('Закрепить'),
+            label: _pinnedMsgIds.contains(msg.id)
+                ? AppL10n.t('Открепить')
+                : AppL10n.t('Закрепить'),
             onTap: () => unawaited(_togglePinMessage(msg))),
         MessageMenuAction(
             icon: Icons.forward,
@@ -6520,8 +6602,9 @@ class _ChatScreenState extends State<ChatScreen> {
               leading: Icon(_pinnedMsgIds.contains(msg.id)
                   ? Icons.push_pin_outlined
                   : Icons.push_pin),
-              title: Text(
-                  _pinnedMsgIds.contains(msg.id) ? AppL10n.t('Открепить') : AppL10n.t('Закрепить')),
+              title: Text(_pinnedMsgIds.contains(msg.id)
+                  ? AppL10n.t('Открепить')
+                  : AppL10n.t('Закрепить')),
               onTap: () async {
                 Navigator.pop(ctx);
                 await _togglePinMessage(msg);
@@ -6804,11 +6887,13 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final f = await ChatStorageService.instance
           .exportDirectChatToJsonFile(_resolvedPeerId);
-      await Share.shareXFiles([XFile(f.path)], subject: AppL10n.t('Rlink — экспорт чата'));
+      await Share.shareXFiles([XFile(f.path)],
+          subject: AppL10n.t('Rlink — экспорт чата'));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Не удалось экспортировать: {0}', [e]))),
+          SnackBar(
+              content: Text(AppL10n.f('Не удалось экспортировать: {0}', [e]))),
         );
       }
     }
@@ -6840,13 +6925,15 @@ class _ChatScreenState extends State<ChatScreen> {
           content: Text(ok
               ? AppL10n.t('История сохранена на Google Drive ✓ (папка «Rlink»)')
               : (GoogleDriveChannelBackup.lastSignInError ??
-                  AppL10n.t('Не удалось. Привяжите аккаунт в Настройки → Google Drive.'))),
+                  AppL10n.t(
+                      'Не удалось. Привяжите аккаунт в Настройки → Google Drive.'))),
         ),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Не удалось экспортировать: {0}', [e]))),
+          SnackBar(
+              content: Text(AppL10n.f('Не удалось экспортировать: {0}', [e]))),
         );
       }
     }
@@ -7042,8 +7129,10 @@ class _ChatScreenState extends State<ChatScreen> {
       SnackBar(
         content: Text(
           msg.isOutgoing
-              ? AppL10n.t('Когда собеседник будет в сети, попросите переслать файл или дождитесь подтяжки истории.')
-              : AppL10n.t('Когда собеседник будет в сети, вложение может подтянуться с историей; иначе попросите переслать.'),
+              ? AppL10n.t(
+                  'Когда собеседник будет в сети, попросите переслать файл или дождитесь подтяжки истории.')
+              : AppL10n.t(
+                  'Когда собеседник будет в сети, вложение может подтянуться с историей; иначе попросите переслать.'),
         ),
       ),
     );
@@ -7201,14 +7290,15 @@ class _ChatScreenState extends State<ChatScreen> {
             '${downloads.path}/rlink_${DateTime.now().millisecondsSinceEpoch}.jpg');
         await File(imagePath).copy(dst.path);
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(AppL10n.f('Сохранено: {0}', [dst.path]))));
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(AppL10n.f('Сохранено: {0}', [dst.path]))));
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(AppL10n.f('Ошибка: {0}', [e])),
+            backgroundColor: Colors.red));
       }
     }
   }
@@ -7263,7 +7353,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Ошибка: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -7427,12 +7519,16 @@ class _ChatScreenState extends State<ChatScreen> {
                                   if (_isDmBot)
                                     Text(
                                       _isLibBot
-                                          ? AppL10n.t('Официальный бот · регистратор ботов')
+                                          ? AppL10n.t(
+                                              'Официальный бот · регистратор ботов')
                                           : _isGigachatBot
-                                              ? AppL10n.t('Официальный бот · ИИ GigaChat (Сбер)')
+                                              ? AppL10n.t(
+                                                  'Официальный бот · ИИ GigaChat (Сбер)')
                                               : _isEmojiBot
-                                                  ? AppL10n.t('Официальный бот · свои эмодзи (:shortcode:)')
-                                                  : AppL10n.t('Сторонний бот · только текст, ответ когда процесс бота в сети'),
+                                                  ? AppL10n.t(
+                                                      'Официальный бот · свои эмодзи (:shortcode:)')
+                                                  : AppL10n.t(
+                                                      'Сторонний бот · только текст, ответ когда процесс бота в сети'),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
@@ -7506,12 +7602,16 @@ class _ChatScreenState extends State<ChatScreen> {
                                   if (_isDmBot)
                                     Text(
                                       _isLibBot
-                                          ? AppL10n.t('Официальный бот · регистратор ботов')
+                                          ? AppL10n.t(
+                                              'Официальный бот · регистратор ботов')
                                           : _isGigachatBot
-                                              ? AppL10n.t('Официальный бот · ИИ GigaChat (Сбер)')
+                                              ? AppL10n.t(
+                                                  'Официальный бот · ИИ GigaChat (Сбер)')
                                               : _isEmojiBot
-                                                  ? AppL10n.t('Официальный бот · свои эмодзи (:shortcode:)')
-                                                  : AppL10n.t('Сторонний бот · только текст, ответ когда процесс бота в сети'),
+                                                  ? AppL10n.t(
+                                                      'Официальный бот · свои эмодзи (:shortcode:)')
+                                                  : AppL10n.t(
+                                                      'Сторонний бот · только текст, ответ когда процесс бота в сети'),
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500,
@@ -7561,9 +7661,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                                 // status, just a note label.
                                                 final subtitleText =
                                                     _savedMessagesLocalOnly
-                                                        ? AppL10n.t('Заметки и файлы только у вас')
+                                                        ? AppL10n.t(
+                                                            'Заметки и файлы только у вас')
                                                         : (isOnline
-                                                            ? AppL10n.t('в сети')
+                                                            ? AppL10n.t(
+                                                                'в сети')
                                                             : _formatPeerLastSeen(
                                                                 _peerLastSeen));
                                                 return Text(
@@ -7744,8 +7846,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               context: context,
                               builder: (ctx) => AlertDialog(
                                 title: Text(AppL10n.t('cs_delete_chat_q')),
-                                content: Text(
-                                    AppL10n.t('Чат будет удалён окончательно.')),
+                                content: Text(AppL10n.t(
+                                    'Чат будет удалён окончательно.')),
                                 actions: [
                                   TextButton(
                                       onPressed: () =>
@@ -7838,7 +7940,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              AppL10n.t('Включён VPN: GigaChat может не ответить или ругаться на сертификат. При ошибках попробуйте отключить VPN.'),
+                              AppL10n.t(
+                                  'Включён VPN: GigaChat может не ответить или ругаться на сертификат. При ошибках попробуйте отключить VPN.'),
                               style: TextStyle(
                                 fontSize: 12,
                                 height: 1.3,
@@ -7864,7 +7967,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               .fold<double?>(null,
                                   (acc, v) => acc == null ? v : (acc + v) / 2);
                       final label = uploadProgress != null
-                          ? AppL10n.f('Загружается файл... {0}%', [(uploadProgress * 100).round()])
+                          ? AppL10n.f('Загружается файл... {0}%',
+                              [(uploadProgress * 100).round()])
                           : AppL10n.t('Отправка...');
                       return Container(
                         width: double.infinity,
@@ -7987,8 +8091,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text(
-                                    AppL10n.t('Запрос на обмен отправлен — ожидаем ответ')),
+                                content: Text(AppL10n.t(
+                                    'Запрос на обмен отправлен — ожидаем ответ')),
                                 duration: Duration(seconds: 3),
                               ),
                             );
@@ -8264,7 +8368,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                           _savedMessagesLocalOnly,
                                                                       bulkSelectMode:
                                                                           _bulkSelectMode,
-                                                                      groupedWithPrev: i > 0 &&
+                                                                      groupedWithPrev: i >
+                                                                              0 &&
                                                                           isGroupablePhotoPair(
                                                                               messages[i - 1],
                                                                               msg),
@@ -8283,10 +8388,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                                                           _saveImageToGallery,
                                                                       onEditImage:
                                                                           _editAndResendImage,
-                                                                      onOpenMediaGallery: () =>
-                                                                          unawaited(_openMediaGalleryFrom(
-                                                                              messages,
-                                                                              msg.id)),
+                                                                      onOpenMediaGallery: () => unawaited(_openMediaGalleryFrom(
+                                                                          messages,
+                                                                          msg.id)),
                                                                       onLongPressSaveImageToGallery: _bulkSelectMode
                                                                           ? null
                                                                           : (p) =>
@@ -9016,7 +9120,9 @@ class _DmInviteBubbleActions extends StatelessWidget {
                     onPressed: subscribed || myId.isEmpty
                         ? null
                         : () => unawaited(_subscribeChannel(context)),
-                    child: Text(subscribed ? AppL10n.t('Вы подписаны') : AppL10n.t('Подписаться')),
+                    child: Text(subscribed
+                        ? AppL10n.t('Вы подписаны')
+                        : AppL10n.t('Подписаться')),
                   );
                 },
               );
@@ -9216,6 +9322,7 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessage msg;
   final String? replyPreviewText;
   final bool bulkSelectMode;
+
   /// Chained-bubble spacing for a detected multi-photo batch (see
   /// isGroupablePhotoPair) — purely visual (margin + corner radius), no
   /// change to this bubble's own content or gesture handling.
@@ -9320,6 +9427,11 @@ class _MessageBubble extends StatelessWidget {
         msg.voicePath != null ||
         msg.filePath != null;
 
+    // A quick video ("кружок") is drawn like Telegram: no bubble behind it, the
+    // duration and the time/status sit in small pills under the circle.
+    final isQuick =
+        msg.videoPath != null && _dmVideoPathIsSquare(msg.videoPath!);
+
     // Check if this is a sticker message
     final isSticker = msg.isSticker ||
         (msg.imagePath != null &&
@@ -9345,6 +9457,32 @@ class _MessageBubble extends StatelessWidget {
                 : baseRadius.bottomRight,
           )
         : baseRadius;
+    Widget timePill() => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                AppSettings.instance.formatTime(msg.timestamp),
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isOut
+                      ? cs.onPrimary.withValues(alpha: 0.9)
+                      : cs.onSurface,
+                ),
+              ),
+              if (isOut) ...[
+                const SizedBox(width: 4),
+                _sendStateAction(context, msg, cs),
+              ],
+            ],
+          ),
+        );
+
     return Align(
       alignment: isOut ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -9353,11 +9491,13 @@ class _MessageBubble extends StatelessWidget {
           right: isOut ? (compact ? 8 : 12) : (compact ? 56 : 64),
           bottom: groupedWithNext ? 2 : settings.messageBubbleBottomMargin,
         ),
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 12 : 14,
-          vertical: settings.messageVerticalPadding,
-        ),
-        decoration: isSticker
+        padding: isQuick
+            ? EdgeInsets.zero
+            : EdgeInsets.symmetric(
+                horizontal: compact ? 12 : 14,
+                vertical: settings.messageVerticalPadding,
+              ),
+        decoration: (isSticker || isQuick)
             ? null
             : RlinkDesign.on
                 ? (isOut
@@ -9503,6 +9643,9 @@ class _MessageBubble extends StatelessWidget {
                   child: _VideoMessageBubble(
                     videoPath: msg.videoPath!,
                     isOut: isOut,
+                    messageId: msg.id,
+                    peerId: msg.peerId,
+                    squareFooter: isQuick ? timePill() : null,
                     isGif:
                         msg.isSticker && !_dmVideoPathIsSquare(msg.videoPath!),
                     onPlaySquareWithQueue: playbackThread != null &&
@@ -9846,61 +9989,63 @@ class _MessageBubble extends StatelessWidget {
               ),
             if (msg.reactions.isNotEmpty)
               _ReactionsWidget(reactions: msg.reactions, isOut: isOut, cs: cs),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isSticker)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          AppSettings.instance.formatTime(msg.timestamp),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isOut
-                                ? cs.onPrimary.withValues(alpha: 0.9)
-                                : cs.onSurface,
+            if (!isQuick) const SizedBox(height: 2),
+            if (!isQuick)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isSticker)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            AppSettings.instance.formatTime(msg.timestamp),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isOut
+                                  ? cs.onPrimary.withValues(alpha: 0.9)
+                                  : cs.onSurface,
+                            ),
                           ),
-                        ),
-                        if (isOut) ...[
-                          const SizedBox(width: 4),
-                          _sendStateAction(context, msg, cs),
+                          if (isOut) ...[
+                            const SizedBox(width: 4),
+                            _sendStateAction(context, msg, cs),
+                          ],
                         ],
-                      ],
+                      ),
+                    )
+                  else ...[
+                    Text(
+                      AppSettings.instance.formatTime(msg.timestamp),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isOut
+                            ? cs.onPrimary.withValues(alpha: 0.7)
+                            : cs.onSurfaceVariant,
+                      ),
                     ),
-                  )
-                else ...[
-                  Text(
-                    AppSettings.instance.formatTime(msg.timestamp),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isOut
-                          ? cs.onPrimary.withValues(alpha: 0.7)
-                          : cs.onSurfaceVariant,
-                    ),
-                  ),
-                  if (isOut) ...[
-                    const SizedBox(width: 4),
-                    _sendStateAction(context, msg, cs),
+                    if (isOut) ...[
+                      const SizedBox(width: 4),
+                      _sendStateAction(context, msg, cs),
+                    ],
                   ],
                 ],
-              ],
-            ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _sendStateAction(BuildContext context, ChatMessage msg, ColorScheme cs) {
+  Widget _sendStateAction(
+      BuildContext context, ChatMessage msg, ColorScheme cs) {
     if (msg.status == MessageStatus.sending) {
       final expired = DateTime.now().difference(msg.timestamp) >=
           const Duration(minutes: 1);
@@ -9988,7 +10133,8 @@ class _MessageBubble extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () => ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppL10n.f('Отправлено: {0}', [_fullTimestamp(msg.timestamp)])),
+            content: Text(
+                AppL10n.f('Отправлено: {0}', [_fullTimestamp(msg.timestamp)])),
             duration: const Duration(seconds: 2),
           ),
         ),
@@ -10008,7 +10154,8 @@ class _MessageBubble extends StatelessWidget {
     return '$d.$mo.${dt.year}, ${AppSettings.instance.formatTime(dt)}:$s';
   }
 
-  Widget _statusIcon(MessageStatus status, ColorScheme cs, {bool read = false}) {
+  Widget _statusIcon(MessageStatus status, ColorScheme cs,
+      {bool read = false}) {
     final dimColor = cs.onPrimary.withValues(alpha: 0.6);
     final brightColor = cs.onPrimary;
     switch (status) {
@@ -10228,7 +10375,8 @@ class _FileMessageBubble extends StatelessWidget {
   String _fmtSize(int? bytes) {
     if (bytes == null) return '';
     if (bytes < 1024) return AppL10n.f('{0} Б', [bytes]);
-    if (bytes < 1024 * 1024) return AppL10n.f('{0} КБ', [(bytes / 1024).toStringAsFixed(1)]);
+    if (bytes < 1024 * 1024)
+      return AppL10n.f('{0} КБ', [(bytes / 1024).toStringAsFixed(1)]);
     return AppL10n.f('{0} МБ', [(bytes / (1024 * 1024)).toStringAsFixed(1)]);
   }
 
@@ -10508,7 +10656,8 @@ class _DocumentPreviewScreenState extends State<_DocumentPreviewScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                AppL10n.t('Встроенный просмотр для этого типа пока не поддерживается.'),
+                AppL10n.t(
+                    'Встроенный просмотр для этого типа пока не поддерживается.'),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: cs.onSurfaceVariant),
               ),
@@ -10564,7 +10713,8 @@ class _AudioFileBubble extends StatelessWidget {
   String _fmtSize(int? bytes) {
     if (bytes == null) return '';
     if (bytes < 1024) return AppL10n.f('{0} Б', [bytes]);
-    if (bytes < 1024 * 1024) return AppL10n.f('{0} КБ', [(bytes / 1024).toStringAsFixed(1)]);
+    if (bytes < 1024 * 1024)
+      return AppL10n.f('{0} КБ', [(bytes / 1024).toStringAsFixed(1)]);
     return AppL10n.f('{0} МБ', [(bytes / (1024 * 1024)).toStringAsFixed(1)]);
   }
 
@@ -10974,12 +11124,22 @@ class _VideoMessageBubble extends StatefulWidget {
   /// Animated sticker: a short video that auto-loops, muted, no controls.
   final bool isGif;
 
+  /// Quick video ("кружок") extras: the message id/peer (to track "watched with
+  /// sound" and send the receipt) and the time/status pill shown under the
+  /// circle next to the duration.
+  final String? messageId;
+  final String? peerId;
+  final Widget? squareFooter;
+
   const _VideoMessageBubble({
     required this.videoPath,
     required this.isOut,
     this.onPlaySquareWithQueue,
     this.onLongPressSaveToGallery,
     this.isGif = false,
+    this.messageId,
+    this.peerId,
+    this.squareFooter,
   });
 
   @override
@@ -11012,7 +11172,8 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
   bool get _squareUsesQueue =>
       _isSquare && widget.onPlaySquareWithQueue != null;
 
-  Size _videoPaintSize({double fallbackWidth = 1280, VideoPlayerController? of}) {
+  Size _videoPaintSize(
+      {double fallbackWidth = 1280, VideoPlayerController? of}) {
     final value = (of ?? _ctrl)?.value;
     final size = value?.size ?? Size.zero;
     if (size.width > 0 && size.height > 0) return size;
@@ -11256,7 +11417,27 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     }
   }
 
+  /// The user started playing this quick video (with sound, not just the
+  /// preview frame): clear the dot locally and tell the sender once.
+  void _markSeenIfNeeded() {
+    final id = widget.messageId;
+    if (id == null || !_isSquare) return;
+    final seen = QuickVideoSeenService.instance;
+    if (seen.isSeen(id)) return;
+    unawaited(seen.markSeen(id));
+    final peer = widget.peerId;
+    final me = CryptoService.instance.publicKeyHex;
+    if (!widget.isOut && peer != null && peer.isNotEmpty && me.isNotEmpty) {
+      unawaited(GossipRouter.instance
+          .sendQuickVideoSeen(recipientId: peer, messageId: id, fromId: me));
+    }
+  }
+
   void _onCurrentlyPlayingChanged() {
+    if (mounted &&
+        VoiceService.instance.currentlyPlaying.value == widget.videoPath) {
+      _markSeenIfNeeded();
+    }
     if (!mounted || !_squareUsesQueue) {
       return;
     }
@@ -11499,6 +11680,7 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
       }
       return;
     }
+    _markSeenIfNeeded();
     if (widget.onPlaySquareWithQueue != null) {
       final cur = VoiceService.instance.currentlyPlaying.value;
       if (cur == widget.videoPath && _queueDriveActive) {
@@ -11592,10 +11774,10 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     );
   }
 
-  static String _fmtVideoDur(Duration d) {
-    final m = d.inMinutes;
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
+  static String _fmtDur2(Duration d) {
+    final m = d.inMinutes.toString().padLeft(2, '0');
+    final sec = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
   }
 
   Widget _buildCircle() {
@@ -11617,8 +11799,11 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
     final localReady = _initialized && _ctrl != null;
     final ctrl = vsCtrl ?? (localReady ? _ctrl : null);
     final shape = QuickVideoShapeX.fromPath(widget.videoPath);
+    final side = shape == QuickVideoShape.square ? 160.0 : 176.0;
+    final seenSvc = QuickVideoSeenService.instance;
+    final id = widget.messageId;
 
-    return GestureDetector(
+    final circle = GestureDetector(
       onTap: exists ? _togglePlay : null,
       onLongPress: exists && widget.onLongPressSaveToGallery != null
           ? () {
@@ -11627,8 +11812,8 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
             }
           : null,
       child: SizedBox(
-        width: shape == QuickVideoShape.square ? 160 : 176,
-        height: shape == QuickVideoShape.square ? 160 : 176,
+        width: side,
+        height: side,
         child: QuickVideoClip(
           shape: shape,
           child: Stack(
@@ -11651,7 +11836,9 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                               child: Padding(
                                 padding: const EdgeInsets.all(12),
                                 child: Text(
-                                  kIsWeb ? AppL10n.t('Браузер не открыл видео') : AppL10n.t('Видео'),
+                                  kIsWeb
+                                      ? AppL10n.t('Браузер не открыл видео')
+                                      : AppL10n.t('Видео'),
                                   style: const TextStyle(
                                       color: Colors.white54, fontSize: 11),
                                   textAlign: TextAlign.center,
@@ -11677,74 +11864,109 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
               if (exists && !_playing)
                 Positioned.fill(
                   child: Container(
-                    color: Colors.black.withValues(alpha: 0.25),
+                    color: Colors.black.withValues(alpha: 0.2),
                     alignment: Alignment.center,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.play_circle_fill,
-                            color: Colors.white, size: 52),
-                        if (ctrl != null &&
-                            ctrl.value.duration.inSeconds > 0) ...[
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              _fmtVideoDur(ctrl.value.duration),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                    child: const Icon(Icons.play_circle_fill,
+                        color: Colors.white, size: 52),
                   ),
                 ),
-              if (_playing && ctrl != null)
+              // Incoming and not yet played: "muted preview" badge, like Telegram.
+              if (exists && !_playing && id != null && !widget.isOut)
                 Positioned(
+                  top: 10,
                   left: 0,
                   right: 0,
-                  bottom: 8,
-                  child: IgnorePointer(
-                    child: Center(
-                      child: ValueListenableBuilder<VideoPlayerValue>(
-                        valueListenable: ctrl,
-                        builder: (_, v, __) {
-                          if (v.duration.inMilliseconds <= 0) {
-                            return const SizedBox.shrink();
-                          }
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              '${_fmtVideoDur(v.position)} / ${_fmtVideoDur(v.duration)}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
+                  child: AnimatedBuilder(
+                    animation: seenSvc,
+                    builder: (_, __) => seenSvc.isSeen(id)
+                        ? const SizedBox.shrink()
+                        : Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
                               ),
+                              child: const Icon(Icons.volume_off_rounded,
+                                  color: Colors.white, size: 14),
                             ),
-                          );
-                        },
-                      ),
-                    ),
+                          ),
                   ),
                 ),
             ],
           ),
         ),
+      ),
+    );
+
+    // Duration pill under the circle: total time when idle, elapsed while
+    // playing; the dot means "not watched with sound yet" (by me if incoming,
+    // by the recipient if outgoing).
+    Widget durationPill() {
+      final c = ctrl;
+      if (c == null) return const SizedBox.shrink();
+      return ValueListenableBuilder<VideoPlayerValue>(
+        valueListenable: c,
+        builder: (_, v, __) {
+          if (v.duration.inMilliseconds <= 0) return const SizedBox.shrink();
+          final shown = _playing ? v.position : v.duration;
+          return AnimatedBuilder(
+            animation: seenSvc,
+            builder: (_, __) {
+              final unseen = id != null && !seenSvc.isSeen(id);
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.32),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _fmtDur2(shown),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    if (unseen) ...[
+                      const SizedBox(width: 5),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    }
+
+    return SizedBox(
+      width: side,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          circle,
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              durationPill(),
+              const Spacer(),
+              if (widget.squareFooter != null) widget.squareFooter!,
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -11803,7 +12025,9 @@ class _VideoMessageBubbleState extends State<_VideoMessageBubble> {
                               color: Colors.white70, size: 28),
                           const SizedBox(height: 8),
                           Text(
-                            kIsWeb ? AppL10n.t('Браузер не открыл видео') : AppL10n.t('Видео'),
+                            kIsWeb
+                                ? AppL10n.t('Браузер не открыл видео')
+                                : AppL10n.t('Видео'),
                             style: const TextStyle(
                                 color: Colors.white70, fontSize: 12),
                             textAlign: TextAlign.center,
@@ -12363,7 +12587,9 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
               : _DmMaterialKind.video,
           message: m,
           timestamp: ts,
-          title: _dmVideoPathIsSquare(videoPath) ? AppL10n.t('Квадратик') : AppL10n.t('Видео'),
+          title: _dmVideoPathIsSquare(videoPath)
+              ? AppL10n.t('Квадратик')
+              : AppL10n.t('Видео'),
           subtitle: m.text.trim().isEmpty ? null : m.text.trim(),
           mediaPath: videoPath,
         ));
@@ -12543,7 +12769,8 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
         builder: (c) => AlertDialog(
           title: Text(AppL10n.t('cs_block_contact_q')),
           content: Text(
-            AppL10n.t('Вы больше не будете получать от него сообщения, истории и вызовы.'),
+            AppL10n.t(
+                'Вы больше не будете получать от него сообщения, истории и вызовы.'),
           ),
           actions: [
             TextButton(
@@ -12571,7 +12798,8 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
         builder: (c) => AlertDialog(
           title: Text(AppL10n.t('cm_delete_contact_q')),
           content: Text(
-            AppL10n.t('Контакт и вся переписка будут удалены без возможности восстановления.'),
+            AppL10n.t(
+                'Контакт и вся переписка будут удалены без возможности восстановления.'),
           ),
           actions: [
             TextButton(
@@ -12653,8 +12881,9 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title:
-              Text(handle.isEmpty ? AppL10n.t('Профиль бота') : AppL10n.f('Профиль бота @{0}', [handle])),
+          title: Text(handle.isEmpty
+              ? AppL10n.t('Профиль бота')
+              : AppL10n.f('Профиль бота @{0}', [handle])),
           content: SizedBox(
             width: 460,
             child: SingleChildScrollView(
@@ -12664,14 +12893,16 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                   TextField(
                     controller: nameCtrl,
                     maxLength: 64,
-                    decoration: InputDecoration(labelText: AppL10n.t('Имя бота')),
+                    decoration:
+                        InputDecoration(labelText: AppL10n.t('Имя бота')),
                   ),
                   TextField(
                     controller: descCtrl,
                     maxLength: 512,
                     minLines: 2,
                     maxLines: 5,
-                    decoration: InputDecoration(labelText: AppL10n.t('Описание')),
+                    decoration:
+                        InputDecoration(labelText: AppL10n.t('Описание')),
                   ),
                   TextField(
                     controller: avatarCtrl,
@@ -13105,7 +13336,8 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(
-                                        AppL10n.t('Ожидайте: трек придёт с профилем, когда контакт обновит приложение или откроет чат.'),
+                                        AppL10n.t(
+                                            'Ожидайте: трек придёт с профилем, когда контакт обновит приложение или откроет чат.'),
                                       ),
                                     ),
                                   );
@@ -13115,7 +13347,8 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                               )
                             else
                               Text(
-                                AppL10n.t('Когда контакт будет в сети ретранслятора, трек сможет подтянуться с профилем.'),
+                                AppL10n.t(
+                                    'Когда контакт будет в сети ретранслятора, трек сможет подтянуться с профилем.'),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: cs.onSurfaceVariant,
@@ -13134,7 +13367,8 @@ class _PeerProfileScreenState extends State<_PeerProfileScreen> {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.amp_stories),
                       title: Text(AppL10n.t('cs_todays_story')),
-                      subtitle: Text(AppL10n.f('{0} историй', [stories.length])),
+                      subtitle:
+                          Text(AppL10n.f('{0} историй', [stories.length])),
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -13545,7 +13779,8 @@ class _DmImage extends StatelessWidget {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return constrain(loadingBox());
             }
-            return constrain(errorBox(snapshot.error ?? 'missing_custom_sticker'));
+            return constrain(
+                errorBox(snapshot.error ?? 'missing_custom_sticker'));
           }
           return constrain(fromBytesOrRls(data));
         },
@@ -13703,6 +13938,7 @@ class GalleryMediaItem {
   final String path;
   final bool isVideo;
   final String? caption;
+
   /// Source chat message id — powers the "..." menu's forward / jump-to-
   /// message actions. Null for callers that don't have one yet (channel/
   /// group galleries aren't wired to those actions).
@@ -13876,8 +14112,8 @@ class _MediaGalleryViewerState extends State<_MediaGalleryViewer> {
                   // Close — top-left; save — top-right.
                   SafeArea(
                     child: Padding(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 6),
                       child: Row(
                         children: [
                           _ViewerCircleButton(

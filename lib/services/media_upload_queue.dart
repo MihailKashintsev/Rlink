@@ -319,7 +319,10 @@ class MediaUploadQueue {
 
     try {
       final bytes = await File(task.filePath).readAsBytes();
-      final compressed = ImageService.instance.compress(bytes);
+      // Video containers are already compressed: zlib at level 6 on the UI
+      // isolate took seconds and gained ~nothing (receivers accept raw bytes).
+      final compressed =
+          task.isVideo ? bytes : ImageService.instance.compress(bytes);
       final sealed = await CryptoService.instance.sealMediaPayload(
         plaintext: compressed,
         recipientX25519KeyBase64: recipientX25519,

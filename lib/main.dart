@@ -32,6 +32,7 @@ import 'models/shared_collab.dart';
 import 'app_version.dart';
 import 'services/app_settings.dart';
 import 'services/vpn_status_service.dart';
+import 'services/quick_video_seen_service.dart';
 import 'services/delivery_health_service.dart';
 import 'services/premium_service.dart';
 import 'services/app_lock_service.dart';
@@ -790,6 +791,7 @@ Future<void> initServices() async {
     // immediately (not only after opening Settings).
     unawaited(GoogleDriveChannelBackup.warmUp());
     unawaited(VpnStatusService.instance.start());
+  unawaited(QuickVideoSeenService.instance.init());
     unawaited(OneDriveBackup.instance.init());
     unawaited(DropboxBackup.instance.init());
     await _restoreAdminPasswordFromSealedIfNeeded();
@@ -2990,6 +2992,15 @@ Future<void> initServices() async {
       if (from == null || myKey.isEmpty || ts <= 0) return;
       if (rid8 != null && !myKey.startsWith(rid8)) return;
       await ChatStorageService.instance.applyPeerRead(from, ts);
+    };
+
+    GossipRouter.instance.onQuickVideoSeen = (payload) async {
+      final mid = payload['mid'] as String?;
+      final rid8 = payload['r'] as String?;
+      final myKey = CryptoService.instance.publicKeyHex;
+      if (mid == null || myKey.isEmpty) return;
+      if (rid8 != null && !myKey.startsWith(rid8)) return;
+      await QuickVideoSeenService.instance.markSeen(mid);
     };
 
     GossipRouter.instance.onDmEphemeral = (payload) async {
