@@ -7,7 +7,7 @@
 #
 # Prerequisite: an A record  <domain> -> 185.244.172.90  already resolves.
 # Run on the relay host:
-#   ssh root@185.244.172.90 bash -s -- relay.rendergames.online < deploy/nginx_domain.sh
+#   ssh root@185.244.172.90 bash -s -- rlinkrelay.duckdns.org < deploy/nginx_domain.sh
 # Idempotent: re-running only fills in whatever is missing.
 set -euo pipefail
 DOMAIN="${1:?usage: nginx_domain.sh <domain>}"

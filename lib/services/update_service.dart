@@ -12,11 +12,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// Обновления берём со СВОЕГО сервера (relay), а не с GitHub — в РФ GitHub
 /// часто режется/тормозит. Relay отдаёт манифест + сами бинарники:
-///   https://relay.rendergames.online/updates/manifest.json
+///   https://rlinkrelay.duckdns.org/updates/manifest.json
 /// Манифест: { version, notes, assets: { android|windows|macos|linux|ios } }.
 /// The same server under two names — some networks stall TLS for one of them.
 const _kUpdateManifestUrls = <String>[
-  'https://relay.rendergames.online/updates/manifest.json',
+  'https://rlinkrelay.duckdns.org/updates/manifest.json',
   'https://185.244.172.90.nip.io/updates/manifest.json',
 ];
 

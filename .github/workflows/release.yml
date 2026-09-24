@@ -280,7 +280,7 @@ jobs:
           SCP="scp -i $HOME/.ssh/relay $SSHOPTS"
           HOST=root@185.244.172.90
           DIR=/var/www/rlink-updates
-          B=https://185.244.172.90.nip.io/updates
+          B=https://rlinkrelay.duckdns.org/updates
           # `android` = arm64: every client, including old ones that predate the
           # split, reads that key. 32-bit ARM picks `android_arm32` when present.
           au=""; [ -f "artifacts/Rlink-${V}-arm64.apk" ]   && au="$B/Rlink-${V}-arm64.apk"
