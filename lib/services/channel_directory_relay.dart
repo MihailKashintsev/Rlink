@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../models/channel.dart';
+import 'channel_service.dart';
 import 'crypto_service.dart';
 import 'relay_service.dart';
 
@@ -16,7 +17,8 @@ class ChannelDirectoryRelay {
     return jsonEncode(sorted);
   }
 
-  static Map<String, dynamic> _payloadMap(Channel ch, int updatedAtMs) {
+  static Map<String, dynamic> _payloadMap(Channel ch, int updatedAtMs,
+      List<Map<String, dynamic>> ownerChain) {
     if (!ch.isPublic) {
       return {
         'adminId': ch.adminId,
@@ -48,6 +50,7 @@ class ChannelDirectoryRelay {
         'driveBannerUrl': ch.driveBannerUrl,
       'allowModeratorsManageDriveAccount': ch.allowModeratorsManageDriveAccount,
       'isPublic': true,
+      if (ownerChain.isNotEmpty) 'ownerChain': ownerChain,
       'linkAdminIds': ch.linkAdminIds,
       'moderatorIds': ch.moderatorIds,
       'name': ch.name,
@@ -70,7 +73,8 @@ class ChannelDirectoryRelay {
     if (!RelayService.instance.isConnected) return;
 
     final updatedAt = DateTime.now().millisecondsSinceEpoch;
-    final m = _payloadMap(ch, updatedAt);
+    final m = _payloadMap(
+        ch, updatedAt, await ChannelService.instance.ownerChain(ch.id));
     final payload = _canonicalPayloadJson(m);
     try {
       final sig = await CryptoService.instance.signUtf8Message(payload);

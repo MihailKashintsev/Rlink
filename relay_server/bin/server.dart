@@ -174,6 +174,27 @@ bool _checkChannelDirPutRate(String adminId) {
   return true;
 }
 
+/// A channel's directory entry may only change hands with a chain of
+/// owner-signed hand-over certificates (`f` → `t`, message
+/// `rlink-owner-v1|channelId|f|t|ts`) leading from the known admin to the new
+/// one — otherwise anyone could claim/hide/tombstone someone else's channel by
+/// signing a put with their own key.
+Future<bool> _ownerPathValid(
+    String channelId, String from, String to, List<dynamic> chain) async {
+  var cur = from;
+  for (final c in chain) {
+    if (c is! Map) continue;
+    final f = c['f'], t = c['t'], ts = c['ts'], sig = c['s'];
+    if (f != cur || t is! String || ts is! num || sig is! String) continue;
+    final ok = await _verifyChannelDirSignature(
+        'rlink-owner-v1|$channelId|$f|$t|${ts.toInt()}', sig, f as String);
+    if (!ok) continue;
+    cur = t;
+    if (cur == to) return true;
+  }
+  return false;
+}
+
 Future<bool> _verifyChannelDirSignature(
   String payloadJson,
   String signatureHex,
@@ -1707,6 +1728,22 @@ Future<void> _handleChannelDirPutAsync(
       }));
     } catch (_) {}
     return;
+  }
+
+  final knownAdmin = _channelDirectory[channelId]?['adminId'] as String?;
+  if (knownAdmin != null && knownAdmin != adminId) {
+    final chain = obj['ownerChain'];
+    if (chain is! List ||
+        !await _ownerPathValid(channelId, knownAdmin, adminId, chain)) {
+      try {
+        user.ws.sink.add(jsonEncode({
+          'type': 'channel_dir_ack',
+          'ok': false,
+          'error': 'owner_mismatch',
+        }));
+      } catch (_) {}
+      return;
+    }
   }
 
   final tomb = _channelDirTombstones[channelId] ?? 0;

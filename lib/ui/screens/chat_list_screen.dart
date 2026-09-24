@@ -48,6 +48,7 @@ import '../widgets/nav_glyph.dart';
 import '../widgets/premium_gate.dart';
 import '../widgets/status_emoji_view.dart';
 import '../widgets/stories_collapse_overlay.dart';
+import '../widgets/vpn_notice_banner.dart';
 import '../widgets/update_available_banner.dart';
 import '../../utils/message_preview_formatter.dart'
     show
@@ -2504,6 +2505,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
       _resetScrollSink();
       final col = Column(children: [
         _storiesSpacer(key: widget.areaKey),
+        const VpnNoticeBanner(),
         _buildPendingBanners(context),
         _miniPlayerGap(),
         Expanded(
@@ -2521,6 +2523,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
           children: [
             _storiesSpacer(key: widget.areaKey),
             _buildFilterBar(context),
+            const VpnNoticeBanner(),
             _buildPendingBanners(context),
             _miniPlayerGap(),
             Expanded(
@@ -2572,6 +2575,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildFilterTools(context),
+                        const VpnNoticeBanner(),
                         _buildPendingBanners(context),
                         if (_birthdayContact != null)
                           BirthdayBanner(

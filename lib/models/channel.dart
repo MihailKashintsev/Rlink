@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../services/channel_directory_relay.dart';
+import '../services/channel_service.dart';
 import '../services/gossip_router.dart';
 import '../services/image_service.dart';
 
@@ -540,7 +541,9 @@ extension ChannelGossipBroadcast on Channel {
   /// конкретному пользователю (доставляется через relay-mailbox даже офлайн и
   /// работает для скрытых каналов) — используется при назначении модератора.
   Future<void> broadcastGossipMeta({String? recipientId}) async {
+    final ownerChain = await ChannelService.instance.ownerChain(id);
     await GossipRouter.instance.broadcastChannelMeta(
+      ownerChain: ownerChain,
       channelId: id,
       name: name,
       adminId: adminId,

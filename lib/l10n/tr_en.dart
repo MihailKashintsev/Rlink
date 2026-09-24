@@ -2010,4 +2010,5 @@ const Map<String, String> trEn = <String, String>{
   'Владение можно передать только администратору канала. Сначала назначьте администратора в разделе «Команда и подписи».': 'Ownership can only be transferred to a channel administrator. First appoint an administrator in “Team and signatures”.',
   'Резерв на Google Диск…': 'Backing up to Google Drive…',
   'Владельцем станет один из администраторов канала': 'One of the channel administrators will become the owner',
+  'Включён VPN — с ним возможны небольшие неполадки в работе приложения (сообщения, звонки, синхронизация).': 'A VPN is on — minor issues with the app (messages, calls, sync) are possible while it is active.',
 };

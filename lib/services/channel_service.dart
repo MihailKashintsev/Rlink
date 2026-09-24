@@ -889,11 +889,16 @@ class ChannelService {
         backupProvider: (r['backup_provider'] as String?) ?? 'google',
       );
 
-  Future<void> updateChannel(Channel ch) async {
+  /// [changeOwner] must be set ONLY by a verified ownership hand-over — the
+  /// admin id used to be silently dropped here (so a transfer demoted the new
+  /// owner to a plain subscriber while the old owner stayed admin). Other
+  /// callers write possibly stale channel objects and must not touch it.
+  Future<void> updateChannel(Channel ch, {bool changeOwner = false}) async {
     final existing = await getChannel(ch.id);
     await _db!.update(
       'channels',
       {
+        if (changeOwner) 'admin_id': ch.adminId,
         'name': ch.name,
         'subscribers': ch.subscriberIds.join(','),
         'moderators': ch.moderatorIds.join(','),
@@ -991,15 +996,105 @@ class ChannelService {
     _bump();
   }
 
+  // ── Ownership hand-over proofs ─────────────────────────────────────────────
+  // A change of channel owner is accepted only with a chain of certificates,
+  // each signed by the owner that hands over (`f` → `t`). Without this, any peer
+  // (or a stale relay-directory entry) could reassign a channel by broadcasting
+  // a meta packet with its own id as admin.
+  static const _ownerChainPrefsKey = 'channel_owner_chains_v1';
+  final Map<String, List<Map<String, dynamic>>> _ownerChains = {};
+  bool _ownerChainsLoaded = false;
+
+  static String _ownerCertMessage(String channelId, String f, String t, int ts) =>
+      'rlink-owner-v1|$channelId|$f|$t|$ts';
+
+  Future<void> _ensureOwnerChains() async {
+    if (_ownerChainsLoaded) return;
+    _ownerChainsLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final s = prefs.getString(_ownerChainPrefsKey);
+      if (s == null || s.isEmpty) return;
+      final j = jsonDecode(s) as Map<String, dynamic>;
+      for (final e in j.entries) {
+        _ownerChains[e.key] = (e.value as List)
+            .whereType<Map>()
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveOwnerChains() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_ownerChainPrefsKey, jsonEncode(_ownerChains));
+    } catch (_) {}
+  }
+
+  /// Certificates proving how [channelId] reached its current owner.
+  Future<List<Map<String, dynamic>>> ownerChain(String channelId) async {
+    await _ensureOwnerChains();
+    return List<Map<String, dynamic>>.from(_ownerChains[channelId] ?? const []);
+  }
+
+  /// True if [chain] contains a valid signed path of hand-overs from [from] to [to].
+  Future<bool> _ownerPathValid(
+      String channelId, String from, String to, List<dynamic> chain) async {
+    var cur = from;
+    for (final c in chain) {
+      if (c is! Map) continue;
+      final f = c['f'], t = c['t'], ts = c['ts'], sig = c['s'];
+      if (f != cur || t is! String || ts is! num || sig is! String) continue;
+      final ok = await CryptoService.instance.verifyUtf8Signature(
+          f as String, _ownerCertMessage(channelId, f, t, ts.toInt()), sig);
+      if (!ok) continue;
+      cur = t;
+      if (cur == to) return true;
+    }
+    return false;
+  }
+
+  Future<void> _rememberOwnerChain(
+      String channelId, List<dynamic> incoming) async {
+    await _ensureOwnerChains();
+    final merged = <String, Map<String, dynamic>>{};
+    for (final c in [...(_ownerChains[channelId] ?? const []), ...incoming]) {
+      if (c is! Map) continue;
+      final m = Map<String, dynamic>.from(c);
+      merged['${m['f']}>${m['t']}>${m['ts']}'] = m;
+    }
+    final list = merged.values.toList();
+    _ownerChains[channelId] =
+        list.length > 8 ? list.sublist(list.length - 8) : list;
+    await _saveOwnerChains();
+  }
+
   /// Слияние `channel_meta` gossip: отсутствующие в пакете поля не затираются.
   Future<void> applyChannelMetaFromPayload(Map<String, dynamic> p) async {
     if (_db == null) return;
     final channelId = p['channelId'] as String?;
     final name = p['name'] as String?;
-    final adminId = p['adminId'] as String?;
+    var adminId = p['adminId'] as String?;
     if (channelId == null || name == null || adminId == null) return;
 
     final existing = await getChannel(channelId);
+
+    // A different admin than we know is only believed with a signed hand-over
+    // chain from the admin we know. Otherwise keep our owner AND ignore the
+    // packet's staff lists (they describe an ownership state we don't accept).
+    var ownerChanged = false;
+    var ownerTrusted = true;
+    if (existing != null && existing.adminId != adminId) {
+      final chain = (p['oc'] ?? p['ownerChain']) as List<dynamic>? ?? const [];
+      if (await _ownerPathValid(channelId, existing.adminId, adminId, chain)) {
+        ownerChanged = true;
+        await _rememberOwnerChain(channelId, chain);
+      } else {
+        ownerTrusted = false;
+        adminId = existing.adminId;
+      }
+    }
 
     List<String> subs() {
       final incoming = p.containsKey('subscriberIds')
@@ -1018,12 +1113,12 @@ class ChannelService {
       if (me.isNotEmpty && (existing?.subscriberIds.contains(me) ?? false)) {
         merged.add(me);
       }
-      if (merged.isEmpty) merged.add(adminId);
+      if (merged.isEmpty) merged.add(adminId!);
       return merged.toList();
     }
 
     List<String> mods() {
-      if (p.containsKey('moderatorIds')) {
+      if (ownerTrusted && p.containsKey('moderatorIds')) {
         final raw = p['moderatorIds'] as List<dynamic>?;
         return raw?.cast<String>() ?? const [];
       }
@@ -1031,7 +1126,7 @@ class ChannelService {
     }
 
     List<String> links() {
-      if (p.containsKey('linkAdminIds')) {
+      if (ownerTrusted && p.containsKey('linkAdminIds')) {
         final raw = p['linkAdminIds'] as List<dynamic>?;
         return raw?.cast<String>() ?? const [];
       }
@@ -1046,7 +1141,7 @@ class ChannelService {
     }
 
     Map<String, String> labels() {
-      if (p.containsKey('staffLabels') && p['staffLabels'] is Map) {
+      if (ownerTrusted && p.containsKey('staffLabels') && p['staffLabels'] is Map) {
         final m = p['staffLabels'] as Map;
         return m.map((k, v) => MapEntry(k.toString(), v.toString()));
       }
@@ -1124,7 +1219,7 @@ class ChannelService {
               ? (p['allowModeratorsManageDriveAccount'] as bool? ?? false)
               : (existing?.allowModeratorsManageDriveAccount ?? false),
     );
-    await saveChannelFromBroadcast(ch);
+    await saveChannelFromBroadcast(ch, changeOwner: ownerChanged);
     // Only subscribers (and the admin) cache the avatar/banner — pull from Drive
     // if subscribed and we don't have them yet.
     final myId = CryptoService.instance.publicKeyHex;
@@ -1195,11 +1290,12 @@ class ChannelService {
     }
   }
 
-  Future<void> saveChannelFromBroadcast(Channel ch) async {
+  Future<void> saveChannelFromBroadcast(Channel ch,
+      {bool changeOwner = false}) async {
     final existing = await getChannel(ch.id);
     if (existing != null) {
       // update subscriber list etc
-      await updateChannel(ch);
+      await updateChannel(ch, changeOwner: changeOwner);
       return;
     }
     await _db!.insert('channels', {
@@ -1356,7 +1452,18 @@ class ChannelService {
       linkAdminIds: links,
       staffLabels: staffLabels,
     );
-    await updateChannel(updated);
+    // Signed certificate: proves to every other device that the previous owner
+    // really handed the channel over (see [_ownerPathValid]).
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final cert = <String, dynamic>{
+      'f': currentAdminId,
+      't': newAdminId,
+      'ts': ts,
+      's': await CryptoService.instance.signUtf8Message(
+          _ownerCertMessage(channelId, currentAdminId, newAdminId, ts)),
+    };
+    await _rememberOwnerChain(channelId, [cert]);
+    await updateChannel(updated, changeOwner: true);
     unawaited(updated.broadcastGossipMeta());
     // Directed copy so the new owner learns of the handover even if they're
     // offline now (relay queues it) or out of gossip range — they then assert

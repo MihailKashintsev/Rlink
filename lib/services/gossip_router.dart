@@ -2953,6 +2953,7 @@ class GossipRouter {
     bool? driveBackup,
     int? driveBackupRev,
     bool? allowModeratorsManageDriveAccount,
+    List<Map<String, dynamic>>? ownerChain,
     String? recipientId,
   }) async {
     // Скрытые каналы не рассылаются широковещательно — только прямые invite и
@@ -2990,6 +2991,7 @@ class GossipRouter {
         if (allowModeratorsManageDriveAccount != null)
           'allowModeratorsManageDriveAccount':
               allowModeratorsManageDriveAccount,
+        if (ownerChain != null && ownerChain.isNotEmpty) 'oc': ownerChain,
       },
     );
     await _forward(packet);

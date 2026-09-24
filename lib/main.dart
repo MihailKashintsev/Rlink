@@ -31,6 +31,7 @@ import 'models/user_profile.dart';
 import 'models/shared_collab.dart';
 import 'app_version.dart';
 import 'services/app_settings.dart';
+import 'services/vpn_status_service.dart';
 import 'services/delivery_health_service.dart';
 import 'services/premium_service.dart';
 import 'services/app_lock_service.dart';
@@ -788,6 +789,7 @@ Future<void> initServices() async {
     // Restore the Google session in the background so linked accounts work
     // immediately (not only after opening Settings).
     unawaited(GoogleDriveChannelBackup.warmUp());
+    unawaited(VpnStatusService.instance.start());
     unawaited(OneDriveBackup.instance.init());
     unawaited(DropboxBackup.instance.init());
     await _restoreAdminPasswordFromSealedIfNeeded();
