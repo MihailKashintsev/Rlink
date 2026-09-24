@@ -104,7 +104,7 @@ class RelayService with WidgetsBindingObserver {
   /// Default public relay server — always tried, so a broken custom relay
   /// (see [AppSettings.relayServerUrl]) degrades to "slower to connect",
   /// never "no connectivity at all".
-  static const defaultServerUrl = 'wss://relay.rendergames.ru';
+  static const defaultServerUrl = 'wss://relay.rendergames.online';
 
   /// Same server under its old name. Some networks stall the TLS handshake for
   /// `*.nip.io` names (SNI filtering), others may do so for the new domain, so
