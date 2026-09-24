@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../services/contact_trust_service.dart';
 import '../../services/crypto_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Экран «Код безопасности» (safety number) между вами и контактом.
 /// Оба видят один и тот же код, если никакой relay не подменил ключи. Сверьте
@@ -65,7 +66,7 @@ class _SafetyNumberScreenState extends State<SafetyNumberScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Код безопасности')),
+      appBar: AppBar(title: Text(AppL10n.t('Код безопасности'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -86,9 +87,7 @@ class _SafetyNumberScreenState extends State<SafetyNumberScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Код безопасности изменился. Это бывает при переустановке '
-                            'у собеседника — но может означать перехват. Сверьте код '
-                            'заново, прежде чем доверять.',
+                            AppL10n.t('Код безопасности изменился. Это бывает при переустановке у собеседника — но может означать перехват. Сверьте код заново, прежде чем доверять.'),
                             style: TextStyle(color: cs.onErrorContainer),
                           ),
                         ),
@@ -96,9 +95,7 @@ class _SafetyNumberScreenState extends State<SafetyNumberScreen> {
                     ),
                   ),
                 Text(
-                  'Сверьте этот код с ${widget.peerName} (голосом или лично). '
-                  'Если у вас обоих он одинаковый — переписку и звонки никто не '
-                  'перехватывает.',
+                  AppL10n.f('Сверьте этот код с {0} (голосом или лично). Если у вас обоих он одинаковый — переписку и звонки никто не перехватывает.', [widget.peerName]),
                   style: TextStyle(color: cs.onSurfaceVariant, height: 1.4),
                 ),
                 const SizedBox(height: 20),
@@ -130,11 +127,11 @@ class _SafetyNumberScreenState extends State<SafetyNumberScreen> {
                                 ClipboardData(text: _number));
                             ScaffoldMessenger.of(context)
                               ..clearSnackBars()
-                              ..showSnackBar(const SnackBar(
-                                  content: Text('Код скопирован')));
+                              ..showSnackBar(SnackBar(
+                                  content: Text(AppL10n.t('Код скопирован'))));
                           },
                     icon: const Icon(Icons.copy, size: 18),
-                    label: const Text('Скопировать'),
+                    label: Text(AppL10n.t('Скопировать')),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -149,14 +146,13 @@ class _SafetyNumberScreenState extends State<SafetyNumberScreen> {
                       ? Icons.verified_user
                       : Icons.verified_user_outlined),
                   label: Text(_verified
-                      ? 'Проверен ✓ — снять отметку'
-                      : 'Отметить проверенным'),
+                      ? AppL10n.t('Проверен ✓ — снять отметку')
+                      : AppL10n.t('Отметить проверенным')),
                 ),
                 if (widget.peerX25519Key.isEmpty) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Ключ шифрования контакта ещё не получен — код появится, когда '
-                    'вы обменяетесь сообщениями.',
+                    AppL10n.t('Ключ шифрования контакта ещё не получен — код появится, когда вы обменяетесь сообщениями.'),
                     style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
                   ),
                 ],

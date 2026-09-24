@@ -15,6 +15,7 @@ import '../../services/image_service.dart';
 import '../../services/profile_service.dart';
 import 'avatar_widget.dart';
 import 'desktop_image_picker.dart';
+import '../../l10n/app_l10n.dart';
 
 // Direct profile edits for the settings tiles — pick straight into the
 // gallery / emoji picker, save, and broadcast (same propagation as the full
@@ -44,8 +45,8 @@ Future<String?> _pickBannerPath(BuildContext context) async {
     if (jpg.length > 500 * 1024) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Баннер слишком большой. Выберите меньше.')),
+          SnackBar(
+              content: Text(AppL10n.t('Баннер слишком большой. Выберите меньше.'))),
         );
       }
       return null;

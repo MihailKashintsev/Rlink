@@ -1,8 +1,5 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/material.dart' show Theme;
+import 'package:flutter/material.dart' show ColoredBox, Theme;
 
 /// Переходы в стиле iOS: свайп от левого края для возврата (на iOS и в типичной конфигурации).
 Route<T> rlinkPushRoute<T>(Widget page) {
@@ -27,46 +24,17 @@ Route<T> rlinkOpaquePushRoute<T>(Widget page) {
   );
 }
 
-bool get _rlinkSkipChatEnterFade {
-  if (kIsWeb) return false;
-  try {
-    return Platform.isMacOS || Platform.isWindows || Platform.isLinux;
-  } catch (_) {
-    return false;
-  }
-}
-
-/// Открытие личного чата: Cupertino + плавное проявление от прозрачности.
+/// Открытие личного чата: Cupertino-сдвиг. Чат наезжает справа налево, а
+/// экран под ним (главный / откуда открыли) чуть сдвигается влево — и обратно
+/// при выходе. Это делает сам Cupertino-роут (delegatedTransition для нижнего
+/// роута), поэтому страница чата должна быть НЕПРОЗРАЧНОЙ: раньше поверх
+/// сдвига накладывалось затухание, и во время перехода сквозь чат просвечивал
+/// уезжающий экран — отсюда «баг» при открытии.
 Route<T> rlinkChatRoute<T>(Widget page) {
-  if (_rlinkSkipChatEnterFade) {
-    return CupertinoPageRoute<T>(builder: (_) => page);
-  }
   return CupertinoPageRoute<T>(
-    builder: (context) => _RlinkChatEnterFade(child: page),
+    builder: (context) => ColoredBox(
+      color: Theme.of(context).colorScheme.surface,
+      child: page,
+    ),
   );
-}
-
-class _RlinkChatEnterFade extends StatelessWidget {
-  final Widget child;
-
-  const _RlinkChatEnterFade({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final route = ModalRoute.of(context);
-    final animation = route?.animation;
-    if (animation == null) return child;
-
-    return FadeTransition(
-      opacity: CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        // easeIn on the closing half delays the fade right when it starts —
-        // exits read as responsive with ease-out too (see improve-animations
-        // audit, 2026-09-23).
-        reverseCurve: Curves.easeOutCubic,
-      ),
-      child: child,
-    );
-  }
 }

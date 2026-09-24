@@ -13,6 +13,7 @@ import '../../models/rlv_sticker.dart';
 import '../widgets/photo_vectorize_dialog.dart';
 import '../widgets/rlv_sticker_view.dart'
     show buildShapePath, buildFreehandPath, parseRlvHexColor;
+import '../../l10n/app_l10n.dart';
 
 /// The vector sticker "mini studio": compose shape/freehand/SVG layers, pose
 /// each one on the canvas at chosen moments in time (same keyframe/timeline
@@ -53,14 +54,14 @@ const List<(String, IconData)> _kShapeTypes = [
   ('polygon', Icons.change_history_rounded),
   ('line', Icons.horizontal_rule_rounded),
 ];
-const Map<String, String> _kPresetLabels = {
-  'bounce': 'Подпрыгивание',
-  'pulse': 'Пульсация',
-  'spin': 'Вращение',
-  'wobble': 'Тряска',
-  'fadeIn': 'Появление',
-  'fadeOut': 'Исчезновение',
-  'slideIn': 'Слайд',
+Map<String, String> _kPresetLabels = {
+  'bounce': AppL10n.t('Подпрыгивание'),
+  'pulse': AppL10n.t('Пульсация'),
+  'spin': AppL10n.t('Вращение'),
+  'wobble': AppL10n.t('Тряска'),
+  'fadeIn': AppL10n.t('Появление'),
+  'fadeOut': AppL10n.t('Исчезновение'),
+  'slideIn': AppL10n.t('Слайд'),
 };
 
 String _colorToHex(Color c) {
@@ -246,7 +247,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
   void _deleteNearestKeyframe() {
     final layer = _sel;
     if (layer == null || layer.keys.length <= 1) {
-      _snack('У слоя должен остаться хотя бы один ключевой кадр');
+      _snack(AppL10n.t('У слоя должен остаться хотя бы один ключевой кадр'));
       return;
     }
     var nearest = 0;
@@ -420,7 +421,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Фигура',
+                  Text(AppL10n.t('Фигура'),
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 12),
                   Wrap(
@@ -475,7 +476,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
                     onPressed: chosenShape == null
                         ? null
                         : () => Navigator.pop(ctx, (chosenShape!, chosenColor)),
-                    child: const Text('Добавить'),
+                    child: Text(AppL10n.t('Добавить')),
                   ),
                 ],
               ),
@@ -497,7 +498,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
       final bytes = result?.files.single.bytes;
       if (bytes == null) return;
       if (bytes.length > rlvMaxSvgBytesPerLayer) {
-        _snack('SVG слишком большой');
+        _snack(AppL10n.t('SVG слишком большой'));
         return;
       }
       final svgText = utf8.decode(bytes);
@@ -539,7 +540,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
         _selected = _layers.length - 1;
       });
     } catch (e) {
-      _snack('Не удалось импортировать SVG: $e');
+      _snack(AppL10n.f('Не удалось импортировать SVG: {0}', [e]));
     }
   }
 
@@ -591,7 +592,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
         _selected = _layers.length - 1;
       });
     } catch (e) {
-      _snack('Не удалось векторизовать фото: $e');
+      _snack(AppL10n.f('Не удалось векторизовать фото: {0}', [e]));
     }
   }
 
@@ -645,7 +646,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
 
   Future<void> _export() async {
     if (_layers.isEmpty) {
-      _snack('Добавьте хотя бы один слой');
+      _snack(AppL10n.t('Добавьте хотя бы один слой'));
       return;
     }
     setState(() => _exporting = true);
@@ -660,7 +661,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
       final bytes = sticker.encode();
       if (mounted) Navigator.of(context).pop(bytes);
     } catch (e) {
-      _snack('Не удалось собрать стикер: $e');
+      _snack(AppL10n.f('Не удалось собрать стикер: {0}', [e]));
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -679,7 +680,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
       appBar: AppBar(
         backgroundColor: const Color(0xFF101014),
         foregroundColor: Colors.white,
-        title: const Text('Векторный стикер'),
+        title: Text(AppL10n.t('Векторный стикер')),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -693,7 +694,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
                           strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.check_rounded, size: 18),
-              label: const Text('Готово'),
+              label: Text(AppL10n.t('Готово')),
             ),
           ),
         ],
@@ -855,7 +856,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
             ),
           ),
           IconButton(
-            tooltip: 'Удалить ближайший ключевой кадр',
+            tooltip: AppL10n.t('Удалить ближайший ключевой кадр'),
             color: Colors.white54,
             icon: const Icon(Icons.close_rounded, size: 18),
             onPressed: layer == null ? null : _deleteNearestKeyframe,
@@ -912,17 +913,17 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _toolBtn(Icons.category_outlined, 'Фигура', _pickShape),
-              _toolBtn(Icons.edit_outlined, 'Рисовать',
+              _toolBtn(Icons.category_outlined, AppL10n.t('Фигура'), _pickShape),
+              _toolBtn(Icons.edit_outlined, AppL10n.t('Рисовать'),
                   () => setState(() => _drawMode = true)),
               _toolBtn(Icons.image_outlined, 'SVG', _addSvgLayer),
-              _toolBtn(Icons.auto_fix_high_outlined, 'Фото в вектор', _addPhotoVectorLayer),
+              _toolBtn(Icons.auto_fix_high_outlined, AppL10n.t('Фото в вектор'), _addPhotoVectorLayer),
               _toolBtn(
                 Icons.auto_awesome_rounded,
-                'Пресеты',
+                AppL10n.t('Пресеты'),
                 layer == null ? null : () => _pickPreset(layer),
               ),
-              _toolBtn(Icons.delete_outline, 'Удалить',
+              _toolBtn(Icons.delete_outline, AppL10n.t('Удалить'),
                   layer == null ? null : _removeSelectedLayer),
               _easePicker(layer),
               _durationPicker(),
@@ -960,7 +961,7 @@ class _RlvStickerEditorScreenState extends State<RlvStickerEditorScreen>
               ),
             TextButton(
               onPressed: () => setState(() => _drawMode = false),
-              child: const Text('Готово'),
+              child: Text(AppL10n.t('Готово')),
             ),
           ],
         ),

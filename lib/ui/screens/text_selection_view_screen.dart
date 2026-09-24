@@ -22,10 +22,10 @@ class TextSelectionViewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Выделить текст'),
+        title: Text(AppL10n.t('Выделить текст')),
         actions: [
           IconButton(
-            tooltip: 'Скопировать всё',
+            tooltip: AppL10n.t('Скопировать всё'),
             icon: const Icon(Icons.copy_all),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: text));
@@ -33,7 +33,7 @@ class TextSelectionViewScreen extends StatelessWidget {
             },
           ),
           IconButton(
-            tooltip: 'Перевести всё',
+            tooltip: AppL10n.t('Перевести всё'),
             icon: const Icon(Icons.translate),
             onPressed: () => showTranslateResult(context, text),
           ),
@@ -52,7 +52,7 @@ class TextSelectionViewScreen extends StatelessWidget {
               final selected =
                   sel.textInside(editableState.textEditingValue.text);
               items.add(ContextMenuButtonItem(
-                label: 'Перевести',
+                label: AppL10n.t('Перевести'),
                 onPressed: () {
                   editableState.hideToolbar();
                   showTranslateResult(ctx, selected);

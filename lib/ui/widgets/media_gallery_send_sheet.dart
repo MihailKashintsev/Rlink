@@ -87,10 +87,10 @@ Future<void> showTabbedGallerySheet(
       onPoll != null ||
       onCalendarEvent != null;
   final tabs = <Tab>[
-    const Tab(text: 'Фото'),
-    const Tab(text: 'Видео'),
-    const Tab(text: 'Файлы'),
-    if (hasExtraMenu) const Tab(text: 'Меню'),
+    Tab(text: AppL10n.t('Фото')),
+    Tab(text: AppL10n.t('Видео')),
+    Tab(text: AppL10n.t('Файлы')),
+    if (hasExtraMenu) Tab(text: AppL10n.t('Меню')),
   ];
   return showModalBottomSheet<void>(
     context: context,
@@ -407,7 +407,7 @@ class _OtherTab extends StatelessWidget {
           if (onLocation != null)
             _GridActionButton(
               icon: Icons.location_on,
-              label: 'Локация',
+              label: AppL10n.t('Локация'),
               color: cs.primary,
               onTap: () {
                 Navigator.of(context).pop();
@@ -417,7 +417,7 @@ class _OtherTab extends StatelessWidget {
           if (onTodo != null)
             _GridActionButton(
               icon: Icons.checklist_rtl,
-              label: 'Задачи',
+              label: AppL10n.t('Задачи'),
               color: cs.tertiary,
               onTap: () {
                 Navigator.of(context).pop();
@@ -427,7 +427,7 @@ class _OtherTab extends StatelessWidget {
           if (onPoll != null)
             _GridActionButton(
               icon: Icons.poll,
-              label: 'Опрос',
+              label: AppL10n.t('Опрос'),
               color: cs.secondary,
               onTap: () {
                 Navigator.of(context).pop();
@@ -437,7 +437,7 @@ class _OtherTab extends StatelessWidget {
           if (onCalendarEvent != null)
             _GridActionButton(
               icon: Icons.event,
-              label: 'Событие',
+              label: AppL10n.t('Событие'),
               color: cs.error,
               onTap: () {
                 Navigator.of(context).pop();
@@ -721,7 +721,7 @@ class _SendButton extends StatelessWidget {
           ElevatedButton.icon(
             onPressed: onSend,
             icon: const Icon(Icons.send),
-            label: Text('Отправить $count'),
+            label: Text(AppL10n.f('Отправить {0}', [count])),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -893,7 +893,7 @@ class _GalleryPreviewGridState extends State<_GalleryPreviewGrid> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Нет фото в галерее',
+              AppL10n.t('Нет фото в галерее'),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
@@ -1144,37 +1144,37 @@ class _ActionBar extends StatelessWidget {
     final items = <_ActionItem>[
       _ActionItem(
         icon: Icons.insert_drive_file,
-        label: 'Файл',
+        label: AppL10n.t('Файл'),
         onTap: onOpenFile,
       ),
       if (onLocation != null)
         _ActionItem(
           icon: Icons.location_on,
-          label: 'Локация',
+          label: AppL10n.t('Локация'),
           onTap: () => unawaited(_runAndClose(onLocation!)),
         ),
       if (onContact != null)
         _ActionItem(
           icon: Icons.person,
-          label: 'Контакт',
+          label: AppL10n.t('Контакт'),
           onTap: () => unawaited(_runAndClose(onContact!)),
         ),
       if (onTodo != null)
         _ActionItem(
           icon: Icons.checklist_rtl,
-          label: 'Задачи',
+          label: AppL10n.t('Задачи'),
           onTap: () => unawaited(_runAndClose(onTodo!)),
         ),
       if (onCalendarEvent != null)
         _ActionItem(
           icon: Icons.event,
-          label: 'Событие',
+          label: AppL10n.t('Событие'),
           onTap: () => unawaited(_runAndClose(onCalendarEvent!)),
         ),
       if (onPoll != null)
         _ActionItem(
           icon: Icons.poll,
-          label: 'Опрос',
+          label: AppL10n.t('Опрос'),
           onTap: () => unawaited(_runAndClose(onPoll!)),
         ),
     ];
@@ -1304,7 +1304,7 @@ class _ExtraActionsMenuTab extends StatelessWidget {
       if (onLocation != null)
         ListTile(
           leading: const Icon(Icons.location_on_outlined),
-          title: const Text('Геометка'),
+          title: Text(AppL10n.t('Геометка')),
           onTap: () => unawaited(_runAndClose(onLocation!)),
         ),
       if (onTodo != null)
@@ -1327,7 +1327,7 @@ class _ExtraActionsMenuTab extends StatelessWidget {
         ),
     ];
     if (tiles.isEmpty) {
-      return const Center(child: Text('Нет доступных действий'));
+      return Center(child: Text(AppL10n.t('Нет доступных действий')));
     }
     return ListView.separated(
       itemCount: tiles.length,
@@ -1378,8 +1378,8 @@ class _EmojiStickersGifTabState extends State<_EmojiStickersGifTab>
       children: [
         TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Стикеры'),
+          tabs: [
+            Tab(text: AppL10n.t('Стикеры')),
             Tab(text: 'GIF'),
           ],
         ),
@@ -1480,7 +1480,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
     if (picked == null || !mounted) return;
     if (picked.path.toLowerCase().endsWith('.gif')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Для GIF откройте вкладку «GIF»')),
+        SnackBar(content: Text(AppL10n.t('Для GIF откройте вкладку «GIF»'))),
       );
       return;
     }
@@ -1515,7 +1515,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
                   size: 48, color: Theme.of(context).colorScheme.outline),
               const SizedBox(height: 12),
               Text(
-                'Здесь стикеры, которые вы отправляли или добавляли из чатов',
+                AppL10n.t('Здесь стикеры, которые вы отправляли или добавляли из чатов'),
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
@@ -1523,7 +1523,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
               FilledButton.icon(
                 onPressed: _createFromPhoto,
                 icon: const Icon(Icons.add_photo_alternate_outlined),
-                label: const Text('Создать стикер из фото'),
+                label: Text(AppL10n.t('Создать стикер из фото')),
               ),
             ],
           ),
@@ -1575,7 +1575,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Все',
+                            AppL10n.t('Все'),
                             style: TextStyle(
                               fontSize: 11,
                               color: isSelected
@@ -1674,8 +1674,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'В этом наборе пока нет стикеров. Выберите «Все стикеры» '
-                  'или добавьте стикеры в набор в Настройки → Стикеры.',
+                  AppL10n.t('В этом наборе пока нет стикеров. Выберите «Все стикеры» или добавьте стикеры в набор в Настройки → Стикеры.'),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
@@ -1731,7 +1730,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Все',
+                            AppL10n.t('Все'),
                             style: TextStyle(
                               fontSize: 11,
                               color: isSelected
@@ -1832,7 +1831,7 @@ class _StickerLibraryTabState extends State<_StickerLibraryTab> {
             child: OutlinedButton.icon(
               onPressed: _createFromPhoto,
               icon: const Icon(Icons.add, size: 20),
-              label: const Text('Новый стикер из фото'),
+              label: Text(AppL10n.t('Новый стикер из фото')),
             ),
           ),
         ),
@@ -1969,14 +1968,14 @@ class _FilesGalleryTabState extends State<_FilesGalleryTab> {
           child: FilledButton.icon(
             onPressed: _browse,
             icon: const Icon(Icons.folder_open_rounded),
-            label: const Text('Выбрать файл'),
+            label: Text(AppL10n.t('Выбрать файл')),
           ),
         ),
         if (_recent.isEmpty)
           Expanded(
             child: Center(
               child: Text(
-                'Недавно выбранные файлы появятся здесь',
+                AppL10n.t('Недавно выбранные файлы появятся здесь'),
                 style: Theme.of(context).textTheme.bodyMedium,
                 textAlign: TextAlign.center,
               ),
@@ -2128,7 +2127,7 @@ class _GalleryTabState extends State<_GalleryTab> {
         if (mounted) {
           setState(() {
             _loading = false;
-            _error = 'Нет доступа к галерее';
+            _error = AppL10n.t('Нет доступа к галерее');
             _assets = [];
             _albums = null;
             _selectedAlbumId = null;
@@ -2384,9 +2383,9 @@ class _GalleryTabState extends State<_GalleryTab> {
                 child: Text(AppL10n.t('common_retry')),
               ),
               const SizedBox(height: 8),
-              const TextButton(
+              TextButton(
                 onPressed: PhotoManager.openSetting,
-                child: Text('Настройки доступа'),
+                child: Text(AppL10n.t('Настройки доступа')),
               ),
             ],
           ),
@@ -2402,8 +2401,8 @@ class _GalleryTabState extends State<_GalleryTab> {
         return Center(
           child: Text(
             widget.mode == _GalleryMode.gif
-                ? 'Нет GIF в этом альбоме'
-                : 'Нет элементов в этом альбоме',
+                ? AppL10n.t('Нет GIF в этом альбоме')
+                : AppL10n.t('Нет элементов в этом альбоме'),
             style: Theme.of(context).textTheme.bodyLarge,
             textAlign: TextAlign.center,
           ),
@@ -2511,8 +2510,7 @@ class _GalleryTabState extends State<_GalleryTab> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Ограниченный доступ к фото: видны не все снимки. '
-                      'Откройте полный доступ или выберите альбом (например «Камера»).',
+                      AppL10n.t('Ограниченный доступ к фото: видны не все снимки. Откройте полный доступ или выберите альбом (например «Камера»).'),
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.25,
@@ -2523,7 +2521,7 @@ class _GalleryTabState extends State<_GalleryTab> {
                   ),
                   TextButton(
                     onPressed: () => unawaited(_openPhotoAccessSettings()),
-                    child: const Text('Доступ'),
+                    child: Text(AppL10n.t('Доступ')),
                   ),
                 ],
               ),
@@ -2534,8 +2532,8 @@ class _GalleryTabState extends State<_GalleryTab> {
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
             child: DropdownButtonFormField<String>(
               initialValue: _selectedAlbumId,
-              decoration: const InputDecoration(
-                labelText: 'Альбом',
+              decoration: InputDecoration(
+                labelText: AppL10n.t('Альбом'),
                 isDense: true,
                 border: OutlineInputBorder(),
                 contentPadding:
@@ -2669,7 +2667,7 @@ class _SelectedPhotosBar extends StatelessWidget {
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.send_rounded, size: 18),
-                label: Text('Отправить ${selected.length}'),
+                label: Text(AppL10n.f('Отправить {0}', [selected.length])),
               ),
             ),
           ),
@@ -2691,11 +2689,11 @@ class _DesktopPlaceholder extends StatelessWidget {
   String get _label {
     switch (mode) {
       case _GalleryMode.gif:
-        return 'Выбрать GIF';
+        return AppL10n.t('Выбрать GIF');
       case _GalleryMode.photo:
-        return 'Выбрать фото';
+        return AppL10n.t('Выбрать фото');
       case _GalleryMode.video:
-        return 'Выбрать видео';
+        return AppL10n.t('Выбрать видео');
     }
   }
 

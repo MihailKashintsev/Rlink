@@ -4,6 +4,7 @@ import '../../services/channel_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/premium_service.dart';
 import '../screens/premium_status_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Shown instead of a paid screen when there's no active subscription.
 ///
@@ -42,7 +43,7 @@ class PremiumRequired extends StatelessWidget {
                       size: 40, color: cs.primary),
                 ),
                 const SizedBox(height: 16),
-                const Text('Нужна подписка Rlink Premium',
+                Text(AppL10n.t('Нужна подписка Rlink Premium'),
                     textAlign: TextAlign.center,
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
@@ -60,11 +61,11 @@ class PremiumRequired extends StatelessWidget {
                         builder: (_) => const PremiumStatusPage()),
                   ),
                   icon: const Icon(Icons.workspace_premium_outlined),
-                  label: const Text('Оформить — 48 ₽/мес или 496 ₽/год'),
+                  label: Text(AppL10n.t('Оформить — 48 ₽/мес или 496 ₽/год')),
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Всё остальное в Rlink бесплатно.',
+                  AppL10n.t('Всё остальное в Rlink бесплатно.'),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               ],
@@ -93,10 +94,9 @@ Future<bool> allowNewChannel(BuildContext context) async {
   await Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => const PremiumRequired(
-        title: 'Больше каналов',
-        description: 'На бесплатном тарифе можно создать два канала. Создание '
-            'следующих входит в Rlink Premium.',
+      builder: (_) => PremiumRequired(
+        title: AppL10n.t('Больше каналов'),
+        description: AppL10n.t('На бесплатном тарифе можно создать два канала. Создание следующих входит в Rlink Premium.'),
       ),
     ),
   );

@@ -5,6 +5,7 @@ import '../../services/music_catalog_service.dart';
 import '../../services/music_library_service.dart';
 import '../../services/voice_service.dart';
 import '../widgets/music_lyrics_panel.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Full-screen "now playing", opened from either mini player.
 ///
@@ -47,17 +48,17 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.expand_more),
-          tooltip: 'Свернуть',
+          tooltip: AppL10n.t('Свернуть'),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Сейчас играет'),
+        title: Text(AppL10n.t('Сейчас играет')),
       ),
       body: ValueListenableBuilder<VoicePlaybackSession?>(
         valueListenable: voice.playbackSession,
         builder: (context, session, _) {
           if (session == null) {
             return Center(
-              child: Text('Ничего не играет',
+              child: Text(AppL10n.t('Ничего не играет'),
                   style: TextStyle(color: cs.onSurfaceVariant)),
             );
           }
@@ -128,7 +129,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                     ],
                     if (session.total > 1) ...[
                       const SizedBox(height: 4),
-                      Text('${session.indexOneBased} из ${session.total}',
+                      Text(AppL10n.f('{0} из {1}', [session.indexOneBased, session.total]),
                           style: TextStyle(
                               fontSize: 12, color: cs.onSurfaceVariant)),
                     ],
@@ -179,13 +180,13 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                       children: [
                         IconButton(
                           iconSize: 32,
-                          tooltip: 'Предыдущий трек',
+                          tooltip: AppL10n.t('Предыдущий трек'),
                           icon: const Icon(Icons.skip_previous_rounded),
                           onPressed: voice.playPrevInQueue,
                         ),
                         IconButton(
                           iconSize: 28,
-                          tooltip: 'Назад на 15 секунд',
+                          tooltip: AppL10n.t('Назад на 15 секунд'),
                           icon: const Icon(Icons.replay_10),
                           onPressed: () => _nudge(voice, -15000),
                         ),
@@ -201,13 +202,13 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                         ),
                         IconButton(
                           iconSize: 28,
-                          tooltip: 'Вперёд на 15 секунд',
+                          tooltip: AppL10n.t('Вперёд на 15 секунд'),
                           icon: const Icon(Icons.forward_10),
                           onPressed: () => _nudge(voice, 15000),
                         ),
                         IconButton(
                           iconSize: 32,
-                          tooltip: 'Следующий трек',
+                          tooltip: AppL10n.t('Следующий трек'),
                           icon: const Icon(Icons.skip_next_rounded),
                           onPressed: voice.hasNextInQueue
                               ? voice.playNextInQueue
@@ -223,7 +224,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                         ValueListenableBuilder<bool>(
                           valueListenable: voice.repeatOne,
                           builder: (_, on, __) => IconButton(
-                            tooltip: 'Повтор трека',
+                            tooltip: AppL10n.t('Повтор трека'),
                             icon: Icon(
                               on
                                   ? Icons.repeat_one_rounded
@@ -241,7 +242,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                               final liked = MusicLibraryService.instance
                                   .isLiked(cachedRef);
                               return IconButton(
-                                tooltip: 'Нравится',
+                                tooltip: AppL10n.t('Нравится'),
                                 icon: Icon(
                                   liked
                                       ? Icons.favorite
@@ -334,7 +335,7 @@ class _LyricsToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      tooltip: 'Текст (бета)',
+      tooltip: AppL10n.t('Текст (бета)'),
       icon: const Icon(Icons.lyrics_outlined),
       onPressed: () => showModalBottomSheet<void>(
         context: context,

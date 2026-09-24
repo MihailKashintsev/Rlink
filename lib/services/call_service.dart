@@ -19,6 +19,7 @@ import 'screen_share_helper.dart';
 import 'sound_effects_service.dart';
 import '../utils/web_file_store.dart';
 import '../utils/web_object_url.dart';
+import '../l10n/app_l10n.dart';
 
 enum CallPhase { idle, ringing, connecting, connected, ended, failed }
 
@@ -1111,7 +1112,7 @@ class CallService {
             NotificationService.instance.showPersonalMessage(
               peerId: fromId,
               title: displayName,
-              body: isVideo ? 'Видеозвонок' : 'Аудиозвонок',
+              body: isVideo ? AppL10n.t('Видеозвонок') : AppL10n.t('Аудиозвонок'),
             ),
           );
         }
@@ -1435,7 +1436,7 @@ class CallService {
     unawaited(NotificationService.instance.showPersonalMessage(
       peerId: peerId,
       title: name,
-      body: video ? 'Пропущенный видеозвонок' : 'Пропущенный звонок',
+      body: video ? AppL10n.t('Пропущенный видеозвонок') : AppL10n.t('Пропущенный звонок'),
     ));
   }
 

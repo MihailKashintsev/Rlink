@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/background_removal.dart';
 import 'checkerboard_background.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Live-preview tolerance slider for [BackgroundRemoval.remove]. Returns the
 /// processed PNG bytes on "Готово", or null if cancelled. Shared by both
@@ -77,7 +78,7 @@ class _BackgroundRemovalDialogState extends State<_BackgroundRemovalDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Удалить фон'),
+      title: Text(AppL10n.t('Удалить фон')),
       content: SizedBox(
         width: 280,
         child: Column(
@@ -106,7 +107,7 @@ class _BackgroundRemovalDialogState extends State<_BackgroundRemovalDialog> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text('Не удалось обработать: $_error',
+                child: Text(AppL10n.f('Не удалось обработать: {0}', [_error]),
                     style: const TextStyle(color: Colors.red, fontSize: 12)),
               ),
             const SizedBox(height: 8),
@@ -122,8 +123,7 @@ class _BackgroundRemovalDialogState extends State<_BackgroundRemovalDialog> {
               ],
             ),
             Text(
-              'Допуск: ${(_tolerance * 100).round()}% — больше стирает больше фона, '
-              'но может задеть сам объект',
+              AppL10n.f('Допуск: {0}% — больше стирает больше фона, но может задеть сам объект', [(_tolerance * 100).round()]),
               style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
@@ -133,11 +133,11 @@ class _BackgroundRemovalDialogState extends State<_BackgroundRemovalDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
+          child: Text(AppL10n.t('Отмена')),
         ),
         FilledButton(
           onPressed: _preview == null ? null : () => Navigator.pop(context, _preview),
-          child: const Text('Готово'),
+          child: Text(AppL10n.t('Готово')),
         ),
       ],
     );

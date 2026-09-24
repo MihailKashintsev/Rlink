@@ -13,6 +13,7 @@ import 'notification_service.dart';
 import 'relay_service.dart';
 import 'screen_share_helper.dart';
 import 'webrtc_ice_config.dart';
+import '../l10n/app_l10n.dart';
 
 enum GroupCallPhase { idle, active }
 
@@ -116,7 +117,7 @@ class GroupCallService {
   final ValueNotifier<bool> canAdminister = ValueNotifier(false);
 
   /// Header for the call screen / return pill (group name for group rooms).
-  final ValueNotifier<String> roomTitle = ValueNotifier('Звонок');
+  final ValueNotifier<String> roomTitle = ValueNotifier(AppL10n.t('Звонок'));
 
   /// True while the call screen is on top; the app-wide "return to call"
   /// pill hides itself then.
@@ -208,7 +209,7 @@ class GroupCallService {
   Future<void> joinRoom(GroupCallRoomInfo info, {bool? video}) async {
     final ids = await _resolveParticipants(info);
     if (ids.length >= kMaxCallParticipants) {
-      _notices.add('Комната заполнена (до $kMaxCallParticipants человек)');
+      _notices.add(AppL10n.f('Комната заполнена (до {0} человек)', [kMaxCallParticipants]));
       throw StateError('full');
     }
     await _enter(info, video: video ?? info.video, connectTo: ids);
@@ -255,7 +256,7 @@ class GroupCallService {
     cameraEnabled.value = video;
     screenSharing.value = false;
     room.value = info;
-    roomTitle.value = info.isGroupRoom ? 'Групповой звонок' : 'Звонок';
+    roomTitle.value = info.isGroupRoom ? AppL10n.t('Групповой звонок') : AppL10n.t('Звонок');
     if (info.groupId != null) {
       unawaited(GroupService.instance.getGroup(info.groupId!).then((g) {
         if (g != null && room.value?.roomId == info.roomId) {
@@ -439,7 +440,7 @@ class GroupCallService {
         break;
       case 'full':
         if (_known.length <= 1) {
-          _notices.add('Комната заполнена (до $kMaxCallParticipants человек)');
+          _notices.add(AppL10n.f('Комната заполнена (до {0} человек)', [kMaxCallParticipants]));
           await leaveCall();
         }
         break;
@@ -481,14 +482,14 @@ class GroupCallService {
       case 'forcemute':
         if (await _isAdmin(fromId)) {
           await toggleMic(false);
-          _notices.add('Администратор выключил ваш микрофон');
+          _notices.add(AppL10n.t('Администратор выключил ваш микрофон'));
         }
         break;
       case 'forcevideo':
         if (await _isAdmin(fromId)) {
           if (screenSharing.value) await stopScreenShare();
           await toggleCamera(false);
-          _notices.add('Администратор выключил вашу камеру');
+          _notices.add(AppL10n.t('Администратор выключил вашу камеру'));
         }
         break;
     }
@@ -563,7 +564,7 @@ class GroupCallService {
       unawaited(NotificationService.instance.showGroupMessage(
         groupId: gid,
         title: group.name,
-        body: '📞 Идёт групповой звонок',
+        body: AppL10n.t('📞 Идёт групповой звонок'),
         color: group.avatarColor,
         imagePath: group.avatarImagePath,
         emoji: group.avatarEmoji.isNotEmpty ? group.avatarEmoji : '👥',
@@ -949,7 +950,7 @@ class GroupCallService {
         }
       } catch (e) {
         debugPrint('[RLINK][GroupCall] camera start failed: $e');
-        _notices.add('Не удалось включить камеру');
+        _notices.add(AppL10n.t('Не удалось включить камеру'));
         return;
       }
     }
@@ -979,7 +980,7 @@ class GroupCallService {
     final track = stream?.getVideoTracks().firstOrNull;
     if (stream == null || track == null) {
       if (stream != null) await ScreenShareHelper.stop(stream);
-      _notices.add('Не удалось начать демонстрацию экрана');
+      _notices.add(AppL10n.t('Не удалось начать демонстрацию экрана'));
       return;
     }
     track.onEnded = () => unawaited(stopScreenShare());
@@ -1057,7 +1058,7 @@ class GroupCallService {
   Future<void> _onKick(String fromId, String? target) async {
     if (target == null || !await _isAdmin(fromId)) return;
     if (target == _myId) {
-      _notices.add('Вас исключили из звонка');
+      _notices.add(AppL10n.t('Вас исключили из звонка'));
       await leaveCall(notifyPeers: false);
       return;
     }

@@ -94,7 +94,7 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Пересчитать',
+            tooltip: AppL10n.t('Пересчитать'),
             onPressed: _reload,
           ),
         ],
@@ -107,14 +107,14 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
           }
           final data = snap.data;
           if (data == null) {
-            return const Center(child: Text('Не удалось загрузить'));
+            return Center(child: Text(AppL10n.t('Не удалось загрузить')));
           }
           if (data.isWebPlaceholder) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'В веб-версии оценка места на диске недоступна.',
+                  AppL10n.t('В веб-версии оценка места на диске недоступна.'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Theme.of(context).hintColor),
                 ),
@@ -126,7 +126,7 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
             children: [
               Text(
-                'Нажмите на сектор кольца или выберите пункт в списке, затем «Очистить».',
+                AppL10n.t('Нажмите на сектор кольца или выберите пункт в списке, затем «Очистить».'),
                 style: TextStyle(
                   fontSize: 13,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -202,13 +202,13 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
     if (s.id == 'databases') {
       return FilledButton.tonal(
         onPressed: () => _openDatabaseCleanupSheet(context),
-        child: const Text('Очистить…'),
+        child: Text(AppL10n.t('Очистить…')),
       );
     }
     if (s.id == 'other') {
       return FilledButton.tonal(
         onPressed: () => _openOtherCleanupSheet(context),
-        child: const Text('Очистить…'),
+        child: Text(AppL10n.t('Очистить…')),
       );
     }
     if (s.bytes <= 0) {
@@ -219,15 +219,15 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
     }
     return FilledButton.tonal(
       onPressed: () => _runClear(context, s.id),
-      child: const Text('Очистить'),
+      child: Text(AppL10n.t('Очистить')),
     );
   }
 
   Future<void> _runClear(BuildContext context, String id) async {
     if (id == 'databases' || id == 'other') return;
     await _confirm(
-      title: 'Очистить данные?',
-      description: 'Файлы этого типа будут удалены с устройства.',
+      title: AppL10n.t('Очистить данные?'),
+      description: AppL10n.t('Файлы этого типа будут удалены с устройства.'),
       action: () async {
         try {
           await clearStorageSegment(
@@ -241,7 +241,7 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
         } catch (e) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+              SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
             );
           }
         }
@@ -259,10 +259,10 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const ListTile(
-              title: Text('Базы SQLite'),
+            ListTile(
+              title: Text(AppL10n.t('Базы SQLite')),
               subtitle: Text(
-                'Выберите, что очистить. Контакты и каналы как объекты можно сохранить — удаляется в основном содержимое.',
+                AppL10n.t('Выберите, что очистить. Контакты и каналы как объекты можно сохранить — удаляется в основном содержимое.'),
                 style: TextStyle(fontSize: 12),
               ),
             ),
@@ -291,21 +291,21 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
             ),
             ListTile(
               leading: const Icon(Icons.groups_outlined),
-              title: const Text('Удалить все сообщения групп'),
-              subtitle: const Text(
-                'Группы и участники останутся',
+              title: Text(AppL10n.t('Удалить все сообщения групп')),
+              subtitle: Text(
+                AppL10n.t('Группы и участники останутся'),
                 style: TextStyle(fontSize: 12),
               ),
               onTap: () async {
                 Navigator.pop(sheetCtx);
                 await _confirm(
-                  title: 'Удалить сообщения групп?',
-                  description: 'История всех групп будет удалена локально.',
+                  title: AppL10n.t('Удалить сообщения групп?'),
+                  description: AppL10n.t('История всех групп будет удалена локально.'),
                   action: () async {
                     await GroupService.instance.deleteAllGroupMessages();
                     if (ctx.mounted) {
                       ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(content: Text('Сообщения групп удалены')),
+                        SnackBar(content: Text(AppL10n.t('Сообщения групп удалены'))),
                       );
                     }
                     _reload();
@@ -315,22 +315,22 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
             ),
             ListTile(
               leading: const Icon(Icons.campaign_outlined),
-              title: const Text('Удалить посты и комментарии каналов'),
-              subtitle: const Text(
-                'Список каналов сохранится',
+              title: Text(AppL10n.t('Удалить посты и комментарии каналов')),
+              subtitle: Text(
+                AppL10n.t('Список каналов сохранится'),
                 style: TextStyle(fontSize: 12),
               ),
               onTap: () async {
                 Navigator.pop(sheetCtx);
                 await _confirm(
-                  title: 'Удалить посты каналов?',
+                  title: AppL10n.t('Удалить посты каналов?'),
                   description:
-                      'Все посты и комментарии будут удалены локально; каналы останутся.',
+                      AppL10n.t('Все посты и комментарии будут удалены локально; каналы останутся.'),
                   action: () async {
                     await ChannelService.instance.deleteAllPostsAndComments();
                     if (ctx.mounted) {
                       ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(content: Text('Посты каналов удалены')),
+                        SnackBar(content: Text(AppL10n.t('Посты каналов удалены'))),
                       );
                     }
                     _reload();
@@ -340,9 +340,9 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
             ),
             ListTile(
               leading: const Icon(Icons.cloud_upload_outlined),
-              title: const Text('Очистить очередь загрузок медиа'),
-              subtitle: const Text(
-                'Незавершённые отправки файлов в ретранслятор',
+              title: Text(AppL10n.t('Очистить очередь загрузок медиа')),
+              subtitle: Text(
+                AppL10n.t('Незавершённые отправки файлов в ретранслятор'),
                 style: TextStyle(fontSize: 12),
               ),
               onTap: () async {
@@ -350,7 +350,7 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
                 await MediaUploadQueue.instance.clearAll();
                 if (ctx.mounted) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(content: Text('Очередь загрузок очищена')),
+                    SnackBar(content: Text(AppL10n.t('Очередь загрузок очищена'))),
                   );
                 }
                 _reload();
@@ -394,10 +394,10 @@ class _SettingsDataPageState extends State<SettingsDataPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ListTile(
-              title: Text('Прочее на диске'),
+            ListTile(
+              title: Text(AppL10n.t('Прочее на диске')),
               subtitle: Text(
-                'Сюда входят фоны чатов, аватары и файлы вне базы сообщений.',
+                AppL10n.t('Сюда входят фоны чатов, аватары и файлы вне базы сообщений.'),
                 style: TextStyle(fontSize: 12),
               ),
             ),

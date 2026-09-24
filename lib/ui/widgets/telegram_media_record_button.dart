@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Как в Telegram: короткое нажатие переключает голос ↔ видеоквадратик;
 /// удержание — запись, отпускание — отправка; вверх — закрепить; в закрепе — отправка/пауза/корзина сверху.
@@ -133,7 +134,7 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
             valueListenable: widget.lockedVideoPausedListenable!,
             builder: (_, paused, __) {
               return IconButton(
-                tooltip: paused ? 'Продолжить' : 'Пауза',
+                tooltip: paused ? AppL10n.t('Продолжить') : AppL10n.t('Пауза'),
                 icon: Icon(
                   paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
                   color: cs.onSurface,
@@ -149,7 +150,7 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
             valueListenable: widget.lockedVoicePausedListenable!,
             builder: (_, paused, __) {
               return IconButton(
-                tooltip: paused ? 'Продолжить' : 'Пауза',
+                tooltip: paused ? AppL10n.t('Продолжить') : AppL10n.t('Пауза'),
                 icon: Icon(
                   paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
                   color: cs.onSurface,
@@ -163,7 +164,7 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
         Widget? trimBtn;
         if (!_videoMode && widget.onLockedVoiceTrimLastPart != null) {
           trimBtn = IconButton(
-            tooltip: 'Обрезать',
+            tooltip: AppL10n.t('Обрезать'),
             icon: Icon(Icons.content_cut_rounded, color: cs.onSurface),
             onPressed: () => unawaited(widget.onLockedVoiceTrimLastPart!()),
           );
@@ -191,7 +192,7 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        _videoMode ? 'Видео' : 'Голосовое',
+                        _videoMode ? AppL10n.t('Видео') : AppL10n.t('Голосовое'),
                         style: TextStyle(
                           color: cs.onSurface,
                           fontWeight: FontWeight.w600,
@@ -200,12 +201,12 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
                       if (pauseBtn != null) pauseBtn,
                       if (trimBtn != null) trimBtn,
                       IconButton(
-                        tooltip: 'Отправить',
+                        tooltip: AppL10n.t('Отправить'),
                         icon: Icon(Icons.send_rounded, color: cs.primary),
                         onPressed: () => unawaited(_onLockedSend()),
                       ),
                       IconButton(
-                        tooltip: 'Удалить',
+                        tooltip: AppL10n.t('Удалить'),
                         icon: Icon(Icons.delete_outline, color: cs.error),
                         onPressed: () => unawaited(_onLockedCancel()),
                       ),
@@ -336,8 +337,8 @@ class _TelegramMediaRecordButtonState extends State<TelegramMediaRecordButton> {
 
     return Tooltip(
       message: _videoMode
-          ? 'Короткое нажатие — голос; удерживайте для видеокружка'
-          : 'Короткое нажатие — видео; удерживайте для голоса',
+          ? AppL10n.t('Короткое нажатие — голос; удерживайте для видеокружка')
+          : AppL10n.t('Короткое нажатие — видео; удерживайте для голоса'),
       child: Listener(
         onPointerDown: _onButtonPointerDown,
         onPointerUp: _onButtonPointerUp,

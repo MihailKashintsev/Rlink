@@ -46,8 +46,8 @@ class _ChatInboxCustomGroupScreenState extends State<ChatInboxCustomGroupScreen>
     if (_selected.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Выберите хотя бы один чат'),
+        SnackBar(
+          content: Text(AppL10n.t('Выберите хотя бы один чат')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -64,7 +64,7 @@ class _ChatInboxCustomGroupScreenState extends State<ChatInboxCustomGroupScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Не удалось сохранить: $e'),
+            content: Text(AppL10n.f('Не удалось сохранить: {0}', [e])),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -93,7 +93,7 @@ class _ChatInboxCustomGroupScreenState extends State<ChatInboxCustomGroupScreen>
             )
           else
             IconButton(
-              tooltip: 'Готово',
+              tooltip: AppL10n.t('Готово'),
               icon: const Icon(Icons.check_rounded),
               onPressed: _loading
                   ? null
@@ -111,8 +111,8 @@ class _ChatInboxCustomGroupScreenState extends State<ChatInboxCustomGroupScreen>
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                   child: TextField(
                     controller: _nameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Название вкладки',
+                    decoration: InputDecoration(
+                      labelText: AppL10n.t('Название вкладки'),
                       border: OutlineInputBorder(),
                     ),
                     maxLength: 32,
@@ -139,10 +139,10 @@ class _ChatInboxCustomGroupScreenState extends State<ChatInboxCustomGroupScreen>
                         title: Text(row.title),
                         subtitle: Text(
                           switch (row.kind) {
-                            ChatInboxItemKind.dm => 'Личный чат',
-                            ChatInboxItemKind.group => 'Группа',
-                            ChatInboxItemKind.channel => 'Канал',
-                            ChatInboxItemKind.saved => 'Избранное',
+                            ChatInboxItemKind.dm => AppL10n.t('Личный чат'),
+                            ChatInboxItemKind.group => AppL10n.t('Группа'),
+                            ChatInboxItemKind.channel => AppL10n.t('Канал'),
+                            ChatInboxItemKind.saved => AppL10n.t('Избранное'),
                           },
                           style: const TextStyle(fontSize: 12),
                         ),

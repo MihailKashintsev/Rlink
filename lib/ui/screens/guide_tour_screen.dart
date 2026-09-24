@@ -530,10 +530,10 @@ class _RlinkMock extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    _navItem(Icons.chat_bubble_outline, 'Чаты', 0),
-                    _navItem(Icons.radar, 'Рядом', 1),
-                    _navItem(Icons.cell_tower, 'Эфир', 2),
-                    _navItem(Icons.settings_outlined, 'Настройки', 3),
+                    _navItem(Icons.chat_bubble_outline, AppL10n.t('Чаты'), 0),
+                    _navItem(Icons.radar, AppL10n.t('Рядом'), 1),
+                    _navItem(Icons.cell_tower, AppL10n.t('Эфир'), 2),
+                    _navItem(Icons.settings_outlined, AppL10n.t('Настройки'), 3),
                     _navItem(Icons.search, '', 4),
                   ],
                 ),

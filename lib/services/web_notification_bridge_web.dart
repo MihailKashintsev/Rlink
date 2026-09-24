@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js' as js;
+import '../l10n/app_l10n.dart';
 
 bool _hasGlobal(String name) {
   try {
@@ -98,28 +99,28 @@ Future<Map<String, Object?>> webNotificationCapability() async {
   if (isIOS && !standalone) {
     status = 'ios_install_required';
     label =
-        'На iPhone/iPad Safari push-уведомления работают только после добавления Rlink на экран Домой';
+        AppL10n.t('На iPhone/iPad Safari push-уведомления работают только после добавления Rlink на экран Домой');
     canRequest = false;
   } else if (!notificationSupported) {
     status = 'unsupported_notifications';
-    label = 'Браузер не отдает Notifications API';
+    label = AppL10n.t('Браузер не отдает Notifications API');
     canRequest = false;
   } else if (!serviceWorkerSupported) {
     status = 'unsupported_service_worker';
-    label = 'Service Worker недоступен на этом адресе';
+    label = AppL10n.t('Service Worker недоступен на этом адресе');
     canRequest = false;
   } else if (!pushSupported) {
     status = 'unsupported_push';
     label = isSafari
-        ? 'Safari сейчас не отдает Push API для этой вкладки'
-        : 'Браузер не отдает Push API';
+        ? AppL10n.t('Safari сейчас не отдает Push API для этой вкладки')
+        : AppL10n.t('Браузер не отдает Push API');
     canRequest = false;
   } else {
     status = permission;
     label = switch (permission) {
-      'granted' => 'Разрешены',
-      'denied' => 'Запрещены в настройках браузера',
-      _ => 'Нужно разрешение браузера',
+      'granted' => AppL10n.t('Разрешены'),
+      'denied' => AppL10n.t('Запрещены в настройках браузера'),
+      _ => AppL10n.t('Нужно разрешение браузера'),
     };
     canRequest = permission != 'denied';
   }

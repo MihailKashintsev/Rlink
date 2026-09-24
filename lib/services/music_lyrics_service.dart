@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'lyrics_db_service.dart';
 import 'whisper_web_service.dart';
+import '../l10n/app_l10n.dart';
 
 class LyricLine {
   final int startMs;
@@ -96,7 +97,7 @@ class MusicLyricsService {
       if (!whisper.isSupported) {
         state.value = LyricsState(
           forUrl: url,
-          error: 'На этой платформе расшифровка песен пока недоступна',
+          error: AppL10n.t('На этой платформе расшифровка песен пока недоступна'),
         );
         return;
       }
@@ -126,7 +127,7 @@ class MusicLyricsService {
       );
     } catch (e) {
       state.value = LyricsState(
-          forUrl: url, phase: LyricsPhase.done, error: 'Не получилось: $e');
+          forUrl: url, phase: LyricsPhase.done, error: AppL10n.f('Не получилось: {0}', [e]));
     } finally {
       _inFlight = null;
     }

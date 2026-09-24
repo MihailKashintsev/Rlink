@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/emoji_binding_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Prompts for an emoji (typed via the OS's own emoji keyboard/paste — no
 /// custom picker needed) and binds it to a sticker (send-after) or a custom
@@ -17,17 +18,15 @@ Future<void> showBindToEmojiDialog(
   final emoji = await showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Привязать к эмодзи'),
+      title: Text(AppL10n.t('Привязать к эмодзи')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             stickerRef != null
-                ? 'Когда вы наберёте этот эмодзи в сообщении, будет предложено '
-                    'отправить этот стикер следом.'
-                : 'Когда вы наберёте этот эмодзи, будет предложено заменить его '
-                    'на этот кастомный эмодзи.',
+                ? AppL10n.t('Когда вы наберёте этот эмодзи в сообщении, будет предложено отправить этот стикер следом.')
+                : AppL10n.t('Когда вы наберёте этот эмодзи, будет предложено заменить его на этот кастомный эмодзи.'),
             style: TextStyle(fontSize: 13, color: Theme.of(ctx).colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
@@ -43,20 +42,20 @@ Future<void> showBindToEmojiDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Отмена'),
+          child: Text(AppL10n.t('Отмена')),
         ),
         FilledButton(
           onPressed: () {
             final glyph = controller.text.trim();
             if (!EmojiBindingService.instance.isKnownEmoji(glyph)) {
               ScaffoldMessenger.of(ctx).showSnackBar(
-                const SnackBar(content: Text('Это не похоже на эмодзи')),
+                SnackBar(content: Text(AppL10n.t('Это не похоже на эмодзи'))),
               );
               return;
             }
             Navigator.pop(ctx, glyph);
           },
-          child: const Text('Привязать'),
+          child: Text(AppL10n.t('Привязать')),
         ),
       ],
     ),
@@ -69,7 +68,7 @@ Future<void> showBindToEmojiDialog(
   }
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$emoji привязан')),
+      SnackBar(content: Text(AppL10n.f('{0} привязан', [emoji]))),
     );
   }
 }

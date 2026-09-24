@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import '../../services/embedded_video_pause_bus.dart';
 import '../../utils/web_video_frames.dart';
 import 'square_video_recording_widgets.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Предпросмотр «видеоквадратика» перед отправкой (удержание или полноэкранный рекордер).
 /// [allowTrim] — показать ползунок обрезки (обычно true).
@@ -153,7 +154,7 @@ class _HoldSquareVideoReviewScreenState
       if (!mounted) return;
       if (info?.path == null || info!.path!.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось обрезать видео')),
+          SnackBar(content: Text(AppL10n.t('Не удалось обрезать видео'))),
         );
         setState(() => _busy = false);
         return;
@@ -162,7 +163,7 @@ class _HoldSquareVideoReviewScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Обрезка: $e')),
+          SnackBar(content: Text(AppL10n.f('Обрезка: {0}', [e]))),
         );
         setState(() => _busy = false);
       }
@@ -182,10 +183,10 @@ class _HoldSquareVideoReviewScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.previewOnly ? 'Запись' : 'Просмотр'),
+        title: Text(widget.previewOnly ? AppL10n.t('Запись') : AppL10n.t('Просмотр')),
         leading: IconButton(
           icon: Icon(widget.previewOnly ? Icons.arrow_back : Icons.close),
-          tooltip: widget.previewOnly ? 'Назад к записи' : 'Отмена',
+          tooltip: widget.previewOnly ? AppL10n.t('Назад к записи') : AppL10n.t('Отмена'),
           onPressed: _busy ? null : () => Navigator.pop(context),
         ),
       ),
@@ -239,8 +240,8 @@ class _HoldSquareVideoReviewScreenState
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: Text(
                           kIsWeb
-                              ? 'Предпросмотр перед отправкой'
-                              : 'Потяните за края, чтобы обрезать, или отправьте целиком',
+                              ? AppL10n.t('Предпросмотр перед отправкой')
+                              : AppL10n.t('Потяните за края, чтобы обрезать, или отправьте целиком'),
                           style: TextStyle(
                             fontSize: 13,
                             color: cs.onSurfaceVariant,
@@ -260,8 +261,8 @@ class _HoldSquareVideoReviewScreenState
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
                           widget.previewOnly
-                              ? 'Это снято на данный момент. Вернитесь, чтобы продолжить запись.'
-                              : 'Проверьте кадр и нажмите «Отправить»',
+                              ? AppL10n.t('Это снято на данный момент. Вернитесь, чтобы продолжить запись.')
+                              : AppL10n.t('Проверьте кадр и нажмите «Отправить»'),
                           style: TextStyle(
                             fontSize: 13,
                             color: cs.onSurfaceVariant,
@@ -285,7 +286,7 @@ class _HoldSquareVideoReviewScreenState
                                       : () => Navigator.pop(
                                           context, 'gif::${widget.videoPath}'),
                                   icon: const Icon(Icons.gif_box_rounded),
-                                  label: const Text('GIF без звука'),
+                                  label: Text(AppL10n.t('GIF без звука')),
                                 ),
                               ),
                             Expanded(
@@ -296,8 +297,8 @@ class _HoldSquareVideoReviewScreenState
                                         ? () => Navigator.pop(context)
                                         : _send),
                                 child: Text(widget.previewOnly
-                                    ? 'Продолжить запись'
-                                    : (_busy ? 'Обработка…' : 'Отправить')),
+                                    ? AppL10n.t('Продолжить запись')
+                                    : (_busy ? AppL10n.t('Обработка…') : AppL10n.t('Отправить'))),
                               ),
                             ),
                           ],
@@ -381,7 +382,7 @@ class _FilmstripTrimBarState extends State<_FilmstripTrimBar> {
     }
   }
 
-  String _fmt(double s) => '${s.toStringAsFixed(1)} с';
+  String _fmt(double s) => AppL10n.f('{0} с', [s.toStringAsFixed(1)]);
 
   @override
   Widget build(BuildContext context) {
@@ -489,7 +490,7 @@ class _FilmstripTrimBarState extends State<_FilmstripTrimBar> {
           ),
           const SizedBox(height: 6),
           if (widget.readOnly)
-            Text('Обрезка видео доступна в приложении',
+            Text(AppL10n.t('Обрезка видео доступна в приложении'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))
           else
             Row(
@@ -498,7 +499,7 @@ class _FilmstripTrimBarState extends State<_FilmstripTrimBar> {
                 Text(_fmt(widget.start),
                     style:
                         TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                Text('${_fmt(widget.end - widget.start)} выбрано',
+                Text(AppL10n.f('{0} выбрано', [_fmt(widget.end - widget.start)]),
                     style: TextStyle(
                         fontSize: 12,
                         color: cs.primary,

@@ -14,6 +14,7 @@ import '../../services/image_service.dart';
 import '../../services/profile_service.dart';
 import 'avatar_crop_screen.dart';
 import 'desktop_image_picker.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Pick a new profile photo and save + broadcast it directly — no profile-edit
 /// screen needed (the avatar is managed via its long-press menu; the edit screen
@@ -48,8 +49,8 @@ Future<bool> pickAndSaveProfileAvatar(BuildContext context) async {
     if (dataUrl == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Фото слишком большое. Выберите меньше.')),
+          SnackBar(
+              content: Text(AppL10n.t('Фото слишком большое. Выберите меньше.'))),
         );
       }
       return false;

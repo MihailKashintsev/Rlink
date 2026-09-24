@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Official multi-colour Google "G" mark (inline SVG — no network/asset).
 const String _kGoogleGSvg = '''
@@ -19,12 +20,12 @@ class GoogleSignInButton extends StatefulWidget {
   final bool busy;
   final String label;
 
-  const GoogleSignInButton({
+  GoogleSignInButton({
     super.key,
     required this.onPressed,
     this.busy = false,
-    this.label = 'Войти через Google',
-  });
+    String? label,
+  }) : label = label ?? AppL10n.t('Войти через Google');
 
   @override
   State<GoogleSignInButton> createState() => _GoogleSignInButtonState();
@@ -96,7 +97,7 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    widget.busy ? 'Подождите…' : widget.label,
+                    widget.busy ? AppL10n.t('Подождите…') : widget.label,
                     style: TextStyle(
                       color: fg,
                       fontSize: 15,

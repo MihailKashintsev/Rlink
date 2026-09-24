@@ -41,7 +41,7 @@ class _FirstRunSetupScreenState extends State<FirstRunSetupScreen> {
                 children: [
                   _Header(cs: cs),
                   const SizedBox(height: 28),
-                  _sectionTitle('Язык', Icons.translate_rounded, cs),
+                  _sectionTitle(AppL10n.t('Язык'), Icons.translate_rounded, cs),
                   const SizedBox(height: 10),
                   _LanguagePicker(
                     selected: _settings.locale,
@@ -51,7 +51,7 @@ class _FirstRunSetupScreenState extends State<FirstRunSetupScreen> {
                     },
                   ),
                   const SizedBox(height: 26),
-                  _sectionTitle('Тема', Icons.brightness_6_rounded, cs),
+                  _sectionTitle(AppL10n.t('Тема'), Icons.brightness_6_rounded, cs),
                   const SizedBox(height: 10),
                   _ThemePicker(
                     selected: _settings.themeMode,
@@ -61,7 +61,7 @@ class _FirstRunSetupScreenState extends State<FirstRunSetupScreen> {
                     },
                   ),
                   const SizedBox(height: 26),
-                  _sectionTitle('Цветовая палитра', Icons.palette_rounded, cs),
+                  _sectionTitle(AppL10n.t('Цветовая палитра'), Icons.palette_rounded, cs),
                   const SizedBox(height: 12),
                   _PalettePicker(
                     selectedIndex: _settings.appPalette,
@@ -72,7 +72,7 @@ class _FirstRunSetupScreenState extends State<FirstRunSetupScreen> {
                   ),
                   const SizedBox(height: 26),
                   _sectionTitle(
-                      'Расшифровка голосовых', Icons.graphic_eq_rounded, cs),
+                      AppL10n.t('Расшифровка голосовых'), Icons.graphic_eq_rounded, cs),
                   const SizedBox(height: 8),
                   _transcriptionSection(cs),
                 ],
@@ -106,8 +106,7 @@ class _FirstRunSetupScreenState extends State<FirstRunSetupScreen> {
         icon: Icons.check_circle_rounded,
         cs: cs,
         text:
-            'Расшифровка работает прямо на устройстве через Apple WhisperKit — '
-            'ничего скачивать не нужно.',
+            AppL10n.t('Расшифровка работает прямо на устройстве через Apple WhisperKit — ничего скачивать не нужно.'),
       );
     }
     if (_isWeb) {
@@ -115,8 +114,7 @@ class _FirstRunSetupScreenState extends State<FirstRunSetupScreen> {
         icon: Icons.cloud_done_rounded,
         cs: cs,
         text:
-            'В браузере расшифровка выполняется локально (WASM) или в облаке — '
-            'модель подгрузится автоматически при первом использовании.',
+            AppL10n.t('В браузере расшифровка выполняется локально (WASM) или в облаке — модель подгрузится автоматически при первом использовании.'),
       );
     }
     // Android / Windows / Linux — choose + optionally download a ggml model.
@@ -153,13 +151,13 @@ class _Header extends StatelessWidget {
           child: const Icon(Icons.tune_rounded, color: Colors.white, size: 30),
         ),
         const SizedBox(height: 16),
-        const Text(
-          'Быстрая настройка',
+        Text(
+          AppL10n.t('Быстрая настройка'),
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 6),
         Text(
-          'Настройте Rlink под себя. Всё это можно поменять позже в Настройках.',
+          AppL10n.t('Настройте Rlink под себя. Всё это можно поменять позже в Настройках.'),
           style: TextStyle(fontSize: 14, height: 1.35, color: cs.onSurfaceVariant),
         ),
       ],
@@ -199,10 +197,10 @@ class _ThemePicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    const items = [
-      (ThemeMode.system, 'Системная', Icons.smartphone_rounded),
-      (ThemeMode.light, 'Светлая', Icons.light_mode_rounded),
-      (ThemeMode.dark, 'Тёмная', Icons.dark_mode_rounded),
+    final items = [
+      (ThemeMode.system, AppL10n.t('Системная'), Icons.smartphone_rounded),
+      (ThemeMode.light, AppL10n.t('Светлая'), Icons.light_mode_rounded),
+      (ThemeMode.dark, AppL10n.t('Тёмная'), Icons.dark_mode_rounded),
     ];
     return Row(
       children: [
@@ -244,7 +242,7 @@ class _PalettePicker extends StatelessWidget {
         return GestureDetector(
           onTap: () => onPick(i),
           child: Tooltip(
-            message: p.name,
+            message: AppL10n.t(p.name),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
@@ -279,7 +277,7 @@ class _ModelPicker extends StatelessWidget {
   final WhisperModelSize selected;
   final ValueChanged<WhisperModelSize> onPick;
 
-  String _mb(int bytes) => '${(bytes / (1024 * 1024)).round()} МБ';
+  String _mb(int bytes) => AppL10n.f('{0} МБ', [(bytes / (1024 * 1024)).round()]);
 
   @override
   Widget build(BuildContext context) {
@@ -288,8 +286,7 @@ class _ModelPicker extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Модель скачивается один раз и работает офлайн. Можно скачать сейчас '
-          'или позже — она подтянется при первом использовании.',
+          AppL10n.t('Модель скачивается один раз и работает офлайн. Можно скачать сейчас или позже — она подтянется при первом использовании.'),
           style: TextStyle(
               fontSize: 12.5, height: 1.35, color: cs.onSurfaceVariant),
         ),
@@ -363,7 +360,7 @@ class _ModelRow extends StatelessWidget {
                                     fontWeight: FontWeight.w600, fontSize: 14.5)),
                             const SizedBox(height: 2),
                             Text(
-                              '≈ $sizeLabel${installed ? ' · скачана' : ''}',
+                              '≈ $sizeLabel${installed ? AppL10n.t(' · скачана') : ''}',
                               style: TextStyle(
                                   fontSize: 12, color: cs.onSurfaceVariant),
                             ),
@@ -407,7 +404,7 @@ class _ModelRow extends StatelessWidget {
       );
     }
     return IconButton(
-      tooltip: 'Скачать',
+      tooltip: AppL10n.t('Скачать'),
       icon: const Icon(Icons.download_rounded),
       color: cs.primary,
       onPressed: () async {
@@ -415,7 +412,7 @@ class _ModelRow extends StatelessWidget {
         try {
           await ModelDownloadService.instance.ensureDownloaded(size);
           messenger.showSnackBar(SnackBar(
-              content: Text('Модель «${size.displayName}» установлена')));
+              content: Text(AppL10n.f('Модель «{0}» установлена', [size.displayName]))));
         } catch (e) {
           messenger.showSnackBar(SnackBar(content: Text('$e')));
         }
@@ -573,7 +570,7 @@ class _ContinueBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14)),
           ),
           onPressed: onContinue,
-          child: const Text('Продолжить',
+          child: Text(AppL10n.t('Продолжить'),
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         ),
       ),

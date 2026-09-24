@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../services/device_link_sync_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Full-screen animation shown on a child device while it receives the linked
 /// account snapshot (contacts, channels, chats). Progress bar + a rotating
@@ -100,7 +101,7 @@ class _LinkSyncScrimState extends State<_LinkSyncScrim>
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  'Перенос профиля',
+                  AppL10n.t('Перенос профиля'),
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 19,

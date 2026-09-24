@@ -45,14 +45,14 @@ class _ChannelAdminSettingsScreenState
     final free = st?.freeBytes;
     final limit = st?.limitBytes;
     if (free == null || limit == null || limit <= 0) return '';
-    return 'Свободно ${_fmtGb(free)} из ${_fmtGb(limit)}';
+    return AppL10n.f('Свободно {0} из {1}', [_fmtGb(free), _fmtGb(limit)]);
   }
 
   String _fmtGb(int bytes) {
     const gb = 1024 * 1024 * 1024;
     const mb = 1024 * 1024;
-    if (bytes >= gb) return '${(bytes / gb).toStringAsFixed(1)} ГБ';
-    return '${(bytes / mb).toStringAsFixed(0)} МБ';
+    if (bytes >= gb) return AppL10n.f('{0} ГБ', [(bytes / gb).toStringAsFixed(1)]);
+    return AppL10n.f('{0} МБ', [(bytes / mb).toStringAsFixed(0)]);
   }
 
   @override
@@ -121,9 +121,9 @@ class _ChannelAdminSettingsScreenState
     ));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content:
-              Text('Заявка на верификацию отправлена администраторам сети'),
+              Text(AppL10n.t('Заявка на верификацию отправлена администраторам сети')),
         ),
       );
     }
@@ -137,7 +137,7 @@ class _ChannelAdminSettingsScreenState
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(AppL10n.t('cm_delete_channel_q')),
-        content: const Text('Канал и все посты будут удалены навсегда.'),
+        content: Text(AppL10n.t('Канал и все посты будут удалены навсегда.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -157,10 +157,9 @@ class _ChannelAdminSettingsScreenState
 
   void _showLeaveHint() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'Чтобы выйти без удаления канала, сначала передайте владение '
-          'ниже, затем откройте профиль канала и нажмите «Отписаться».',
+          AppL10n.t('Чтобы выйти без удаления канала, сначала передайте владение ниже, затем откройте профиль канала и нажмите «Отписаться».'),
         ),
       ),
     );
@@ -187,15 +186,15 @@ class _ChannelAdminSettingsScreenState
     if (ch == null) return;
     final linked = BackupProviders.ids.where(BackupProviders.isLinked).toList();
     if (linked.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'Сначала привяжите Google Drive, OneDrive или Dropbox в Настройках')));
+              AppL10n.t('Сначала привяжите Google Drive, OneDrive или Dropbox в Настройках'))));
       return;
     }
     final chosen = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Хранилище резервной копии'),
+        title: Text(AppL10n.t('Хранилище резервной копии')),
         children: [
           for (final id in linked)
             RadioListTile<String>(
@@ -237,16 +236,16 @@ class _ChannelAdminSettingsScreenState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('Подписчики канала',
+                  child: Text(AppL10n.t('Подписчики канала'),
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 ),
                 if (current.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.all(16),
-                    child: Text('Нет подписчиков',
+                    child: Text(AppL10n.t('Нет подписчиков'),
                         style: TextStyle(color: Colors.grey)),
                   )
                 else
@@ -263,7 +262,7 @@ class _ChannelAdminSettingsScreenState
                           title: Text(nickFor(uid)),
                           subtitle: Text(
                             isMod
-                                ? 'Модератор · ${uid.substring(0, 12)}…'
+                                ? AppL10n.f('Модератор · {0}…', [uid.substring(0, 12)])
                                 : '${uid.substring(0, 12)}…',
                             style: const TextStyle(
                                 fontSize: 11, color: Colors.grey),
@@ -271,7 +270,7 @@ class _ChannelAdminSettingsScreenState
                           trailing: IconButton(
                             icon: const Icon(Icons.person_remove_outlined,
                                 color: Colors.red),
-                            tooltip: 'Исключить',
+                            tooltip: AppL10n.t('Исключить'),
                             onPressed: () async {
                               await ChannelService.instance
                                   .removeSubscriber(ch.id, uid);
@@ -306,7 +305,7 @@ class _ChannelAdminSettingsScreenState
     final contacts = ChatStorageService.instance.contactsNotifier.value;
 
     String nickFor(String id) {
-      if (id == _myId) return 'Вы';
+      if (id == _myId) return AppL10n.t('Вы');
       for (final c in contacts) {
         if (c.publicKeyHex == id) return c.nickname;
       }
@@ -325,16 +324,16 @@ class _ChannelAdminSettingsScreenState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('Модераторы канала',
+                  child: Text(AppL10n.t('Модераторы канала'),
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 ),
                 if (subscribers.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.all(16),
-                    child: Text('Нет подписчиков для назначения',
+                    child: Text(AppL10n.t('Нет подписчиков для назначения'),
                         style: TextStyle(color: Colors.grey)),
                   )
                 else
@@ -428,23 +427,21 @@ class _ChannelAdminSettingsScreenState
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
-          title: const Text('Передать владение'),
+          title: Text(AppL10n.t('Передать владение')),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Новый владелец получит права администратора. '
-                  'Рекомендуется сделать полный резерв истории на ваш Google Диск '
-                  'пока у вас есть доступ админа — затем данные можно импортировать под новым аккаунтом при необходимости.',
+                Text(
+                  AppL10n.t('Новый владелец получит права администратора. Рекомендуется сделать полный резерв истории на ваш Google Диск пока у вас есть доступ админа — затем данные можно импортировать под новым аккаунтом при необходимости.'),
                   style: TextStyle(fontSize: 13),
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   initialValue: picked,
-                  decoration: const InputDecoration(
-                    labelText: 'Новый владелец',
+                  decoration: InputDecoration(
+                    labelText: AppL10n.t('Новый владелец'),
                     border: OutlineInputBorder(),
                   ),
                   items: candidates
@@ -460,9 +457,9 @@ class _ChannelAdminSettingsScreenState
                   value: backupFirst,
                   onChanged: (v) => setD(() => backupFirst = v ?? true),
                   controlAffinity: ListTileControlAffinity.leading,
-                  title: const Text('Сделать резерв на мой Google Диск сейчас'),
-                  subtitle: const Text(
-                    'Перед передачей прав',
+                  title: Text(AppL10n.t('Сделать резерв на мой Google Диск сейчас')),
+                  subtitle: Text(
+                    AppL10n.t('Перед передачей прав'),
                     style: TextStyle(fontSize: 12),
                   ),
                 ),
@@ -476,7 +473,7 @@ class _ChannelAdminSettingsScreenState
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Передать'),
+              child: Text(AppL10n.t('Передать')),
             ),
           ],
         ),
@@ -491,8 +488,8 @@ class _ChannelAdminSettingsScreenState
         await ChannelBackupService.instance.publishBackup(ch);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Резерв на Google Диск выполнен'),
+            SnackBar(
+              content: Text(AppL10n.t('Резерв на Google Диск выполнен')),
             ),
           );
         }
@@ -501,7 +498,7 @@ class _ChannelAdminSettingsScreenState
           final go = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
-              title: const Text('Ошибка резерва'),
+              title: Text(AppL10n.t('Ошибка резерва')),
               content: Text('$e'),
               actions: [
                 TextButton(
@@ -510,7 +507,7 @@ class _ChannelAdminSettingsScreenState
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Всё равно передать'),
+                  child: Text(AppL10n.t('Всё равно передать')),
                 ),
               ],
             ),
@@ -528,15 +525,15 @@ class _ChannelAdminSettingsScreenState
     if (!mounted) return;
     if (updated == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось передать владение')),
+        SnackBar(content: Text(AppL10n.t('Не удалось передать владение'))),
       );
       return;
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'Владение передано. Откройте профиль канала и нажмите «Отписаться», чтобы выйти.',
+          AppL10n.t('Владение передано. Откройте профиль канала и нажмите «Отписаться», чтобы выйти.'),
         ),
       ),
     );
@@ -559,7 +556,7 @@ class _ChannelAdminSettingsScreenState
     if (!amOwner && !amMod) {
       return Scaffold(
         appBar: AppBar(title: Text(AppL10n.t('cm_channel_settings'))),
-        body: const Center(child: Text('Недостаточно прав для настроек канала')),
+        body: Center(child: Text(AppL10n.t('Недостаточно прав для настроек канала'))),
       );
     }
 
@@ -569,7 +566,7 @@ class _ChannelAdminSettingsScreenState
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      appBar: AppBar(title: Text('Настройки: ${ch.name}')),
+      appBar: AppBar(title: Text(AppL10n.f('Настройки: {0}', [ch.name]))),
       body: ListView(
         children: [
           // ── Google Drive: только просмотр привязанного аккаунта ───────────
@@ -582,13 +579,13 @@ class _ChannelAdminSettingsScreenState
               color: hasEmail ? theme.colorScheme.primary : null,
             ),
             isThreeLine: hasEmail && _driveSpaceLabel.isNotEmpty,
-            title: const Text('Google-аккаунт'),
+            title: Text(AppL10n.t('Google-аккаунт')),
             subtitle: Text(
               hasEmail
                   ? (_driveSpaceLabel.isEmpty
                       ? email!
                       : '${email!}\n$_driveSpaceLabel')
-                  : 'Не привязан — Настройки → Google Drive',
+                  : AppL10n.t('Не привязан — Настройки → Google Drive'),
               style: TextStyle(
                 fontSize: 12,
                 color: hasEmail
@@ -599,8 +596,8 @@ class _ChannelAdminSettingsScreenState
           ),
           ListTile(
             leading: const Icon(Icons.swap_horiz_outlined),
-            title: const Text('Хранилище резервной копии'),
-            subtitle: Text('Сейчас: ${BackupProviders.label(ch.backupProvider)}',
+            title: Text(AppL10n.t('Хранилище резервной копии')),
+            subtitle: Text(AppL10n.f('Сейчас: {0}', [BackupProviders.label(ch.backupProvider)]),
                 style: TextStyle(
                     fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
             trailing: const Icon(Icons.chevron_right),
@@ -611,7 +608,7 @@ class _ChannelAdminSettingsScreenState
           // ── Профиль ───────────────────────────────────────────────────
           ListTile(
             leading: const Icon(Icons.edit_outlined),
-            title: const Text('Редактировать профиль'),
+            title: Text(AppL10n.t('Редактировать профиль')),
             trailing: const Icon(Icons.chevron_right),
             onTap: _openEditDialog,
           ),
@@ -620,7 +617,7 @@ class _ChannelAdminSettingsScreenState
           ListTile(
             leading: const Icon(Icons.people_outline),
             title: Text(AppL10n.t('cm_subscribers')),
-            subtitle: Text('${ch.subscriberIds.length} подписчиков',
+            subtitle: Text(AppL10n.f('{0} подписчиков', [ch.subscriberIds.length]),
                 style: TextStyle(
                     fontSize: 12,
                     color: theme.colorScheme.onSurfaceVariant)),
@@ -649,8 +646,8 @@ class _ChannelAdminSettingsScreenState
           ),
           ListTile(
             leading: const Icon(Icons.manage_accounts_outlined),
-            title: const Text('Модераторы'),
-            subtitle: Text('${ch.moderatorIds.length} модераторов',
+            title: Text(AppL10n.t('Модераторы')),
+            subtitle: Text(AppL10n.f('{0} модераторов', [ch.moderatorIds.length]),
                 style: TextStyle(
                     fontSize: 12,
                     color: theme.colorScheme.onSurfaceVariant)),
@@ -688,15 +685,15 @@ class _ChannelAdminSettingsScreenState
                   : Icons.comment_outlined,
             ),
             title: Text(ch.commentsEnabled
-                ? 'Выключить комментарии'
-                : 'Включить комментарии'),
+                ? AppL10n.t('Выключить комментарии')
+                : AppL10n.t('Включить комментарии')),
             onTap: amOwner ? _toggleComments : null,
           ),
 
           // ── Команда ───────────────────────────────────────────────────
           ListTile(
             leading: const Icon(Icons.badge_outlined),
-            title: const Text('Команда и подписи'),
+            title: Text(AppL10n.t('Команда и подписи')),
             trailing: const Icon(Icons.chevron_right),
             onTap: _manageStaffAndLinks,
           ),
@@ -706,24 +703,24 @@ class _ChannelAdminSettingsScreenState
             if (!ch.verified)
               ListTile(
                 leading: const Icon(Icons.verified_outlined),
-                title: const Text('Подать на верификацию'),
+                title: Text(AppL10n.t('Подать на верификацию')),
                 onTap: _requestVerification,
               ),
             if (_canTransferOwnership)
               ListTile(
                 leading: const Icon(Icons.swap_horiz_outlined),
-                title: const Text('Передать владение'),
-                subtitle: const Text(
-                  'Другой подписчик станет администратором',
+                title: Text(AppL10n.t('Передать владение')),
+                subtitle: Text(
+                  AppL10n.t('Другой подписчик станет администратором'),
                   style: TextStyle(fontSize: 12),
                 ),
                 onTap: _showTransferOwnershipDialog,
               ),
             ListTile(
               leading: const Icon(Icons.logout_outlined),
-              title: const Text('Покинуть канал'),
-              subtitle: const Text(
-                'После передачи владения — через «Отписаться» в профиле',
+              title: Text(AppL10n.t('Покинуть канал')),
+              subtitle: Text(
+                AppL10n.t('После передачи владения — через «Отписаться» в профиле'),
                 style: TextStyle(fontSize: 12),
               ),
               onTap: _showLeaveHint,
@@ -731,7 +728,7 @@ class _ChannelAdminSettingsScreenState
             const Divider(height: 32),
             ListTile(
               leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title: const Text('Удалить канал',
+              title: Text(AppL10n.t('Удалить канал'),
                   style: TextStyle(color: Colors.red)),
               onTap: _deleteChannel,
             ),

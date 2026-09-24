@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../l10n/app_l10n.dart';
 
 /// Один кастомный эмодзи в наборе ([relPath] относительно каталога документов).
 class CustomEmoji {
@@ -58,7 +59,7 @@ class EmojiPack {
       id: m['id'] as String,
       name: (m['name'] as String?)?.trim().isNotEmpty == true
           ? (m['name'] as String).trim()
-          : 'Набор',
+          : AppL10n.t('Набор'),
       emojis: list,
       sourcePeerId: m['srcPeer'] as String? ?? m['sourcePeerId'] as String?,
     );

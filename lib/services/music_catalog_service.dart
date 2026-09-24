@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
 import 'relay_service.dart';
+import '../l10n/app_l10n.dart';
 
 String? _driveFileId(String url) {
   for (final re in [
@@ -316,7 +317,7 @@ class MusicCatalogService {
       out.add(CatalogTrack(
         title: (raw['title'] as String?)?.trim().isNotEmpty == true
             ? raw['title'] as String
-            : 'Без названия',
+            : AppL10n.t('Без названия'),
         artist:
             user is Map<String, dynamic> ? (user['name'] as String? ?? '') : '',
         streamUrl: '$host/v1/tracks/$id/stream?app_name=$_appName',
@@ -411,9 +412,9 @@ String musicDisplayLabel(String path) {
   final clean = path.split('#').first;
   if (clean.startsWith('http://') || clean.startsWith('https://')) {
     final host = Uri.tryParse(clean)?.host ?? '';
-    if (host.contains('audius')) return 'Трек из Audius';
-    if (host.contains('jamendo')) return 'Трек из Jamendo';
-    return host.isEmpty ? 'Трек по ссылке' : host;
+    if (host.contains('audius')) return AppL10n.t('Трек из Audius');
+    if (host.contains('jamendo')) return AppL10n.t('Трек из Jamendo');
+    return host.isEmpty ? AppL10n.t('Трек по ссылке') : host;
   }
   final base = clean.split('/').last.split('\\').last;
   final dot = base.lastIndexOf('.');

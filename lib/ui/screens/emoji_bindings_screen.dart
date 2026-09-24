@@ -4,6 +4,7 @@ import '../../models/emoji_binding.dart';
 import '../../services/emoji_binding_service.dart';
 import '../../services/emoji_pack_service.dart';
 import '../widgets/channel_feed_image.dart' show storedImage;
+import '../../l10n/app_l10n.dart';
 
 /// Views and removes emoji→sticker/custom-emoji bindings. New bindings are
 /// created from where the bound asset actually lives — the sticker hub's
@@ -39,15 +40,13 @@ class _EmojiBindingsScreenState extends State<EmojiBindingsScreen> {
     final cs = Theme.of(context).colorScheme;
     final bindings = EmojiBindingService.instance.allBindings;
     return Scaffold(
-      appBar: AppBar(title: const Text('Привязки эмодзи')),
+      appBar: AppBar(title: Text(AppL10n.t('Привязки эмодзи'))),
       body: bindings.isEmpty
           ? Padding(
               padding: const EdgeInsets.all(24),
               child: Center(
                 child: Text(
-                  'Пока нет привязок. Их можно добавить после экспорта стикера '
-                  'в мастерской стикеров, или долгим нажатием на кастомный '
-                  'эмодзи в наборе.',
+                  AppL10n.t('Пока нет привязок. Их можно добавить после экспорта стикера в мастерской стикеров, или долгим нажатием на кастомный эмодзи в наборе.'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: cs.onSurfaceVariant, height: 1.4),
                 ),

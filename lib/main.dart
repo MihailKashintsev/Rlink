@@ -1298,7 +1298,7 @@ Future<void> initServices() async {
           await NotificationService.instance.showPersonalMessage(
             peerId: authorId,
             title: title,
-            body: 'Выложил(а) историю',
+            body: AppL10n.t('Выложил(а) историю'),
           );
         }());
       },
@@ -1636,7 +1636,7 @@ Future<void> initServices() async {
             );
             return;
           }
-          final fileLabel = '📎 ${origName ?? 'Файл'}';
+          final fileLabel = '📎 ${origName ?? AppL10n.t('Файл')}';
           final fileBytes = knownBytes;
           final msg = ChatMessage(
             id: msgId,
@@ -2144,7 +2144,7 @@ Future<void> initServices() async {
           ChatMessage(
             id: const Uuid().v4(),
             peerId: publicKey,
-            text: '$requesterTitle хочет привязать это устройство как дочернее',
+            text: AppL10n.f('{0} хочет привязать это устройство как дочернее', [requesterTitle]),
             invitePayloadJson: invitePayload,
             isOutgoing: false,
             timestamp: DateTime.now(),
@@ -2154,7 +2154,7 @@ Future<void> initServices() async {
         incomingMessageController.add(
           IncomingMessage(
             fromId: publicKey,
-            text: 'Запрос на связку устройств',
+            text: AppL10n.t('Запрос на связку устройств'),
             timestamp: DateTime.now(),
             msgId: const Uuid().v4(),
           ),
@@ -2163,7 +2163,7 @@ Future<void> initServices() async {
           await NotificationService.instance.showPersonalMessage(
             peerId: publicKey,
             title: requesterTitle,
-            body: 'Запрос на связку устройств',
+            body: AppL10n.t('Запрос на связку устройств'),
           );
         }
       });
@@ -2175,8 +2175,8 @@ Future<void> initServices() async {
       if (!accepted) {
         if (ctx != null && ctx.mounted) {
           ScaffoldMessenger.of(ctx).showSnackBar(
-            const SnackBar(
-              content: Text('Запрос связки отклонён на другом устройстве'),
+            SnackBar(
+              content: Text(AppL10n.t('Запрос связки отклонён на другом устройстве')),
             ),
           );
         }
@@ -2189,8 +2189,8 @@ Future<void> initServices() async {
       await applyConnectionTransport();
       if (ctx != null && ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(
-            content: Text('Связка устройств активирована'),
+          SnackBar(
+            content: Text(AppL10n.t('Связка устройств активирована')),
           ),
         );
       }
@@ -2207,8 +2207,8 @@ Future<void> initServices() async {
         final ctx = navigatorKey.currentContext;
         if (ctx != null && ctx.mounted) {
           ScaffoldMessenger.of(ctx).showSnackBar(
-            const SnackBar(
-              content: Text('Связка устройств была снята на другом устройстве'),
+            SnackBar(
+              content: Text(AppL10n.t('Связка устройств была снята на другом устройстве')),
             ),
           );
         }
@@ -2248,8 +2248,8 @@ Future<void> initServices() async {
           // the change sticks instead of the old admin's stale directory record
           // pushing the previous owner back. Also take over Drive backup.
           InAppNotificationService.instance.show(
-            title: 'Вы — владелец канала',
-            body: 'Вам передали владение «${after.name}»',
+            title: AppL10n.t('Вы — владелец канала'),
+            body: AppL10n.f('Вам передали владение «{0}»', [after.name]),
             payload: 'channel:$channelId',
             color: after.avatarColor,
             emoji: after.avatarEmoji.isNotEmpty ? after.avatarEmoji : '👑',
@@ -2262,8 +2262,8 @@ Future<void> initServices() async {
           }
         } else if (!wasMod && nowMod && myId.isNotEmpty && after != null) {
           InAppNotificationService.instance.show(
-            title: 'Модератор канала',
-            body: 'Вас назначили модератором «${after.name}»',
+            title: AppL10n.t('Модератор канала'),
+            body: AppL10n.f('Вас назначили модератором «{0}»', [after.name]),
             payload: 'channel:$channelId',
             color: after.avatarColor,
             emoji: after.avatarEmoji.isNotEmpty ? after.avatarEmoji : '👑',
@@ -2361,7 +2361,7 @@ Future<void> initServices() async {
           final rawText = payload['text'] as String? ?? '';
           final textHuman = humanizeCustomEmojiCodes(rawText);
           final preview = rawText.isEmpty
-              ? 'Новый пост'
+              ? AppL10n.t('Новый пост')
               : textHuman.length > 80
                   ? '${textHuman.substring(0, 80)}…'
                   : textHuman;
@@ -2653,7 +2653,7 @@ Future<void> initServices() async {
             final rch = await ChannelService.instance.getChannel(post.channelId);
             await NotificationService.instance.showChannelPost(
               channelId: post.channelId,
-              title: 'Реакция на ваш пост',
+              title: AppL10n.t('Реакция на ваш пост'),
               body: '$reactorName: $emojiPlain',
               color: rch?.avatarColor,
               imagePath: rch?.avatarImagePath,
@@ -2674,7 +2674,7 @@ Future<void> initServices() async {
             await NotificationService.instance.showPersonalMessage(
               peerId: from,
               title: reactorName,
-              body: 'Реакция на ваш комментарий: $emojiPlain',
+              body: AppL10n.f('Реакция на ваш комментарий: {0}', [emojiPlain]),
             );
           }
           break;
@@ -2688,7 +2688,7 @@ Future<void> initServices() async {
             await NotificationService.instance.showPersonalMessage(
               peerId: from,
               title: reactorName,
-              body: 'Реакция на ваше сообщение: $emojiPlain',
+              body: AppL10n.f('Реакция на ваше сообщение: {0}', [emojiPlain]),
             );
           }
           break;
@@ -2908,11 +2908,11 @@ Future<void> initServices() async {
             '${senderId.substring(0, senderId.length.clamp(0, 8))}…';
         final plain = humanizeCustomEmojiCodes(text);
         final preview = text.isEmpty
-            ? 'Опрос'
+            ? AppL10n.t('Опрос')
             : (plain.length > 60 ? '${plain.substring(0, 60)}…' : plain);
         await NotificationService.instance.showGroupMessage(
           groupId: groupId,
-          title: g?.name ?? 'Группа',
+          title: g?.name ?? AppL10n.t('Группа'),
           body: '$author: $preview',
           color: g?.avatarColor,
           imagePath: g?.avatarImagePath,
@@ -3110,8 +3110,8 @@ Future<void> initServices() async {
         unawaited(GroupBackupService.instance.maybeBackgroundPull(updated));
         if (!wasMod && nowMod && myId.isNotEmpty) {
           InAppNotificationService.instance.show(
-            title: 'Модератор группы',
-            body: 'Вас назначили модератором «${updated.name}»',
+            title: AppL10n.t('Модератор группы'),
+            body: AppL10n.f('Вас назначили модератором «{0}»', [updated.name]),
             payload: 'group:$groupId',
             color: updated.avatarColor,
             emoji: updated.avatarEmoji.isNotEmpty ? updated.avatarEmoji : '👑',
@@ -3811,7 +3811,7 @@ void _onBotOffline(String botId) {
   if (now - last < 60000) return; // не спамим
   _botOfflineStubMs[id] = now;
 
-  const stub = 'Бот не в сети, подождите ответа или обратитесь к разработчику.';
+  final stub = AppL10n.t('Бот не в сети, подождите ответа или обратитесь к разработчику.');
   final ts = DateTime.now();
   unawaited(() async {
     try {
@@ -4042,7 +4042,7 @@ String _placeholderLabelForIncomingMedia({
 }) {
   if (isVoice) return '🎤 Голосовое';
   if (isFile) {
-    return '📎 ${fileName?.trim().isNotEmpty == true ? fileName!.trim() : 'Файл'}';
+    return '📎 ${fileName?.trim().isNotEmpty == true ? fileName!.trim() : AppL10n.t('Файл')}';
   }
   if (isVideo) return isSquare ? '⬛ Видео' : '📹 Видео';
   return '';
@@ -4559,7 +4559,7 @@ Future<void> _processBlobAssemble({
       return;
     }
 
-    final fileLabel = '📎 ${origName ?? 'Файл'}';
+    final fileLabel = '📎 ${origName ?? AppL10n.t('Файл')}';
     final msg = ChatMessage(
       id: msgId,
       peerId: senderKey,
@@ -4826,20 +4826,18 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
     final allow = await showDialog<bool>(
       context: ctx,
       builder: (dialogCtx) => AlertDialog(
-        title: const Text('Разрешить приём сообщений в фоне?'),
-        content: const Text(
-          'Пока Rlink закрыт, система может остановить приём сообщений, чтобы '
-          'сэкономить батарею. Исключение Rlink из оптимизации батареи не даёт '
-          'этому случиться.',
+        title: Text(AppL10n.t('Разрешить приём сообщений в фоне?')),
+        content: Text(
+          AppL10n.t('Пока Rlink закрыт, система может остановить приём сообщений, чтобы сэкономить батарею. Исключение Rlink из оптимизации батареи не даёт этому случиться.'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, false),
-            child: const Text('Позже'),
+            child: Text(AppL10n.t('Позже')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogCtx, true),
-            child: const Text('Разрешить'),
+            child: Text(AppL10n.t('Разрешить')),
           ),
         ],
       ),

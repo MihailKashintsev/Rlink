@@ -10,6 +10,7 @@ import '../utils/web_file_store.dart';
 // Conditional imports: use IO-specific code on native platforms, stub on web
 import 'local_transcription_service_stub.dart'
     if (dart.library.io) 'local_transcription_service_io.dart';
+import '../l10n/app_l10n.dart';
 
 /// Расшифровка аудио/звонков. Движок и размер модели выбираются пользователем
 /// в настройках ([AppSettings.transcriptionEngine] / [transcriptionModelSize]).
@@ -88,7 +89,7 @@ class LocalTranscriptionService {
       _readySize = size;
     } catch (e) {
       _modelReady = false;
-      throw StateError('Не удалось загрузить модель для расшифровки: $e');
+      throw StateError(AppL10n.f('Не удалось загрузить модель для расшифровки: {0}', [e]));
     } finally {
       _loadingModel = false;
     }
@@ -107,7 +108,7 @@ class LocalTranscriptionService {
   Future<String> transcribeFile(String audioPath,
       {String language = 'ru'}) async {
     if (audioPath.isEmpty) {
-      throw ArgumentError('Файл не найден: $audioPath');
+      throw ArgumentError(AppL10n.f('Файл не найден: {0}', [audioPath]));
     }
     final engine = _engine;
     final size = _modelSize;
@@ -130,8 +131,7 @@ class LocalTranscriptionService {
           return await _transcribeOnDevice(audioPath, language, size);
         } catch (localError) {
           throw StateError(
-            'Облачная расшифровка недоступна ($cloudError), '
-            'локальная тоже не запустилась ($localError)',
+            AppL10n.f('Облачная расшифровка недоступна ({0}), локальная тоже не запустилась ({1})', [cloudError, localError]),
           );
         }
       }
@@ -153,7 +153,7 @@ class LocalTranscriptionService {
     }
     final text =
         await WhisperWebService.instance.transcribe(path, language: language);
-    if (text.trim().isEmpty) throw StateError('Речь не распознана');
+    if (text.trim().isEmpty) throw StateError(AppL10n.t('Речь не распознана'));
     return text.trim();
   }
 }

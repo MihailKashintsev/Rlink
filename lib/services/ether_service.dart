@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'name_filter.dart';
+import '../l10n/app_l10n.dart';
 
 class EtherMessage {
   final String id;
@@ -57,7 +58,7 @@ class EtherService {
       debugPrint('[Ether] Filtered message containing name: ${msg.id}');
       toAdd = EtherMessage(
         id: msg.id,
-        text: '[ сообщение скрыто — упоминание имени ]',
+        text: AppL10n.t('[ сообщение скрыто — упоминание имени ]'),
         color: msg.color,
         receivedAt: msg.receivedAt,
         isOwn: msg.isOwn,

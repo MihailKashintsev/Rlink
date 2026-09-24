@@ -14,6 +14,7 @@ import 'image_service.dart';
 import '../utils/web_file_store.dart';
 import '../utils/web_object_url.dart';
 import 'story_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// Унифицированный приёмник медиа: единый pipeline для BLE-чанков и relay-blob.
 class MediaReceiver {
@@ -277,7 +278,7 @@ class MediaReceiver {
       filePath = await img.assembleAndSaveFile(msgId);
       if (filePath == null) return;
       fileSize = await _storedMediaByteLength(filePath);
-      label = '📎 ${fileName ?? 'Файл'}';
+      label = '📎 ${fileName ?? AppL10n.t('Файл')}';
     } else if (isVideo) {
       videoPath = await img.assembleAndSaveVideo(msgId, isSquare: isSquare);
       if (videoPath == null) return;

@@ -1,3 +1,5 @@
+import '../l10n/app_l10n.dart';
+
 Future<void> requestWebNotificationPermission() async {}
 
 Future<String> webNotificationPermission() async => 'unsupported';
@@ -5,7 +7,7 @@ Future<String> webNotificationPermission() async => 'unsupported';
 Future<Map<String, Object?>> webNotificationCapability() async => {
       'status': 'unsupported',
       'permission': 'unsupported',
-      'label': 'Не поддерживаются на этой платформе',
+      'label': AppL10n.t('Не поддерживаются на этой платформе'),
       'canRequest': false,
       'notificationSupported': false,
       'serviceWorkerSupported': false,

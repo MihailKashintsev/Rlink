@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../l10n/app_l10n.dart';
 
 /// Durable OAuth account linking against the relay's own `/oauth/<provider>/*`
 /// backend (see relay_server/bin/oauth.dart) — the relay holds the refresh
@@ -62,12 +63,12 @@ class RelayOauthLink {
   Future<bool> finishLink() async {
     final pairing = _pendingPairing;
     if (pairing == null || pairing.isEmpty) {
-      _lastError = 'Сначала откройте вход';
+      _lastError = AppL10n.t('Сначала откройте вход');
       return false;
     }
     final res = await _fetchToken(pairing);
     if (res == null) {
-      _lastError = 'Вход ещё не подтверждён. Завершите его в браузере.';
+      _lastError = AppL10n.t('Вход ещё не подтверждён. Завершите его в браузере.');
       return false;
     }
     final email = res.email;

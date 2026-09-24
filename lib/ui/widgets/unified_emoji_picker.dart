@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/emoji_pack.dart';
 import '../../services/emoji_pack_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// One picker for everything: custom packs and the official set share a single
 /// row of tabs at the top, the grid below shows whatever is selected, and the
@@ -133,7 +134,7 @@ class _UnifiedEmojiPickerState extends State<UnifiedEmojiPicker> {
             decoration: InputDecoration(
               isDense: true,
               prefixIcon: const Icon(Icons.search, size: 18),
-              hintText: 'Поиск: имя или :код:',
+              hintText: AppL10n.t('Поиск: имя или :код:'),
               hintStyle: const TextStyle(fontSize: 13),
               filled: true,
               fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
@@ -190,7 +191,7 @@ class _UnifiedEmojiPickerState extends State<UnifiedEmojiPicker> {
         Expanded(
           child: items.isEmpty
               ? Center(
-                  child: Text('Ничего не найдено',
+                  child: Text(AppL10n.t('Ничего не найдено'),
                       style: TextStyle(color: cs.onSurfaceVariant)),
                 )
               : GridView.builder(

@@ -9,6 +9,7 @@ import '../models/rlv_sticker.dart';
 import '../models/shared_collab.dart';
 import '../models/tgs_sticker.dart';
 import 'custom_emoji_text.dart';
+import '../l10n/app_l10n.dart';
 
 // `stk_*` (native filename prefix) only identifies a sticker on native
 // platforms; web stores stickers as inline `data:` refs with no such
@@ -54,22 +55,22 @@ String formatMessagePreview(String? text, {String? pollJson}) {
   final p = MessagePoll.tryDecode(pollJson ?? '');
   if (p != null) {
     final q = p.question.trim();
-    return q.isEmpty ? '📊 Опрос' : '📊 $q';
+    return q.isEmpty ? AppL10n.t('📊 Опрос') : '📊 $q';
   }
   if (text == null || text.isEmpty) return '';
 
   final todo = SharedTodoPayload.tryDecode(text);
   if (todo != null) {
     final title = todo.title.trim();
-    final head = title.isEmpty ? 'Список задач' : title;
+    final head = title.isEmpty ? AppL10n.t('Список задач') : title;
     final n = todo.items.length;
-    return '📋 $head${n > 0 ? ' · $n п.' : ''}';
+    return '📋 $head${n > 0 ? AppL10n.f(' · {0} п.', [n]) : ''}';
   }
 
   final cal = SharedCalendarPayload.tryDecode(text);
   if (cal != null) {
     final title = cal.title.trim();
-    return title.isEmpty ? '📅 Событие' : '📅 $title';
+    return title.isEmpty ? AppL10n.t('📅 Событие') : '📅 $title';
   }
 
   if (text == '📷' || text == '📷 Фото') return '📷 Фото';
@@ -85,9 +86,9 @@ String dmLastMessagePreview(ChatMessage m) {
   if (m.stickerPackPayload != null) {
     final title = (m.stickerPackPayload!['title'] as String?)?.trim();
     if (title != null && title.isNotEmpty) {
-      return '🩵 Набор «$title»';
+      return AppL10n.f('🩵 Набор «{0}»', [title]);
     }
-    return '🩵 Набор стикеров';
+    return AppL10n.t('🩵 Набор стикеров');
   }
   final inv = m.invitePayloadJson;
   if (inv != null && inv.isNotEmpty) {
@@ -96,15 +97,15 @@ String dmLastMessagePreview(ChatMessage m) {
       final ty = map['type'] as String? ?? map['kind'] as String?;
       if (ty == 'emoji_pack') {
         final name = (map['name'] as String?)?.trim();
-        if (name != null && name.isNotEmpty) return '😀 Набор «$name»';
-        return '😀 Набор эмодзи';
+        if (name != null && name.isNotEmpty) return AppL10n.f('😀 Набор «{0}»', [name]);
+        return AppL10n.t('😀 Набор эмодзи');
       }
     } catch (_) {}
   }
   var t = formatMessagePreview(m.text.isEmpty ? null : m.text);
   if (t.isNotEmpty) return t;
   if (m.imagePath != null) {
-    if (_isStickerImagePath(m.imagePath!)) return '🩵 Стикер';
+    if (_isStickerImagePath(m.imagePath!)) return AppL10n.t('🩵 Стикер');
     if (m.imagePath!.toLowerCase().endsWith('.gif')) return '🎞 GIF';
     return '📷 Фото';
   }
@@ -112,7 +113,7 @@ String dmLastMessagePreview(ChatMessage m) {
   if (m.videoPath != null) return '📹 Видео';
   if (m.filePath != null) {
     if (m.text.startsWith('📎 ')) return m.text;
-    return '📎 Файл';
+    return AppL10n.t('📎 Файл');
   }
   return '';
 }
@@ -123,12 +124,12 @@ String formatGroupMessagePreview(GroupMessage m) {
   if (t.isNotEmpty) return t;
   final img = m.imagePath;
   if (img != null && img.isNotEmpty) {
-    if (_isStickerImagePath(img)) return '🩵 Стикер';
+    if (_isStickerImagePath(img)) return AppL10n.t('🩵 Стикер');
     return img.toLowerCase().endsWith('.gif') ? '🎞 GIF' : '📷 Фото';
   }
   if (m.voicePath != null && m.voicePath!.isNotEmpty) return '🎤 Голосовое';
   if (m.videoPath != null && m.videoPath!.isNotEmpty) return '📹 Видео';
-  return 'Сообщение';
+  return AppL10n.t('Сообщение');
 }
 
 /// Превью последнего поста канала.
@@ -137,11 +138,11 @@ String formatChannelPostPreview(ChannelPost p) {
   if (t.isNotEmpty) return t;
   final img = p.imagePath;
   if (img != null && img.isNotEmpty) {
-    if (_isStickerImagePath(img)) return '🩵 Стикер';
+    if (_isStickerImagePath(img)) return AppL10n.t('🩵 Стикер');
     return img.toLowerCase().endsWith('.gif') ? '🎞 GIF' : '📷 Фото';
   }
   if (p.voicePath != null && p.voicePath!.isNotEmpty) return '🎤 Голосовое';
   if (p.videoPath != null && p.videoPath!.isNotEmpty) return '📹 Видео';
-  if (p.filePath != null && p.filePath!.isNotEmpty) return '📎 Файл';
-  return 'Пост';
+  if (p.filePath != null && p.filePath!.isNotEmpty) return AppL10n.t('📎 Файл');
+  return AppL10n.t('Пост');
 }

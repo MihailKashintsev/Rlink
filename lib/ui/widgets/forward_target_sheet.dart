@@ -102,8 +102,8 @@ Future<ForwardDmTargetPick?> showForwardDmTargetSheet(
       SnackBar(
         content: Text(
           excludePeerId != null
-              ? 'Нет других чатов для пересылки'
-              : 'Нет чатов для пересылки',
+              ? AppL10n.t('Нет других чатов для пересылки')
+              : AppL10n.t('Нет чатов для пересылки'),
         ),
       ),
     );
@@ -133,7 +133,7 @@ Future<ForwardDmTargetPick?> showForwardDmTargetSheet(
                         child: Padding(
                           padding: const EdgeInsets.only(left: 8),
                           child: Text(
-                            'Переслать в…',
+                            AppL10n.t('Переслать в…'),
                             style: Theme.of(ctx)
                                 .textTheme
                                 .titleMedium

@@ -9,6 +9,7 @@ import 'crypto_service.dart';
 import 'gossip_router.dart';
 import 'linked_device_fanout.dart';
 import 'peer_key_directory.dart';
+import '../l10n/app_l10n.dart';
 
 /// Текстовая отправка в личный чат (как [ChatScreen._send], без UI).
 class OutboundDmText {
@@ -36,7 +37,7 @@ class OutboundDmText {
     final resolved =
         PeerKeyDirectory.instance.resolvePeerPublicKey(peerIdOrBle);
     if (_pkRe.hasMatch(resolved)) return resolved;
-    throw StateError('Нет публичного ключа собеседника для отправки');
+    throw StateError(AppL10n.t('Нет публичного ключа собеседника для отправки'));
   }
 
   /// Сохраняет сообщения в БД и рассылает gossip (шифрование при наличии X25519).
@@ -46,7 +47,7 @@ class OutboundDmText {
     String? replyToMessageId,
   }) async {
     final myId = CryptoService.instance.publicKeyHex;
-    if (myId.isEmpty) throw StateError('Ключи не готовы');
+    if (myId.isEmpty) throw StateError(AppL10n.t('Ключи не готовы'));
 
     final targetPeerId = _resolveTargetPeerId(peerId);
     final parts = splitChunks(fullText);

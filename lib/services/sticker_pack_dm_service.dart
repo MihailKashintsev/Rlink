@@ -18,6 +18,7 @@ import 'crypto_service.dart';
 import 'image_service.dart';
 import 'relay_service.dart';
 import 'sticker_collection_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// Отправка карточки набора стикеров в ЛС (payload в [ChatMessage.stickerPackPayload],
 /// по сети — сжатый JSON через relay blob, id сообщения с префиксом `stickerpack_`).
@@ -129,13 +130,13 @@ class StickerPackDmService {
     final canonical = ChatStorageService.normalizeDmPeerId(targetPeerId.trim());
     final payload = await buildStickerPackPayload(pack);
     if ((payload['stickers'] as List?)?.isEmpty != false) {
-      _snack(context, 'В наборе нет файлов для отправки');
+      _snack(context, AppL10n.t('В наборе нет файлов для отправки'));
       return;
     }
 
     final msgId = 'stickerpack_${_uuid.v4()}';
-    final title = (pack.title.trim().isEmpty) ? 'Набор' : pack.title.trim();
-    final previewText = '🩵 Набор «$title»';
+    final title = (pack.title.trim().isEmpty) ? AppL10n.t('Набор') : pack.title.trim();
+    final previewText = AppL10n.f('🩵 Набор «{0}»', [title]);
 
     final msg = ChatMessage(
       id: msgId,
@@ -154,7 +155,7 @@ class StickerPackDmService {
         MessageStatus.sent,
       );
       await ChatStorageService.instance.loadMessages(canonical);
-      _snack(context, 'Набор сохранён');
+      _snack(context, AppL10n.t('Набор сохранён'));
       return;
     }
 
@@ -163,7 +164,7 @@ class StickerPackDmService {
         msgId,
         MessageStatus.failed,
       );
-      _snack(context, 'Для отправки набора нужен relay');
+      _snack(context, AppL10n.t('Для отправки набора нужен relay'));
       return;
     }
 
@@ -209,14 +210,14 @@ class StickerPackDmService {
         MessageStatus.sent,
       );
       await ChatStorageService.instance.loadMessages(canonical);
-      _snack(context, 'Набор отправлен');
+      _snack(context, AppL10n.t('Набор отправлен'));
     } catch (e, st) {
       debugPrint('[StickerPackDm] send failed: $e\n$st');
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
         msgId,
         MessageStatus.failed,
       );
-      _snack(context, 'Не удалось отправить: $e');
+      _snack(context, AppL10n.f('Не удалось отправить: {0}', [e]));
     }
   }
 
@@ -233,8 +234,8 @@ class StickerPackDmService {
     final canonical = ChatStorageService.normalizeDmPeerId(targetPeerId.trim());
     final msgId = 'stickerpack_${_uuid.v4()}';
     final rawTitle = (payload['title'] as String?)?.trim() ?? '';
-    final title = rawTitle.isEmpty ? 'Набор' : rawTitle;
-    final previewText = '🩵 Набор «$title»';
+    final title = rawTitle.isEmpty ? AppL10n.t('Набор') : rawTitle;
+    final previewText = AppL10n.f('🩵 Набор «{0}»', [title]);
 
     await ChatStorageService.instance.saveMessage(ChatMessage(
       id: msgId,
@@ -252,7 +253,7 @@ class StickerPackDmService {
         MessageStatus.sent,
       );
       await ChatStorageService.instance.loadMessages(canonical);
-      _snack(context, 'Набор сохранён');
+      _snack(context, AppL10n.t('Набор сохранён'));
       return;
     }
 
@@ -261,7 +262,7 @@ class StickerPackDmService {
         msgId,
         MessageStatus.failed,
       );
-      _snack(context, 'Для отправки набора нужен relay');
+      _snack(context, AppL10n.t('Для отправки набора нужен relay'));
       return;
     }
 
@@ -305,14 +306,14 @@ class StickerPackDmService {
         MessageStatus.sent,
       );
       await ChatStorageService.instance.loadMessages(canonical);
-      _snack(context, 'Набор отправлен');
+      _snack(context, AppL10n.t('Набор отправлен'));
     } catch (e, st) {
       debugPrint('[StickerPackDm] forward failed: $e\n$st');
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
         msgId,
         MessageStatus.failed,
       );
-      _snack(context, 'Не удалось отправить: $e');
+      _snack(context, AppL10n.f('Не удалось отправить: {0}', [e]));
     }
   }
 
@@ -338,8 +339,8 @@ class StickerPackDmService {
 
     final title = (payload['title'] as String?)?.trim();
     final previewText = (title != null && title.isNotEmpty)
-        ? '🩵 Набор «$title»'
-        : '🩵 Набор стикеров';
+        ? AppL10n.f('🩵 Набор «{0}»', [title])
+        : AppL10n.t('🩵 Набор стикеров');
 
     // Auto-download sticker files
     final stickers = payload['stickers'] as List?;
@@ -412,7 +413,7 @@ class StickerPackDmService {
         msg.id,
         MessageStatus.failed,
       );
-      _snack(context, 'Для отправки набора нужен relay');
+      _snack(context, AppL10n.t('Для отправки набора нужен relay'));
       return;
     }
 
@@ -464,7 +465,7 @@ class StickerPackDmService {
         msg.id,
         MessageStatus.failed,
       );
-      _snack(context, 'Повтор не удался: $e');
+      _snack(context, AppL10n.f('Повтор не удался: {0}', [e]));
     }
   }
 

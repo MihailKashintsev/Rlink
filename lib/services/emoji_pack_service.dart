@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/emoji_pack.dart';
 import '../utils/web_file_store.dart';
+import '../l10n/app_l10n.dart';
 
 /// Локальные наборы кастомных эмодзи.
 /// • Native: каталог [emoji_packs/] + индекс [emoji_packs.json] в documents.
@@ -296,7 +297,7 @@ class EmojiPackService {
       final root = await _packsRootDir();
       Directory(p.join(root.path, id)).createSync(recursive: true);
     }
-    final n = name.trim().isEmpty ? 'Набор' : name.trim();
+    final n = name.trim().isEmpty ? AppL10n.t('Набор') : name.trim();
     packs.insert(
       0,
       EmojiPack(id: id, name: n, emojis: const [], sourcePeerId: sourcePeerId),
@@ -462,7 +463,7 @@ class EmojiPackService {
     await ensureInitialized();
     final name = (payload['name'] as String?)?.trim().isNotEmpty == true
         ? (payload['name'] as String).trim()
-        : 'Набор';
+        : AppL10n.t('Набор');
     final rawEmojis = (payload['emojis'] as List?) ?? const [];
     if (rawEmojis.isEmpty) return null;
 
@@ -571,7 +572,7 @@ class EmojiPackService {
       if (bytes.isEmpty) continue;
       final packName = (m['pack'] as String?)?.trim();
       final targetName =
-          (packName != null && packName.isNotEmpty) ? packName : 'Из чата';
+          (packName != null && packName.isNotEmpty) ? packName : AppL10n.t('Из чата');
       try {
         final packId = await packIdFor(targetName);
         await addEmojiBytes(packId: packId, shortcode: norm, bytes: bytes);

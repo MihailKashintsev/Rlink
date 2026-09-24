@@ -1,3 +1,5 @@
+import '../l10n/app_l10n.dart';
+
 /// Движок расшифровки аудио/звонков, выбираемый пользователем в настройках.
 ///
 /// Платформенно-нейтральный файл (без dart:io) — импортируется и на вебе.
@@ -14,9 +16,9 @@ enum TranscriptionEngine {
   String get displayName {
     switch (this) {
       case TranscriptionEngine.onDevice:
-        return 'На устройстве (локально)';
+        return AppL10n.t('На устройстве (локально)');
       case TranscriptionEngine.cloud:
-        return 'Облако (Hugging Face)';
+        return AppL10n.t('Облако (Hugging Face)');
     }
   }
 

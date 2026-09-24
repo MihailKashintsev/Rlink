@@ -81,12 +81,12 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
   Future<void> _addPack() async {
     if (_selectedAbs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Отметьте стикеры или нажмите «Все»')),
+        SnackBar(content: Text(AppL10n.t('Отметьте стикеры или нажмите «Все»'))),
       );
       return;
     }
     final titleCtrl = TextEditingController(
-      text: '${widget.peerName} — набор',
+      text: AppL10n.f('{0} — набор', [widget.peerName]),
     );
     bool? ok;
     var title = '';
@@ -94,11 +94,11 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
       ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Добавить набор к себе'),
+          title: Text(AppL10n.t('Добавить набор к себе')),
           content: TextField(
             controller: titleCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Название',
+            decoration: InputDecoration(
+              labelText: AppL10n.t('Название'),
               border: OutlineInputBorder(),
             ),
             autofocus: true,
@@ -122,7 +122,7 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
     if (ok != true || !mounted) return;
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите название')),
+        SnackBar(content: Text(AppL10n.t('Введите название'))),
       );
       return;
     }
@@ -144,7 +144,7 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Набор «$title» добавлен')),
+          SnackBar(content: Text(AppL10n.f('Набор «{0}» добавлен', [title]))),
         );
         Navigator.pop(context);
       }
@@ -152,7 +152,7 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка: $e'),
+            content: Text(AppL10n.f('Ошибка: {0}', [e])),
             backgroundColor: Colors.red,
           ),
         );
@@ -166,7 +166,7 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: Text('Стикеры: ${widget.peerName}'),
+        title: Text(AppL10n.f('Стикеры: {0}', [widget.peerName])),
         actions: [
           if (paths.isNotEmpty)
             TextButton(
@@ -174,7 +174,7 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
                   ? _clearSel
                   : _selectAll,
               child: Text(
-                _selectedAbs.length == paths.length ? 'Снять все' : 'Все',
+                _selectedAbs.length == paths.length ? AppL10n.t('Снять все') : AppL10n.t('Все'),
               ),
             ),
         ],
@@ -187,8 +187,8 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
             icon: const Icon(Icons.library_add_outlined),
             label: Text(
               _selectedAbs.isEmpty
-                  ? 'Добавить к себе'
-                  : 'Добавить выбранные (${_selectedAbs.length})',
+                  ? AppL10n.t('Добавить к себе')
+                  : AppL10n.f('Добавить выбранные ({0})', [_selectedAbs.length]),
             ),
           ),
         ),
@@ -200,8 +200,7 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(
-                      'В чате с этим контактом пока нет стикеров '
-                      '(картинки с именем stk_…).',
+                      AppL10n.t('В чате с этим контактом пока нет стикеров (картинки с именем stk_…).'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
@@ -213,8 +212,7 @@ class _PeerStickersScreenState extends State<PeerStickersScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                       child: Text(
-                        'Нажмите на стикеры, которые хотите сохранить у себя в наборе. '
-                        'Они копируются в вашу коллекцию.',
+                        AppL10n.t('Нажмите на стикеры, которые хотите сохранить у себя в наборе. Они копируются в вашу коллекцию.'),
                         style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                       ),
                     ),

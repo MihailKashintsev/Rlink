@@ -134,9 +134,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (dataUrl == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content:
-                  Text('Баннер слишком большой. Выберите изображение меньше.'),
+                  Text(AppL10n.t('Баннер слишком большой. Выберите изображение меньше.')),
             ),
           );
         }
@@ -168,7 +168,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Выбрать фото'),
+              title: Text(AppL10n.t('Выбрать фото')),
               onTap: () async {
                 Navigator.pop(ctx);
                 final ok = await pickAndSaveProfileAvatar(context);
@@ -180,7 +180,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.emoji_emotions_outlined),
-              title: const Text('Эмодзи'),
+              title: Text(AppL10n.t('Эмодзи')),
               onTap: () {
                 Navigator.pop(ctx);
                 setState(() {
@@ -192,7 +192,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (hasPhoto)
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Убрать фото',
+                title: Text(AppL10n.t('Убрать фото'),
                     style: TextStyle(color: Colors.red)),
                 onTap: () async {
                   Navigator.pop(ctx);
@@ -230,8 +230,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!audioExts.contains(ext)) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Выберите аудиофайл (mp3, m4a, wav, ogg, flac…)')),
+            SnackBar(
+                content: Text(AppL10n.t('Выберите аудиофайл (mp3, m4a, wav, ogg, flac…)'))),
           );
         }
         return;
@@ -240,7 +240,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (bytes == null || bytes.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Не удалось прочитать аудиофайл')),
+            SnackBar(content: Text(AppL10n.t('Не удалось прочитать аудиофайл'))),
           );
         }
         return;
@@ -254,7 +254,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (stored == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Не удалось сохранить аудиофайл')),
+            SnackBar(content: Text(AppL10n.t('Не удалось сохранить аудиофайл'))),
           );
         }
         return;
@@ -330,9 +330,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  static const _ruMonths = [
-    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля',
-    'августа', 'сентября', 'октября', 'ноября', 'декабря'
+  static List<String> get _ruMonths => [
+    AppL10n.t('января'), AppL10n.t('февраля'), AppL10n.t('марта'), AppL10n.t('апреля'), AppL10n.t('мая'), AppL10n.t('июня'), AppL10n.t('июля'),
+    AppL10n.t('августа'), AppL10n.t('сентября'), AppL10n.t('октября'), AppL10n.t('ноября'), AppL10n.t('декабря')
   ];
 
   /// "15 марта" from a stored "MM-DD"/"YYYY-MM-DD".
@@ -509,7 +509,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                     .hintColor,
                                                 size: 32),
                                             const SizedBox(height: 4),
-                                            Text('Добавить баннер',
+                                            Text(AppL10n.t('Добавить баннер'),
                                                 style: TextStyle(
                                                     color: Theme.of(context)
                                                         .hintColor,
@@ -688,7 +688,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       controller: _controller,
                       maxLength: 20,
                       decoration: InputDecoration(
-                        labelText: 'Имя',
+                        labelText: AppL10n.t('Имя'),
                         filled: true,
                         fillColor: cs.surfaceContainerHigh,
                         prefixIcon: Icon(Icons.person_outline_rounded,
@@ -712,7 +712,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onChanged: (_) => setState(() {}),
                     )
                   : _InfoTile(
-                      label: 'Имя',
+                      label: AppL10n.t('Имя'),
                       value: profile.nickname,
                       valueWidget: NickText(
                         profile.nickname,
@@ -728,7 +728,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Эмодзи-статус',
+                        Text(AppL10n.t('Эмодзи-статус'),
                             style: TextStyle(
                                 fontSize: 12,
                                 color: Theme.of(context).hintColor)),
@@ -764,16 +764,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   _statusEmoji = '';
                                   _statusEmojiController.clear();
                                 }),
-                                child: const Text('Убрать'),
+                                child: Text(AppL10n.t('Убрать')),
                               ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         TextField(
                           controller: _statusEmojiController,
-                          decoration: const InputDecoration(
-                            labelText: 'Или введите вручную',
-                            hintText: '😀 или :my_emoji:',
+                          decoration: InputDecoration(
+                            labelText: AppL10n.t('Или введите вручную'),
+                            hintText: AppL10n.t('😀 или :my_emoji:'),
                             border: OutlineInputBorder(),
                           ),
                           onChanged: (v) {
@@ -802,8 +802,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     )
                   : _InfoTile(
-                      label: 'Эмодзи-статус',
-                      value: profile.statusEmoji.isEmpty ? 'Не задан' : '',
+                      label: AppL10n.t('Эмодзи-статус'),
+                      value: profile.statusEmoji.isEmpty ? AppL10n.t('Не задан') : '',
                       valueWidget: profile.statusEmoji.isEmpty
                           ? null
                           : StatusEmojiView(
@@ -820,14 +820,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       controller: _usernameController,
                       maxLength: 24,
                       decoration: InputDecoration(
-                        labelText: 'Юзернейм',
-                        hintText: 'Например: ivan_99',
+                        labelText: AppL10n.t('Юзернейм'),
+                        hintText: AppL10n.t('Например: ivan_99'),
                         prefixText: '#',
                         border: const OutlineInputBorder(),
                         counterStyle: TextStyle(
                             color: Theme.of(context).hintColor, fontSize: 11),
                         helperText:
-                            'Латиница, цифры, _ и . — для быстрого поиска',
+                            AppL10n.t('Латиница, цифры, _ и . — для быстрого поиска'),
                         helperStyle: TextStyle(
                             color: Theme.of(context).hintColor, fontSize: 11),
                       ),
@@ -837,18 +837,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     )
                   : _InfoTile(
-                      label: 'Юзернейм',
+                      label: AppL10n.t('Юзернейм'),
                       value: profile.username.isNotEmpty
                           ? '#${profile.username}'
-                          : 'Не задан',
+                          : AppL10n.t('Не задан'),
                       monospace: profile.username.isNotEmpty,
                       onCopy: profile.username.isNotEmpty
                           ? () {
                               Clipboard.setData(
                                   ClipboardData(text: profile.username));
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('Юзернейм скопирован!')),
+                                SnackBar(
+                                    content: Text(AppL10n.t('Юзернейм скопирован!'))),
                               );
                             }
                           : null,
@@ -863,7 +863,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     const Icon(Icons.palette_outlined, size: 20),
                     const SizedBox(width: 8),
-                    const Text('Цвет имени',
+                    Text(AppL10n.t('Цвет имени'),
                         style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(width: 8),
                     if (!PremiumService.instance.has(PremiumFeature.nickColor))
@@ -900,7 +900,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Цвет увидят все ваши собеседники.',
+                  AppL10n.t('Цвет увидят все ваши собеседники.'),
                   style: TextStyle(
                       fontSize: 12, color: Theme.of(context).hintColor),
                 ),
@@ -926,12 +926,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 final sub = hasMusic
                     ? parseMusicRef(rp).title
                     : (_editing
-                        ? 'Выберите аудиофайл — контакты смогут загрузить и послушать, когда вы в сети'
-                        : 'Не выбрано');
+                        ? AppL10n.t('Выберите аудиофайл — контакты смогут загрузить и послушать, когда вы в сети')
+                        : AppL10n.t('Не выбрано'));
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.library_music_outlined),
-                  title: const Text('Музыка в профиле'),
+                  title: Text(AppL10n.t('Музыка в профиле')),
                   subtitle: Text(
                     sub,
                     style: TextStyle(
@@ -944,12 +944,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             if (_profileMusicPath != null)
                               IconButton(
                                 icon: const Icon(Icons.clear),
-                                tooltip: 'Убрать',
+                                tooltip: AppL10n.t('Убрать'),
                                 onPressed: _clearProfileMusic,
                               ),
                             IconButton(
                               icon: const Icon(Icons.travel_explore_outlined),
-                              tooltip: 'Каталог или ссылка',
+                              tooltip: AppL10n.t('Каталог или ссылка'),
                               onPressed: () async {
                                 final url =
                                     await showMusicPickerSheet(context);
@@ -959,7 +959,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                             IconButton(
                               icon: const Icon(Icons.audio_file_outlined),
-                              tooltip: 'Выбрать файл',
+                              tooltip: AppL10n.t('Выбрать файл'),
                               onPressed: _pickProfileMusic,
                             ),
                           ],
@@ -975,10 +975,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.cake_outlined,
                       color: Theme.of(context).colorScheme.primary),
-                  title: const Text('День рождения'),
+                  title: Text(AppL10n.t('День рождения')),
                   subtitle: Text(
                     _birthday == null
-                        ? 'Контакты увидят поздравление в этот день'
+                        ? AppL10n.t('Контакты увидят поздравление в этот день')
                         : _birthdayLabel(_birthday!),
                     style: const TextStyle(fontSize: 12),
                   ),
@@ -1000,8 +1000,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: TextField(
                       controller: _tagController,
                       decoration: InputDecoration(
-                        labelText: 'Добавить тег (макс. 5)',
-                        hintText: 'Например: музыка',
+                        labelText: AppL10n.t('Добавить тег (макс. 5)'),
+                        hintText: AppL10n.t('Например: музыка'),
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
                           icon: const Icon(Icons.add),
@@ -1054,7 +1054,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     }),
                     if (_tags.isEmpty && !_editing)
-                      Text('Нет тегов',
+                      Text(AppL10n.t('Нет тегов'),
                           style: TextStyle(
                               color: Theme.of(context).hintColor,
                               fontSize: 13)),
@@ -1067,7 +1067,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 12),
 
               _InfoTile(
-                label: 'RID (для поиска через &)',
+                label: AppL10n.t('RID (для поиска через &)'),
                 value: profile.publicKeyHex,
                 monospace: true,
                 onCopy: () {
@@ -1130,8 +1130,8 @@ class _GigaChatProfileCardState extends State<_GigaChatProfileCard> {
           SnackBar(
             content: Text(
               value
-                  ? 'Включён обход проверки сертификата для узлов GigaChat'
-                  : 'Проверка сертификата снова обычная',
+                  ? AppL10n.t('Включён обход проверки сертификата для узлов GigaChat')
+                  : AppL10n.t('Проверка сертификата снова обычная'),
             ),
           ),
         );
@@ -1153,7 +1153,7 @@ class _GigaChatProfileCardState extends State<_GigaChatProfileCard> {
       await GigachatService.instance.saveAuthorizationKey(_keyCtrl.text.trim());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ключ GigaChat сохранён')),
+          SnackBar(content: Text(AppL10n.t('Ключ GigaChat сохранён'))),
         );
       }
     } finally {
@@ -1168,7 +1168,7 @@ class _GigaChatProfileCardState extends State<_GigaChatProfileCard> {
       await GigachatService.instance.saveAuthorizationKey(null);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ключ удалён')),
+          SnackBar(content: Text(AppL10n.t('Ключ удалён'))),
         );
       }
     } finally {
@@ -1198,9 +1198,9 @@ class _GigaChatProfileCardState extends State<_GigaChatProfileCard> {
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
         leading: const Icon(Icons.smart_toy_outlined),
-        title: const Text('ИИ-чат (GigaChat)'),
-        subtitle: const Text(
-          'Ключ для бота в списке чатов',
+        title: Text(AppL10n.t('ИИ-чат (GigaChat)')),
+        subtitle: Text(
+          AppL10n.t('Ключ для бота в списке чатов'),
           style: TextStyle(fontSize: 12),
         ),
         children: [
@@ -1215,7 +1215,7 @@ class _GigaChatProfileCardState extends State<_GigaChatProfileCard> {
                   maxLines: 1,
                   decoration: InputDecoration(
                     labelText: 'Authorization Key',
-                    hintText: 'Ключ из личного кабинета Сбера',
+                    hintText: AppL10n.t('Ключ из личного кабинета Сбера'),
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -1241,17 +1241,16 @@ class _GigaChatProfileCardState extends State<_GigaChatProfileCard> {
                     ),
                     OutlinedButton(
                       onPressed: _saving ? null : _clear,
-                      child: const Text('Удалить ключ'),
+                      child: Text(AppL10n.t('Удалить ключ')),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Обход проверки сертификата (GigaChat)'),
+                  title: Text(AppL10n.t('Обход проверки сертификата (GigaChat)')),
                   subtitle: Text(
-                    'Только хосты *.devices.sberbank.ru. Включайте, если из‑за VPN или '
-                    'корпоративной сети видите ошибку сертификата. Снижает защиту от перехвата трафика.',
+                    AppL10n.t('Только хосты *.devices.sberbank.ru. Включайте, если из‑за VPN или корпоративной сети видите ошибку сертификата. Снижает защиту от перехвата трафика.'),
                     style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1264,20 +1263,12 @@ class _GigaChatProfileCardState extends State<_GigaChatProfileCard> {
                 ),
                 const Divider(height: 28),
                 Text(
-                  'Как получить ключ',
+                  AppL10n.t('Как получить ключ'),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '1. Откройте портал Сбер для разработчиков (developers.sber.ru) и войдите в аккаунт.\n'
-                  '2. Создайте проект с подключением GigaChat API (раздел продуктов и API).\n'
-                  '3. В настройках проекта получите Client ID и Client Secret или сразу скопируйте '
-                  'готовое значение «Ключ авторизации» (Authorization Key) — длинная строка Base64.\n'
-                  '4. Вставьте ключ в поле выше. Если в кабинете ключ без слова Basic — приложение '
-                  'добавит префикс само.\n'
-                  '5. Для физических лиц используется область доступа GIGACHAT_API_PERS (уже выбрана в приложении).\n'
-                  '6. Тексты из чата с ботом отправляются на серверы Сбера; не передавайте туда пароли и персональные данные третьих лиц.\n\n'
-                  'Если запросы не проходят, проверьте интернет и что сертификаты устройства доверяют узлам Сбера.',
+                  AppL10n.t('1. Откройте портал Сбер для разработчиков (developers.sber.ru) и войдите в аккаунт.\n2. Создайте проект с подключением GigaChat API (раздел продуктов и API).\n3. В настройках проекта получите Client ID и Client Secret или сразу скопируйте готовое значение «Ключ авторизации» (Authorization Key) — длинная строка Base64.\n4. Вставьте ключ в поле выше. Если в кабинете ключ без слова Basic — приложение добавит префикс само.\n5. Для физических лиц используется область доступа GIGACHAT_API_PERS (уже выбрана в приложении).\n6. Тексты из чата с ботом отправляются на серверы Сбера; не передавайте туда пароли и персональные данные третьих лиц.\n\nЕсли запросы не проходят, проверьте интернет и что сертификаты устройства доверяют узлам Сбера.'),
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.4,
@@ -1288,7 +1279,7 @@ class _GigaChatProfileCardState extends State<_GigaChatProfileCard> {
                 TextButton.icon(
                   onPressed: _openDoc,
                   icon: const Icon(Icons.open_in_new, size: 18),
-                  label: const Text('Документация: быстрый старт GigaChat'),
+                  label: Text(AppL10n.t('Документация: быстрый старт GigaChat')),
                 ),
               ],
             ),

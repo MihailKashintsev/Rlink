@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:characters/characters.dart';
 
 import '../services/image_service.dart';
+import '../l10n/app_l10n.dart';
 
 class UserProfile {
   final String publicKeyHex;
@@ -48,9 +49,9 @@ class UserProfile {
     return m == null ? null : '${m.group(1)}-${m.group(2)}';
   }
 
-  static const _ruMonthsGen = [
-    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля',
-    'августа', 'сентября', 'октября', 'ноября', 'декабря'
+  static List<String> get _ruMonthsGen => [
+    AppL10n.t('января'), AppL10n.t('февраля'), AppL10n.t('марта'), AppL10n.t('апреля'), AppL10n.t('мая'), AppL10n.t('июня'), AppL10n.t('июля'),
+    AppL10n.t('августа'), AppL10n.t('сентября'), AppL10n.t('октября'), AppL10n.t('ноября'), AppL10n.t('декабря')
   ];
 
   /// Human "D месяца" label for a stored birthday, or the raw string on parse

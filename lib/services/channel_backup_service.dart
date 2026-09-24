@@ -22,6 +22,7 @@ import 'image_service.dart';
 import 'relay_service.dart';
 import '../utils/web_file_store.dart';
 import '../utils/web_image_compress.dart';
+import '../l10n/app_l10n.dart';
 
 /// Read avatar/banner bytes web-safely (data: URL, OPFS, or native file).
 Future<Uint8List?> _readChannelVisualBytes(String? path) async {
@@ -600,7 +601,7 @@ class ChannelBackupService {
     final url = channel.driveFileUrl;
     if (url == null || url.isEmpty) return false;
 
-    onStep?.call('Проверка ключа расшифровки…');
+    onStep?.call(AppL10n.t('Проверка ключа расшифровки…'));
     var key = await _readSymKeyBytes(channel.id);
 
     // If no local key, try fetching it from the public keys file.
@@ -614,7 +615,7 @@ class ChannelBackupService {
     }
 
     try {
-      onStep?.call('Скачивание из Google Drive…');
+      onStep?.call(AppL10n.t('Скачивание из Google Drive…'));
       Uint8List? sealed;
 
       // Owner / signed-in user: download via the authenticated Drive API. The
@@ -656,9 +657,9 @@ class ChannelBackupService {
         sealed = Uint8List.fromList(response.data!);
       }
       if (sealed.isEmpty) return false;
-      onStep?.call('Расшифровка данных…');
+      onStep?.call(AppL10n.t('Расшифровка данных…'));
       await _decryptAndImport(channel.id, channel.driveBackupRev, sealed);
-      onStep?.call('Применение истории…');
+      onStep?.call(AppL10n.t('Применение истории…'));
       debugPrint(
           '[RLINK][ChBak] restoreFromDriveUrl: import done (${sealed.length} bytes)');
       return true;
@@ -675,13 +676,13 @@ class ChannelBackupService {
     final keysUrl = channel.driveKeysUrl;
     // No Drive keys file → try relay keystore directly.
     if (keysUrl == null || keysUrl.isEmpty) {
-      onStep?.call('Запрос ключа с сервера…');
+      onStep?.call(AppL10n.t('Запрос ключа с сервера…'));
       return _fetchKeyFromRelay(channel.id);
     }
     final myId = CryptoService.instance.publicKeyHex;
     if (myId.isEmpty) return null;
     try {
-      onStep?.call('Получение ключа расшифровки…');
+      onStep?.call(AppL10n.t('Получение ключа расшифровки…'));
       debugPrint('[RLINK][ChBak] fetching keys file for ${channel.id}');
       String? body;
 

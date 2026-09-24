@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/sticker_pack.dart';
 import '../../services/sticker_collection_service.dart';
 import 'channel_feed_image.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Нижняя панель выбора стикера: паки — рядом маленьких иконок сверху (как в
 /// пикере эмодзи), сетка выбранного пака под ним.
@@ -70,7 +71,7 @@ class _StickerPickerBodyState extends State<_StickerPickerBody> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Нет наборов. Создайте набор в разделе стикеров.',
+                  AppL10n.t('Нет наборов. Создайте набор в разделе стикеров.'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: cs.onSurfaceVariant),
                 ),
@@ -170,7 +171,7 @@ class _StickerPackPickerGrid extends StatelessWidget {
         if (files.isEmpty) {
           return Center(
             child: Text(
-              'В наборе нет файлов',
+              AppL10n.t('В наборе нет файлов'),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),

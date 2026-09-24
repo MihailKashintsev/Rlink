@@ -18,6 +18,7 @@ import '../rlink_nav_routes.dart';
 import '../screens/chat_screen.dart';
 import '../widgets/avatar_widget.dart';
 import '../widgets/security_visuals.dart';
+import '../../l10n/app_l10n.dart';
 
 /// True on platforms where the camera QR scanner is available.
 bool get _scanSupported =>
@@ -64,29 +65,29 @@ Future<void> showAddByQrSheet(BuildContext context) {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 4),
-            Text('Знакомство по QR',
+            Text(AppL10n.t('Знакомство по QR'),
                 style: Theme.of(sheetCtx).textTheme.titleMedium),
             const SizedBox(height: 12),
             option(
               icon: Icons.qr_code_2_rounded,
-              title: 'Мой QR-код',
-              subtitle: 'Покажите его, чтобы вас добавили',
+              title: AppL10n.t('Мой QR-код'),
+              subtitle: AppL10n.t('Покажите его, чтобы вас добавили'),
               onTap: () => Navigator.of(context)
                   .push(rlinkPushRoute(const MyQrScreen())),
             ),
             if (_scanSupported)
               option(
                 icon: Icons.qr_code_scanner_rounded,
-                title: 'Сканировать QR',
-                subtitle: 'Наведите камеру на чужой код',
+                title: AppL10n.t('Сканировать QR'),
+                subtitle: AppL10n.t('Наведите камеру на чужой код'),
                 onTap: () => Navigator.of(context)
                     .push(rlinkPushRoute(const QrScanScreen())),
               )
             else
               option(
                 icon: Icons.link_rounded,
-                title: 'Добавить по ссылке',
-                subtitle: 'Вставьте rlink-ссылку контакта',
+                title: AppL10n.t('Добавить по ссылке'),
+                subtitle: AppL10n.t('Вставьте rlink-ссылку контакта'),
                 onTap: () => _pasteLinkDialog(context),
               ),
             const SizedBox(height: 8),
@@ -152,7 +153,7 @@ class _MyQrScreenState extends State<MyQrScreen>
     HapticFeedback.selectionClick();
     final p = ProfileService.instance.profile;
     await Share.share(
-      'Добавьте меня в Rlink${p != null ? ' — ${p.nickname}' : ''}\n$link',
+      AppL10n.f('Добавьте меня в Rlink{0}\n{1}', [p != null ? ' — ${p.nickname}' : '', link]),
       sharePositionOrigin:
           RlinkDeepLink.sharePositionOriginFromContext(context),
     );
@@ -168,11 +169,11 @@ class _MyQrScreenState extends State<MyQrScreen>
       backgroundColor: cs.surface,
       appBar: AppBar(
         backgroundColor: cs.surface,
-        title: const Text('Мой QR-код'),
+        title: Text(AppL10n.t('Мой QR-код')),
         actions: [
           if (link != null)
             IconButton(
-              tooltip: 'Поделиться',
+              tooltip: AppL10n.t('Поделиться'),
               icon: const Icon(Icons.ios_share_rounded),
               onPressed: _share,
             ),
@@ -182,7 +183,7 @@ class _MyQrScreenState extends State<MyQrScreen>
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
           child: (link == null || p == null)
-              ? const Text('Профиль ещё не создан')
+              ? Text(AppL10n.t('Профиль ещё не создан'))
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -220,7 +221,7 @@ class _MyQrScreenState extends State<MyQrScreen>
                     ],
                     const SizedBox(height: 6),
                     Text(
-                      'Наведите камеру собеседника на этот код,\nчтобы обменяться контактами',
+                      AppL10n.t('Наведите камеру собеседника на этот код,\nчтобы обменяться контактами'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           color: cs.onSurfaceVariant, fontSize: 13),
@@ -231,7 +232,7 @@ class _MyQrScreenState extends State<MyQrScreen>
                         onPressed: () => Navigator.of(context).pushReplacement(
                             rlinkPushRoute(const QrScanScreen())),
                         icon: const Icon(Icons.qr_code_scanner_rounded),
-                        label: const Text('Сканировать чужой код'),
+                        label: Text(AppL10n.t('Сканировать чужой код')),
                       ),
                     ],
                   ],
@@ -426,7 +427,7 @@ class _QrScanScreenState extends State<QrScanScreen>
       _handled = false;
       unawaited(_controller.start());
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Это ваш собственный QR-код')),
+        SnackBar(content: Text(AppL10n.t('Это ваш собственный QR-код'))),
       );
       return;
     }
@@ -449,7 +450,7 @@ class _QrScanScreenState extends State<QrScanScreen>
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Запрос на связку отправлен: ${c.nickname}')),
+        SnackBar(content: Text(AppL10n.f('Запрос на связку отправлен: {0}', [c.nickname]))),
       );
       return;
     }
@@ -470,15 +471,15 @@ class _QrScanScreenState extends State<QrScanScreen>
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Сканирование'),
+        title: Text(AppL10n.t('Сканирование')),
         actions: [
           IconButton(
-            tooltip: 'Вспышка',
+            tooltip: AppL10n.t('Вспышка'),
             icon: const Icon(Icons.flash_on_rounded),
             onPressed: () => _controller.toggleTorch(),
           ),
           IconButton(
-            tooltip: 'Сменить камеру',
+            tooltip: AppL10n.t('Сменить камеру'),
             icon: const Icon(Icons.cameraswitch_rounded),
             onPressed: () => _controller.switchCamera(),
           ),
@@ -508,15 +509,15 @@ class _QrScanScreenState extends State<QrScanScreen>
             bottom: 60,
             child: Column(
               children: [
-                const Text(
-                  'Наведите на QR-код собеседника',
+                Text(
+                  AppL10n.t('Наведите на QR-код собеседника'),
                   style: TextStyle(color: Colors.white, fontSize: 15),
                 ),
                 const SizedBox(height: 14),
                 TextButton.icon(
                   onPressed: () => _pasteLinkDialog(context),
                   icon: const Icon(Icons.link_rounded, color: Colors.white70),
-                  label: const Text('Ввести код вручную',
+                  label: Text(AppL10n.t('Ввести код вручную'),
                       style: TextStyle(color: Colors.white70)),
                 ),
               ],
@@ -619,8 +620,8 @@ class _CameraError extends StatelessWidget {
               const SizedBox(height: 16),
               Text(
                 denied
-                    ? 'Нет доступа к камере.\nРазрешите камеру в настройках.'
-                    : 'Камера недоступна.',
+                    ? AppL10n.t('Нет доступа к камере.\nРазрешите камеру в настройках.')
+                    : AppL10n.t('Камера недоступна.'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70),
               ),
@@ -628,7 +629,7 @@ class _CameraError extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: () => _pasteLinkDialog(context),
                 icon: const Icon(Icons.link_rounded),
-                label: const Text('Ввести код вручную'),
+                label: Text(AppL10n.t('Ввести код вручную')),
               ),
             ],
           ),
@@ -647,7 +648,7 @@ Future<void> _pasteLinkDialog(BuildContext context) async {
   final link = await showDialog<String>(
     context: context,
     builder: (dctx) => AlertDialog(
-      title: const Text('Добавить по ссылке'),
+      title: Text(AppL10n.t('Добавить по ссылке')),
       content: TextField(
         controller: ctrl,
         autofocus: true,
@@ -659,11 +660,11 @@ Future<void> _pasteLinkDialog(BuildContext context) async {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dctx),
-          child: const Text('Отмена'),
+          child: Text(AppL10n.t('Отмена')),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(dctx, ctrl.text.trim()),
-          child: const Text('Добавить'),
+          child: Text(AppL10n.t('Добавить')),
         ),
       ],
     ),
@@ -673,7 +674,7 @@ Future<void> _pasteLinkDialog(BuildContext context) async {
   final parsed = uri == null ? null : RlinkDeepLink.parseUser(uri);
   if (parsed == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Не похоже на ссылку контакта Rlink')),
+      SnackBar(content: Text(AppL10n.t('Не похоже на ссылку контакта Rlink'))),
     );
     return;
   }
@@ -681,7 +682,7 @@ Future<void> _pasteLinkDialog(BuildContext context) async {
   if (!context.mounted) return;
   if (contact == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Это ваш собственный код')),
+      SnackBar(content: Text(AppL10n.t('Это ваш собственный код'))),
     );
     return;
   }

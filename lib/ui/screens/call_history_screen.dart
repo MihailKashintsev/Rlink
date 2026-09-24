@@ -10,6 +10,7 @@ import '../rlink_nav_routes.dart';
 import 'call_screen.dart';
 import 'call_recording_playback_screen.dart';
 import 'chat_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Вкладка «История звонков»: дата, длительность, контакт; повторный звонок и чат.
 class CallHistoryScreen extends StatefulWidget {
@@ -40,12 +41,12 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     final m = d.inMinutes.remainder(60);
     final s = d.inSeconds.remainder(60);
     if (h > 0) {
-      return '$h ч ${m.toString().padLeft(2, '0')} мин ${s.toString().padLeft(2, '0')} с';
+      return AppL10n.f('{0} ч {1} мин {2} с', [h, m.toString().padLeft(2, '0'), s.toString().padLeft(2, '0')]);
     }
     if (d.inMinutes > 0) {
-      return '$m мин ${s.toString().padLeft(2, '0')} с';
+      return AppL10n.f('{0} мин {1} с', [m, s.toString().padLeft(2, '0')]);
     }
-    return '$s с';
+    return AppL10n.f('{0} с', [s]);
   }
 
   Future<void> _openRecording(CallHistoryEntry e) async {
@@ -77,8 +78,8 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     if (!RelayService.instance.isConnected) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Собеседник офлайн в relay. Звонок недоступен.')),
+          SnackBar(
+              content: Text(AppL10n.t('Собеседник офлайн в relay. Звонок недоступен.'))),
         );
       }
       return;
@@ -100,13 +101,13 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     } on StateError catch (err) {
       if (!mounted) return;
       final r = err.message;
-      String msg = 'Звонок недоступен';
+      String msg = AppL10n.t('Звонок недоступен');
       if (r == 'busy') {
-        msg = 'Уже идёт звонок. Завершите текущий.';
+        msg = AppL10n.t('Уже идёт звонок. Завершите текущий.');
       } else if (r == 'peer_offline') {
-        msg = 'Собеседник офлайн в relay.';
+        msg = AppL10n.t('Собеседник офлайн в relay.');
       } else if (r == 'invalid_recipient') {
-        msg = 'Некорректный контакт для звонка.';
+        msg = AppL10n.t('Некорректный контакт для звонка.');
       }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
@@ -124,7 +125,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                'Пока нет звонков.\nПосле звонка запись появится здесь.',
+                AppL10n.t('Пока нет звонков.\nПосле звонка запись появится здесь.'),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: cs.onSurfaceVariant, height: 1.35),
               ),
@@ -140,8 +141,8 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           ),
           itemBuilder: (_, i) {
             final e = list[i];
-            final sub = '${e.incoming ? 'Входящий' : 'Исходящий'} · '
-                '${e.video ? 'Видео' : 'Аудио'} · ${_fmtDuration(e.duration)}';
+            final sub = '${e.incoming ? AppL10n.t('Входящий') : AppL10n.t('Исходящий')} · '
+                '${e.video ? AppL10n.t('Видео') : AppL10n.t('Аудио')} · ${_fmtDuration(e.duration)}';
             return ListTile(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -162,24 +163,24 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                 children: [
                   if (e.recordingPath != null && e.recordingPath!.isNotEmpty)
                     IconButton(
-                      tooltip: e.video ? 'Смотреть запись' : 'Слушать запись',
+                      tooltip: e.video ? AppL10n.t('Смотреть запись') : AppL10n.t('Слушать запись'),
                       icon: Icon(e.video
                           ? Icons.play_circle_outline
                           : Icons.headphones),
                       onPressed: () => _openRecording(e),
                     ),
                   IconButton(
-                    tooltip: 'Позвонить (аудио)',
+                    tooltip: AppL10n.t('Позвонить (аудио)'),
                     icon: const Icon(Icons.call),
                     onPressed: () => _placeCall(e, video: false),
                   ),
                   IconButton(
-                    tooltip: 'Позвонить (видео)',
+                    tooltip: AppL10n.t('Позвонить (видео)'),
                     icon: const Icon(Icons.videocam_outlined),
                     onPressed: () => _placeCall(e, video: true),
                   ),
                   IconButton(
-                    tooltip: 'Открыть чат',
+                    tooltip: AppL10n.t('Открыть чат'),
                     icon: const Icon(Icons.chat_bubble_outline),
                     onPressed: () => _openChat(e),
                   ),

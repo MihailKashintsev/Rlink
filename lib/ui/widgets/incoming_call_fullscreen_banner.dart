@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/call_service.dart';
 import 'avatar_widget.dart';
 import '../screens/call_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Full-screen incoming-call UI, used on every platform (see main.dart's
 /// `_showIncomingCallOverlay`) — takes over the whole screen with large
@@ -150,8 +151,8 @@ class _IncomingCallFullscreenBannerState
                         children: [
                           Text(
                             isVideo
-                                ? 'Входящий видеозвонок'
-                                : 'Входящий аудиозвонок',
+                                ? AppL10n.t('Входящий видеозвонок')
+                                : AppL10n.t('Входящий аудиозвонок'),
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 16,
@@ -192,7 +193,7 @@ class _IncomingCallFullscreenBannerState
                                     onTap: _decline,
                                     color: const Color(0xFFE53935),
                                     icon: Icons.call_end_rounded,
-                                    label: 'Отклонить',
+                                    label: AppL10n.t('Отклонить'),
                                   ),
                                 ),
                                 Expanded(
@@ -203,7 +204,7 @@ class _IncomingCallFullscreenBannerState
                                     icon: isVideo
                                         ? Icons.videocam_rounded
                                         : Icons.call_rounded,
-                                    label: 'Принять',
+                                    label: AppL10n.t('Принять'),
                                   ),
                                 ),
                               ],

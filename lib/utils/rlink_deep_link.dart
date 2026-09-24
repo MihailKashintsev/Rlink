@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import '../l10n/app_l10n.dart';
 
 /// Ссылки вида [rlink://channel/<id>] — открытие канала в приложении.
 ///
@@ -56,7 +57,7 @@ class RlinkDeepLink {
     required String channelId,
   }) {
     final url = channelInviteWebUri(channelId).toString();
-    return 'Канал «$channelTitle» в Rlink\n$url';
+    return AppL10n.f('Канал «{0}» в Rlink\n{1}', [channelTitle, url]);
   }
 
   /// [context] — виджет, от которого якорится системный лист (обязательно для iPad / macOS).
@@ -89,10 +90,9 @@ class RlinkDeepLink {
       debugPrint('[RlinkDeepLink] Share failed: $e\n$st');
       if (context.mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Не удалось открыть «Поделиться». '
-              'Нажмите «Копировать ссылку» и вставьте в нужное приложение.',
+              AppL10n.t('Не удалось открыть «Поделиться». Нажмите «Копировать ссылку» и вставьте в нужное приложение.'),
             ),
           ),
         );

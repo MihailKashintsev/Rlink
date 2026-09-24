@@ -18,6 +18,7 @@ import 'gossip_router.dart';
 import 'group_service.dart';
 import 'profile_service.dart';
 import 'sticker_collection_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// Moves the account identity itself to a new device — distinct from
 /// `DeviceLinkSyncService`'s companion-device mirror (which keeps two
@@ -208,7 +209,7 @@ class AccountTransferService {
     _expectedKinds = [];
     wasDenied.value = false;
     adoptedIdentityLive.value = false;
-    progress.value = const TransferProgress(done: 0, total: 1, phase: 'Запрос отправлен');
+    progress.value = TransferProgress(done: 0, total: 1, phase: AppL10n.t('Запрос отправлен'));
     await GossipRouter.instance.sendAccountTransferRequest(
       fromPublicKey: me.publicKeyHex,
       xpk: me.x25519PublicKeyBase64,
@@ -218,7 +219,7 @@ class AccountTransferService {
   }
 
   static String defaultDeviceLabel() {
-    if (kIsWeb) return 'Браузер';
+    if (kIsWeb) return AppL10n.t('Браузер');
     try {
       if (Platform.isAndroid) return 'Android';
       if (Platform.isIOS) return 'iPhone/iPad';
@@ -226,7 +227,7 @@ class AccountTransferService {
       if (Platform.isWindows) return 'Windows';
       if (Platform.isLinux) return 'Linux';
     } catch (_) {}
-    return 'Устройство';
+    return AppL10n.t('Устройство');
   }
 
   // ─────────────────── old device: approve/deny + send ───────────────────
@@ -256,7 +257,7 @@ class AccountTransferService {
     clearIncomingRequest();
 
     final me = CryptoService.instance;
-    progress.value = const TransferProgress(done: 0, total: 1, phase: 'Ключи');
+    progress.value = TransferProgress(done: 0, total: 1, phase: AppL10n.t('Ключи'));
 
     Future<void> sendItem(String kind, String plaintextJson,
         {int? total, bool done = false}) async {
@@ -319,7 +320,7 @@ class AccountTransferService {
             total: i == 0 ? filtered.length : null, done: i == filtered.length - 1);
       }
       if (filtered.isEmpty) await sendItem('contact', '{}', total: 0, done: true);
-      bump('Контакты');
+      bump(AppL10n.t('Контакты'));
     }
 
     if (categories.channels) {
@@ -351,7 +352,7 @@ class AccountTransferService {
         );
       }
       if (channels.isEmpty) await sendItem('channel', '{}', total: 0, done: true);
-      bump('Каналы');
+      bump(AppL10n.t('Каналы'));
     }
 
     if (categories.groups) {
@@ -375,7 +376,7 @@ class AccountTransferService {
         );
       }
       if (groups.isEmpty) await sendItem('group', '{}', total: 0, done: true);
-      bump('Группы');
+      bump(AppL10n.t('Группы'));
     }
 
     if (categories.emojiPacks) {
@@ -387,7 +388,7 @@ class AccountTransferService {
       if (payloads.isEmpty) {
         await sendItem('emoji_pack', '{}', total: 0, done: true);
       }
-      bump('Эмодзи');
+      bump(AppL10n.t('Эмодзи'));
     }
 
     if (categories.dmHistory) {
@@ -403,12 +404,12 @@ class AccountTransferService {
         if (i % 30 == 29) await Future.delayed(const Duration(milliseconds: 20));
       }
       if (messages.isEmpty) await sendItem('dm', '{}', total: 0, done: true);
-      bump('Сообщения');
+      bump(AppL10n.t('Сообщения'));
     }
 
     if (categories.settings) {
       await sendItem('settings', jsonEncode(_encodeSettings()), total: 1, done: true);
-      bump('Настройки');
+      bump(AppL10n.t('Настройки'));
     }
 
     if (categories.stickers) {
@@ -433,13 +434,13 @@ class AccountTransferService {
         );
       }
       if (packs.isEmpty) await sendItem('sticker_pack', '{}', total: 0, done: true);
-      bump('Стикеры');
+      bump(AppL10n.t('Стикеры'));
     }
 
     progress.value = TransferProgress(
       done: categories.selectedKinds.length + 1,
       total: categories.selectedKinds.length + 1,
-      phase: 'Ожидание подтверждения…',
+      phase: AppL10n.t('Ожидание подтверждения…'),
     );
   }
 
@@ -551,7 +552,7 @@ class AccountTransferService {
           );
         }
         _keysReceived = true;
-        _emitReceiveProgress('Ключи');
+        _emitReceiveProgress(AppL10n.t('Ключи'));
       } catch (e) {
         debugPrint('[XferSvc] keys decode failed: $e');
       }
@@ -597,7 +598,7 @@ class AccountTransferService {
     final reqId = _activeReqId ??= DateTime.now().microsecondsSinceEpoch.toString();
     if (target == null) return;
     await _sendAck(target, reqId);
-    progress.value = const TransferProgress(done: 1, total: 1, phase: 'Готово — ожидание старого устройства');
+    progress.value = TransferProgress(done: 1, total: 1, phase: AppL10n.t('Готово — ожидание старого устройства'));
     // The old device may not be reachable at this exact instant (this is
     // most often two browser tabs on ONE phone, which iOS backgrounds
     // aggressively — whichever side isn't in front loses its connection
@@ -652,13 +653,13 @@ class AccountTransferService {
   }
 
   static String _phaseLabelFor(String kind) => switch (kind) {
-        'contact' => 'Контакты',
-        'channel' => 'Каналы',
-        'group' => 'Группы',
-        'emoji_pack' => 'Эмодзи',
-        'dm' => 'Сообщения',
-        'settings' => 'Настройки',
-        'sticker_pack' => 'Стикеры',
+        'contact' => AppL10n.t('Контакты'),
+        'channel' => AppL10n.t('Каналы'),
+        'group' => AppL10n.t('Группы'),
+        'emoji_pack' => AppL10n.t('Эмодзи'),
+        'dm' => AppL10n.t('Сообщения'),
+        'settings' => AppL10n.t('Настройки'),
+        'sticker_pack' => AppL10n.t('Стикеры'),
         _ => kind,
       };
 
@@ -764,7 +765,7 @@ class AccountTransferService {
     if (msg.videoPath != null) return '📹 Видео';
     if (msg.filePath != null || msg.fileName != null) {
       final name = (msg.fileName ?? '').trim();
-      return name.isEmpty ? '📎 Файл' : '📎 $name';
+      return name.isEmpty ? AppL10n.t('📎 Файл') : '📎 $name';
     }
     if (msg.imagePath != null) return '📷 Фото';
     return ' ';
@@ -809,7 +810,6 @@ class AccountTransferService {
     final s = AppSettings.instance;
     return {
       'appPalette': s.appPalette,
-      'newDesign': s.newDesignPref,
       'minimalist': s.minimalist,
       'animatedGradient': s.animatedGradientPref,
       'liquidGlass': s.liquidGlassPref,
@@ -848,7 +848,6 @@ class AccountTransferService {
     }
 
     await ifPresent<int>('appPalette', s.setAppPalette);
-    await ifPresent<bool>('newDesign', s.setNewDesign);
     await ifPresent<bool>('minimalist', s.setMinimalist);
     await ifPresent<bool>('animatedGradient', s.setAnimatedGradient);
     await ifPresent<bool>('liquidGlass', s.setLiquidGlass);
@@ -880,7 +879,7 @@ class AccountTransferService {
   }
 
   static Future<void> _applyStickerPack(Map<String, dynamic> data) async {
-    final title = (data['title'] as String?) ?? 'Набор';
+    final title = (data['title'] as String?) ?? AppL10n.t('Набор');
     final rawStickers = (data['stickers'] as List?) ?? const [];
     if (rawStickers.isEmpty) return;
     final bytesList = <Uint8List>[];

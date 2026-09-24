@@ -138,7 +138,7 @@ class _CallRecordingPlaybackScreenState
         if (playbackPath == null) {
           return;
         }
-        await VoiceService.instance.play(playbackPath, title: 'Запись звонка');
+        await VoiceService.instance.play(playbackPath, title: AppL10n.t('Запись звонка'));
         if (mounted) {
           setState(() => _playing = true);
         }
@@ -170,9 +170,9 @@ class _CallRecordingPlaybackScreenState
     }
     if (!LocalTranscriptionService.instance.isSupported) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
-                'Локальная расшифровка доступна на iOS, macOS, Android и Windows')));
+                AppL10n.t('Локальная расшифровка доступна на iOS, macOS, Android и Windows'))));
       }
       return;
     }
@@ -183,7 +183,7 @@ class _CallRecordingPlaybackScreenState
               AppSettings.instance.locale);
       final pathForTranscribe = await _playbackPathForRecording();
       if (pathForTranscribe == null) {
-        throw StateError('Файл записи не найден');
+        throw StateError(AppL10n.t('Файл записи не найден'));
       }
       final text = await LocalTranscriptionService.instance
           .transcribeFile(pathForTranscribe, language: transcriptionLanguage);
@@ -201,7 +201,7 @@ class _CallRecordingPlaybackScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Не удалось расшифровать: $e'),
+            content: Text(AppL10n.f('Не удалось расшифровать: {0}', [e])),
             backgroundColor: Colors.red));
         setState(() => _transcribing = false);
       }
@@ -271,7 +271,7 @@ class _CallRecordingPlaybackScreenState
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Запись сохранена')),
+      SnackBar(content: Text(AppL10n.t('Запись сохранена'))),
     );
   }
 
@@ -280,7 +280,7 @@ class _CallRecordingPlaybackScreenState
     if (path == null || path.isEmpty) return;
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Загрузка записи на Google Drive…')),
+        SnackBar(content: Text(AppL10n.t('Загрузка записи на Google Drive…'))),
       );
     }
     try {
@@ -290,8 +290,8 @@ class _CallRecordingPlaybackScreenState
       }
       if (bytes == null || bytes.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Не удалось прочитать запись на этом устройстве')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(AppL10n.t('Не удалось прочитать запись на этом устройстве'))));
         }
         return;
       }
@@ -313,15 +313,15 @@ class _CallRecordingPlaybackScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(ok
-              ? 'Запись${transcript != null && transcript.trim().isNotEmpty ? ' и расшифровка' : ''} сохранены на Google Drive ✓'
+              ? AppL10n.f('Запись{0} сохранены на Google Drive ✓', [transcript != null && transcript.trim().isNotEmpty ? AppL10n.t(' и расшифровка') : ''])
               : (GoogleDriveChannelBackup.lastSignInError ??
-                  'Не удалось. Привяжите аккаунт в Настройки → Google Drive.')),
+                  AppL10n.t('Не удалось. Привяжите аккаунт в Настройки → Google Drive.'))),
         ),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e]))),
         );
       }
     }
@@ -340,7 +340,7 @@ class _CallRecordingPlaybackScreenState
         actions: [
           if (hasRecording)
             IconButton(
-              tooltip: 'Сохранить на Google Drive',
+              tooltip: AppL10n.t('Сохранить на Google Drive'),
               icon: const Icon(Icons.add_to_drive_outlined),
               onPressed: _saveRecordingToDrive,
             ),
@@ -375,7 +375,7 @@ class _CallRecordingPlaybackScreenState
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w600)),
                 Text(
-                    '${_entry.incoming ? 'Входящий' : 'Исходящий'} · ${_entry.video ? 'Видео' : 'Аудио'} · ${_fmt(_entry.duration)}',
+                    '${_entry.incoming ? AppL10n.t('Входящий') : AppL10n.t('Исходящий')} · ${_entry.video ? AppL10n.t('Видео') : AppL10n.t('Аудио')} · ${_fmt(_entry.duration)}',
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
               ]))),
         Padding(
@@ -386,13 +386,13 @@ class _CallRecordingPlaybackScreenState
                     onPressed: _togglePlayPause,
                     icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
                     label: Text(_playing
-                        ? 'Пауза'
+                        ? AppL10n.t('Пауза')
                         : _isVideo
-                            ? 'Смотреть'
-                            : 'Слушать')),
+                            ? AppL10n.t('Смотреть')
+                            : AppL10n.t('Слушать'))),
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
-                  tooltip: 'Скачать запись',
+                  tooltip: AppL10n.t('Скачать запись'),
                   onPressed: _downloadRecording,
                   icon: const Icon(Icons.download_outlined),
                 ),
@@ -408,13 +408,13 @@ class _CallRecordingPlaybackScreenState
                             child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.transcribe),
                     label: Text(
-                        _transcribing ? 'Расшифровка...' : 'Расшифровать')),
+                        _transcribing ? AppL10n.t('Расшифровка...') : AppL10n.t('Расшифровать'))),
             ])),
         const Divider(),
         if (_transcriptText != null && _transcriptText!.isNotEmpty)
           Expanded(
               child: ListView(padding: const EdgeInsets.all(16), children: [
-            Text('Расшифровка',
+            Text(AppL10n.t('Расшифровка'),
                 style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -441,7 +441,7 @@ class _CallRecordingPlaybackScreenState
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(isMe ? 'Вы' : _entry.peerDisplayName,
+                          Text(isMe ? AppL10n.t('Вы') : _entry.peerDisplayName,
                               style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
@@ -465,8 +465,8 @@ class _CallRecordingPlaybackScreenState
             const SizedBox(height: 12),
             Text(
                 hasRecording
-                    ? 'Нажмите «Расшифровать» для распознавания речи'
-                    : 'Запись не сохранилась',
+                    ? AppL10n.t('Нажмите «Расшифровать» для распознавания речи')
+                    : AppL10n.t('Запись не сохранилась'),
                 style: TextStyle(
                     color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
           ]))),

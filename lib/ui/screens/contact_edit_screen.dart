@@ -77,7 +77,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
     final nick = _nickCtrl.text.trim();
     if (nick.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите имя')),
+        SnackBar(content: Text(AppL10n.t('Введите имя'))),
       );
       return;
     }
@@ -113,7 +113,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Контакт'),
+        title: Text(AppL10n.t('Контакт')),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
@@ -131,7 +131,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'Только на вашем устройстве. Собеседник не узнает об этих изменениях.',
+            AppL10n.t('Только на вашем устройстве. Собеседник не узнает об этих изменениях.'),
             style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
@@ -157,7 +157,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            tooltip: 'Убрать баннер',
+                            tooltip: AppL10n.t('Убрать баннер'),
                             onPressed: () => setState(() => _bannerPath = null),
                             icon: const Icon(Icons.close, color: Colors.white),
                             style: IconButton.styleFrom(
@@ -175,7 +175,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
                               color: cs.onSurfaceVariant, size: 32),
                           const SizedBox(height: 4),
                           Text(
-                            'Обложка (баннер)',
+                            AppL10n.t('Обложка (баннер)'),
                             style: TextStyle(
                                 color: cs.onSurfaceVariant, fontSize: 13),
                           ),
@@ -211,7 +211,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
                         color: const Color(0xFF1DB954),
                         shape: const CircleBorder(),
                         child: IconButton(
-                          tooltip: 'Фото',
+                          tooltip: AppL10n.t('Фото'),
                           padding: const EdgeInsets.all(6),
                           constraints: const BoxConstraints(
                             minWidth: 36,
@@ -229,12 +229,12 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
                   const SizedBox(height: 8),
                   TextButton(
                     onPressed: () => setState(() => _avatarPath = null),
-                    child: const Text('Убрать фото аватара'),
+                    child: Text(AppL10n.t('Убрать фото аватара')),
                   ),
                 ],
                 const SizedBox(height: 8),
                 Text(
-                  'Нажмите на аватар — эмодзи; камера — фото',
+                  AppL10n.t('Нажмите на аватар — эмодзи; камера — фото'),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               ],
@@ -254,7 +254,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
           ],
           if (_avatarPath == null) ...[
             const SizedBox(height: 16),
-            const Text('Цвет фона',
+            Text(AppL10n.t('Цвет фона'),
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
             const SizedBox(height: 8),
             SizedBox(
@@ -268,8 +268,8 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
           ],
           TextField(
             controller: _nickCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Имя в контактах',
+            decoration: InputDecoration(
+              labelText: AppL10n.t('Имя в контактах'),
               border: OutlineInputBorder(),
             ),
             textCapitalization: TextCapitalization.words,
@@ -278,7 +278,7 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
           if (_c.username.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
-              'Юзернейм в сети: #${_c.username}',
+              AppL10n.f('Юзернейм в сети: #{0}', [_c.username]),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           ],
@@ -286,10 +286,10 @@ class _ContactEditScreenState extends State<ContactEditScreen> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.cake_outlined),
-            title: const Text('День рождения'),
+            title: Text(AppL10n.t('День рождения')),
             subtitle: Text(
               _birthday == null || _birthday!.isEmpty
-                  ? 'Не указан'
+                  ? AppL10n.t('Не указан')
                   : UserProfile.birthdayLabel(_birthday),
               style: TextStyle(color: cs.onSurfaceVariant),
             ),

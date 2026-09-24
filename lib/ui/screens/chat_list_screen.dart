@@ -47,6 +47,7 @@ import '../../services/premium_service.dart';
 import '../widgets/nav_glyph.dart';
 import '../widgets/premium_gate.dart';
 import '../widgets/status_emoji_view.dart';
+import '../widgets/stories_collapse_overlay.dart';
 import '../widgets/update_available_banner.dart';
 import '../../utils/message_preview_formatter.dart'
     show
@@ -63,11 +64,9 @@ import 'addons_screen.dart';
 import 'location_map_screen.dart';
 import 'chat_inbox_filters_manage_screen.dart';
 import 'settings_screen.dart';
-import 'story_creator_screen.dart';
 import 'intro_promo_screen.dart';
 import 'first_run_setup_screen.dart';
 import 'guide_tour_screen.dart';
-import 'story_viewer_screen.dart';
 import '../rlink_nav_routes.dart';
 import '../design/rlink_design.dart';
 
@@ -86,6 +85,11 @@ class _ChatListScreenState extends State<ChatListScreen>
   bool _searchActive = false;
   final _searchController = TextEditingController();
   final ValueNotifier<bool> _nearbyShowRadar = ValueNotifier(true);
+  // Chat-list scroll offset + the row's anchor box, shared with the story overlay
+  // that paints above the app bar (avatars fly into it as the list scrolls).
+  final ValueNotifier<double> _storiesScroll = ValueNotifier(0);
+  final GlobalKey _storiesAreaKey = GlobalKey(debugLabel: 'storiesArea');
+  final ScrollController _chatsScroll = ScrollController();
 
   @override
   void initState() {
@@ -137,6 +141,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     unregisterUpdateBannerListener();
     _searchController.dispose();
     _nearbyShowRadar.dispose();
+    _storiesScroll.dispose();
+    _chatsScroll.dispose();
     AudioQueueMiniPlayerLayout.instance.clearBarTop();
     super.dispose();
   }
@@ -197,14 +203,15 @@ class _ChatListScreenState extends State<ChatListScreen>
               TextField(
                 controller: nameCtrl,
                 autofocus: true,
-                decoration: const InputDecoration(hintText: 'Название канала'),
+                decoration:
+                    InputDecoration(hintText: AppL10n.t('Название канала')),
                 maxLength: 30,
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: usernameCtrl,
-                decoration: const InputDecoration(
-                  hintText: 'Юзернейм (необязательно)',
+                decoration: InputDecoration(
+                  hintText: AppL10n.t('Юзернейм (необязательно)'),
                   prefixText: '@',
                 ),
                 maxLength: 24,
@@ -215,8 +222,8 @@ class _ChatListScreenState extends State<ChatListScreen>
               const SizedBox(height: 8),
               TextField(
                 controller: descCtrl,
-                decoration:
-                    const InputDecoration(hintText: 'Описание (необязательно)'),
+                decoration: InputDecoration(
+                    hintText: AppL10n.t('Описание (необязательно)')),
                 maxLength: 100,
               ),
               const SizedBox(height: 8),
@@ -224,11 +231,14 @@ class _ChatListScreenState extends State<ChatListScreen>
                 value: isPublic,
                 onChanged: (v) => setLocal(() => isPublic = v),
                 contentPadding: EdgeInsets.zero,
-                title: Text(isPublic ? 'Публичный' : 'Скрытый'),
+                title: Text(
+                    isPublic ? AppL10n.t('Публичный') : AppL10n.t('Скрытый')),
                 subtitle: Text(
                   isPublic
-                      ? 'Находится по названию, юзернейму и универсальному коду'
-                      : 'Админ сам добавляет подписчиков. В поиске не виден.',
+                      ? AppL10n.t(
+                          'Находится по названию, юзернейму и универсальному коду')
+                      : AppL10n.t(
+                          'Админ сам добавляет подписчиков. В поиске не виден.'),
                   style: const TextStyle(fontSize: 11),
                 ),
               ),
@@ -249,8 +259,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                   if (taken) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Этот юзернейм уже занят')),
+                        SnackBar(
+                            content:
+                                Text(AppL10n.t('Этот юзернейм уже занят'))),
                       );
                     }
                     return;
@@ -262,9 +273,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                   if (myId.isEmpty) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content:
-                              Text('Профиль еще не готов, попробуйте ещё раз'),
+                        SnackBar(
+                          content: Text(AppL10n.t(
+                              'Профиль еще не готов, попробуйте ещё раз')),
                         ),
                       );
                     }
@@ -290,7 +301,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Ошибка: $e')),
+                      SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e]))),
                     );
                   }
                 }
@@ -312,7 +323,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         content: TextField(
           controller: nameCtrl,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Название группы'),
+          decoration: InputDecoration(hintText: AppL10n.t('Название группы')),
           maxLength: 30,
         ),
         actions: [
@@ -341,7 +352,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка: $e')),
+                    SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e]))),
                   );
                 }
               }
@@ -372,15 +383,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
                     child: Row(
                       children: [
                         Icon(Icons.cell_tower_rounded,
                             color: cs.primary, size: 22),
-                        const SizedBox(width: 10),
+                        SizedBox(width: 10),
                         Text(
                           AppL10n.t('nav_ether'),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
                           ),
@@ -390,29 +401,29 @@ class _ChatListScreenState extends State<ChatListScreen>
                   ),
                   if (PlatformCapabilities.instance.supportsBleMesh) ...[
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                      padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
                       child: Row(children: [
                         Icon(Icons.settings_input_antenna_rounded,
                             color: cs.primary, size: 20),
-                        const SizedBox(width: 10),
-                        const Text('Куда отправлять'),
+                        SizedBox(width: 10),
+                        Text(AppL10n.t('Куда отправлять')),
                       ]),
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: SegmentedButton<String>(
-                        segments: const [
+                        segments: [
                           ButtonSegment(
                               value: 'auto',
-                              label: Text('Авто'),
+                              label: Text(AppL10n.t('Авто')),
                               icon: Icon(Icons.auto_awesome, size: 16)),
                           ButtonSegment(
                               value: 'ble',
-                              label: Text('Рядом'),
+                              label: Text(AppL10n.t('Рядом')),
                               icon: Icon(Icons.bluetooth, size: 16)),
                           ButtonSegment(
                               value: 'relay',
-                              label: Text('Сервер'),
+                              label: Text(AppL10n.t('Сервер')),
                               icon: Icon(Icons.dns_outlined, size: 16)),
                         ],
                         selected: {o.transport},
@@ -422,13 +433,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                   ],
                   SwitchListTile(
                     value: o.anonymous,
-                    title: const Text('Анонимно'),
+                    title: Text(AppL10n.t('Анонимно')),
                     secondary: const Icon(Icons.person_off_outlined),
                     onChanged: o.setAnonymous,
                   ),
                   SwitchListTile(
                     value: o.attachGeo,
-                    title: const Text('Прикреплять геолокацию'),
+                    title: Text(AppL10n.t('Прикреплять геолокацию')),
                     secondary: const Icon(Icons.location_on_outlined),
                     onChanged: o.setAttachGeo,
                   ),
@@ -437,17 +448,18 @@ class _ChatListScreenState extends State<ChatListScreen>
                       leading: const Icon(Icons.map_rounded),
                       title: Text(
                         o.hasCustomLocation
-                            ? 'Выбрана точка на карте'
-                            : 'Выбрать точку на карте',
+                            ? AppL10n.t('Выбрана точка на карте')
+                            : AppL10n.t('Выбрать точку на карте'),
                       ),
                       subtitle: Text(
                         o.hasCustomLocation
                             ? '${o.customLatitude!.toStringAsFixed(5)}, ${o.customLongitude!.toStringAsFixed(5)}'
-                            : 'Иначе отправляется текущее местоположение',
+                            : AppL10n.t(
+                                'Иначе отправляется текущее местоположение'),
                       ),
                       trailing: o.hasCustomLocation
                           ? IconButton(
-                              tooltip: 'Сбросить точку',
+                              tooltip: AppL10n.t('Сбросить точку'),
                               onPressed: o.clearCustomLocation,
                               icon: const Icon(Icons.close_rounded),
                             )
@@ -460,8 +472,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                               initialLat: o.customLatitude,
                               initialLng: o.customLongitude,
                               allowPicking: true,
-                              title: 'Геолокация для Эфира',
-                              confirmButtonLabel: 'Использовать эту точку',
+                              title: AppL10n.t('Геолокация для Эфира'),
+                              confirmButtonLabel:
+                                  AppL10n.t('Использовать эту точку'),
                             ),
                           ),
                         );
@@ -504,7 +517,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final childLinked = settings.isLinkedChildDevice;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
-    return Scaffold(
+    final scaffold = Scaffold(
       // Floating pill: let the content fill the full height and scroll UNDER the
       // nav (no reserved dead band below the pill). Only for the new design —
       // the old opaque NavigationBar must keep reserving its slot.
@@ -538,7 +551,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 autofocus: true,
                 style: const TextStyle(fontSize: 16),
                 decoration: InputDecoration(
-                  hintText: 'Поиск контактов, каналов, людей...',
+                  hintText: AppL10n.t('Поиск контактов, каналов, людей...'),
                   hintStyle: TextStyle(color: Colors.grey.shade500),
                   border: InputBorder.none,
                 ),
@@ -600,7 +613,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     Icon(Icons.smart_toy_outlined,
                         size: 20, color: Theme.of(ctx).colorScheme.primary),
                     const SizedBox(width: 10),
-                    const Text('Боты'),
+                    Text(AppL10n.t('Боты')),
                   ]),
                 ),
                 PopupMenuItem(
@@ -609,7 +622,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     Icon(Icons.extension_outlined,
                         size: 20, color: Theme.of(ctx).colorScheme.primary),
                     const SizedBox(width: 10),
-                    const Text('Дополнения'),
+                    Text(AppL10n.t('Дополнения')),
                   ]),
                 ),
                 if (channelsEnabled)
@@ -640,7 +653,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 final cs = Theme.of(ctx).colorScheme;
                 return PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert),
-                  tooltip: 'Вид и обновление',
+                  tooltip: AppL10n.t('Вид и обновление'),
                   onSelected: (v) {
                     if (v == 'rescan') _rescan();
                     if (v == 'radar') _nearbyShowRadar.value = true;
@@ -653,8 +666,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                         contentPadding: EdgeInsets.zero,
                         leading:
                             Icon(Icons.refresh, color: cs.primary, size: 22),
-                        title: const Text('Обновить поиск'),
-                        subtitle: const Text('Сканировать устройства рядом',
+                        title: Text(AppL10n.t('Обновить поиск')),
+                        subtitle: Text(
+                            AppL10n.t('Сканировать устройства рядом'),
                             style: TextStyle(fontSize: 11)),
                       ),
                     ),
@@ -663,7 +677,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       child: ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(Icons.radar, color: cs.primary, size: 22),
-                        title: const Text('Радар'),
+                        title: Text(AppL10n.t('Радар')),
                         trailing:
                             radar ? Icon(Icons.check, color: cs.primary) : null,
                       ),
@@ -674,7 +688,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(Icons.list_rounded,
                             color: cs.primary, size: 22),
-                        title: const Text('Список'),
+                        title: Text(AppL10n.t('Список')),
                         trailing: !radar
                             ? Icon(Icons.check, color: cs.primary)
                             : null,
@@ -697,7 +711,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         : Icons.inventory_2_outlined,
                     color: inbox.archiveView ? cs.primary : null,
                   ),
-                  tooltip: 'Архив',
+                  tooltip: AppL10n.t('Архив'),
                   onPressed: () => inbox.setArchiveView(!inbox.archiveView),
                 );
               },
@@ -705,7 +719,8 @@ class _ChatListScreenState extends State<ChatListScreen>
           if (_currentTab == 0)
             IconButton(
               icon: Icon(_searchActive ? Icons.close : Icons.search),
-              tooltip: _searchActive ? 'Закрыть' : 'Поиск',
+              tooltip:
+                  _searchActive ? AppL10n.t('Закрыть') : AppL10n.t('Поиск'),
               onPressed: _toggleSearch,
             ),
           if (_currentTab == 2 && !_searchActive)
@@ -757,6 +772,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                 index: _currentTab,
                 children: [
                   _UnifiedChatsTab(
+                    scrollSink: _storiesScroll,
+                    areaKey: _storiesAreaKey,
+                    listController: _chatsScroll,
                     searchQuery: _searchActive ? _searchController.text : '',
                     layoutActive: _currentTab == 0 &&
                         !_searchActive &&
@@ -783,6 +801,26 @@ class _ChatListScreenState extends State<ChatListScreen>
                 if (!_searchActive) _toggleSearch();
               },
             ),
+    );
+    return Stack(
+      children: [
+        scaffold,
+        Positioned.fill(
+          child: StoriesCollapseOverlay(
+            scroll: _storiesScroll,
+            areaKey: _storiesAreaKey,
+            onExpand: () {
+              if (!_chatsScroll.hasClients) return;
+              _chatsScroll.animateTo(0,
+                  duration: const Duration(milliseconds: 380),
+                  curve: Curves.easeOutCubic);
+            },
+            visible: _currentTab == 0 &&
+                !_searchActive &&
+                !ChatInboxService.instance.archiveView,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1130,8 +1168,7 @@ class _DesktopNavRail extends StatelessWidget {
       onDestinationSelected: onSelect,
       labelType: NavigationRailLabelType.all,
       groupAlignment: -0.9,
-      backgroundColor:
-          RlinkDesign.barBg(context, isDark),
+      backgroundColor: RlinkDesign.barBg(context, isDark),
       indicatorColor: theme.colorScheme.primary.withValues(alpha: 0.15),
       indicatorShape:
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -1144,12 +1181,12 @@ class _DesktopNavRail extends StatelessWidget {
         NavigationRailDestination(
           icon: ValueListenableBuilder<int>(
             valueListenable: BleService.instance.peersCount,
-            builder: (_, count, __) => count > 0 &&
-                    AppSettings.instance.connectionMode != 1
-                ? Badge(
-                    label: Text('$count'),
-                    child: _railGlyph(theme, NavGlyph.nearby, false))
-                : _railGlyph(theme, NavGlyph.nearby, false),
+            builder: (_, count, __) =>
+                count > 0 && AppSettings.instance.connectionMode != 1
+                    ? Badge(
+                        label: Text('$count'),
+                        child: _railGlyph(theme, NavGlyph.nearby, false))
+                    : _railGlyph(theme, NavGlyph.nearby, false),
           ),
           selectedIcon: _railGlyph(theme, NavGlyph.nearby, true),
           label: Text(AppL10n.t('nav_nearby')),
@@ -1240,10 +1277,17 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
       }
       return false;
     }
-    if (px < 0) {
-      final t = -px / _pullSpan;
-      if (t >= 1) _open = true;
-      _setPull(_open ? 1 : t);
+    // Clamping physics never moves the list past the top; the finger's extra
+    // travel arrives as overscroll deltas. Feeding them straight into the pull
+    // gives ONE motion source (the header grows under the finger and pushes the
+    // content down) instead of a bounce and a header growth fighting each other.
+    if (n is OverscrollNotification &&
+        n.dragDetails != null &&
+        n.overscroll < 0) {
+      if (!_open) {
+        _setPull(_pull.value + (-n.overscroll) / _pullSpan);
+        if (_pull.value >= 1) _open = true;
+      }
       return false;
     }
     if (n is ScrollEndNotification) {
@@ -1253,9 +1297,6 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
       } else if (!_open) {
         _setPull(0, animate: true);
       }
-    } else if (_open) {
-      // Bouncing physics springs pixels back to 0; keep the latched state.
-      _setPull(1);
     }
     return false;
   }
@@ -1299,10 +1340,11 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
               leading: Icon(Icons.lock_person_outlined, color: cs.primary),
-              title: const Text('Дочернее устройство'),
+              title: Text(AppL10n.t('Дочернее устройство')),
               subtitle: Text(
                 settings.linkedDeviceNickname.isNotEmpty
-                    ? 'Связано с: ${settings.linkedDeviceNickname}'
+                    ? AppL10n.f(
+                        'Связано с: {0}', [settings.linkedDeviceNickname])
                     : settings.linkedDevicePublicKey,
                 style: const TextStyle(fontSize: 12),
               ),
@@ -1310,21 +1352,22 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
           ),
           ListTile(
             leading: const Icon(Icons.link_off_rounded, color: Colors.red),
-            title: const Text(
-              'Отвязаться',
+            title: Text(
+              AppL10n.t('Отвязаться'),
               style: TextStyle(color: Colors.red),
             ),
-            subtitle: const Text(
-              'После отвязки снова станут доступны все разделы',
+            subtitle: Text(
+              AppL10n.t('После отвязки снова станут доступны все разделы'),
               style: TextStyle(fontSize: 12),
             ),
             onTap: () async {
               final ok = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      title: const Text('Отвязать устройство?'),
-                      content: const Text(
-                        'Связка будет снята и на главном устройстве.',
+                      title: Text(AppL10n.t('Отвязать устройство?')),
+                      content: Text(
+                        AppL10n.t(
+                            'Связка будет снята и на главном устройстве.'),
                       ),
                       actions: [
                         TextButton(
@@ -1369,8 +1412,8 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
         child: ListView(
           controller: _listCtrl,
           // Overscroll at the top is what opens the profile header.
-          physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics()),
+          physics: const AlwaysScrollableScrollPhysics(
+              parent: ClampingScrollPhysics()),
           // Bottom clearance so the last settings item scrolls clear of the floating
           // nav pill (extendBody makes this tab fill behind it in the new design).
           padding: EdgeInsets.fromLTRB(
@@ -1388,14 +1431,14 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
                   children: [
                     ListTile(
                       leading: Icon(Icons.mood_rounded, color: cs.primary),
-                      title: const Text('Эмодзи-статус'),
+                      title: Text(AppL10n.t('Эмодзи-статус')),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => quickChangeStatusEmoji(context),
                     ),
                     const Divider(height: 1, indent: 56),
                     ListTile(
                       leading: Icon(Icons.image_outlined, color: cs.primary),
-                      title: const Text('Изменить баннер'),
+                      title: Text(AppL10n.t('Изменить баннер')),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => quickChangeBanner(context),
                     ),
@@ -1403,7 +1446,7 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
                     ListTile(
                       leading:
                           Icon(Icons.photo_camera_outlined, color: cs.primary),
-                      title: const Text('Изменить фото профиля'),
+                      title: Text(AppL10n.t('Изменить фото профиля')),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => _showOwnAvatarMenu(context, profile),
                     ),
@@ -1432,7 +1475,7 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
             if (hasPhoto)
               ListTile(
                 leading: const Icon(Icons.visibility_outlined),
-                title: const Text('Открыть фото'),
+                title: Text(AppL10n.t('Открыть фото')),
                 onTap: () {
                   Navigator.pop(ctx);
                   showAvatarViewer(
@@ -1446,7 +1489,9 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
               ),
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
-              title: Text(hasPhoto ? 'Изменить фото' : 'Добавить фото'),
+              title: Text(hasPhoto
+                  ? AppL10n.t('Изменить фото')
+                  : AppL10n.t('Добавить фото')),
               onTap: () {
                 Navigator.pop(ctx);
                 unawaited(pickAndSaveProfileAvatar(context));
@@ -1456,7 +1501,7 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
               ListTile(
                 leading: Icon(Icons.delete_outline,
                     color: Theme.of(context).colorScheme.error),
-                title: Text('Удалить фото',
+                title: Text(AppL10n.t('Удалить фото'),
                     style:
                         TextStyle(color: Theme.of(context).colorScheme.error)),
                 onTap: () async {
@@ -1473,13 +1518,15 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
 
 // ── Единый список: чаты + группы + каналы (Telegram-style) ──────
 
+const double _kChipsRowHeight = 46;
+
 enum _ChatItemType { personal, group, channel }
 
 String _dmChatListBotChipLabel(String peerId) {
   if (peerId == kLibBotPeerId) return 'Lib';
   if (peerId == kEmojiBotPeerId) return 'Emoji';
-  if (peerId == kGigachatBotPeerId) return 'ИИ';
-  return 'Бот';
+  if (peerId == kGigachatBotPeerId) return AppL10n.t('ИИ');
+  return AppL10n.t('Бот');
 }
 
 /// Превью строки в списке чатов: при несохранённом вводе — «Черновик: …» вместо последнего сообщения.
@@ -1494,7 +1541,7 @@ String _dmChatListPreviewOrDraft(
   final oneLine = d.replaceAll(RegExp(r'[\r\n]+'), ' ').trim();
   if (oneLine.isEmpty) return lastMessagePreview;
   final short = oneLine.length > 52 ? '${oneLine.substring(0, 52)}…' : oneLine;
-  return 'Черновик: $short';
+  return AppL10n.f('Черновик: {0}', [short]);
 }
 
 class _UnifiedChatsTab extends StatefulWidget {
@@ -1505,7 +1552,19 @@ class _UnifiedChatsTab extends StatefulWidget {
 
   /// Переключить на вкладку «Рядом» (из пустого состояния «нет чатов»).
   final VoidCallback? onGoNearby;
+
+  /// Receives the list's scroll offset — drives the story-row collapse.
+  final ValueNotifier<double> scrollSink;
+
+  /// Anchors the story row (top-left of the list area).
+  final GlobalKey areaKey;
+
+  /// Owned by the parent so the story overlay can scroll the list to the top.
+  final ScrollController listController;
   const _UnifiedChatsTab({
+    required this.scrollSink,
+    required this.areaKey,
+    required this.listController,
     this.searchQuery = '',
     this.layoutActive = true,
     this.onGoNearby,
@@ -1519,38 +1578,6 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
   final GlobalKey _miniPlayerListAnchor =
       GlobalKey(debugLabel: 'miniPlayerListAnchor');
   bool _miniPlayerAnchorCallbackPending = false;
-
-  /// Filters shrink & fade out first (done by p≈0.5).
-  Widget _collapsedFilters(double p, Widget child) {
-    final f = (1 - p / 0.5).clamp(0.0, 1.0);
-    if (f >= 0.999) return child;
-    return ClipRect(
-      child: Align(
-        alignment: Alignment.topCenter,
-        heightFactor: f,
-        child: Opacity(opacity: f, child: child),
-      ),
-    );
-  }
-
-  /// Stories shrink into smaller avatar "balls": scale down + clip the labels
-  /// away as the header collapses. Proportional to scroll offset [p] (0..1).
-  Widget _collapsedStories(double p, Widget child) {
-    if (p <= 0.001) return child;
-    final scale = 1.0 - 0.42 * p; // 1.0 → 0.58
-    final hf = 1.0 - 0.5 * p; // 1.0 → 0.5  (clips the labels)
-    return ClipRect(
-      child: Align(
-        alignment: Alignment.topCenter,
-        heightFactor: hf,
-        child: Transform.scale(
-          scale: scale,
-          alignment: Alignment.topCenter,
-          child: child,
-        ),
-      ),
-    );
-  }
 
   List<_ChatItem> _items = [];
   Contact? _birthdayContact; // a contact whose birthday is today, if any
@@ -1569,12 +1596,9 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
   VoidCallback? _botDirListener;
   late final VoidCallback _inboxListener;
 
-  // Offset-driven header collapse: 0 = expanded, 1 = fully collapsed. Driven by
-  // the list scroll position (not scroll direction) so it tracks the finger
-  // smoothly instead of needing a sharp flick.
-  final ScrollController _listController = ScrollController();
-  final ValueNotifier<double> _collapse = ValueNotifier<double>(0);
-  static const double _collapseDistance = 132;
+  // The story row lives above the app bar (see StoriesCollapseOverlay); the list
+  // only reserves its height and reports the scroll offset that drives it.
+  ScrollController get _listController => widget.listController;
 
   // Entrance stagger plays once; after the first frame, scrolled-in rows render
   // statically (no per-row opacity tween) so scrolling stays smooth on phones.
@@ -1582,10 +1606,64 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
 
   void _onScrollOffset() {
     if (!_listController.hasClients) return;
-    final o = _listController.offset;
-    final p = (o / _collapseDistance).clamp(0.0, 1.0);
-    if ((p - _collapse.value).abs() > 0.001) _collapse.value = p;
+    widget.scrollSink.value = _listController.offset;
   }
+
+  double _lastScrollDelta = 0;
+
+  bool _onListScroll(ScrollNotification n) {
+    if (n.depth != 0 || !storiesRowPresent()) return false;
+    if (n is ScrollUpdateNotification &&
+        n.scrollDelta != null &&
+        n.scrollDelta != 0) {
+      _lastScrollDelta = n.scrollDelta!;
+    }
+    // Snap on the next tick, not inside the notification: a wheel/trackpad
+    // scroll calls goBallistic() right after dispatching "end", which would
+    // cancel an animation started from here. Any new scroll cancels the snap.
+    if (n is ScrollStartNotification || n is ScrollUpdateNotification) {
+      _snapTimer?.cancel();
+    } else if (n is ScrollEndNotification) {
+      _snapTimer?.cancel();
+      _snapTimer = Timer(const Duration(milliseconds: 90), _snapStoriesRow);
+    }
+    return false;
+  }
+
+  Timer? _snapTimer;
+
+  /// Magnet: the story row never rests half-collapsed — once scrolling ends
+  /// inside its range it settles either fully open or fully collapsed. The
+  /// direction of the last movement biases the choice (a short push down is
+  /// enough to collapse; a short pull up is enough to reopen), like Telegram.
+  void _snapStoriesRow() {
+    final c = _listController;
+    if (!mounted || !c.hasClients || c.position.isScrollingNotifier.value)
+      return;
+    final o = c.offset;
+    if (o <= 0.5 || o >= kStoriesRowHeight - 0.5) return;
+    final down = _lastScrollDelta > 0;
+    var target =
+        o > kStoriesRowHeight * (down ? 0.3 : 0.7) ? kStoriesRowHeight : 0.0;
+    // Too little content to reach the collapsed position — stay open.
+    if (target > c.position.maxScrollExtent) target = 0;
+    final ms = (140 + 120 * (target - o).abs() / kStoriesRowHeight).round();
+    c.animateTo(target,
+        duration: Duration(milliseconds: ms), curve: Curves.easeOutCubic);
+  }
+
+  /// Non-scrolling states (empty / no results) have no list to report an offset.
+  void _resetScrollSink() {
+    if (widget.scrollSink.value == 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.scrollSink.value = 0;
+    });
+  }
+
+  Widget _storiesSpacer({Key? key}) => SizedBox(
+        key: key,
+        height: storiesRowPresent() ? kStoriesRowHeight : 0,
+      );
 
   @override
   void initState() {
@@ -1642,9 +1720,8 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
 
   @override
   void dispose() {
+    _snapTimer?.cancel();
     _listController.removeListener(_onScrollOffset);
-    _listController.dispose();
-    _collapse.dispose();
     _loadDebounce?.cancel();
     _sub?.cancel();
     if (_groupListener != null) {
@@ -1861,7 +1938,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         avatarEmoji: g.avatarEmoji,
         avatarImagePath: g.avatarImagePath,
         lastMessage: lastMsg == null
-            ? 'Группа создана'
+            ? AppL10n.t('Группа создана')
             : formatGroupMessagePreview(lastMsg),
         lastTime: lastMsg != null
             ? DateTime.fromMillisecondsSinceEpoch(lastMsg.timestamp)
@@ -1893,7 +1970,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
           avatarEmoji: ch.avatarEmoji,
           avatarImagePath: ch.avatarImagePath,
           lastMessage: lastPost == null
-              ? 'Канал создан'
+              ? AppL10n.t('Канал создан')
               : formatChannelPostPreview(lastPost),
           lastTime: lastPost != null
               ? DateTime.fromMillisecondsSinceEpoch(lastPost.timestamp)
@@ -1998,13 +2075,6 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
     if (mounted) _load();
   }
 
-  List<_ChatItem> _storiesSource() {
-    final inbox = ChatInboxService.instance;
-    return _items
-        .where((it) => !inbox.isArchived(_chatItemInboxKey(it)))
-        .toList();
-  }
-
   List<_ChatItem> _computeVisibleItems() {
     final inbox = ChatInboxService.instance;
     final tab = inbox.selectedTab;
@@ -2084,7 +2154,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
             if (inbox.archiveView)
               ListTile(
                 leading: const Icon(Icons.unarchive_outlined),
-                title: const Text('Вернуть из архива'),
+                title: Text(AppL10n.t('Вернуть из архива')),
                 onTap: () async {
                   Navigator.pop(ctx);
                   await inbox.unarchive(key);
@@ -2094,7 +2164,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
               if (inbox.isPinned(key))
                 ListTile(
                   leading: const Icon(Icons.push_pin_outlined),
-                  title: const Text('Открепить'),
+                  title: Text(AppL10n.t('Открепить')),
                   onTap: () async {
                     Navigator.pop(ctx);
                     await inbox.unpin(key);
@@ -2103,7 +2173,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
               else
                 ListTile(
                   leading: const Icon(Icons.push_pin_outlined),
-                  title: const Text('Закрепить'),
+                  title: Text(AppL10n.t('Закрепить')),
                   onTap: () async {
                     Navigator.pop(ctx);
                     await inbox.pin(key);
@@ -2111,7 +2181,7 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
                 ),
               ListTile(
                 leading: const Icon(Icons.archive_outlined),
-                title: const Text('В архив'),
+                title: Text(AppL10n.t('В архив')),
                 onTap: () async {
                   Navigator.pop(ctx);
                   await inbox.archive(key);
@@ -2142,8 +2212,8 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      'Порядок закреплённых',
+                    Text(
+                      AppL10n.t('Порядок закреплённых'),
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                     ),
@@ -2186,7 +2256,8 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
     );
   }
 
-  Widget _buildFilterBar(BuildContext context) {
+  /// Folder chips (or the archive header). Pinned under the app bar.
+  Widget _buildChipsRow(BuildContext context) {
     final inbox = ChatInboxService.instance;
     final cs = Theme.of(context).colorScheme;
     if (inbox.archiveView) {
@@ -2199,11 +2270,11 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
               IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => inbox.setArchiveView(false),
-                tooltip: 'Закрыть архив',
+                tooltip: AppL10n.t('Закрыть архив'),
               ),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Архив',
+                  AppL10n.t('Архив'),
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                 ),
               ),
@@ -2212,52 +2283,61 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: 46,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            children: [
-              for (final tab in inbox.tabs)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: FilterChip(
-                    label: Text(inbox.tabLabel(tab)),
-                    selected: inbox.selectedTabId == tab.id,
-                    onSelected: (_) => inbox.setSelectedTab(tab.id),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 8, 2),
-          child: Wrap(
-            spacing: 0,
-            children: [
-              TextButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  rlinkPushRoute(const ChatInboxFiltersManageScreen()),
-                ),
-                icon: const Icon(Icons.tune, size: 18),
-                label: const Text('Фильтры'),
+    return SizedBox(
+      height: _kChipsRowHeight,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        children: [
+          for (final tab in inbox.tabs)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: FilterChip(
+                label: Text(inbox.tabLabel(tab)),
+                selected: inbox.selectedTabId == tab.id,
+                onSelected: (_) => inbox.setSelectedTab(tab.id),
               ),
-              if (inbox.pinOrder.isNotEmpty)
-                TextButton.icon(
-                  onPressed: () => _showPinReorderSheet(context),
-                  icon: const Icon(Icons.push_pin_outlined, size: 18),
-                  label: const Text('Закреплённые'),
-                ),
-            ],
-          ),
-        ),
-      ],
+            ),
+        ],
+      ),
     );
   }
+
+  /// «Фильтры» / «Закреплённые» buttons — scroll away with the list.
+  Widget _buildFilterTools(BuildContext context) {
+    final inbox = ChatInboxService.instance;
+    if (inbox.archiveView) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 8, 2),
+      child: Wrap(
+        spacing: 0,
+        children: [
+          TextButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              rlinkPushRoute(const ChatInboxFiltersManageScreen()),
+            ),
+            icon: const Icon(Icons.tune, size: 18),
+            label: Text(AppL10n.t('Фильтры')),
+          ),
+          if (inbox.pinOrder.isNotEmpty)
+            TextButton.icon(
+              onPressed: () => _showPinReorderSheet(context),
+              icon: const Icon(Icons.push_pin_outlined, size: 18),
+              label: Text(AppL10n.t('Закреплённые')),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterBar(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildChipsRow(context),
+          _buildFilterTools(context),
+        ],
+      );
 
   Widget _buildPendingBanners(BuildContext context) {
     final inbox = ChatInboxService.instance;
@@ -2284,13 +2364,13 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
                           context,
                           icon: Icons.person_add_alt_1_rounded,
                           iconColor: Theme.of(context).colorScheme.primary,
-                          title: (e.value['nick'] as String?)
-                                      ?.trim()
-                                      .isNotEmpty ==
-                                  true
-                              ? '${e.value['nick']} хочет обменяться профилем'
-                              : 'Новый запрос на обмен профилем',
-                          subtitle: 'Нажмите, чтобы открыть запрос',
+                          title:
+                              (e.value['nick'] as String?)?.trim().isNotEmpty ==
+                                      true
+                                  ? AppL10n.f('{0} хочет обменяться профилем',
+                                      [e.value['nick']])
+                                  : AppL10n.t('Новый запрос на обмен профилем'),
+                          subtitle: AppL10n.t('Нажмите, чтобы открыть запрос'),
                           onTap: () => showPairRequestScreen(
                             context,
                             e.key,
@@ -2302,8 +2382,10 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
                           context,
                           icon: Icons.campaign_outlined,
                           iconColor: const Color(0xFF42A5F5),
-                          title: 'Приглашение в канал: ${inv.channelName}',
-                          subtitle: '${inv.inviterNick} приглашает вас',
+                          title: AppL10n.f(
+                              'Приглашение в канал: {0}', [inv.channelName]),
+                          subtitle: AppL10n.f(
+                              '{0} приглашает вас', [inv.inviterNick]),
                           onTap: () => Navigator.push(
                             context,
                             rlinkPushRoute(const ChannelsScreen()),
@@ -2314,8 +2396,10 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
                           context,
                           icon: Icons.group_outlined,
                           iconColor: const Color(0xFF5C6BC0),
-                          title: 'Приглашение в группу: ${inv.groupName}',
-                          subtitle: '${inv.inviterNick} приглашает вас',
+                          title: AppL10n.f(
+                              'Приглашение в группу: {0}', [inv.groupName]),
+                          subtitle: AppL10n.f(
+                              '{0} приглашает вас', [inv.inviterNick]),
                           onTap: () => Navigator.push(
                             context,
                             rlinkPushRoute(const GroupsScreen()),
@@ -2408,8 +2492,9 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
     final visible = _computeVisibleItems();
 
     if (_items.isEmpty && q.isEmpty) {
+      _resetScrollSink();
       final col = Column(children: [
-        _StoriesStrip(chatItems: _storiesSource()),
+        _storiesSpacer(key: widget.areaKey),
         _buildPendingBanners(context),
         _miniPlayerGap(),
         Expanded(
@@ -2422,16 +2507,19 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
 
     if (q.isEmpty) {
       if (visible.isEmpty) {
+        _resetScrollSink();
         final col = Column(
           children: [
-            _StoriesStrip(chatItems: _storiesSource()),
+            _storiesSpacer(key: widget.areaKey),
             _buildFilterBar(context),
             _buildPendingBanners(context),
             _miniPlayerGap(),
             Expanded(
               child: Center(
                 child: Text(
-                  inbox.archiveView ? 'Архив пуст' : 'Нет чатов в этой вкладке',
+                  inbox.archiveView
+                      ? AppL10n.t('Архив пуст')
+                      : AppL10n.t('Нет чатов в этой вкладке'),
                   style: TextStyle(color: Theme.of(context).hintColor),
                 ),
               ),
@@ -2441,91 +2529,112 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
         _layoutMiniPlayerAnchor();
         return col;
       }
-      final storiesStrip = _StoriesStrip(chatItems: _storiesSource());
-      final filterBar = _buildFilterBar(context);
+      final bottomPad = AppSettings.instance.newDesign
+          ? MediaQuery.paddingOf(context).bottom + 78
+          : 8.0;
+      final dividerColor =
+          Theme.of(context).dividerColor.withValues(alpha: 0.22);
       final col = Column(children: [
-        // Offset-driven collapsing header: rebuilds only this subtree per scroll
-        // frame (via _collapse notifier), so it tracks the finger smoothly.
-        ValueListenableBuilder<double>(
-          valueListenable: _collapse,
-          builder: (context, p, __) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _collapsedStories(p, storiesStrip),
-              _collapsedFilters(p, filterBar),
-            ],
-          ),
-        ),
-        _buildPendingBanners(context),
-        if (_birthdayContact != null)
-          BirthdayBanner(
-            contact: _birthdayContact!,
-            onWrite: () => Navigator.push(
-              context,
-              rlinkChatRoute(ChatScreen(
-                peerId: _birthdayContact!.publicKeyHex,
-                peerNickname: _birthdayContact!.nickname,
-                peerAvatarColor: _birthdayContact!.avatarColor,
-                peerAvatarEmoji: _birthdayContact!.avatarEmoji,
-                peerAvatarImagePath: _birthdayContact!.avatarImagePath,
-              )),
-            ),
-          )
-        else if (_showPremiumSuggestion)
-          PremiumSuggestionBanner(
-            onDismissed: () => setState(() => _showPremiumSuggestion = false),
-          ),
+        // The player is an overlay; reserve its room above the scroll view.
         _miniPlayerGap(),
         Expanded(
-            child: ListView.separated(
-          controller: _listController,
-          key: const PageStorageKey<String>('chat_inbox_list'),
-          cacheExtent: 720,
-          itemCount: visible.length,
-          // Bottom clearance so the last chats scroll clear of the floating nav
-          // pill (extendBody makes the list fill behind it in the new design).
-          padding: EdgeInsets.only(
-            top: 2,
-            bottom: AppSettings.instance.newDesign
-                ? MediaQuery.paddingOf(context).bottom + 78
-                : 8,
-          ),
-          separatorBuilder: (_, __) => Divider(
-            height: 1,
-            indent: 68,
-            endIndent: 12,
-            color: Theme.of(context).dividerColor.withValues(alpha: 0.22),
-          ),
-          itemBuilder: (_, i) {
-            final item = visible[i];
-            final key = _chatItemInboxKey(item);
-            final pinned =
-                inbox.pinOrder.contains(key) && !item.isSavedMessages;
-            final row = _TelegramChatRow(
-              item: item,
-              onTap: () => _navigate(context, item),
-              onLongPress: () => _showChatItemActions(context, item),
-              showPinned: pinned,
-              timeLabel: item.isSavedMessages && !item.savedHasMessages
-                  ? ''
-                  : _fmtTime(item.lastTime),
-            );
-            return RepaintBoundary(
-              key: ValueKey<String>('chat_row_$key'),
-              // Entrance stagger only on the FIRST paint of the list — otherwise
-              // every row re-plays the opacity/slide tween as it scrolls back
-              // into view (recycled by ListView.builder), which janks on phones.
-              child: _entranceAnimated
-                  ? row
-                  : StaggeredListItem(
-                      index: i,
-                      duration: const Duration(milliseconds: 280),
-                      maxDelay: const Duration(milliseconds: 220),
-                      child: row,
+          child: KeyedSubtree(
+            key: widget.areaKey,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _onListScroll,
+              child: CustomScrollView(
+                key: const PageStorageKey<String>('chat_inbox_list'),
+                controller: _listController,
+                cacheExtent: 720,
+                slivers: [
+                  // Story avatars are painted by StoriesCollapseOverlay above the
+                  // app bar; this just holds their place and scrolls away.
+                  SliverToBoxAdapter(child: _storiesSpacer()),
+                  // Folder chips stay pinned under the app bar, like Telegram.
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _PinnedChipsDelegate(
+                      height: inbox.archiveView ? 52 : _kChipsRowHeight,
+                      child: _buildChipsRow(context),
                     ),
-            );
-          },
-        )),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildFilterTools(context),
+                        _buildPendingBanners(context),
+                        if (_birthdayContact != null)
+                          BirthdayBanner(
+                            contact: _birthdayContact!,
+                            onWrite: () => Navigator.push(
+                              context,
+                              rlinkChatRoute(ChatScreen(
+                                peerId: _birthdayContact!.publicKeyHex,
+                                peerNickname: _birthdayContact!.nickname,
+                                peerAvatarColor: _birthdayContact!.avatarColor,
+                                peerAvatarEmoji: _birthdayContact!.avatarEmoji,
+                                peerAvatarImagePath:
+                                    _birthdayContact!.avatarImagePath,
+                              )),
+                            ),
+                          )
+                        else if (_showPremiumSuggestion)
+                          PremiumSuggestionBanner(
+                            onDismissed: () =>
+                                setState(() => _showPremiumSuggestion = false),
+                          ),
+                      ],
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.only(top: 2, bottom: bottomPad),
+                    sliver: SliverList.separated(
+                      itemCount: visible.length,
+                      separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        indent: 68,
+                        endIndent: 12,
+                        color: dividerColor,
+                      ),
+                      itemBuilder: (_, i) {
+                        final item = visible[i];
+                        final key = _chatItemInboxKey(item);
+                        final pinned = inbox.pinOrder.contains(key) &&
+                            !item.isSavedMessages;
+                        final row = _TelegramChatRow(
+                          item: item,
+                          onTap: () => _navigate(context, item),
+                          onLongPress: () =>
+                              _showChatItemActions(context, item),
+                          showPinned: pinned,
+                          timeLabel:
+                              item.isSavedMessages && !item.savedHasMessages
+                                  ? ''
+                                  : _fmtTime(item.lastTime),
+                        );
+                        return RepaintBoundary(
+                          key: ValueKey<String>('chat_row_$key'),
+                          // Entrance stagger only on the FIRST paint of the list —
+                          // otherwise every row re-plays the tween as it scrolls
+                          // back into view, which janks on phones.
+                          child: _entranceAnimated
+                              ? row
+                              : StaggeredListItem(
+                                  index: i,
+                                  duration: const Duration(milliseconds: 280),
+                                  maxDelay: const Duration(milliseconds: 220),
+                                  child: row,
+                                ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ]);
       _layoutMiniPlayerAnchor();
       return col;
@@ -2567,13 +2676,15 @@ class _TelegramChatRow extends StatelessWidget {
   });
 
   static String _formatLastSeen(DateTime? lastSeen) {
-    if (lastSeen == null) return 'Не в сети';
+    if (lastSeen == null) return AppL10n.t('Не в сети');
     final diff = DateTime.now().difference(lastSeen);
-    if (diff.inSeconds < 60) return 'был(а) только что';
-    if (diff.inMinutes < 60) return 'был(а) ${diff.inMinutes} мин назад';
-    if (diff.inHours < 24) return 'был(а) ${diff.inHours} ч назад';
-    if (diff.inDays < 7) return 'был(а) ${diff.inDays} дн назад';
-    return 'Не в сети';
+    if (diff.inSeconds < 60) return AppL10n.t('был(а) только что');
+    if (diff.inMinutes < 60)
+      return AppL10n.f('был(а) {0} мин назад', [diff.inMinutes]);
+    if (diff.inHours < 24)
+      return AppL10n.f('был(а) {0} ч назад', [diff.inHours]);
+    if (diff.inDays < 7) return AppL10n.f('был(а) {0} дн назад', [diff.inDays]);
+    return AppL10n.t('Не в сети');
   }
 
   @override
@@ -2722,7 +2833,7 @@ class _TelegramChatRow extends StatelessWidget {
                           const SizedBox(width: 6),
                           Text(
                             item.isOnline
-                                ? 'В сети'
+                                ? AppL10n.t('В сети')
                                 : _formatLastSeen(item.lastSeen),
                             style: TextStyle(
                               fontSize: 12,
@@ -2892,6 +3003,7 @@ class _ChatItem {
       id; // peerId for personal, groupId for group, channelId for channel
   final String nickname, lastMessage, avatarEmoji, statusEmoji;
   final int avatarColor;
+
   /// Premium-цвет имени собеседника (из его профиля); null — цвет темы.
   final int? nickColor;
   final String? avatarImagePath;
@@ -2973,16 +3085,16 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
 
   // Which result section to show; 'all' shows everything.
   String _filter = 'all';
-  static const _filters = <List<String>>[
-    ['all', 'Все'],
-    ['chats', 'Чаты'],
-    ['contacts', 'Контакты'],
-    ['channels', 'Каналы'],
-    ['people', 'Люди'],
-    ['messages', 'Сообщения'],
-    ['addons', 'Дополнения'],
-    ['settings', 'Настройки'],
-  ];
+  static List<List<String>> get _filters => <List<String>>[
+        ['all', AppL10n.t('Все')],
+        ['chats', AppL10n.t('Чаты')],
+        ['contacts', AppL10n.t('Контакты')],
+        ['channels', AppL10n.t('Каналы')],
+        ['people', AppL10n.t('Люди')],
+        ['messages', AppL10n.t('Сообщения')],
+        ['addons', AppL10n.t('Дополнения')],
+        ['settings', AppL10n.t('Настройки')],
+      ];
 
   bool _show(String key) => _filter == 'all' || _filter == key;
 
@@ -3111,14 +3223,15 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
                           Icon(Icons.search_off,
                               size: 56, color: Colors.grey.shade600),
                           const SizedBox(height: 12),
-                          Text('Ничего не найдено',
+                          Text(AppL10n.t('Ничего не найдено'),
                               style: TextStyle(
                                   color: Colors.grey.shade400, fontSize: 15)),
                           const SizedBox(height: 4),
                           Text(
                             RelayService.instance.isConnected
-                                ? 'Попробуй другой запрос'
-                                : 'Relay не подключён — поиск людей недоступен',
+                                ? AppL10n.t('Попробуй другой запрос')
+                                : AppL10n.t(
+                                    'Relay не подключён — поиск людей недоступен'),
                             style: TextStyle(
                                 color: Colors.grey.shade600, fontSize: 12),
                             textAlign: TextAlign.center,
@@ -3134,7 +3247,7 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
                   children: [
                     _filterChips(),
                     if (_show('chats') && chatMatches.isNotEmpty) ...[
-                      _searchSection('Чаты', chatMatches.length),
+                      _searchSection(AppL10n.t('Чаты'), chatMatches.length),
                       for (final m in chatMatches)
                         _TelegramChatRow(
                           item: m,
@@ -3145,7 +3258,8 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
                         ),
                     ],
                     if (_show('contacts') && contactMatches.isNotEmpty) ...[
-                      _searchSection('Контакты', contactMatches.length),
+                      _searchSection(
+                          AppL10n.t('Контакты'), contactMatches.length),
                       for (final c in contactMatches)
                         ListTile(
                           leading: AvatarWidget(
@@ -3178,7 +3292,7 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
                         ),
                     ],
                     if (_show('channels') && channels.isNotEmpty) ...[
-                      _searchSection('Каналы', channels.length),
+                      _searchSection(AppL10n.t('Каналы'), channels.length),
                       for (final ch in channels)
                         ListTile(
                           leading: CircleAvatar(
@@ -3213,7 +3327,8 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
                         ),
                     ],
                     if (_show('people') && relayPeople.isNotEmpty) ...[
-                      _searchSection('Люди в сети', relayPeople.length),
+                      _searchSection(
+                          AppL10n.t('Люди в сети'), relayPeople.length),
                       for (final p in relayPeople)
                         ListTile(
                           leading: CircleAvatar(
@@ -3263,7 +3378,7 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
                     ],
                     // Installed add-ons matching the query.
                     if (_show('addons') && addonHits.isNotEmpty) ...[
-                      _searchSection('Дополнения', addonHits.length),
+                      _searchSection(AppL10n.t('Дополнения'), addonHits.length),
                       for (final a in addonHits)
                         ListTile(
                           leading: Icon(a.icon, color: a.color),
@@ -3276,7 +3391,8 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
                     ],
                     // Settings pages matching the query.
                     if (_show('settings') && settingsHits.isNotEmpty) ...[
-                      _searchSection('Настройки', settingsHits.length),
+                      _searchSection(
+                          AppL10n.t('Настройки'), settingsHits.length),
                       for (final e in settingsHits)
                         ListTile(
                           leading: Icon(e.icon),
@@ -3294,7 +3410,7 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
                     ],
                     // Full-text hits across every conversation.
                     if (_show('messages') && msgs.isNotEmpty) ...[
-                      _searchSection('Сообщения', msgs.length),
+                      _searchSection(AppL10n.t('Сообщения'), msgs.length),
                       for (final m in msgs)
                         ListTile(
                           leading: const Icon(Icons.chat_bubble_outline),
@@ -3363,255 +3479,40 @@ class _UnifiedSearchResultsState extends State<_UnifiedSearchResults> {
   }
 }
 
-// ── Сторис полоска ───────────────────────────────────────────────
-
-class _StoriesStrip extends StatelessWidget {
-  final List<_ChatItem> chatItems;
-  const _StoriesStrip({required this.chatItems});
-
-  @override
-  Widget build(BuildContext context) {
-    // Wrap in profileNotifier listener so strip rebuilds when profile loads
-    return ValueListenableBuilder<UserProfile?>(
-      valueListenable: ProfileService.instance.profileNotifier,
-      builder: (context, myProfile, _) {
-        return ValueListenableBuilder<List<Contact>>(
-          valueListenable: ChatStorageService.instance.contactsNotifier,
-          builder: (context, contacts, __) {
-            final contactKeys = contacts.map((c) => c.publicKeyHex).toSet();
-            return ValueListenableBuilder<int>(
-              valueListenable: StoryService.instance.version,
-              builder: (context, _, __) {
-                final ownKey = myProfile?.publicKeyHex;
-                final activeAuthors = StoryService.instance.activeAuthors
-                    .where((id) => id == ownKey || contactKeys.contains(id))
-                    .toList();
-
-                // Only show strip if there are stories or own profile exists
-                if (activeAuthors.isEmpty && myProfile == null) {
-                  return const SizedBox.shrink();
-                }
-
-                final storiesList = ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  children: [
-                    // ── Создать историю (всегда видна) ──────────────
-                    if (myProfile != null)
-                      _StoryAvatar(
-                        label: 'Создать',
-                        avatar: AvatarWidget(
-                          initials: myProfile.initials,
-                          color: myProfile.avatarColor,
-                          emoji: myProfile.avatarEmoji,
-                          imagePath: myProfile.avatarImagePath,
-                          size: 56,
-                          hasStory: false,
-                          hasUnviewedStory: false,
-                        ),
-                        showAddBadge: true,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            rlinkPushRoute(
-                              StoryCreatorScreen(
-                                  authorId: myProfile.publicKeyHex),
-                            ),
-                          ).then((story) {
-                            if (story is StoryItem) {
-                              GossipRouter.instance.sendStory(
-                                storyId: story.id,
-                                authorId: story.authorId,
-                                text: story.text,
-                                bgColor: story.bgColor,
-                                textX: story.textX,
-                                textY: story.textY,
-                                textSize: story.textSize,
-                                textColor: story.textColor,
-                                textBold: story.textBold,
-                                textItalic: story.textItalic,
-                                textBgOpacity: story.textBgOpacity,
-                                overlays: story.overlays
-                                    .map((e) => e.toJson())
-                                    .toList(),
-                              );
-                            }
-                          });
-                        },
-                      ),
-
-                    // ── Моя история (только когда есть активные) ────
-                    if (myProfile != null &&
-                        StoryService.instance
-                            .hasActiveStory(myProfile.publicKeyHex))
-                      _StoryAvatar(
-                        label: 'Моя история',
-                        avatar: AvatarWidget(
-                          initials: myProfile.initials,
-                          color: myProfile.avatarColor,
-                          emoji: myProfile.avatarEmoji,
-                          imagePath: myProfile.avatarImagePath,
-                          size: 56,
-                          hasStory: true,
-                          hasUnviewedStory: false,
-                        ),
-                        onTap: () {
-                          final existing = StoryService.instance
-                              .storiesFor(myProfile.publicKeyHex);
-                          if (existing.isNotEmpty) {
-                            Navigator.push(
-                              context,
-                              rlinkPushRoute(
-                                StoryViewerScreen(
-                                  authorId: myProfile.publicKeyHex,
-                                  authorName: 'Я',
-                                  stories: existing,
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                      ),
-
-                    // Stories from contacts — exclude own key to avoid duplicate
-                    ...activeAuthors
-                        .where((id) => id != ownKey)
-                        .map((authorId) {
-                      final chatItem = chatItems
-                          .where((c) => c.type == _ChatItemType.personal)
-                          .cast<_ChatItem?>()
-                          .firstWhere((c) => c?.peerId == authorId,
-                              orElse: () => null);
-                      final name = chatItem?.nickname ??
-                          authorId.substring(0, authorId.length.clamp(0, 8));
-                      final stories =
-                          StoryService.instance.storiesFor(authorId);
-                      return _StoryAvatar(
-                        label: name,
-                        avatar: AvatarWidget(
-                          initials:
-                              name.isNotEmpty ? name[0].toUpperCase() : '?',
-                          color: chatItem?.avatarColor ?? 0xFF607D8B,
-                          emoji: chatItem?.avatarEmoji ?? '',
-                          imagePath: chatItem?.avatarImagePath,
-                          size: 56,
-                          hasStory: true,
-                          hasUnviewedStory:
-                              StoryService.instance.hasUnviewedStory(authorId),
-                        ),
-                        onTap: () => Navigator.push(
-                          context,
-                          rlinkPushRoute(
-                            StoryViewerScreen(
-                              authorId: authorId,
-                              authorName: name,
-                              stories: stories,
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                );
-                final isWide = MediaQuery.of(context).size.width >= 1100;
-                if (!isWide) {
-                  return SizedBox(height: 96, child: storiesList);
-                }
-                final cs = Theme.of(context).colorScheme;
-                return SizedBox(
-                  height: 106,
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 460),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHigh.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: cs.outlineVariant.withValues(alpha: 0.4),
-                          ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: storiesList,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _StoryAvatar extends StatelessWidget {
-  final String label;
-  final Widget avatar;
-  final bool showAddBadge;
-  final VoidCallback onTap;
-
-  const _StoryAvatar({
-    required this.label,
-    required this.avatar,
-    required this.onTap,
-    this.showAddBadge = false,
-  });
+/// Pinned folder-chips bar: transparent at rest, gets a panel only while list
+/// rows scroll underneath it (so it never shows "through" the chips).
+class _PinnedChipsDelegate extends SliverPersistentHeaderDelegate {
+  final double height;
+  final Widget child;
+  const _PinnedChipsDelegate({required this.height, required this.child});
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                avatar,
-                if (showAddBadge)
-                  Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                          width: 2,
-                        ),
-                      ),
-                      child:
-                          const Icon(Icons.add, size: 12, color: Colors.white),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            SizedBox(
-              width: 60,
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11),
-              ),
-            ),
-          ],
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = AppSettings.instance.newDesign
+        ? RlinkDesign.frosted(context: context, blur: 18, fill: 0.42)
+        : ColoredBox(color: RlinkDesign.screenBg(context, isDark));
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        AnimatedOpacity(
+          opacity: overlapsContent ? 1 : 0,
+          duration: const Duration(milliseconds: 150),
+          child: panel,
         ),
-      ),
+        child,
+      ],
     );
   }
+
+  @override
+  bool shouldRebuild(covariant _PinnedChipsDelegate old) => true;
 }
 
 // ── Рядом (радар / список) ───────────────────────────────────────
@@ -3656,7 +3557,7 @@ class _NearbyTabState extends State<_NearbyTab> {
                 size: 72, color: Colors.grey.shade700),
             const SizedBox(height: 16),
             Text(
-              'Bluetooth выключен',
+              AppL10n.t('Bluetooth выключен'),
               style: TextStyle(
                   color: Colors.grey.shade300,
                   fontSize: 18,
@@ -3664,7 +3565,8 @@ class _NearbyTabState extends State<_NearbyTab> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Режим «Только интернет» включён.\nОбщение ведётся через сеть.',
+              AppL10n.t(
+                  'Режим «Только интернет» включён.\nОбщение ведётся через сеть.'),
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
             ),
@@ -3726,12 +3628,13 @@ class _NearbyListView extends StatelessWidget {
                             Icon(Icons.bluetooth_searching,
                                 size: 72, color: Colors.grey.shade700),
                             const SizedBox(height: 16),
-                            Text('Ищем устройства...',
+                            Text(AppL10n.t('Ищем устройства...'),
                                 style: TextStyle(
                                     color: Colors.grey.shade400, fontSize: 16)),
                             const SizedBox(height: 8),
                             Text(
-                                'Убедись что Bluetooth включён\nна обоих устройствах',
+                                AppL10n.t(
+                                    'Убедись что Bluetooth включён\nна обоих устройствах'),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     color: Colors.grey.shade600, fontSize: 13)),
@@ -3810,7 +3713,7 @@ class _PendingDeviceTile extends StatelessWidget {
                         style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 15)),
                     const SizedBox(height: 2),
-                    Text('Нажмите чтобы добавить',
+                    Text(AppL10n.t('Нажмите чтобы добавить'),
                         style: TextStyle(
                             color: theme.colorScheme.primary, fontSize: 12)),
                   ],
@@ -3875,8 +3778,8 @@ class _PendingDeviceTile extends StatelessWidget {
 
     BleService.instance.setExchangeState(bleId, 1); // invite sent
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Запрос на обмен отправлен'),
+      SnackBar(
+        content: Text(AppL10n.t('Запрос на обмен отправлен')),
         duration: Duration(seconds: 2),
       ),
     );
@@ -3947,7 +3850,7 @@ class _IncomingPairRequestTile extends StatelessWidget {
                             fontSize: 15,
                             color: theme.colorScheme.onPrimaryContainer,
                           )),
-                      Text('Хочет обменяться профилями',
+                      Text(AppL10n.t('Хочет обменяться профилями'),
                           style: TextStyle(
                             fontSize: 12,
                             color: theme.colorScheme.onPrimaryContainer
@@ -4173,7 +4076,7 @@ class _PairRequestScreenState extends State<_PairRequestScreen>
                     onPressed: _decline,
                   ),
                   const Spacer(),
-                  Text('Запрос на обмен',
+                  Text(AppL10n.t('Запрос на обмен'),
                       style: theme.textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w600)),
                   const Spacer(),
@@ -4241,8 +4144,8 @@ class _PairRequestScreenState extends State<_PairRequestScreen>
                     const SizedBox(height: 8),
                     Text(
                       _done
-                          ? 'Профиль загружен!'
-                          : 'Хочет обменяться профилями',
+                          ? AppL10n.t('Профиль загружен!')
+                          : AppL10n.t('Хочет обменяться профилями'),
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -4255,7 +4158,7 @@ class _PairRequestScreenState extends State<_PairRequestScreen>
                         child: CircularProgressIndicator(strokeWidth: 3),
                       ),
                       const SizedBox(height: 8),
-                      Text('Обмен профилями...',
+                      Text(AppL10n.t('Обмен профилями...'),
                           style: TextStyle(
                               color: theme.colorScheme.onSurfaceVariant,
                               fontSize: 13)),
@@ -4277,7 +4180,7 @@ class _PairRequestScreenState extends State<_PairRequestScreen>
                       child: FilledButton.icon(
                         onPressed: _accept,
                         icon: const Icon(Icons.download, size: 20),
-                        label: const Text('Загрузить профиль',
+                        label: Text(AppL10n.t('Загрузить профиль'),
                             style: TextStyle(fontSize: 16)),
                       ),
                     ),
@@ -4443,7 +4346,7 @@ class _BoomCelebrationScreenState extends State<_BoomCelebrationScreen>
                       scale: v,
                       child: child,
                     ),
-                    child: Text('БУМШШШШ!',
+                    child: Text(AppL10n.t('БУМШШШШ!'),
                         style: TextStyle(
                           fontSize: 42,
                           fontWeight: FontWeight.w900,
@@ -4464,7 +4367,7 @@ class _BoomCelebrationScreenState extends State<_BoomCelebrationScreen>
                     curve: Curves.easeOut,
                     builder: (_, v, child) => Opacity(opacity: v, child: child),
                     child: Text(
-                      'Вы обменялись с ${widget.peerNick}!',
+                      AppL10n.f('Вы обменялись с {0}!', [widget.peerNick]),
                       style: const TextStyle(
                         fontSize: 18,
                         color: Colors.white70,
@@ -4650,12 +4553,12 @@ class _NearbyDeviceTile extends StatelessWidget {
             if (contact == null && !childLinked)
               IconButton(
                 icon: const Icon(Icons.person_add_outlined),
-                tooltip: 'Добавить',
+                tooltip: AppL10n.t('Добавить'),
                 onPressed: () => _addContact(context, publicKeyOrBleId),
               ),
             IconButton(
               icon: const Icon(Icons.chat),
-              tooltip: 'Написать',
+              tooltip: AppL10n.t('Написать'),
               onPressed: () => Navigator.push(
                 context,
                 rlinkChatRoute(
@@ -4678,8 +4581,9 @@ class _NearbyDeviceTile extends StatelessWidget {
   void _addContact(BuildContext context, String peerId) {
     if (AppSettings.instance.isLinkedChildDevice) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('В дочернем режиме добавление контактов недоступно'),
+        SnackBar(
+          content: Text(
+              AppL10n.t('В дочернем режиме добавление контактов недоступно')),
         ),
       );
       return;
@@ -4688,8 +4592,9 @@ class _NearbyDeviceTile extends StatelessWidget {
     // Require valid Ed25519 public key before sending pair_req
     if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(resolvedKey)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Профиль ещё не загружен — подождите несколько секунд'),
+        SnackBar(
+          content: Text(AppL10n.t(
+              'Профиль ещё не загружен — подождите несколько секунд')),
           duration: Duration(seconds: 3),
         ),
       );
@@ -4710,8 +4615,8 @@ class _NearbyDeviceTile extends StatelessWidget {
     );
     BleService.instance.setExchangeState(peerId, 1); // invite sent
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Запрос на обмен отправлен'),
+      SnackBar(
+        content: Text(AppL10n.t('Запрос на обмен отправлен')),
         duration: Duration(seconds: 2),
       ),
     );

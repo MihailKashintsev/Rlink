@@ -14,6 +14,7 @@ import 'unified_emoji_picker.dart';
 import '../../services/image_service.dart';
 import '../../services/sticker_collection_service.dart';
 import 'channel_feed_image.dart';
+import '../../l10n/app_l10n.dart';
 
 enum AvatarPresenceTransport { bluetooth, internet, wifiDirect }
 
@@ -422,7 +423,7 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker>
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(4),
+              padding: EdgeInsets.all(4),
               decoration: BoxDecoration(
                 color: cs.surfaceContainerHighest.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(12),
@@ -437,10 +438,10 @@ class _AvatarEmojiPickerState extends State<AvatarEmojiPicker>
                 labelColor: cs.primary,
                 unselectedLabelColor: cs.onSurfaceVariant,
                 dividerColor: Colors.transparent,
-                tabs: const [
-                  Tab(text: 'Эмодзи'),
-                  Tab(text: 'Стикеры'),
-                  Tab(text: 'Гиф'),
+                tabs: [
+                  Tab(text: AppL10n.t('Эмодзи')),
+                  Tab(text: AppL10n.t('Стикеры')),
+                  Tab(text: AppL10n.t('Гиф')),
                 ],
               ),
             ),
@@ -567,7 +568,7 @@ class _StickerGrid extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Все',
+                            AppL10n.t('Все'),
                             style: TextStyle(
                               fontSize: 11,
                               color: isSelected
@@ -685,7 +686,7 @@ class _StickerGrid extends StatelessWidget {
                       child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
-                          'В этом наборе пока нет стикеров',
+                          AppL10n.t('В этом наборе пока нет стикеров'),
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
@@ -749,7 +750,7 @@ class _GifGrid extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            'Гифки недоступны',
+            AppL10n.t('Гифки недоступны'),
             textAlign: TextAlign.center,
             style: TextStyle(color: cs.onSurfaceVariant),
           ),

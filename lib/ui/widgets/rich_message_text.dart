@@ -543,7 +543,7 @@ void _showCodeSheet(BuildContext context, String code, bool isOut) {
           ),
           ListTile(
             leading: const Icon(Icons.text_fields_rounded),
-            title: const Text('Выделить текст'),
+            title: Text(AppL10n.t('Выделить текст')),
             onTap: () {
               Navigator.pop(ctx);
               Navigator.of(context).push(MaterialPageRoute(

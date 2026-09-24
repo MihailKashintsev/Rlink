@@ -245,7 +245,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
       child: Row(
         children: [
           IconButton(
-            tooltip: 'Отменить штрих',
+            tooltip: AppL10n.t('Отменить штрих'),
             onPressed: _strokes.isEmpty
                 ? null
                 : () => setState(() => _strokes.removeLast()),
@@ -579,7 +579,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                   const Spacer(),
                   // Text size toggle
                   IconButton(
-                    tooltip: 'Размер текста',
+                    tooltip: AppL10n.t('Размер текста'),
                     icon: Icon(
                       Icons.text_fields,
                       color: _textSizeSliderVisible
@@ -603,8 +603,8 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(22),
                         ),
-                        child: const Text(
-                          'Опубликовать',
+                        child: Text(
+                          AppL10n.t('Опубликовать'),
                           style: TextStyle(
                             color: Colors.black87,
                             fontWeight: FontWeight.w700,
@@ -837,7 +837,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                           if (_textCtrl.text.isEmpty)
                             Center(
                               child: Text(
-                                'Введите текст ниже',
+                                AppL10n.t('Введите текст ниже'),
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.4),
                                   fontSize: 18,
@@ -996,7 +996,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                     minLines: 1,
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                     decoration: InputDecoration(
-                      hintText: 'Введите текст истории...',
+                      hintText: AppL10n.t('Введите текст истории...'),
                       hintStyle:
                           TextStyle(color: Colors.white.withValues(alpha: 0.4)),
                       filled: true,
@@ -1026,7 +1026,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                         ),
                         onPressed: _pickImage,
                         icon: const Icon(Icons.photo_outlined, size: 18),
-                        label: const Text('Фото'),
+                        label: Text(AppL10n.t('Фото')),
                       ),
                       const SizedBox(width: 8),
                       OutlinedButton.icon(
@@ -1039,14 +1039,14 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                         ),
                         onPressed: _pickVideo,
                         icon: const Icon(Icons.videocam_outlined, size: 18),
-                        label: const Text('Видео'),
+                        label: Text(AppL10n.t('Видео')),
                       ),
                       if (_imagePath != null || _videoPath != null) ...[
                         const SizedBox(width: 8),
                         IconButton(
                           onPressed: _clearMedia,
                           icon: const Icon(Icons.close, color: Colors.white70),
-                          tooltip: 'Убрать медиа',
+                          tooltip: AppL10n.t('Убрать медиа'),
                         ),
                       ],
                     ],
@@ -1066,7 +1066,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                                   size: 16, color: Colors.white70),
                               const SizedBox(width: 6),
                               Text(
-                                'Фрагмент: ${_fmtDuration(_videoTrimStart)} - ${_fmtDuration(_videoTrimEnd)}',
+                                AppL10n.f('Фрагмент: {0} - {1}', [_fmtDuration(_videoTrimStart), _fmtDuration(_videoTrimEnd)]),
                                 style: const TextStyle(
                                     color: Colors.white70, fontSize: 12),
                               ),
@@ -1130,7 +1130,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                       }),
                       const SizedBox(width: 8),
                       IconButton(
-                        tooltip: 'Жирный',
+                        tooltip: AppL10n.t('Жирный'),
                         onPressed: () => setState(() => _textBold = !_textBold),
                         icon: Icon(
                           Icons.format_bold,
@@ -1138,7 +1138,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Курсив',
+                        tooltip: AppL10n.t('Курсив'),
                         onPressed: () =>
                             setState(() => _textItalic = !_textItalic),
                         icon: Icon(
@@ -1147,7 +1147,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Подложка текста',
+                        tooltip: AppL10n.t('Подложка текста'),
                         onPressed: _cycleTextBgOpacity,
                         icon: Icon(
                           Icons.rectangle_outlined,
@@ -1157,7 +1157,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                         ),
                       ),
                       IconButton(
-                        tooltip: _drawMode ? 'Завершить рисование' : 'Рисовать',
+                        tooltip: _drawMode ? AppL10n.t('Завершить рисование') : AppL10n.t('Рисовать'),
                         onPressed: () =>
                             setState(() => _drawMode = !_drawMode),
                         icon: Icon(
@@ -1166,7 +1166,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Добавить эмодзи',
+                        tooltip: AppL10n.t('Добавить эмодзи'),
                         onPressed: () async {
                           final emoji = await showReactionPickerSheet(context);
                           if (emoji != null && emoji.isNotEmpty) {
@@ -1177,7 +1177,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                             color: Colors.white70),
                       ),
                       IconButton(
-                        tooltip: 'Добавить стикер',
+                        tooltip: AppL10n.t('Добавить стикер'),
                         onPressed: () async {
                           if (!mounted) return;
                           final emoji = await showModalBottomSheet<String>(
@@ -1225,7 +1225,7 @@ class _StoryCreatorScreenState extends State<StoryCreatorScreen> {
                       ),
                       if (_activeOverlay >= 0 && _activeOverlay < _overlays.length)
                         IconButton(
-                          tooltip: 'Удалить стикер/эмодзи',
+                          tooltip: AppL10n.t('Удалить стикер/эмодзи'),
                           onPressed: () {
                             setState(() {
                               _overlays.removeAt(_activeOverlay);

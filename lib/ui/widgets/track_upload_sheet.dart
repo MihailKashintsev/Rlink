@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 
 import '../../services/my_tracks_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Upload a track to the user's own Google Drive: pick the audio, set cover,
 /// title and artist, get a link back that can go into a profile or be shared.
@@ -16,8 +17,8 @@ Future<String?> showTrackUploadSheet(BuildContext context) {
   // without a linked account can only end in an error at the last step.
   if (!isGoogleLinked) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Сначала войдите в Google — Настройки → Google Drive'),
+      SnackBar(
+        content: Text(AppL10n.t('Сначала войдите в Google — Настройки → Google Drive')),
       ),
     );
     return Future<String?>.value();
@@ -76,7 +77,7 @@ class _TrackUploadSheetState extends State<_TrackUploadSheet> {
     final dot = name.lastIndexOf('.');
     final ext = dot >= 0 ? name.substring(dot + 1).toLowerCase() : '';
     if (kIsWeb && !_audioExts.contains(ext)) {
-      setState(() => _error = 'Выберите аудиофайл (mp3, m4a, wav, ogg, flac…)');
+      setState(() => _error = AppL10n.t('Выберите аудиофайл (mp3, m4a, wav, ogg, flac…)'));
       return;
     }
     setState(() {
@@ -120,7 +121,7 @@ class _TrackUploadSheetState extends State<_TrackUploadSheet> {
     if (ref == null) {
       setState(() {
         _busy = false;
-        _error = MyTracksService.instance.lastError ?? 'Не удалось загрузить';
+        _error = MyTracksService.instance.lastError ?? AppL10n.t('Не удалось загрузить');
       });
       return;
     }
@@ -149,12 +150,11 @@ class _TrackUploadSheetState extends State<_TrackUploadSheet> {
               ),
             ),
             const SizedBox(height: 14),
-            const Text('Загрузить трек',
+            Text(AppL10n.t('Загрузить трек'),
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(
-              'Файл ляжет на ваш Google Drive. Rlink хранит только ссылку — '
-              'остальные слушают прямо оттуда, ничего не скачивая.',
+              AppL10n.t('Файл ляжет на ваш Google Drive. Rlink хранит только ссылку — остальные слушают прямо оттуда, ничего не скачивая.'),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
@@ -179,7 +179,7 @@ class _TrackUploadSheetState extends State<_TrackUploadSheet> {
                               Icon(Icons.image_outlined,
                                   color: cs.onSurfaceVariant),
                               const SizedBox(height: 2),
-                              Text('Обложка',
+                              Text(AppL10n.t('Обложка'),
                                   style: TextStyle(
                                       fontSize: 10,
                                       color: cs.onSurfaceVariant)),
@@ -194,8 +194,8 @@ class _TrackUploadSheetState extends State<_TrackUploadSheet> {
                       TextField(
                         controller: _title,
                         enabled: !_busy,
-                        decoration: const InputDecoration(
-                          labelText: 'Название',
+                        decoration: InputDecoration(
+                          labelText: AppL10n.t('Название'),
                           isDense: true,
                           border: OutlineInputBorder(),
                         ),
@@ -204,8 +204,8 @@ class _TrackUploadSheetState extends State<_TrackUploadSheet> {
                       TextField(
                         controller: _artist,
                         enabled: !_busy,
-                        decoration: const InputDecoration(
-                          labelText: 'Исполнитель',
+                        decoration: InputDecoration(
+                          labelText: AppL10n.t('Исполнитель'),
                           isDense: true,
                           border: OutlineInputBorder(),
                         ),
@@ -221,8 +221,8 @@ class _TrackUploadSheetState extends State<_TrackUploadSheet> {
               icon: const Icon(Icons.audio_file_outlined),
               label: Text(
                 _audio == null
-                    ? 'Выбрать аудиофайл'
-                    : '$_audioName · ${(_audio!.length / 1048576).toStringAsFixed(1)} МБ',
+                    ? AppL10n.t('Выбрать аудиофайл')
+                    : AppL10n.f('{0} · {1} МБ', [_audioName, (_audio!.length / 1048576).toStringAsFixed(1)]),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -241,7 +241,7 @@ class _TrackUploadSheetState extends State<_TrackUploadSheet> {
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.cloud_upload_outlined),
-              label: Text(_busy ? 'Загружаем…' : 'Загрузить на Google Drive'),
+              label: Text(_busy ? AppL10n.t('Загружаем…') : AppL10n.t('Загрузить на Google Drive')),
             ),
           ],
         ),
@@ -274,7 +274,7 @@ class MyTrackRow extends StatelessWidget {
       ),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        track.artist.isEmpty ? 'Мой трек · Google Drive' : track.artist,
+        track.artist.isEmpty ? AppL10n.t('Мой трек · Google Drive') : track.artist,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 12),
@@ -286,7 +286,7 @@ class MyTrackRow extends StatelessWidget {
             await Clipboard.setData(ClipboardData(text: track.url));
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Ссылка скопирована')),
+                SnackBar(content: Text(AppL10n.t('Ссылка скопирована'))),
               );
             }
           }
@@ -294,9 +294,9 @@ class MyTrackRow extends StatelessWidget {
             await MyTracksService.instance.remove(track.url);
           }
         },
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'copy', child: Text('Скопировать ссылку')),
-          PopupMenuItem(value: 'remove', child: Text('Убрать из списка')),
+        itemBuilder: (_) => [
+          PopupMenuItem(value: 'copy', child: Text(AppL10n.t('Скопировать ссылку'))),
+          PopupMenuItem(value: 'remove', child: Text(AppL10n.t('Убрать из списка'))),
         ],
       ),
     );

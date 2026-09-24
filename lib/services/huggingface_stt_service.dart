@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import 'huggingface_audio_loader_stub.dart'
     if (dart.library.io) 'huggingface_audio_loader_io.dart';
+import '../l10n/app_l10n.dart';
 
 /// Бесплатная расшифровка аудио через Hugging Face Inference API.
 /// Не требует собственного сервера и не жрёт место моделями на устройстве.
@@ -49,7 +50,7 @@ class HuggingFaceSttService {
 
       if (response.statusCode == 503) {
         throw StateError(
-            'Модель загружается на сервере Hugging Face. Попробуйте через минуту.');
+            AppL10n.t('Модель загружается на сервере Hugging Face. Попробуйте через минуту.'));
       }
 
       final data = response.data;
@@ -73,19 +74,19 @@ class HuggingFaceSttService {
           if (buf.isNotEmpty) return buf.toString();
         }
       }
-      throw StateError('Речь не распознана: неожиданный ответ сервера');
+      throw StateError(AppL10n.t('Речь не распознана: неожиданный ответ сервера'));
     } on DioException catch (e) {
       if (e.response?.statusCode == 503) {
         throw StateError(
-            'Модель загружается на сервере Hugging Face. Попробуйте через минуту.');
+            AppL10n.t('Модель загружается на сервере Hugging Face. Попробуйте через минуту.'));
       }
       final body = e.response?.data;
       if (body is Map && body['error'] != null) {
-        throw StateError('Ошибка API: ${body['error']}');
+        throw StateError(AppL10n.f('Ошибка API: {0}', [body['error']]));
       }
-      throw StateError('Ошибка сети: ${e.message}');
+      throw StateError(AppL10n.f('Ошибка сети: {0}', [e.message]));
     } catch (e) {
-      throw StateError('Ошибка распознавания: $e');
+      throw StateError(AppL10n.f('Ошибка распознавания: {0}', [e]));
     }
   }
 }

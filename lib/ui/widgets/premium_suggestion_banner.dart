@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../screens/premium_status_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 /// How often the suggestion is allowed to reappear (also the snooze length
 /// when dismissed with the × — one code path for both).
@@ -78,7 +79,7 @@ class _PremiumSuggestionBannerState extends State<PremiumSuggestionBanner> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontWeight: FontWeight.w700)),
-                Text('Цветной ник, больше каналов, конструктор ботов — от 48 ₽/мес',
+                Text(AppL10n.t('Цветной ник, больше каналов, конструктор ботов — от 48 ₽/мес'),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
@@ -95,7 +96,7 @@ class _PremiumSuggestionBannerState extends State<PremiumSuggestionBanner> {
               context,
               MaterialPageRoute(builder: (_) => const PremiumStatusPage()),
             ),
-            child: const Text('Открыть'),
+            child: Text(AppL10n.t('Открыть')),
           ),
           IconButton(
             icon: const Icon(Icons.close, size: 18),

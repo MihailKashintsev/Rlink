@@ -5,15 +5,20 @@
 ///   1. Add the key to _ru map (Russian is the master)
 ///   2. Add translations to _en, _es, _de, _fr, _zh, _uk maps
 ///
-/// Most UI screens are still hardcoded in Russian. In [supportedLocales],
-/// [showPartialUiHint] is false only for `ru` and `system`; for other codes the
-/// language picker shows [locale_ui_partial_note] while strings from this file
-/// still apply to wired areas (settings, about, chat list, message link sheets).
+/// Every UI string goes through [t] / [f]. Named keys (`cs_reply`…) live in the
+/// per-language maps below; everything else uses the Russian source text as the
+/// key, with translations in `tr_<lang>.dart` (all 7 languages complete).
 library;
 
 import 'dart:ui' as ui;
 
 import '../services/app_settings.dart';
+import 'tr_de.dart';
+import 'tr_en.dart';
+import 'tr_es.dart';
+import 'tr_fr.dart';
+import 'tr_uk.dart';
+import 'tr_zh.dart';
 
 class AppL10n {
   AppL10n._();
@@ -28,8 +33,20 @@ class AppL10n {
   /// Текущий язык интерфейса (цель перевода по умолчанию).
   static String get currentLang => _lang;
 
+  /// Named keys (`cs_reply`…) first, then the bulk translations keyed by the
+  /// Russian source text itself (`tr_<lang>.dart`); Russian falls through to the
+  /// key, which IS the Russian text.
   static String t(String key) =>
-      _data[_lang]?[key] ?? _data['ru']![key] ?? key;
+      _data[_lang]?[key] ?? _gen[_lang]?[key] ?? _data['ru']![key] ?? key;
+
+  /// Template lookup: `{0}`, `{1}`… in the translated string are replaced by [args].
+  static String f(String key, List<Object?> args) {
+    var s = t(key);
+    for (var i = 0; i < args.length; i++) {
+      s = s.replaceAll('{$i}', '${args[i]}');
+    }
+    return s;
+  }
 
   static AppL10n get s => AppL10n._();
 
@@ -3606,6 +3623,15 @@ class AppL10n {
     'link_code_snackbar_copied': '代码已复制',
   };
 
+  static const Map<String, Map<String, String>> _gen = {
+    'en': trEn,
+    'de': trDe,
+    'es': trEs,
+    'fr': trFr,
+    'uk': trUk,
+    'zh': trZh,
+  };
+
   static const Map<String, Map<String, String>> _data = {
     'ru': _ru,
     'en': _en,
@@ -3616,7 +3642,7 @@ class AppL10n {
     'zh': _zh,
   };
 
-  /// [showPartialUiHint]: most screens still use Russian strings; AppL10n covers
+  /// [showPartialUiHint] is kept for the picker layout; all locales are complete now. (AppL10n covers
   /// settings, about, chat list rows, links in messages — not the whole app.
   static const List<
       ({
@@ -3627,11 +3653,11 @@ class AppL10n {
       })> supportedLocales = [
     (code: 'system', name: 'System', nativeName: 'Системный', showPartialUiHint: false),
     (code: 'ru', name: 'Russian', nativeName: 'Русский', showPartialUiHint: false),
-    (code: 'en', name: 'English', nativeName: 'English', showPartialUiHint: true),
-    (code: 'uk', name: 'Ukrainian', nativeName: 'Українська', showPartialUiHint: true),
-    (code: 'de', name: 'German', nativeName: 'Deutsch', showPartialUiHint: true),
-    (code: 'fr', name: 'French', nativeName: 'Français', showPartialUiHint: true),
-    (code: 'es', name: 'Spanish', nativeName: 'Español', showPartialUiHint: true),
-    (code: 'zh', name: 'Chinese', nativeName: '中文', showPartialUiHint: true),
+    (code: 'en', name: 'English', nativeName: 'English', showPartialUiHint: false),
+    (code: 'uk', name: 'Ukrainian', nativeName: 'Українська', showPartialUiHint: false),
+    (code: 'de', name: 'German', nativeName: 'Deutsch', showPartialUiHint: false),
+    (code: 'fr', name: 'French', nativeName: 'Français', showPartialUiHint: false),
+    (code: 'es', name: 'Spanish', nativeName: 'Español', showPartialUiHint: false),
+    (code: 'zh', name: 'Chinese', nativeName: '中文', showPartialUiHint: false),
   ];
 }

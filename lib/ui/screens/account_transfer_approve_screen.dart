@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/account_transfer_service.dart';
 import '../../services/rlink_account_transfer_reset.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Full-screen "someone wants to transfer your account" approval flow —
 /// structurally the same pattern as `showPairRequestScreen` in
@@ -79,7 +80,7 @@ class _AccountTransferApproveScreenState
     if (!mounted) return;
     setState(() => _resending = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Отправлено ещё раз')),
+      SnackBar(content: Text(AppL10n.t('Отправлено ещё раз'))),
     );
   }
 
@@ -96,21 +97,18 @@ class _AccountTransferApproveScreenState
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('Стереть это устройство?'),
+        title: Text(AppL10n.t('Стереть это устройство?')),
         content: Text(
           forced
-              ? 'Подтверждение с нового устройства не получено. Стирайте только '
-                  'если вы точно убедились, что перенос завершился успешно на '
-                  'новом устройстве — отменить это действие нельзя.'
-              : 'Аккаунт перенесён. Сейчас с этого устройства будут удалены ключи, '
-                  'вся переписка и профиль. Отменить нельзя.',
+              ? AppL10n.t('Подтверждение с нового устройства не получено. Стирайте только если вы точно убедились, что перенос завершился успешно на новом устройстве — отменить это действие нельзя.')
+              : AppL10n.t('Аккаунт перенесён. Сейчас с этого устройства будут удалены ключи, вся переписка и профиль. Отменить нельзя.'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppL10n.t('Отмена'))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Стереть'),
+            child: Text(AppL10n.t('Стереть')),
           ),
         ],
       ),
@@ -137,9 +135,9 @@ class _AccountTransferApproveScreenState
         child: switch (_step) {
           _Step.confirm => _confirmView(theme),
           _Step.categories => _categoriesView(theme),
-          _Step.sending => _progressView(theme, 'Отправка…', showForcedWipeFallback: true),
+          _Step.sending => _progressView(theme, AppL10n.t('Отправка…'), showForcedWipeFallback: true),
           _Step.readyToWipe => _readyToWipeView(theme),
-          _Step.wiping => _progressView(theme, 'Стирание этого устройства…'),
+          _Step.wiping => _progressView(theme, AppL10n.t('Стирание этого устройства…')),
         },
       ),
     );
@@ -154,7 +152,7 @@ class _AccountTransferApproveScreenState
             children: [
               IconButton(icon: const Icon(Icons.close), onPressed: _onNo),
               const Spacer(),
-              Text('Перенос аккаунта',
+              Text(AppL10n.t('Перенос аккаунта'),
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               const Spacer(),
               const SizedBox(width: 48),
@@ -181,13 +179,13 @@ class _AccountTransferApproveScreenState
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    widget.request.label.isEmpty ? 'Новое устройство' : widget.request.label,
+                    widget.request.label.isEmpty ? AppL10n.t('Новое устройство') : widget.request.label,
                     style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Пытается перенести ваш аккаунт на себя. Это вы?',
+                    AppL10n.t('Пытается перенести ваш аккаунт на себя. Это вы?'),
                     style: theme.textTheme.bodyLarge
                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     textAlign: TextAlign.center,
@@ -207,9 +205,7 @@ class _AccountTransferApproveScreenState
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'После подтверждения аккаунт полностью переедет на новое '
-                            'устройство, а это устройство будет очищено. Отменить нельзя — '
-                            'придётся переносить всё заново.',
+                            AppL10n.t('После подтверждения аккаунт полностью переедет на новое устройство, а это устройство будет очищено. Отменить нельзя — придётся переносить всё заново.'),
                             style: theme.textTheme.bodySmall?.copyWith(color: Colors.red.shade300),
                           ),
                         ),
@@ -230,7 +226,7 @@ class _AccountTransferApproveScreenState
                 height: 52,
                 child: FilledButton(
                   onPressed: _onYes,
-                  child: const Text('Да, это я', style: TextStyle(fontSize: 16)),
+                  child: Text(AppL10n.t('Да, это я'), style: TextStyle(fontSize: 16)),
                 ),
               ),
               const SizedBox(height: 10),
@@ -239,7 +235,7 @@ class _AccountTransferApproveScreenState
                 height: 48,
                 child: OutlinedButton(
                   onPressed: _onNo,
-                  child: const Text('Нет, это не я', style: TextStyle(fontSize: 15)),
+                  child: Text(AppL10n.t('Нет, это не я'), style: TextStyle(fontSize: 15)),
                 ),
               ),
             ],
@@ -266,7 +262,7 @@ class _AccountTransferApproveScreenState
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => setState(() => _step = _Step.confirm)),
               const Spacer(),
-              Text('Что перенести',
+              Text(AppL10n.t('Что перенести'),
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               const Spacer(),
               const SizedBox(width: 48),
@@ -276,19 +272,17 @@ class _AccountTransferApproveScreenState
         Expanded(
           child: ListView(
             children: [
-              _categoryTile('Контакты', _contacts, (v) => setState(() => _contacts = v)),
-              _categoryTile('Каналы', _channels, (v) => setState(() => _channels = v)),
-              _categoryTile('Группы', _groups, (v) => setState(() => _groups = v)),
-              _categoryTile('Эмодзи-наборы', _emojiPacks, (v) => setState(() => _emojiPacks = v)),
-              _categoryTile('Переписка', _dmHistory, (v) => setState(() => _dmHistory = v)),
-              _categoryTile('Настройки', _settings, (v) => setState(() => _settings = v)),
-              _categoryTile('Стикеры', _stickers, (v) => setState(() => _stickers = v)),
+              _categoryTile(AppL10n.t('Контакты'), _contacts, (v) => setState(() => _contacts = v)),
+              _categoryTile(AppL10n.t('Каналы'), _channels, (v) => setState(() => _channels = v)),
+              _categoryTile(AppL10n.t('Группы'), _groups, (v) => setState(() => _groups = v)),
+              _categoryTile(AppL10n.t('Эмодзи-наборы'), _emojiPacks, (v) => setState(() => _emojiPacks = v)),
+              _categoryTile(AppL10n.t('Переписка'), _dmHistory, (v) => setState(() => _dmHistory = v)),
+              _categoryTile(AppL10n.t('Настройки'), _settings, (v) => setState(() => _settings = v)),
+              _categoryTile(AppL10n.t('Стикеры'), _stickers, (v) => setState(() => _stickers = v)),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Text(
-                  'История группы (сообщения) не переносится — только состав и настройки '
-                  'группы. Это уже действующее ограничение синхронизации, не новое для '
-                  'переноса аккаунта.',
+                  AppL10n.t('История группы (сообщения) не переносится — только состав и настройки группы. Это уже действующее ограничение синхронизации, не новое для переноса аккаунта.'),
                   style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               ),
@@ -307,8 +301,7 @@ class _AccountTransferApproveScreenState
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  'Начиная перенос, вы соглашаетесь, что это устройство будет очищено. '
-                  'Отменить нельзя.',
+                  AppL10n.t('Начиная перенос, вы соглашаетесь, что это устройство будет очищено. Отменить нельзя.'),
                   style: theme.textTheme.bodySmall?.copyWith(color: Colors.red.shade300),
                   textAlign: TextAlign.center,
                 ),
@@ -318,7 +311,7 @@ class _AccountTransferApproveScreenState
                 height: 52,
                 child: FilledButton(
                   onPressed: _startTransfer,
-                  child: const Text('Начать перенос', style: TextStyle(fontSize: 16)),
+                  child: Text(AppL10n.t('Начать перенос'), style: TextStyle(fontSize: 16)),
                 ),
               ),
             ],
@@ -372,13 +365,13 @@ class _AccountTransferApproveScreenState
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.refresh, size: 18),
-                label: Text(_resending ? 'Отправляю ещё раз…' : 'Отправить ещё раз'),
+                label: Text(_resending ? AppL10n.t('Отправляю ещё раз…') : AppL10n.t('Отправить ещё раз')),
               ),
               const SizedBox(height: 4),
               TextButton(
                 onPressed: () => _wipe(forced: true),
                 child: Text(
-                  'Уже перенеслось, но подтверждение не приходит?',
+                  AppL10n.t('Уже перенеслось, но подтверждение не приходит?'),
                   style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                   textAlign: TextAlign.center,
                 ),
@@ -399,7 +392,7 @@ class _AccountTransferApproveScreenState
           children: [
             Icon(Icons.check_circle, color: Colors.green.shade400, size: 56),
             const SizedBox(height: 16),
-            Text('Перенос подтверждён новым устройством',
+            Text(AppL10n.t('Перенос подтверждён новым устройством'),
                 style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
             const SizedBox(height: 24),
             SizedBox(
@@ -408,7 +401,7 @@ class _AccountTransferApproveScreenState
               child: FilledButton(
                 onPressed: () => _wipe(forced: false),
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Стереть это устройство', style: TextStyle(fontSize: 16)),
+                child: Text(AppL10n.t('Стереть это устройство'), style: TextStyle(fontSize: 16)),
               ),
             ),
           ],

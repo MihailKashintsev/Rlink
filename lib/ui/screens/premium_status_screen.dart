@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/premium_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Subscription status, what it unlocks, and the purchase flow.
 ///
@@ -16,13 +17,13 @@ class PremiumStatusPage extends StatefulWidget {
 }
 
 class _PremiumStatusPageState extends State<PremiumStatusPage> {
-  static const _features = <(IconData, String, String)>[
-    (Icons.palette_outlined, 'Свой цвет ника',
-        'Его видят все ваши собеседники'),
-    (Icons.campaign_outlined, 'Больше двух каналов',
-        'Без ограничения бесплатного тарифа'),
-    (Icons.smart_toy_outlined, 'Конструктор ботов',
-        'No-code сборка ботов прямо в мессенджере'),
+  static List<(IconData, String, String)> get _features => <(IconData, String, String)>[
+    (Icons.palette_outlined, AppL10n.t('Свой цвет ника'),
+        AppL10n.t('Его видят все ваши собеседники')),
+    (Icons.campaign_outlined, AppL10n.t('Больше двух каналов'),
+        AppL10n.t('Без ограничения бесплатного тарифа')),
+    (Icons.smart_toy_outlined, AppL10n.t('Конструктор ботов'),
+        AppL10n.t('No-code сборка ботов прямо в мессенджере')),
   ];
 
   bool _busy = false;
@@ -51,9 +52,9 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (url == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
-            'Не удалось начать оплату. Проверьте соединение и попробуйте ещё раз.'),
+            AppL10n.t('Не удалось начать оплату. Проверьте соединение и попробуйте ещё раз.')),
       ));
       return;
     }
@@ -71,8 +72,8 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
       if (ok) _awaitingPayment = false;
     });
     if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Оплата пока не подтверждена. Попробуйте через минуту.'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppL10n.t('Оплата пока не подтверждена. Попробуйте через минуту.')),
       ));
     }
   }
@@ -116,17 +117,15 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                active ? 'Подписка активна' : 'Подписки нет',
+                                active ? AppL10n.t('Подписка активна') : AppL10n.t('Подписки нет'),
                                 style: const TextStyle(
                                     fontSize: 16, fontWeight: FontWeight.w700),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 active && until != null
-                                    ? 'До ${until.day.toString().padLeft(2, '0')}.'
-                                        '${until.month.toString().padLeft(2, '0')}.${until.year}'
-                                        ' · осталось $days дн.'
-                                    : '48 ₽ в месяц или 496 ₽ в год',
+                                    ? AppL10n.f('До {0}.{1}.{2} · осталось {3} дн.', [until.day.toString().padLeft(2, '0'), until.month.toString().padLeft(2, '0'), until.year, days])
+                                    : AppL10n.t('48 ₽ в месяц или 496 ₽ в год'),
                                 style: TextStyle(
                                     fontSize: 13, color: cs.onSurfaceVariant),
                               ),
@@ -137,7 +136,7 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const Text('Что входит',
+                  Text(AppL10n.t('Что входит'),
                       style:
                           TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
@@ -151,35 +150,35 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
                     ),
                   const SizedBox(height: 8),
                   Text(
-                    'Все остальные функции Rlink бесплатны для всех.',
+                    AppL10n.t('Все остальные функции Rlink бесплатны для всех.'),
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 22),
                   Text(
-                    active ? 'Продлить подписку' : 'Оформить подписку',
+                    active ? AppL10n.t('Продлить подписку') : AppL10n.t('Оформить подписку'),
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     active
-                        ? 'Купленное время добавится к оставшемуся — ничего не сгорает.'
-                        : 'Подписка привязывается к вашему аккаунту, а не к устройству.',
+                        ? AppL10n.t('Купленное время добавится к оставшемуся — ничего не сгорает.')
+                        : AppL10n.t('Подписка привязывается к вашему аккаунту, а не к устройству.'),
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 12),
                   _PlanCard(
-                    title: '1 месяц',
+                    title: AppL10n.t('1 месяц'),
                     price: '48 ₽',
-                    note: '+30 дней',
+                    note: AppL10n.t('+30 дней'),
                     enabled: !_busy,
                     onTap: () => _buy('month'),
                   ),
                   const SizedBox(height: 10),
                   _PlanCard(
-                    title: '1 год',
+                    title: AppL10n.t('1 год'),
                     price: '496 ₽',
-                    note: '+365 дней · выгоднее на 80 ₽ в год',
+                    note: AppL10n.t('+365 дней · выгоднее на 80 ₽ в год'),
                     highlight: true,
                     enabled: !_busy,
                     onTap: () => _buy('year'),
@@ -195,12 +194,11 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Ждём подтверждения оплаты',
+                          Text(AppL10n.t('Ждём подтверждения оплаты'),
                               style: TextStyle(fontWeight: FontWeight.w600)),
                           const SizedBox(height: 4),
                           Text(
-                            'Оплатите на открывшейся странице и вернитесь сюда. '
-                            'Подписка включится автоматически.',
+                            AppL10n.t('Оплатите на открывшейся странице и вернитесь сюда. Подписка включится автоматически.'),
                             style: TextStyle(
                                 fontSize: 12, color: cs.onSurfaceVariant),
                           ),
@@ -209,7 +207,7 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
                             children: [
                               FilledButton.tonal(
                                 onPressed: _busy ? null : _checkPayment,
-                                child: const Text('Проверить оплату'),
+                                child: Text(AppL10n.t('Проверить оплату')),
                               ),
                               const SizedBox(width: 8),
                               TextButton(
@@ -223,7 +221,7 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
                                               () => _awaitingPayment = false);
                                         }
                                       },
-                                child: const Text('Отменить'),
+                                child: Text(AppL10n.t('Отменить')),
                               ),
                             ],
                           ),
@@ -238,7 +236,7 @@ class _PremiumStatusPageState extends State<PremiumStatusPage> {
                         Uri.parse('https://rendergames.ru/offert'),
                         mode: LaunchMode.externalApplication,
                       ),
-                      child: const Text('Публичная оферта',
+                      child: Text(AppL10n.t('Публичная оферта'),
                           style: TextStyle(fontSize: 12)),
                     ),
                   ),

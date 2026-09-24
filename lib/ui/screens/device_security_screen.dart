@@ -6,6 +6,7 @@ import '../../services/app_lock_service.dart';
 import '../../services/rlink_app_reset.dart';
 import '../../services/runtime_platform.dart';
 import '../../services/web_notification_bridge.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Одноразовое (на устройство) предупреждение о рисках web-хранения. Показывается
 /// на web при первом заходе; полная информация — в [DeviceSecurityScreen].
@@ -30,20 +31,15 @@ Future<void> showWebSecurityNoticeOnce(BuildContext context) async {
               Row(children: [
                 Icon(Icons.shield_outlined, color: cs.primary),
                 const SizedBox(width: 8),
-                const Expanded(
-                  child: Text('Безопасность в браузере',
+                Expanded(
+                  child: Text(AppL10n.t('Безопасность в браузере'),
                       style:
                           TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
                 ),
               ]),
               const SizedBox(height: 12),
               Text(
-                'Переписка и звонки в Rlink шифруются end-to-end — в пути их никто '
-                'не прочитает. Но данные в браузере не шифруются на самом '
-                'устройстве: у того, кто получит доступ к этому компьютеру или '
-                'профилю браузера, будет доступ к переписке.\n\n'
-                'Советы: установите Rlink как приложение, включите блокировку по '
-                'коду и не пользуйтесь на чужих устройствах.',
+                AppL10n.t('Переписка и звонки в Rlink шифруются end-to-end — в пути их никто не прочитает. Но данные в браузере не шифруются на самом устройстве: у того, кто получит доступ к этому компьютеру или профилю браузера, будет доступ к переписке.\n\nСоветы: установите Rlink как приложение, включите блокировку по коду и не пользуйтесь на чужих устройствах.'),
                 style: TextStyle(color: cs.onSurfaceVariant, height: 1.45),
               ),
               const SizedBox(height: 18),
@@ -55,14 +51,14 @@ Future<void> showWebSecurityNoticeOnce(BuildContext context) async {
                       Navigator.of(context).push(MaterialPageRoute(
                           builder: (_) => const DeviceSecurityScreen()));
                     },
-                    child: const Text('Подробнее'),
+                    child: Text(AppL10n.t('Подробнее')),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Понятно'),
+                    child: Text(AppL10n.t('Понятно')),
                   ),
                 ),
               ]),
@@ -110,44 +106,34 @@ class _DeviceSecurityScreenState extends State<DeviceSecurityScreen> {
     if (!kIsWeb) {
       if (RuntimePlatform.isDesktop) {
         return (
-          title: 'Настольное приложение',
+          title: AppL10n.t('Настольное приложение'),
           body:
-              'Переписка и звонки шифруются end-to-end. Ключи на этом ПК пока '
-              'хранятся не в защищённом хранилище — обязательно включите '
-              'блокировку по коду и не оставляйте компьютер разблокированным.',
+              AppL10n.t('Переписка и звонки шифруются end-to-end. Ключи на этом ПК пока хранятся не в защищённом хранилище — обязательно включите блокировку по коду и не оставляйте компьютер разблокированным.'),
           color: Colors.orange,
           icon: Icons.desktop_windows_outlined,
         );
       }
       return (
-        title: 'Мобильное приложение',
+        title: AppL10n.t('Мобильное приложение'),
         body:
-            'Лучшая защита: ключи в защищённом хранилище системы (Keychain / '
-            'Android Keystore), переписка и звонки — end-to-end. Для дополнительной '
-            'защиты включите блокировку по коду или биометрию.',
+            AppL10n.t('Лучшая защита: ключи в защищённом хранилище системы (Keychain / Android Keystore), переписка и звонки — end-to-end. Для дополнительной защиты включите блокировку по коду или биометрию.'),
         color: Colors.green,
         icon: Icons.verified_user_outlined,
       );
     }
     if (_standalone) {
       return (
-        title: 'Веб-приложение (установлено)',
+        title: AppL10n.t('Веб-приложение (установлено)'),
         body:
-            'Переписка и звонки шифруются end-to-end. Но данные в браузере '
-            '(история и ключи) не шифруются «на диске» — тот, у кого есть доступ '
-            'к этому устройству/профилю браузера, может их прочитать. Включите '
-            'блокировку по коду.',
+            AppL10n.t('Переписка и звонки шифруются end-to-end. Но данные в браузере (история и ключи) не шифруются «на диске» — тот, у кого есть доступ к этому устройству/профилю браузера, может их прочитать. Включите блокировку по коду.'),
         color: Colors.orange,
         icon: Icons.install_mobile_outlined,
       );
     }
     return (
-      title: 'Веб-вкладка браузера',
+      title: AppL10n.t('Веб-вкладка браузера'),
       body:
-          'Переписка и звонки шифруются end-to-end — в пути их никто не прочитает. '
-          'Но на ЭТОМ устройстве данные в браузере не шифруются: доступ к '
-          'компьютеру/профилю = доступ к переписке. Наименее защищённый режим. '
-          'Не используйте на чужих или общих компьютерах.',
+          AppL10n.t('Переписка и звонки шифруются end-to-end — в пути их никто не прочитает. Но на ЭТОМ устройстве данные в браузере не шифруются: доступ к компьютеру/профилю = доступ к переписке. Наименее защищённый режим. Не используйте на чужих или общих компьютерах.'),
       color: Colors.red,
       icon: Icons.public_off_outlined,
     );
@@ -162,7 +148,7 @@ class _DeviceSecurityScreenState extends State<DeviceSecurityScreen> {
     }
     final s = _status;
     return Scaffold(
-      appBar: AppBar(title: const Text('Безопасность устройства')),
+      appBar: AppBar(title: Text(AppL10n.t('Безопасность устройства'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
@@ -196,48 +182,44 @@ class _DeviceSecurityScreenState extends State<DeviceSecurityScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          _sectionTitle('Как повысить защиту'),
+          _sectionTitle(AppL10n.t('Как повысить защиту')),
           _recTile(
             icon: Icons.lock_outline,
-            title: 'Блокировка по коду',
+            title: AppL10n.t('Блокировка по коду'),
             subtitle: AppLockService.instance.isEnabled
-                ? 'Включена ✓'
-                : 'Выключена — рекомендуем включить',
+                ? AppL10n.t('Включена ✓')
+                : AppL10n.t('Выключена — рекомендуем включить'),
             done: AppLockService.instance.isEnabled,
           ),
           if (kIsWeb && !_standalone)
             _recTile(
               icon: Icons.ios_share_outlined,
-              title: 'Установить как приложение',
+              title: AppL10n.t('Установить как приложение'),
               subtitle:
-                  'iPhone: «Поделиться» → «На экран Домой». Изоляция данных лучше, '
-                  'чем во вкладке.',
+                  AppL10n.t('iPhone: «Поделиться» → «На экран Домой». Изоляция данных лучше, чем во вкладке.'),
               done: false,
             ),
           _recTile(
             icon: Icons.timer_off_outlined,
-            title: 'Исчезающие сообщения',
-            subtitle: 'Для чувствительного — чтобы история не копилась на '
-                'устройстве (скоро).',
+            title: AppL10n.t('Исчезающие сообщения'),
+            subtitle: AppL10n.t('Для чувствительного — чтобы история не копилась на устройстве (скоро).'),
             done: false,
           ),
           _recTile(
             icon: Icons.no_accounts_outlined,
-            title: 'Не входите на чужих устройствах',
-            subtitle: 'На общих/публичных компьютерах данные могут остаться в '
-                'браузере.',
+            title: AppL10n.t('Не входите на чужих устройствах'),
+            subtitle: AppL10n.t('На общих/публичных компьютерах данные могут остаться в браузере.'),
             done: false,
           ),
           const SizedBox(height: 24),
-          _sectionTitle('Экстренно'),
+          _sectionTitle(AppL10n.t('Экстренно')),
           Card(
             color: cs.errorContainer.withValues(alpha: 0.35),
             child: ListTile(
               leading: Icon(Icons.delete_forever_outlined, color: cs.error),
-              title: const Text('Стереть все данные с этого устройства'),
-              subtitle: const Text(
-                  'Удалит ключи, переписку и профиль ИЗ ЭТОГО браузера/устройства. '
-                  'На других устройствах данные не тронуты. Отменить нельзя.'),
+              title: Text(AppL10n.t('Стереть все данные с этого устройства')),
+              subtitle: Text(
+                  AppL10n.t('Удалит ключи, переписку и профиль ИЗ ЭТОГО браузера/устройства. На других устройствах данные не тронуты. Отменить нельзя.')),
               onTap: _confirmWipe,
             ),
           ),
@@ -277,18 +259,17 @@ class _DeviceSecurityScreenState extends State<DeviceSecurityScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Стереть все данные?'),
-        content: const Text(
-            'С ЭТОГО устройства будут удалены ключи, вся переписка и профиль. '
-            'Отменить нельзя. Продолжить?'),
+        title: Text(AppL10n.t('Стереть все данные?')),
+        content: Text(
+            AppL10n.t('С ЭТОГО устройства будут удалены ключи, вся переписка и профиль. Отменить нельзя. Продолжить?')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена')),
+              child: Text(AppL10n.t('Отмена'))),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Стереть'),
+            child: Text(AppL10n.t('Стереть')),
           ),
         ],
       ),

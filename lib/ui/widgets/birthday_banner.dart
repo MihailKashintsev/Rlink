@@ -7,6 +7,7 @@ import '../../models/contact.dart';
 import '../../services/premium_service.dart';
 import '../screens/birthday_card_editor.dart';
 import '../screens/chat_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Shown above the chat list and inside a DM on the contact's birthday.
 /// "<name> празднует день рождения! Поздравьте" + a Поздравить button.
@@ -46,12 +47,12 @@ class BirthdayBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${contact.nickname} празднует день рождения!',
+                  AppL10n.f('{0} празднует день рождения!', [contact.nickname]),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-                Text('Поздравьте его',
+                Text(AppL10n.t('Поздравьте его'),
                     style:
                         TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
               ],
@@ -65,7 +66,7 @@ class BirthdayBanner extends StatelessWidget {
             ),
             onPressed: () =>
                 showBirthdayGiftSheet(context, contact, onWrite: onWrite),
-            child: const Text('Поздравить'),
+            child: Text(AppL10n.t('Поздравить')),
           ),
         ],
       ),
@@ -108,8 +109,8 @@ class _GiftSheetState extends State<_GiftSheet> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (url == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Не удалось начать оплату. Попробуйте ещё раз.'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppL10n.t('Не удалось начать оплату. Попробуйте ещё раз.')),
       ));
       return;
     }
@@ -125,13 +126,13 @@ class _GiftSheetState extends State<_GiftSheet> {
     setState(() => _busy = false);
     if (recipient != null) {
       // Gift went through → decorate a card by hand and send it along.
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Подписка подарена! Украсьте открытку 🎉'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppL10n.t('Подписка подарена! Украсьте открытку 🎉')),
       ));
       await _composeAndSendCard();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Оплата пока не подтверждена. Попробуйте через минуту.'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppL10n.t('Оплата пока не подтверждена. Попробуйте через минуту.')),
       ));
     }
   }
@@ -183,15 +184,13 @@ class _GiftSheetState extends State<_GiftSheet> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Поздравить ${widget.contact.nickname}',
+              AppL10n.f('Поздравить {0}', [widget.contact.nickname]),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             Text(
-              'Подарите этому человеку Rlink Premium, но мы советуем сделать '
-              'подарок в реальной жизни. Самый приятный подарок — это подарок, '
-              'сделанный своими руками!',
+              AppL10n.t('Подарите этому человеку Rlink Premium, но мы советуем сделать подарок в реальной жизни. Самый приятный подарок — это подарок, сделанный своими руками!'),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
@@ -206,19 +205,18 @@ class _GiftSheetState extends State<_GiftSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Ждём подтверждения оплаты',
+                    Text(AppL10n.t('Ждём подтверждения оплаты'),
                         style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
                     Text(
-                      'Оплатите на открывшейся странице и вернитесь — после '
-                      'этого напишете поздравительную открытку.',
+                      AppL10n.t('Оплатите на открывшейся странице и вернитесь — после этого напишете поздравительную открытку.'),
                       style:
                           TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                     ),
                     const SizedBox(height: 10),
                     FilledButton.tonal(
                       onPressed: _busy ? null : _check,
-                      child: const Text('Проверить оплату'),
+                      child: Text(AppL10n.t('Проверить оплату')),
                     ),
                   ],
                 ),
@@ -227,11 +225,11 @@ class _GiftSheetState extends State<_GiftSheet> {
               FilledButton.icon(
                 onPressed: _busy ? null : _composeAndSendCard,
                 icon: const Icon(Icons.brush_outlined),
-                label: const Text('Собрать открытку своими руками'),
+                label: Text(AppL10n.t('Собрать открытку своими руками')),
               ),
               const SizedBox(height: 12),
               Text(
-                '— или подарить подписку —',
+                AppL10n.t('— или подарить подписку —'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
@@ -239,12 +237,12 @@ class _GiftSheetState extends State<_GiftSheet> {
               FilledButton.tonalIcon(
                 onPressed: _busy ? null : () => _gift('month'),
                 icon: const Icon(Icons.workspace_premium_outlined),
-                label: const Text('Premium на месяц — 48 ₽'),
+                label: Text(AppL10n.t('Premium на месяц — 48 ₽')),
               ),
               const SizedBox(height: 8),
               OutlinedButton(
                 onPressed: _busy ? null : () => _gift('year'),
-                child: const Text('Подарить на год — 496 ₽'),
+                child: Text(AppL10n.t('Подарить на год — 496 ₽')),
               ),
             ],
             if (widget.onWrite != null) ...[
@@ -255,7 +253,7 @@ class _GiftSheetState extends State<_GiftSheet> {
                   widget.onWrite!.call();
                 },
                 icon: const Icon(Icons.edit_outlined),
-                label: const Text('Просто написать поздравление'),
+                label: Text(AppL10n.t('Просто написать поздравление')),
               ),
             ],
           ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 /// A customizable keyboard accessory bar that appears above the keyboard.
 /// Buttons can be reordered and toggled in Settings.
@@ -140,23 +141,23 @@ enum KeyboardAccessoryButton {
   String displayName() {
     switch (this) {
       case KeyboardAccessoryButton.emoji:
-        return 'Эмодзи';
+        return AppL10n.t('Эмодзи');
       case KeyboardAccessoryButton.sticker:
-        return 'Стикеры';
+        return AppL10n.t('Стикеры');
       case KeyboardAccessoryButton.gallery:
-        return 'Галерея';
+        return AppL10n.t('Галерея');
       case KeyboardAccessoryButton.camera:
-        return 'Камера';
+        return AppL10n.t('Камера');
       case KeyboardAccessoryButton.file:
-        return 'Файл';
+        return AppL10n.t('Файл');
       case KeyboardAccessoryButton.location:
-        return 'Локация';
+        return AppL10n.t('Локация');
       case KeyboardAccessoryButton.contact:
-        return 'Контакт';
+        return AppL10n.t('Контакт');
       case KeyboardAccessoryButton.poll:
-        return 'Опрос';
+        return AppL10n.t('Опрос');
       case KeyboardAccessoryButton.voiceMessage:
-        return 'Голосовое';
+        return AppL10n.t('Голосовое');
     }
   }
 }

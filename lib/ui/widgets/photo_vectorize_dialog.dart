@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../services/background_removal.dart';
 import '../../services/photo_vectorizer.dart';
 import 'checkerboard_background.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Live-preview color-count/detail tuning for [PhotoVectorizer.vectorize].
 /// Returns the resulting SVG string on "Готово", or null if cancelled.
@@ -76,7 +77,7 @@ class _PhotoVectorizeDialogState extends State<_PhotoVectorizeDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Фото в вектор'),
+      title: Text(AppL10n.t('Фото в вектор')),
       content: SizedBox(
         width: 280,
         child: SingleChildScrollView(
@@ -106,7 +107,7 @@ class _PhotoVectorizeDialogState extends State<_PhotoVectorizeDialog> {
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text('Не удалось обработать: $_error',
+                  child: Text(AppL10n.f('Не удалось обработать: {0}', [_error]),
                       style: const TextStyle(color: Colors.red, fontSize: 12)),
                 ),
               const SizedBox(height: 8),
@@ -126,7 +127,7 @@ class _PhotoVectorizeDialogState extends State<_PhotoVectorizeDialog> {
                   ),
                 ],
               ),
-              Text('Цветов: $_colorCount',
+              Text(AppL10n.f('Цветов: {0}', [_colorCount]),
                   style: TextStyle(
                       fontSize: 11,
                       color: Theme.of(context).colorScheme.onSurfaceVariant)),
@@ -142,7 +143,7 @@ class _PhotoVectorizeDialogState extends State<_PhotoVectorizeDialog> {
                   ),
                 ],
               ),
-              Text('Детализация: ${(_detail * 100).round()}%',
+              Text(AppL10n.f('Детализация: {0}%', [(_detail * 100).round()]),
                   style: TextStyle(
                       fontSize: 11,
                       color: Theme.of(context).colorScheme.onSurfaceVariant)),
@@ -150,7 +151,7 @@ class _PhotoVectorizeDialogState extends State<_PhotoVectorizeDialog> {
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 value: _removeBackgroundFirst,
-                title: const Text('Сначала убрать фон',
+                title: Text(AppL10n.t('Сначала убрать фон'),
                     style: TextStyle(fontSize: 13)),
                 onChanged: (v) {
                   setState(() => _removeBackgroundFirst = v ?? false);
@@ -164,11 +165,11 @@ class _PhotoVectorizeDialogState extends State<_PhotoVectorizeDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
+          child: Text(AppL10n.t('Отмена')),
         ),
         FilledButton(
           onPressed: _svg == null ? null : () => Navigator.pop(context, _svg),
-          child: const Text('Готово'),
+          child: Text(AppL10n.t('Готово')),
         ),
       ],
     );

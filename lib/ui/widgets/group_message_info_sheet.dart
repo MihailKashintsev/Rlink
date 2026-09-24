@@ -8,6 +8,7 @@ import '../../services/chat_storage_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/group_service.dart';
 import 'avatar_widget.dart';
+import '../../l10n/app_l10n.dart';
 
 /// WhatsApp-style "message info" for a group message you sent: who has it and
 /// who has read it. Delivered is per message (each device reports the ids it
@@ -146,7 +147,7 @@ class _GroupMessageInfoSheetState extends State<_GroupMessageInfoSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Text('Информация о сообщении',
+              child: Text(AppL10n.t('Информация о сообщении'),
                   style: Theme.of(context).textTheme.titleMedium),
             ),
             Padding(
@@ -161,13 +162,13 @@ class _GroupMessageInfoSheetState extends State<_GroupMessageInfoSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      text.isEmpty ? '📎 Вложение' : text,
+                      text.isEmpty ? AppL10n.t('📎 Вложение') : text,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Отправлено ${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}, ${AppSettings.instance.formatTime(dt)}',
+                      AppL10n.f('Отправлено {0}.{1}.{2}, {3}', [dt.day.toString().padLeft(2, '0'), dt.month.toString().padLeft(2, '0'), dt.year, AppSettings.instance.formatTime(dt)]),
                       style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                     ),
                   ],
@@ -182,21 +183,21 @@ class _GroupMessageInfoSheetState extends State<_GroupMessageInfoSheet> {
             else ...[
               if (showRead)
                 _section(context, Icons.done_all, Colors.blue.shade400,
-                    'Прочитали', read),
+                    AppL10n.t('Прочитали'), read),
               _section(context, Icons.done_all, cs.onSurfaceVariant,
-                  'Доставлено', delivered),
+                  AppL10n.t('Доставлено'), delivered),
               _section(context, Icons.check, cs.onSurfaceVariant.withValues(alpha: 0.6),
-                  'Пока не доставлено', pending),
+                  AppL10n.t('Пока не доставлено'), pending),
               if (others.isEmpty)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('В группе больше никого нет'),
+                  child: Text(AppL10n.t('В группе больше никого нет')),
                 ),
               if (!showRead)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
                   child: Text(
-                    'Отчёты о прочтении выключены в настройках — кто прочитал, не показывается.',
+                    AppL10n.t('Отчёты о прочтении выключены в настройках — кто прочитал, не показывается.'),
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                   ),
                 ),

@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../models/rls_sticker.dart';
 import '../widgets/background_removal_dialog.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Editor for a Rlink animated sticker (.rls): compose a few image layers,
 /// pose each one on the canvas at chosen moments in time, and the result plays
@@ -192,7 +193,7 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
         _selected = _layers.length - 1;
       });
     } catch (e) {
-      _snack('Не удалось добавить слой: $e');
+      _snack(AppL10n.f('Не удалось добавить слой: {0}', [e]));
     }
   }
 
@@ -207,7 +208,7 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
       if (bytes.isEmpty) return;
       await _addLayerFromBytes(bytes);
     } catch (e) {
-      _snack('Не удалось выбрать фото: $e');
+      _snack(AppL10n.f('Не удалось выбрать фото: {0}', [e]));
     }
   }
 
@@ -226,7 +227,7 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
       }
       setState(() => layer.replaceImage(frame.image, result));
     } catch (e) {
-      _snack('Не удалось применить: $e');
+      _snack(AppL10n.f('Не удалось применить: {0}', [e]));
     }
   }
 
@@ -236,21 +237,21 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
       builder: (ctx) {
         final ctrl = TextEditingController();
         return AlertDialog(
-          title: const Text('Эмодзи-слой'),
+          title: Text(AppL10n.t('Эмодзи-слой')),
           content: TextField(
             controller: ctrl,
             autofocus: true,
-            decoration: const InputDecoration(hintText: 'Вставьте эмодзи'),
+            decoration: InputDecoration(hintText: AppL10n.t('Вставьте эмодзи')),
             onSubmitted: (v) => Navigator.pop(ctx, v),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена'),
+              child: Text(AppL10n.t('Отмена')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, ctrl.text),
-              child: const Text('Добавить'),
+              child: Text(AppL10n.t('Добавить')),
             ),
           ],
         );
@@ -324,7 +325,7 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
   void _deleteNearestKeyframe() {
     final layer = _sel;
     if (layer == null || layer.keys.length <= 1) {
-      _snack('У слоя должен остаться хотя бы один ключевой кадр');
+      _snack(AppL10n.t('У слоя должен остаться хотя бы один ключевой кадр'));
       return;
     }
     var nearest = 0;
@@ -396,7 +397,7 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
 
   Future<void> _export() async {
     if (_layers.isEmpty) {
-      _snack('Добавьте хотя бы один слой');
+      _snack(AppL10n.t('Добавьте хотя бы один слой'));
       return;
     }
     setState(() => _exporting = true);
@@ -416,7 +417,7 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
       final bytes = sticker.encode();
       if (mounted) Navigator.of(context).pop(bytes);
     } catch (e) {
-      _snack('Не удалось собрать стикер: $e');
+      _snack(AppL10n.f('Не удалось собрать стикер: {0}', [e]));
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -435,7 +436,7 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
       appBar: AppBar(
         backgroundColor: const Color(0xFF101014),
         foregroundColor: Colors.white,
-        title: const Text('Анимированный стикер'),
+        title: Text(AppL10n.t('Анимированный стикер')),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -448,7 +449,7 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.check_rounded, size: 18),
-              label: const Text('Готово'),
+              label: Text(AppL10n.t('Готово')),
             ),
           ),
         ],
@@ -606,7 +607,7 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
                 ),
               ),
               IconButton(
-                tooltip: 'Удалить ближайший ключевой кадр',
+                tooltip: AppL10n.t('Удалить ближайший ключевой кадр'),
                 color: Colors.white54,
                 icon: const Icon(Icons.close_rounded, size: 18),
                 onPressed: layer == null ? null : _deleteNearestKeyframe,
@@ -662,16 +663,16 @@ class _RlsStickerEditorScreenState extends State<RlsStickerEditorScreen>
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _toolBtn(Icons.photo_outlined, 'Фото', _addPhotoLayer),
-            _toolBtn(Icons.emoji_emotions_outlined, 'Эмодзи', _addEmojiLayer),
+            _toolBtn(Icons.photo_outlined, AppL10n.t('Фото'), _addPhotoLayer),
+            _toolBtn(Icons.emoji_emotions_outlined, AppL10n.t('Эмодзи'), _addEmojiLayer),
             _toolBtn(
               Icons.auto_fix_high_outlined,
-              'Убрать фон',
+              AppL10n.t('Убрать фон'),
               layer == null ? null : _removeBackgroundFromSelectedLayer,
             ),
             _toolBtn(
               Icons.delete_outline,
-              'Удалить слой',
+              AppL10n.t('Удалить слой'),
               layer == null ? null : _removeSelectedLayer,
             ),
             _easePicker(layer),

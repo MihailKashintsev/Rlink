@@ -146,8 +146,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
     }
     if (key == null || !_pubKey64.hasMatch(key)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Нужен полный RID (64 hex) или онлайн-пир по коду'),
+        SnackBar(
+          content: Text(AppL10n.t('Нужен полный RID (64 hex) или онлайн-пир по коду')),
         ),
       );
       return;
@@ -184,7 +184,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
             Icon(Icons.wifi_off, size: 14, color: Colors.orange.shade800),
             const SizedBox(width: 6),
             Expanded(
-              child: Text('Relay не подключён — поиск людей недоступен',
+              child: Text(AppL10n.t('Relay не подключён — поиск людей недоступен'),
                   style: TextStyle(fontSize: 11, color: Colors.orange.shade800)),
             ),
             SizedBox(
@@ -195,7 +195,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   minimumSize: Size.zero,
                 ),
-                child: Text('Подключить',
+                child: Text(AppL10n.t('Подключить'),
                     style: TextStyle(fontSize: 11, color: Colors.orange.shade900)),
               ),
             ),
@@ -251,12 +251,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   Icon(Icons.people_outline,
                       size: 64, color: Colors.grey.shade700),
                   const SizedBox(height: 16),
-                  Text('Нет контактов',
+                  Text(AppL10n.t('Нет контактов'),
                       style: TextStyle(
                           color: Colors.grey.shade500, fontSize: 16)),
                   const SizedBox(height: 8),
                   Text(
-                    'Введи имя или ID в поле выше\nчтобы найти собеседников',
+                    AppL10n.t('Введи имя или ID в поле выше\nчтобы найти собеседников'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Colors.grey.shade600, fontSize: 13),
@@ -270,7 +270,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     // ── Relay results (top priority when searching) ──
                     if (hasRelay) ...[
                       _SectionHeader(
-                        title: 'Найдены в сети',
+                        title: AppL10n.t('Найдены в сети'),
                         count: filteredRelay.length,
                         icon: Icons.wifi,
                       ),
@@ -301,7 +301,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                       ),
                       const SizedBox(height: 8),
                       Center(
-                        child: Text('Поиск в сети...',
+                        child: Text(AppL10n.t('Поиск в сети...'),
                             style: TextStyle(
                                 color: Colors.grey.shade500, fontSize: 13)),
                       ),
@@ -328,8 +328,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
                               Expanded(
                                 child: Text(
                                   _isSelfSearch(q)
-                                      ? 'Это ваш код! Введите код собеседника.'
-                                      : 'Никого не найдено по "$q".',
+                                      ? AppL10n.t('Это ваш код! Введите код собеседника.')
+                                      : AppL10n.f('Никого не найдено по "{0}".', [q]),
                                   style: TextStyle(
                                     color: _isSelfSearch(q)
                                         ? Colors.orange.shade700
@@ -362,7 +362,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                 padding:
                                     const EdgeInsets.only(left: 20, top: 2),
                                 child: Text(
-                                  'В сети: $hint',
+                                  AppL10n.f('В сети: {0}', [hint]),
                                   style: TextStyle(
                                       color: Colors.grey.shade600,
                                       fontSize: 11),
@@ -377,7 +377,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     // ── Local contacts ──
                     if (hasLocal) ...[
                       _SectionHeader(
-                        title: q.isEmpty ? 'Контакты' : 'Мои контакты',
+                        title: q.isEmpty ? AppL10n.t('Контакты') : AppL10n.t('Мои контакты'),
                         count: localVisible.length,
                       ),
                       for (final c in localVisible) _ContactTile(contact: c),
@@ -390,7 +390,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                         child: FilledButton.icon(
                           onPressed: () => _openDirectByKey(context),
                           icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                          label: const Text('Открыть чат по ключу'),
+                          label: Text(AppL10n.t('Открыть чат по ключу')),
                           style: FilledButton.styleFrom(
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -503,7 +503,7 @@ class _RelayPeerTile extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 4),
-        Text('в сети',
+        Text(AppL10n.t('в сети'),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
       ]),
       onTap: onTap,
@@ -575,12 +575,12 @@ class _ContactTile extends StatelessWidget {
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         IconButton(
           icon: const Icon(Icons.edit_outlined, size: 20),
-          tooltip: 'Редактировать',
+          tooltip: AppL10n.t('Редактировать'),
           onPressed: () => _editContact(context),
         ),
         IconButton(
           icon: const Icon(Icons.chat_outlined),
-          tooltip: 'Написать',
+          tooltip: AppL10n.t('Написать'),
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -596,7 +596,7 @@ class _ContactTile extends StatelessWidget {
         ),
         IconButton(
           icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 20),
-          tooltip: 'Удалить',
+          tooltip: AppL10n.t('Удалить'),
           onPressed: () => _confirmDelete(context),
         ),
       ]),
@@ -629,7 +629,7 @@ class _ContactTile extends StatelessWidget {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(AppL10n.t('cm_delete_contact_q')),
-        content: Text('${contact.nickname} будет удалён из контактов.'),
+        content: Text(AppL10n.f('{0} будет удалён из контактов.', [contact.nickname])),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

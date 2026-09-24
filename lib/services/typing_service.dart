@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../l10n/app_l10n.dart';
 
 /// Activity types for typing indicators
 class Activity {
@@ -44,10 +45,10 @@ class TypingService {
 
   String label(int activity) {
     switch (activity) {
-      case Activity.typing: return 'печатает...';
-      case Activity.recordingVideo: return 'записывает видео...';
-      case Activity.recordingVoice: return 'записывает голосовое...';
-      case Activity.sendingFile: return 'отправляет файл...';
+      case Activity.typing: return AppL10n.t('печатает...');
+      case Activity.recordingVideo: return AppL10n.t('записывает видео...');
+      case Activity.recordingVoice: return AppL10n.t('записывает голосовое...');
+      case Activity.sendingFile: return AppL10n.t('отправляет файл...');
       default: return '';
     }
   }

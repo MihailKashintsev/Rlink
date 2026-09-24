@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../services/emoji_pack_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Карточка набора эмодзи в пузыре (payload из [invitePayloadJson]).
 class EmojiPackCardBubble extends StatelessWidget {
@@ -21,7 +22,7 @@ class EmojiPackCardBubble extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final name = (data['name'] as String?)?.trim().isNotEmpty == true
         ? (data['name'] as String).trim()
-        : 'Набор эмодзи';
+        : AppL10n.t('Набор эмодзи');
     final raw = (data['emojis'] as List?) ?? const [];
     final previews = <Uint8List>[];
     for (final e in raw.take(12)) {
@@ -99,18 +100,18 @@ class EmojiPackCardBubble extends StatelessWidget {
                 if (!context.mounted) return;
                 if (id == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Не удалось установить набор'),
+                    SnackBar(
+                      content: Text(AppL10n.t('Не удалось установить набор')),
                       backgroundColor: Colors.red,
                     ),
                   );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Набор установлен (id: $id)')),
+                    SnackBar(content: Text(AppL10n.f('Набор установлен (id: {0})', [id]))),
                   );
                 }
               },
-              child: const Text('Установить'),
+              child: Text(AppL10n.t('Установить')),
             ),
           ),
         ],

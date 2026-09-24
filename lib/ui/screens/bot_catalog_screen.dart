@@ -12,6 +12,7 @@ import '../../services/premium_service.dart';
 import '../widgets/premium_gate.dart';
 import 'bot_developer_guide_screen.dart';
 import 'chat_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 class BotCatalogScreen extends StatefulWidget {
   const BotCatalogScreen({super.key});
@@ -42,9 +43,9 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
       MaterialPageRoute(
           builder: (_) => PremiumGate(
                 feature: PremiumFeature.botBuilder,
-                title: 'Конструктор ботов',
+                title: AppL10n.t('Конструктор ботов'),
                 description:
-                    'Создание ботов в no-code конструкторе входит в Rlink Premium.',
+                    AppL10n.t('Создание ботов в no-code конструкторе входит в Rlink Premium.'),
                 child: BotBuilderScreen(existing: existing),
               )),
     );
@@ -54,28 +55,25 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
   @override
   Widget build(BuildContext context) {
     final enabled = AppSettings.instance.enabledBotIds.toSet();
-    const bots = kBuiltinAiBots;
+    final bots = kBuiltinAiBots;
     return Scaffold(
-      appBar: AppBar(title: const Text('Боты')),
+      appBar: AppBar(title: Text(AppL10n.t('Боты'))),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
           _buildCreateCard(context),
           _buildDevGuideTile(context),
           if (_myBots.isNotEmpty) ...[
-            _sectionLabel('Мои боты (черновики)'),
+            _sectionLabel(AppL10n.t('Мои боты (черновики)')),
             ..._myBots.map(_buildMyBotTile),
           ],
-          _sectionLabel('Встроенные'),
+          _sectionLabel(AppL10n.t('Встроенные')),
           Card(
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Text(
-                'Сторонние боты (из каталога relay) отвечают, когда запущен их процесс '
-                'и есть связь с ретранслятором. В приложении с ними — как в обычной личке, '
-                'но только текст: без файлов, голоса, видео и звонков. Сообщения идут по тем же '
-                'E2E-правилам, что и с людьми; ваш профиль на них автоматически не «пушится» для проверки сети.',
+                AppL10n.t('Сторонние боты (из каталога relay) отвечают, когда запущен их процесс и есть связь с ретранслятором. В приложении с ними — как в обычной личке, но только текст: без файлов, голоса, видео и звонков. Сообщения идут по тем же E2E-правилам, что и с людьми; ваш профиль на них автоматически не «пушится» для проверки сети.'),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
@@ -93,11 +91,11 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
                 subtitle: Text(
                   isEnabled
                       ? '${bot.description}\n${bot.link}'
-                      : '${bot.description}\n${bot.link}\nНе активирован',
+                      : AppL10n.f('{0}\n{1}\nНе активирован', [bot.description, bot.link]),
                 ),
                 trailing: FilledButton(
                   onPressed: _starting ? null : () => _startBot(bot),
-                  child: Text(isEnabled ? 'Старт' : 'Активировать'),
+                  child: Text(isEnabled ? AppL10n.t('Старт') : AppL10n.t('Активировать')),
                 ),
               ),
             );
@@ -137,15 +135,14 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Создать своего бота',
+                    Text(AppL10n.t('Создать своего бота'),
                         style: Theme.of(context)
                             .textTheme
                             .titleMedium
                             ?.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
                     Text(
-                      'No-code конструктор: правила «сообщение → ответ» без кода. '
-                      'На выходе — готовый Python-файл для запуска у себя.',
+                      AppL10n.t('No-code конструктор: правила «сообщение → ответ» без кода. На выходе — готовый Python-файл для запуска у себя.'),
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall
@@ -172,9 +169,9 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
           backgroundColor: cs.secondaryContainer,
           child: Icon(Icons.menu_book_outlined, color: cs.onSecondaryContainer),
         ),
-        title: const Text('Справка для разработчиков'),
-        subtitle: const Text(
-          'Как создать, развернуть и зарегистрировать своего бота + заявка на галочку',
+        title: Text(AppL10n.t('Справка для разработчиков')),
+        subtitle: Text(
+          AppL10n.t('Как создать, развернуть и зарегистрировать своего бота + заявка на галочку'),
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.push(
@@ -193,10 +190,9 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
           backgroundColor: Color(bp.color),
           child: Text(bp.emoji),
         ),
-        title: Text(bp.name.isEmpty ? 'Без имени' : bp.name),
+        title: Text(bp.name.isEmpty ? AppL10n.t('Без имени') : bp.name),
         subtitle: Text(
-          '${bp.sanitizedHandle.isEmpty ? 'без ника' : '@${bp.sanitizedHandle}'} · '
-          '${bp.rules.length} правил',
+          AppL10n.f('{0} · {1} правил', [bp.sanitizedHandle.isEmpty ? AppL10n.t('без ника') : '@${bp.sanitizedHandle}', bp.rules.length]),
         ),
         trailing: PopupMenuButton<String>(
           onSelected: (v) async {
@@ -207,9 +203,9 @@ class _BotCatalogScreenState extends State<BotCatalogScreen> {
               await _loadMyBots();
             }
           },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'edit', child: Text('Открыть / изменить')),
-            PopupMenuItem(value: 'delete', child: Text('Удалить')),
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'edit', child: Text(AppL10n.t('Открыть / изменить'))),
+            PopupMenuItem(value: 'delete', child: Text(AppL10n.t('Удалить'))),
           ],
         ),
         onTap: () => _openBuilder(existing: bp),

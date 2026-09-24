@@ -8,6 +8,7 @@ import '../models/chat_message.dart';
 import '../models/group.dart';
 import '../services/image_service.dart';
 import 'rlink_deep_link.dart';
+import '../l10n/app_l10n.dart';
 
 class _ShareAttachment {
   final String rawPath;
@@ -77,12 +78,12 @@ Future<void> _sharePayload(
     _showShareSnack(
       context,
       hadAttachment
-          ? 'Локальные вложения недоступны для экспорта'
-          : 'Нечего экспортировать',
+          ? AppL10n.t('Локальные вложения недоступны для экспорта')
+          : AppL10n.t('Нечего экспортировать'),
     );
   } catch (_) {
     if (!context.mounted) return;
-    _showShareSnack(context, 'Не удалось открыть меню «Поделиться»');
+    _showShareSnack(context, AppL10n.t('Не удалось открыть меню «Поделиться»'));
   }
 }
 
@@ -101,7 +102,7 @@ Future<void> shareChatMessageExternally(
     context,
     text: msg.text,
     attachments: attachments,
-    subject: 'Rlink: сообщение',
+    subject: AppL10n.t('Rlink: сообщение'),
   );
 }
 
@@ -118,7 +119,7 @@ Future<void> shareGroupMessageExternally(
     context,
     text: msg.text,
     attachments: attachments,
-    subject: 'Rlink: сообщение из группы',
+    subject: AppL10n.t('Rlink: сообщение из группы'),
   );
 }
 
@@ -137,7 +138,7 @@ Future<void> shareChannelPostExternally(
     context,
     text: post.text,
     attachments: attachments,
-    subject: 'Rlink: пост канала',
+    subject: AppL10n.t('Rlink: пост канала'),
   );
 }
 
@@ -156,6 +157,6 @@ Future<void> shareChannelCommentExternally(
     context,
     text: comment.text,
     attachments: attachments,
-    subject: 'Rlink: комментарий канала',
+    subject: AppL10n.t('Rlink: комментарий канала'),
   );
 }

@@ -1,7 +1,9 @@
+import '../l10n/app_l10n.dart';
+
 /// Грубая эвристика языка по содержимому фрагмента кода (для подписи в UI).
 String guessProgrammingLanguage(String code) {
   final s = code.trim();
-  if (s.isEmpty) return 'Код';
+  if (s.isEmpty) return AppL10n.t('Код');
 
   final lower = s.toLowerCase();
   if (lower.contains('select ') && lower.contains(' from ')) return 'SQL';
@@ -49,5 +51,5 @@ String guessProgrammingLanguage(String code) {
     return 'PowerShell';
   }
 
-  return 'Код';
+  return AppL10n.t('Код');
 }

@@ -11,6 +11,7 @@ import '../../services/embedded_video_pause_bus.dart';
 import '../../services/voice_service.dart';
 import '../../utils/web_file_store.dart';
 import '../../utils/web_object_url.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Полноэкранное воспроизведение DM-видео (в т.ч. квадратиков) с [VideoPlayer] в дереве.
 class DmVideoFullscreenPage extends StatefulWidget {
@@ -245,7 +246,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
     if (pos < Duration.zero) pos = Duration.zero;
     if (pos > end) pos = end;
     ctrl.seekTo(pos);
-    _flashSeek(deltaSec > 0 ? '+5 с' : '−5 с');
+    _flashSeek(deltaSec > 0 ? AppL10n.t('+5 с') : AppL10n.t('−5 с'));
   }
 
   void _playDoubleTapSeekAnimation({required bool left}) {
@@ -313,8 +314,8 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
         ),
-        body: const Center(
-          child: Text('Ошибка воспроизведения',
+        body: Center(
+          child: Text(AppL10n.t('Ошибка воспроизведения'),
               style: TextStyle(color: Colors.white)),
         ),
       );
@@ -561,7 +562,7 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                         onPressed: () => Navigator.pop(context),
                       ),
                       PopupMenuButton<double>(
-                        tooltip: 'Скорость',
+                        tooltip: AppL10n.t('Скорость'),
                         icon: Text(
                           _playbackSpeedButtonLabel(),
                           style: const TextStyle(

@@ -63,7 +63,7 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
     if (!context.mounted) return;
     if (contacts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нет контактов')),
+        SnackBar(content: Text(AppL10n.t('Нет контактов'))),
       );
       return;
     }
@@ -73,10 +73,10 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
         child: ListView(
           shrinkWrap: true,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'Чей набор посмотреть',
+                AppL10n.t('Чей набор посмотреть'),
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
@@ -127,10 +127,10 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-              'Стикер сохранён в коллекцию. Добавьте его в набор ниже.'),
+          content: Text(
+              AppL10n.t('Стикер сохранён в коллекцию. Добавьте его в набор ниже.')),
           action: SnackBarAction(
-            label: 'Привязать к эмодзи',
+            label: AppL10n.t('Привязать к эмодзи'),
             onPressed: () =>
                 unawaited(showBindToEmojiDialog(context, stickerRef: ref)),
           ),
@@ -139,7 +139,7 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось сохранить стикер: $e')),
+          SnackBar(content: Text(AppL10n.f('Не удалось сохранить стикер: {0}', [e]))),
         );
       }
     }
@@ -161,10 +161,10 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-              'Стикер сохранён в коллекцию. Добавьте его в набор ниже.'),
+          content: Text(
+              AppL10n.t('Стикер сохранён в коллекцию. Добавьте его в набор ниже.')),
           action: SnackBarAction(
-            label: 'Привязать к эмодзи',
+            label: AppL10n.t('Привязать к эмодзи'),
             onPressed: () =>
                 unawaited(showBindToEmojiDialog(context, stickerRef: ref)),
           ),
@@ -173,7 +173,7 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось сохранить стикер: $e')),
+          SnackBar(content: Text(AppL10n.f('Не удалось сохранить стикер: {0}', [e]))),
         );
       }
     }
@@ -193,7 +193,7 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
       if (gunzipTgsToLottieJson(bytes) == null) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Файл не похож на стикер Telegram (.tgs)')),
+            SnackBar(content: Text(AppL10n.t('Файл не похож на стикер Telegram (.tgs)'))),
           );
         }
         return;
@@ -202,15 +202,15 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
           .registerStickerBytes(bytes: bytes, ext: tgsFileExtension);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-              'Стикер сохранён в коллекцию. Добавьте его в набор ниже.'),
+              AppL10n.t('Стикер сохранён в коллекцию. Добавьте его в набор ниже.')),
         ),
       );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось импортировать стикер: $e')),
+          SnackBar(content: Text(AppL10n.f('Не удалось импортировать стикер: {0}', [e]))),
         );
       }
     }
@@ -221,10 +221,10 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Стикеры'),
+        title: Text(AppL10n.t('Стикеры')),
         actions: [
           PopupMenuButton<String>(
-            tooltip: 'Создать или импортировать стикер',
+            tooltip: AppL10n.t('Создать или импортировать стикер'),
             icon: const Icon(Icons.add_circle_outline),
             onSelected: (v) {
               switch (v) {
@@ -236,23 +236,23 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
                   _importTgsSticker(context);
               }
             },
-            itemBuilder: (ctx) => const [
+            itemBuilder: (ctx) => [
               PopupMenuItem(
                 value: 'vector',
-                child: Text('Векторный (мини-студия)'),
+                child: Text(AppL10n.t('Векторный (мини-студия)')),
               ),
               PopupMenuItem(
                 value: 'animated',
-                child: Text('Анимированный (растровый)'),
+                child: Text(AppL10n.t('Анимированный (растровый)')),
               ),
               PopupMenuItem(
                 value: 'tgs',
-                child: Text('Импорт из Telegram (.tgs)'),
+                child: Text(AppL10n.t('Импорт из Telegram (.tgs)')),
               ),
             ],
           ),
           IconButton(
-            tooltip: 'Стикеры из чата с контактом',
+            tooltip: AppL10n.t('Стикеры из чата с контактом'),
             icon: const Icon(Icons.person_search_outlined),
             onPressed: () => _openContactPickerForImport(context),
           ),
@@ -280,13 +280,13 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
                   Card(
                     child: ListTile(
                       leading: Icon(Icons.collections_outlined, color: cs.primary),
-                      title: const Text('Все стикеры'),
-                      subtitle: Text('$_flatCount шт. во вкладке «Стикеры»'),
+                      title: Text(AppL10n.t('Все стикеры')),
+                      subtitle: Text(AppL10n.f('{0} шт. во вкладке «Стикеры»', [_flatCount])),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Мои наборы',
+                    AppL10n.t('Мои наборы'),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: cs.onSurfaceVariant,
                         ),
@@ -296,8 +296,7 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
                     Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'Наборов пока нет. Создайте из своих стикеров или '
-                        'добавьте из переписки с контактом.',
+                        AppL10n.t('Наборов пока нет. Создайте из своих стикеров или добавьте из переписки с контактом.'),
                         style: TextStyle(color: cs.onSurfaceVariant),
                         textAlign: TextAlign.center,
                       ),
@@ -311,8 +310,8 @@ class _StickersHubScreenState extends State<StickersHubScreen> {
                           title: Text(p.title),
                           subtitle: Text(
                             [
-                              '${p.stickerRelPaths.length} стикеров',
-                              if (src != null && src.isNotEmpty) 'от $src',
+                              AppL10n.f('{0} стикеров', [p.stickerRelPaths.length]),
+                              if (src != null && src.isNotEmpty) AppL10n.f('от {0}', [src]),
                             ].join(' · '),
                           ),
                           trailing: const Icon(Icons.chevron_right),

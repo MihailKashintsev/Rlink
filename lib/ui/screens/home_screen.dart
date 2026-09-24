@@ -73,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen>
     if (text.isEmpty || _isSending) return;
     if (_targetPeerId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Выбери пира из списка')),
+        SnackBar(content: Text(AppL10n.t('Выбери пира из списка'))),
       );
       return;
     }
@@ -122,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -185,13 +185,13 @@ class _HomeScreenState extends State<HomeScreen>
                 )
               : IconButton(
                   icon: const Icon(Icons.search),
-                  tooltip: 'Найти устройства',
+                  tooltip: AppL10n.t('Найти устройства'),
                   onPressed: _rescan,
                 ),
           _PeerIndicator(),
           IconButton(
             icon: const Icon(Icons.key),
-            tooltip: 'Мой ID',
+            tooltip: AppL10n.t('Мой ID'),
             onPressed: _showMyId,
           ),
         ],
@@ -228,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen>
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Твой публичный ключ (ID)'),
+        title: Text(AppL10n.t('Твой публичный ключ (ID)')),
         content: SelectableText(
           id,
           style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
@@ -242,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen>
                 SnackBar(content: Text(AppL10n.t('cm_copied'))),
               );
             },
-            child: const Text('Копировать'),
+            child: Text(AppL10n.t('Копировать')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -332,7 +332,7 @@ class _PeerSelector extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             alignment: Alignment.centerLeft,
             child: Text(
-              'Ищем устройства поблизости...',
+              AppL10n.t('Ищем устройства поблизости...'),
               style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
             ),
           );
@@ -373,13 +373,13 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.bluetooth_searching, size: 64, color: Colors.green),
         SizedBox(height: 16),
-        Text('Ищем устройства поблизости...', style: TextStyle(fontSize: 16)),
+        Text(AppL10n.t('Ищем устройства поблизости...'), style: TextStyle(fontSize: 16)),
         SizedBox(height: 8),
-        Text('Bluetooth, без интернета', style: TextStyle(color: Colors.grey)),
+        Text(AppL10n.t('Bluetooth, без интернета'), style: TextStyle(color: Colors.grey)),
       ]),
     );
   }
@@ -407,8 +407,8 @@ class _MessageInput extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              decoration: const InputDecoration(
-                hintText: 'Сообщение...',
+              decoration: InputDecoration(
+                hintText: AppL10n.t('Сообщение...'),
                 border: OutlineInputBorder(),
                 contentPadding:
                     EdgeInsets.symmetric(horizontal: 16, vertical: 10),

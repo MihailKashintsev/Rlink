@@ -63,8 +63,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     if (!mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(
-      const SnackBar(
-        content: Text('Лимит реакций на историю достигнут'),
+      SnackBar(
+        content: Text(AppL10n.t('Лимит реакций на историю достигнут')),
         duration: Duration(seconds: 2),
       ),
     );
@@ -154,7 +154,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 textInputAction: TextInputAction.send,
                 onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
                 decoration: InputDecoration(
-                  hintText: 'Ответить ${widget.authorName}…',
+                  hintText: AppL10n.f('Ответить {0}…', [widget.authorName]),
                   hintStyle: const TextStyle(color: Colors.white54),
                   filled: true,
                   fillColor: Colors.white.withValues(alpha: 0.1),
@@ -225,15 +225,15 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Ответ отправлен'),
+          SnackBar(
+              content: Text(AppL10n.t('Ответ отправлен')),
               duration: Duration(seconds: 2)),
         );
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось отправить ответ')),
+          SnackBar(content: Text(AppL10n.t('Не удалось отправить ответ'))),
         );
       }
     } finally {
@@ -399,7 +399,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                       color: Colors.white70, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    'Просмотры: ${viewers.length}',
+                    AppL10n.f('Просмотры: {0}', [viewers.length]),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -411,10 +411,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
             ),
             const SizedBox(height: 8),
             if (viewers.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Text(
-                  'Пока никто не смотрел',
+                  AppL10n.t('Пока никто не смотрел'),
                   style: TextStyle(color: Colors.white54, fontSize: 14),
                 ),
               )
@@ -460,8 +460,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить историю?'),
-        content: const Text('История будет удалена и больше не будет видна.'),
+        title: Text(AppL10n.t('Удалить историю?')),
+        content: Text(AppL10n.t('История будет удалена и больше не будет видна.')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -842,7 +842,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                                 border: Border.all(color: Colors.white24),
                               ),
                               child: Text(
-                                _sendingReply ? 'Отправка…' : 'Ответить…',
+                                _sendingReply ? AppL10n.t('Отправка…') : AppL10n.t('Ответить…'),
                                 style: const TextStyle(
                                     color: Colors.white70, fontSize: 14),
                               ),
@@ -930,9 +930,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'только что';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} мин';
-    return '${diff.inHours} ч';
+    if (diff.inMinutes < 1) return AppL10n.t('только что');
+    if (diff.inMinutes < 60) return AppL10n.f('{0} мин', [diff.inMinutes]);
+    return AppL10n.f('{0} ч', [diff.inHours]);
   }
 }
 

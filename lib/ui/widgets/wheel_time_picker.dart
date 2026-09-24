@@ -43,13 +43,13 @@ class _BirthdayWheelSheet extends StatefulWidget {
 }
 
 class _BirthdayWheelSheetState extends State<_BirthdayWheelSheet> {
-  static const _nom = [
-    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль',
-    'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  static List<String> get _nom => [
+    AppL10n.t('Январь'), AppL10n.t('Февраль'), AppL10n.t('Март'), AppL10n.t('Апрель'), AppL10n.t('Май'), AppL10n.t('Июнь'), AppL10n.t('Июль'),
+    AppL10n.t('Август'), AppL10n.t('Сентябрь'), AppL10n.t('Октябрь'), AppL10n.t('Ноябрь'), AppL10n.t('Декабрь')
   ];
-  static const _gen = [
-    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля',
-    'августа', 'сентября', 'октября', 'ноября', 'декабря'
+  static List<String> get _gen => [
+    AppL10n.t('января'), AppL10n.t('февраля'), AppL10n.t('марта'), AppL10n.t('апреля'), AppL10n.t('мая'), AppL10n.t('июня'), AppL10n.t('июля'),
+    AppL10n.t('августа'), AppL10n.t('сентября'), AppL10n.t('октября'), AppL10n.t('ноября'), AppL10n.t('декабря')
   ];
   static const _maxDay = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
@@ -106,7 +106,7 @@ class _BirthdayWheelSheetState extends State<_BirthdayWheelSheet> {
               padding: const EdgeInsets.fromLTRB(16, 10, 8, 2),
               child: Row(
                 children: [
-                  const Text('День рождения',
+                  Text(AppL10n.t('День рождения'),
                       style:
                           TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const Spacer(),
@@ -241,8 +241,8 @@ class _WheelSheetState extends State<_WheelSheet> {
   String _dayLabel(int index) {
     final day = _midnightToday.add(Duration(days: index));
     final code = Localizations.localeOf(context).languageCode;
-    if (index == 0) return code == 'en' ? 'Today' : 'Сегодня';
-    if (index == 1) return code == 'en' ? 'Tomorrow' : 'Завтра';
+    if (index == 0) return code == 'en' ? 'Today' : AppL10n.t('Сегодня');
+    if (index == 1) return code == 'en' ? 'Tomorrow' : AppL10n.t('Завтра');
     // Locale-aware "Tue, 5 Aug" for the rest.
     return MaterialLocalizations.of(context).formatMediumDate(day);
   }
@@ -285,7 +285,7 @@ class _WheelSheetState extends State<_WheelSheet> {
               padding: const EdgeInsets.fromLTRB(16, 10, 8, 2),
               child: Row(
                 children: [
-                  Text('Отправить позже',
+                  Text(AppL10n.t('Отправить позже'),
                       style: const TextStyle(
                           fontSize: 17, fontWeight: FontWeight.w700)),
                   const Spacer(),

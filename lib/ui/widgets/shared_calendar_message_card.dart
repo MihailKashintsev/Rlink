@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/shared_collab.dart';
+import '../../l10n/app_l10n.dart';
 
 class SharedCalendarMessageCard extends StatelessWidget {
   final String encoded;
@@ -42,7 +43,7 @@ class SharedCalendarMessageCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  p.title.isEmpty ? 'Событие' : p.title,
+                  p.title.isEmpty ? AppL10n.t('Событие') : p.title,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,

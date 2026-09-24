@@ -16,6 +16,7 @@ import '../../services/sticker_collection_service.dart';
 import 'rls_sticker_view.dart';
 import 'rlv_sticker_view.dart';
 import 'tgs_sticker_view.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Карточка набора стикеров в пузыре ЛС: превью и импорт.
 class StickerPackCardBubble extends StatelessWidget {
@@ -36,7 +37,7 @@ class StickerPackCardBubble extends StatelessWidget {
 
   String get _title {
     final t = (payload['title'] as String?)?.trim();
-    if (t == null || t.isEmpty) return 'Набор стикеров';
+    if (t == null || t.isEmpty) return AppL10n.t('Набор стикеров');
     return t;
   }
 
@@ -84,12 +85,12 @@ class StickerPackCardBubble extends StatelessWidget {
                 ? colorScheme.onPrimary.withValues(alpha: 0.2)
                 : null,
           ),
-          child: const Text('Добавить пак'),
+          child: Text(AppL10n.t('Добавить пак')),
         ),
         if (sourcePeerLabel != null || sourcePeerId != null) ...[
           const SizedBox(height: 6),
           Text(
-            'От: ${sourcePeerLabel ?? sourcePeerId ?? ''}',
+            AppL10n.f('От: {0}', [sourcePeerLabel ?? sourcePeerId ?? '']),
             style: TextStyle(fontSize: 11, color: muted),
           ),
         ],
@@ -100,7 +101,7 @@ class StickerPackCardBubble extends StatelessWidget {
   Future<void> _addPack(BuildContext context) async {
     final entries = _stickerEntries;
     if (entries.isEmpty) {
-      _snack(context, 'В наборе нет данных');
+      _snack(context, AppL10n.t('В наборе нет данных'));
       return;
     }
     
@@ -111,7 +112,7 @@ class StickerPackCardBubble extends StatelessWidget {
         if (kIsWeb) {
           final rels = downloadedPathsRaw.whereType<String>().toList();
           if (rels.isEmpty) {
-            _snack(context, 'Файлы не найдены');
+            _snack(context, AppL10n.t('Файлы не найдены'));
             return;
           }
           await StickerCollectionService.instance.createPack(
@@ -131,7 +132,7 @@ class StickerPackCardBubble extends StatelessWidget {
             }
           }
           if (absPaths.isEmpty) {
-            _snack(context, 'Файлы не найдены');
+            _snack(context, AppL10n.t('Файлы не найдены'));
             return;
           }
           await StickerCollectionService.instance.importPackFromAbsolutePaths(
@@ -142,10 +143,10 @@ class StickerPackCardBubble extends StatelessWidget {
           );
         }
         if (!context.mounted) return;
-        _snack(context, 'Набор добавлен');
+        _snack(context, AppL10n.t('Набор добавлен'));
       } catch (e) {
         if (!context.mounted) return;
-        _snack(context, 'Ошибка: $e');
+        _snack(context, AppL10n.f('Ошибка: {0}', [e]));
       }
       return;
     }
@@ -164,7 +165,7 @@ class StickerPackCardBubble extends StatelessWidget {
           exts.add(ext.isNotEmpty && ext.length <= 6 ? ext.toLowerCase() : '.png');
         }
         if (bytesList.isEmpty) {
-          _snack(context, 'Не удалось прочитать стикеры');
+          _snack(context, AppL10n.t('Не удалось прочитать стикеры'));
           return;
         }
         await StickerCollectionService.instance.importPackFromBytesList(
@@ -175,7 +176,7 @@ class StickerPackCardBubble extends StatelessWidget {
           sourcePeerLabel: sourcePeerLabel,
         );
         if (!context.mounted) return;
-        _snack(context, 'Набор добавлен');
+        _snack(context, AppL10n.t('Набор добавлен'));
         return;
       }
       final tmp = await getTemporaryDirectory();
@@ -194,7 +195,7 @@ class StickerPackCardBubble extends StatelessWidget {
         absPaths.add(f.path);
       }
       if (absPaths.isEmpty) {
-        _snack(context, 'Не удалось прочитать стикеры');
+        _snack(context, AppL10n.t('Не удалось прочитать стикеры'));
         return;
       }
       await StickerCollectionService.instance.importPackFromAbsolutePaths(
@@ -204,10 +205,10 @@ class StickerPackCardBubble extends StatelessWidget {
         sourcePeerLabel: sourcePeerLabel,
       );
       if (!context.mounted) return;
-      _snack(context, 'Набор добавлен');
+      _snack(context, AppL10n.t('Набор добавлен'));
     } catch (e) {
       if (!context.mounted) return;
-      _snack(context, 'Ошибка: $e');
+      _snack(context, AppL10n.f('Ошибка: {0}', [e]));
     }
   }
 
@@ -227,7 +228,7 @@ class _PreviewRow extends StatelessWidget {
     final n = math.min(4, entries.length);
     if (n == 0) {
       return Text(
-        'Нет превью',
+        AppL10n.t('Нет превью'),
         style: TextStyle(fontSize: 13, color: fg.withValues(alpha: 0.7)),
       );
     }

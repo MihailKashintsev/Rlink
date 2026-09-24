@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Hand-drawn security visuals (no emoji, no Material icons).
@@ -22,12 +23,12 @@ const _kLevelColors = <Color>[
   Color(0xFF30A46C), // 4 — strong (green)
 ];
 
-const _kLevelLabels = <String>[
+List<String> get _kLevelLabels => <String>[
   '',
-  'Слабый',
-  'Средний',
-  'Хороший',
-  'Надёжный',
+  AppL10n.t('Слабый'),
+  AppL10n.t('Средний'),
+  AppL10n.t('Хороший'),
+  AppL10n.t('Надёжный'),
 ];
 
 /// Levels 1‑4 map to the door→vault progression the user described.
@@ -150,7 +151,7 @@ class _SecurityStrengthMeterState extends State<SecurityStrengthMeter>
                 ? Theme.of(context).colorScheme.onSurfaceVariant
                 : color,
           ),
-          child: Text(level == 0 ? 'Придумайте пароль' : label),
+          child: Text(level == 0 ? AppL10n.t('Придумайте пароль') : label),
         ),
       ],
     );

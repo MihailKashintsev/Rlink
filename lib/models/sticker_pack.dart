@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../l10n/app_l10n.dart';
 
 /// Локальный набор стикеров (пути относительно каталога документов приложения).
 class StickerPack {
@@ -33,7 +34,7 @@ class StickerPack {
       id: m['id'] as String,
       title: (m['title'] as String?)?.trim().isNotEmpty == true
           ? (m['title'] as String).trim()
-          : 'Набор',
+          : AppL10n.t('Набор'),
       createdAtMs: (m['t'] as num?)?.toInt() ??
           DateTime.now().millisecondsSinceEpoch,
       stickerRelPaths: List<String>.from(paths),

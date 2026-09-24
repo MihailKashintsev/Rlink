@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/chat_message.dart';
 import '../../services/ble_service.dart';
 import '../../services/chat_storage_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// A plain-language view of mesh health: who's directly around right now,
 /// and which outgoing messages are still waiting to be delivered — the
@@ -67,15 +68,15 @@ class _MeshStatusScreenState extends State<MeshStatusScreen> {
   static String _exchangeLabel(int? state) {
     switch (state) {
       case 0:
-        return 'подключение';
+        return AppL10n.t('подключение');
       case 1:
-        return 'профиль отправлен';
+        return AppL10n.t('профиль отправлен');
       case 2:
-        return 'профиль получен';
+        return AppL10n.t('профиль получен');
       case 3:
-        return 'готово';
+        return AppL10n.t('готово');
       default:
-        return 'неизвестно';
+        return AppL10n.t('неизвестно');
     }
   }
 
@@ -92,11 +93,11 @@ class _MeshStatusScreenState extends State<MeshStatusScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Статус mesh'),
+        title: Text(AppL10n.t('Статус mesh')),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Обновить',
+            tooltip: AppL10n.t('Обновить'),
             onPressed: _refreshUndelivered,
           ),
         ],
@@ -106,13 +107,13 @@ class _MeshStatusScreenState extends State<MeshStatusScreen> {
         child: ListView(
           padding: const EdgeInsets.all(12),
           children: [
-            Text('Рядом по Bluetooth (${peers.length})',
+            Text(AppL10n.f('Рядом по Bluetooth ({0})', [peers.length]),
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             if (peers.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text('Никого не видно поблизости',
+                child: Text(AppL10n.t('Никого не видно поблизости'),
                     style: TextStyle(color: cs.onSurfaceVariant)),
               )
             else
@@ -129,9 +130,9 @@ class _MeshStatusScreenState extends State<MeshStatusScreen> {
                         title: Text(name),
                         subtitle: Text(
                           [
-                            if (rssi != null) 'сигнал ${rssi}dBm',
+                            if (rssi != null) AppL10n.f('сигнал {0}dBm', [rssi]),
                             _exchangeLabel(exchangeStates[peerId]),
-                            if (pending > 0) '$pending не доставлено',
+                            if (pending > 0) AppL10n.f('{0} не доставлено', [pending]),
                           ].join(' · '),
                           style: TextStyle(
                               fontSize: 12, color: cs.onSurfaceVariant),
@@ -140,7 +141,7 @@ class _MeshStatusScreenState extends State<MeshStatusScreen> {
                     },
                   )),
             const SizedBox(height: 20),
-            Text('Ожидают доставки (${undeliveredByPeer.length})',
+            Text(AppL10n.f('Ожидают доставки ({0})', [undeliveredByPeer.length]),
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             if (_loadingUndelivered)
@@ -151,7 +152,7 @@ class _MeshStatusScreenState extends State<MeshStatusScreen> {
             else if (undeliveredByPeer.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text('Все сообщения доставлены',
+                child: Text(AppL10n.t('Все сообщения доставлены'),
                     style: TextStyle(color: cs.onSurfaceVariant)),
               )
             else
@@ -172,8 +173,8 @@ class _MeshStatusScreenState extends State<MeshStatusScreen> {
                       title: Text(name),
                       subtitle: Text(
                         directlyReachable
-                            ? 'рядом — отправляется'
-                            : 'ждём relay или путь через mesh',
+                            ? AppL10n.t('рядом — отправляется')
+                            : AppL10n.t('ждём relay или путь через mesh'),
                         style: TextStyle(
                             fontSize: 12, color: cs.onSurfaceVariant),
                       ),

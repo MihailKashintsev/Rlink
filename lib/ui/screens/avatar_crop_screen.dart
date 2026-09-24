@@ -59,7 +59,7 @@ class _AvatarCropScreenState extends State<AvatarCropScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Обрезка аватара'),
+        title: Text(AppL10n.t('Обрезка аватара')),
         actions: [
           TextButton(
             onPressed: _saving ? null : _crop,

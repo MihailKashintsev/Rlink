@@ -29,20 +29,20 @@ Future<String?> showSharedTodoComposeDialog(BuildContext context) async {
             children: [
               TextField(
                 controller: titleCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Заголовок',
+                decoration: InputDecoration(
+                  labelText: AppL10n.t('Заголовок'),
                   border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
-              const Text('Пункты', style: TextStyle(fontSize: 12)),
+              Text(AppL10n.t('Пункты'), style: TextStyle(fontSize: 12)),
               const SizedBox(height: 6),
               ...lines.asMap().entries.map((e) => Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: TextField(
                       controller: e.value,
                       decoration: InputDecoration(
-                        labelText: 'Пункт ${e.key + 1}',
+                        labelText: AppL10n.f('Пункт {0}', [e.key + 1]),
                         border: const OutlineInputBorder(),
                       ),
                     ),
@@ -52,7 +52,7 @@ Future<String?> showSharedTodoComposeDialog(BuildContext context) async {
                   setSt(() => lines.add(TextEditingController()));
                 },
                 icon: const Icon(Icons.add),
-                label: const Text('Добавить пункт'),
+                label: Text(AppL10n.t('Добавить пункт')),
               ),
             ],
           ),
@@ -64,7 +64,7 @@ Future<String?> showSharedTodoComposeDialog(BuildContext context) async {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('В чат'),
+            child: Text(AppL10n.t('В чат')),
           ),
         ],
       ),
@@ -100,7 +100,7 @@ Future<String?> showSharedCalendarComposeDialog(BuildContext context) async {
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Событие в календаре'),
+        title: Text(AppL10n.t('Событие в календаре')),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -108,15 +108,15 @@ Future<String?> showSharedCalendarComposeDialog(BuildContext context) async {
             children: [
               TextField(
                 controller: titleCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Название',
+                decoration: InputDecoration(
+                  labelText: AppL10n.t('Название'),
                   border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Дата и время'),
+                title: Text(AppL10n.t('Дата и время')),
                 subtitle: Text(
                   '${date.day.toString().padLeft(2, '0')}.'
                   '${date.month.toString().padLeft(2, '0')}.${date.year} '
@@ -145,8 +145,8 @@ Future<String?> showSharedCalendarComposeDialog(BuildContext context) async {
               TextField(
                 controller: noteCtrl,
                 maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Заметка (необязательно)',
+                decoration: InputDecoration(
+                  labelText: AppL10n.t('Заметка (необязательно)'),
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -160,7 +160,7 @@ Future<String?> showSharedCalendarComposeDialog(BuildContext context) async {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('В чат'),
+            child: Text(AppL10n.t('В чат')),
           ),
         ],
       ),

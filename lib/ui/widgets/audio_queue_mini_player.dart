@@ -4,6 +4,7 @@ import '../../main.dart' show navigatorKey;
 import '../../services/voice_service.dart';
 import '../screens/music_player_screen.dart';
 import '../../services/audio_queue_mini_player_layout.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Панель очереди голосовых / аудио / квадратиков; вертикальная позиция задаётся
 /// [AudioQueueMiniPlayerLayout] (под шапкой чата или между фильтрами и списком на главном).
@@ -80,7 +81,7 @@ class AudioQueueMiniPlayer extends StatelessWidget {
                                   ),
                                   if (session.total > 1)
                                     Text(
-                                      '${session.indexOneBased} из ${session.total}',
+                                      AppL10n.f('{0} из {1}', [session.indexOneBased, session.total]),
                                       style:
                                           theme.textTheme.labelSmall?.copyWith(
                                         color: cs.onSurfaceVariant,

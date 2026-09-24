@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/addons_registry.dart';
 import '../rlink_nav_routes.dart';
+import '../../l10n/app_l10n.dart';
 
 /// List of installed add-ons. Built-ins today, user add-ons later — the row
 /// shape is the same either way.
@@ -14,7 +15,7 @@ class AddonsScreen extends StatelessWidget {
     final items = addons();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Дополнения')),
+      appBar: AppBar(title: Text(AppL10n.t('Дополнения'))),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 860),
@@ -43,7 +44,7 @@ class AddonsScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Text(
-                  'Свои дополнения',
+                  AppL10n.t('Свои дополнения'),
                   style: TextStyle(
                       fontWeight: FontWeight.w700, color: cs.onSurface),
                 ),
@@ -51,10 +52,7 @@ class AddonsScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Text(
-                  'Дополнение — это отдельный экран внутри Rlink, который пользуется '
-                  'теми же возможностями, что и встроенные: каталог, воспроизведение, '
-                  'локальное хранилище. «Музыка» сделана именно так и служит образцом. '
-                  'Как собрать своё — в docs/addons.md.',
+                  AppL10n.t('Дополнение — это отдельный экран внутри Rlink, который пользуется теми же возможностями, что и встроенные: каталог, воспроизведение, локальное хранилище. «Музыка» сделана именно так и служит образцом. Как собрать своё — в docs/addons.md.'),
                   style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                 ),
               ),

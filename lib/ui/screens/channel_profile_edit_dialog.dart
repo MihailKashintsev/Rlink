@@ -173,7 +173,7 @@ Future<void> showChannelProfileEditDialog(
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Text('Баннер профиля',
+                  Text(AppL10n.t('Баннер профиля'),
                       style:
                           TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                   const SizedBox(height: 8),
@@ -194,7 +194,7 @@ Future<void> showChannelProfileEditDialog(
                           child: pickedBannerPath == null
                               ? Center(
                                   child: Text(
-                                    'Нажмите, чтобы выбрать баннер',
+                                    AppL10n.t('Нажмите, чтобы выбрать баннер'),
                                     style:
                                         TextStyle(color: cs.onSurfaceVariant),
                                   ),
@@ -242,7 +242,7 @@ Future<void> showChannelProfileEditDialog(
                     child: TextButton(
                       onPressed: () =>
                           setDialogState(() => pickedBannerPath = null),
-                      child: const Text('Убрать баннер'),
+                      child: Text(AppL10n.t('Убрать баннер')),
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -250,8 +250,8 @@ Future<void> showChannelProfileEditDialog(
                     controller: nameCtrl,
                     maxLength: 30,
                     autofocus: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Название канала',
+                    decoration: InputDecoration(
+                      labelText: AppL10n.t('Название канала'),
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.drive_file_rename_outline),
                     ),
@@ -261,9 +261,9 @@ Future<void> showChannelProfileEditDialog(
                     controller: descCtrl,
                     maxLength: 200,
                     maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Описание',
-                      hintText: 'Краткое описание канала...',
+                    decoration: InputDecoration(
+                      labelText: AppL10n.t('Описание'),
+                      hintText: AppL10n.t('Краткое описание канала...'),
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.info_outline),
                     ),
@@ -272,15 +272,15 @@ Future<void> showChannelProfileEditDialog(
                   TextField(
                     controller: emojiCtrl,
                     maxLength: 2,
-                    decoration: const InputDecoration(
-                      labelText: 'Эмодзи',
+                    decoration: InputDecoration(
+                      labelText: AppL10n.t('Эмодзи'),
                       hintText: '📢',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.emoji_emotions_outlined),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Text('Цвет канала',
+                  Text(AppL10n.t('Цвет канала'),
                       style:
                           TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                   const SizedBox(height: 8),
@@ -315,9 +315,9 @@ Future<void> showChannelProfileEditDialog(
                       value: commentsEnabled,
                       onChanged: (v) =>
                           setDialogState(() => commentsEnabled = v),
-                      title: const Text('Комментарии'),
-                      subtitle: const Text(
-                        'Подписчики могут комментировать посты',
+                      title: Text(AppL10n.t('Комментарии')),
+                      subtitle: Text(
+                        AppL10n.t('Подписчики могут комментировать посты'),
                         style: TextStyle(fontSize: 12),
                       ),
                       secondary: const Icon(Icons.comment_outlined),
@@ -327,11 +327,11 @@ Future<void> showChannelProfileEditDialog(
                     SwitchListTile(
                       value: isPublic,
                       onChanged: (v) => setDialogState(() => isPublic = v),
-                      title: const Text('Публичный канал'),
+                      title: Text(AppL10n.t('Публичный канал')),
                       subtitle: Text(
                         isPublic
-                            ? 'Найдётся в поиске'
-                            : 'Скрытый — только по прямой ссылке',
+                            ? AppL10n.t('Найдётся в поиске')
+                            : AppL10n.t('Скрытый — только по прямой ссылке'),
                         style: const TextStyle(fontSize: 12),
                       ),
                       secondary:
@@ -341,9 +341,9 @@ Future<void> showChannelProfileEditDialog(
                     ),
                     ListTile(
                       leading: const Icon(Icons.sync),
-                      title: const Text('Синхронизировать историю сейчас'),
-                      subtitle: const Text(
-                        'Сохранить настройки и разослать снимок подписчикам',
+                      title: Text(AppL10n.t('Синхронизировать историю сейчас')),
+                      subtitle: Text(
+                        AppL10n.t('Сохранить настройки и разослать снимок подписчикам'),
                         style: TextStyle(fontSize: 12),
                       ),
                       contentPadding: EdgeInsets.zero,
@@ -383,16 +383,16 @@ Future<void> showChannelProfileEditDialog(
                               .publishBackup(updated);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 content: Text(
-                                    'Резерв разослан подписчикам (без уведомлений)'),
+                                    AppL10n.t('Резерв разослан подписчикам (без уведомлений)')),
                               ),
                             );
                           }
                         } catch (e) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Ошибка резерва: $e')),
+                              SnackBar(content: Text(AppL10n.f('Ошибка резерва: {0}', [e]))),
                             );
                           }
                         }

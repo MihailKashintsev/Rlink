@@ -10,6 +10,7 @@ import '../../services/screen_share_helper.dart';
 import '../../services/sound_effects_service.dart' show CallFxSound;
 import '../widgets/avatar_widget.dart';
 import '../widgets/wave_line.dart';
+import '../../l10n/app_l10n.dart';
 
 class CallScreen extends StatefulWidget {
   final CallSessionInfo session;
@@ -102,8 +103,8 @@ class _CallScreenState extends State<CallScreen>
       debugPrint('[CallScreen] _init error: $e');
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(
-            content: Text('Не удалось получить доступ к микрофону/камере')),
+        SnackBar(
+            content: Text(AppL10n.t('Не удалось получить доступ к микрофону/камере'))),
       );
       Navigator.maybeOf(context)?.maybePop();
       return;
@@ -133,7 +134,7 @@ class _CallScreenState extends State<CallScreen>
       if (phase == CallPhase.failed || phase == CallPhase.ended) {
         if (phase == CallPhase.failed) {
           ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-            const SnackBar(content: Text('Соединение не удалось')),
+            SnackBar(content: Text(AppL10n.t('Соединение не удалось'))),
           );
         }
         Navigator.maybeOf(context)?.maybePop();
@@ -211,14 +212,14 @@ class _CallScreenState extends State<CallScreen>
                   color: Colors.red.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.fiber_manual_record,
                         color: Colors.white, size: 14),
                     SizedBox(width: 6),
                     Text(
-                      'Идёт запись',
+                      AppL10n.t('Идёт запись'),
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
@@ -332,8 +333,8 @@ class _CallScreenState extends State<CallScreen>
   }
 
   void _screenShareFailedSnack() {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Демонстрация экрана недоступна на этом устройстве')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppL10n.t('Демонстрация экрана недоступна на этом устройстве'))));
   }
 
   Future<void> _end() async {
@@ -557,7 +558,7 @@ class _CallScreenState extends State<CallScreen>
             valueListenable: CallService.instance.callElapsed,
             builder: (_, elapsed, __) => Text(
               elapsed == Duration.zero
-                  ? 'Аудиозвонок'
+                  ? AppL10n.t('Аудиозвонок')
                   : _formatElapsed(elapsed),
               style: const TextStyle(
                 color: Colors.white70,
@@ -568,13 +569,13 @@ class _CallScreenState extends State<CallScreen>
           );
         }
         final label = switch (phase) {
-          CallPhase.ringing when widget.session.incoming => 'Входящий звонок',
-          CallPhase.ringing => 'Ждём ответа…',
-          CallPhase.connecting => 'Соединение…',
-          CallPhase.failed => 'Соединение не удалось',
-          CallPhase.ended => 'Звонок завершён',
-          CallPhase.idle => 'Звонок',
-          CallPhase.connected => 'Аудиозвонок',
+          CallPhase.ringing when widget.session.incoming => AppL10n.t('Входящий звонок'),
+          CallPhase.ringing => AppL10n.t('Ждём ответа…'),
+          CallPhase.connecting => AppL10n.t('Соединение…'),
+          CallPhase.failed => AppL10n.t('Соединение не удалось'),
+          CallPhase.ended => AppL10n.t('Звонок завершён'),
+          CallPhase.idle => AppL10n.t('Звонок'),
+          CallPhase.connected => AppL10n.t('Аудиозвонок'),
         };
         return Text(
           label,
@@ -607,7 +608,7 @@ class _CallScreenState extends State<CallScreen>
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Text('Звуковой эффект',
+              Text(AppL10n.t('Звуковой эффект'),
                   style: TextStyle(color: Colors.white70, fontSize: 13)),
               const SizedBox(height: 14),
               Row(
@@ -642,7 +643,7 @@ class _CallScreenState extends State<CallScreen>
         children: [
           _CallButton(
             icon: _micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
-            label: _micOn ? 'Микрофон' : 'Без звука',
+            label: _micOn ? AppL10n.t('Микрофон') : AppL10n.t('Без звука'),
             active: !_micOn,
             onTap: () async {
               _micOn = !_micOn;
@@ -653,7 +654,7 @@ class _CallScreenState extends State<CallScreen>
           const SizedBox(width: 18),
           _CallButton(
             icon: Icons.theater_comedy_rounded,
-            label: 'Эффект',
+            label: AppL10n.t('Эффект'),
             onTap: _openFxSheet,
           ),
           const SizedBox(width: 18),
@@ -664,7 +665,7 @@ class _CallScreenState extends State<CallScreen>
                 icon: sharing
                     ? Icons.stop_screen_share_rounded
                     : Icons.screen_share_rounded,
-                label: sharing ? 'Стоп' : 'Экран',
+                label: sharing ? AppL10n.t('Стоп') : AppL10n.t('Экран'),
                 active: sharing,
                 onTap: () async {
                   if (sharing) {
@@ -685,7 +686,7 @@ class _CallScreenState extends State<CallScreen>
                 icon: speaker
                     ? Icons.volume_up_rounded
                     : Icons.volume_down_rounded,
-                label: 'Динамик',
+                label: AppL10n.t('Динамик'),
                 active: speaker,
                 onTap: () async {
                   await CallService.instance.setSpeakerphone(!speaker);
@@ -702,7 +703,7 @@ class _CallScreenState extends State<CallScreen>
                 icon: rec
                     ? Icons.stop_rounded
                     : Icons.fiber_manual_record_rounded,
-                label: rec ? 'Стоп' : 'Запись',
+                label: rec ? AppL10n.t('Стоп') : AppL10n.t('Запись'),
                 active: rec,
                 activeColor: Colors.red,
                 onTap: () async {
@@ -715,7 +716,7 @@ class _CallScreenState extends State<CallScreen>
           const SizedBox(width: 18),
           _CallButton(
             icon: Icons.call_end_rounded,
-            label: 'Завершить',
+            label: AppL10n.t('Завершить'),
             onTap: _end,
             background: Colors.red,
             foreground: Colors.white,
@@ -734,7 +735,7 @@ class _CallScreenState extends State<CallScreen>
       if (!(isLocal || hasRemote)) {
         return Center(
           child: Text(
-            'Соединение с ${widget.peerName}...',
+            AppL10n.f('Соединение с {0}...', [widget.peerName]),
             style: const TextStyle(color: Colors.white70),
           ),
         );

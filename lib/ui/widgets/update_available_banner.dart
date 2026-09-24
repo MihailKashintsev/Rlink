@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/update_service.dart';
 import 'update_restart_dialog.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Обновление скачивается В ФОНЕ, пока человек пользуется мессенджером (прогресс
 /// виден в Настройках). Когда загрузка завершена — показываем окно-предупреждение
@@ -73,19 +74,19 @@ mixin UpdateAvailableBannerMixin<T extends StatefulWidget> on State<T> {
     messenger.hideCurrentMaterialBanner();
     messenger.showMaterialBanner(
       MaterialBanner(
-        content: Text('Доступно обновление ${update.version}'),
+        content: Text(AppL10n.f('Доступно обновление {0}', [update.version])),
         leading: const Icon(Icons.system_update, color: Colors.green),
         actions: [
           TextButton(
             onPressed: () => messenger.hideCurrentMaterialBanner(),
-            child: const Text('Позже'),
+            child: Text(AppL10n.t('Позже')),
           ),
           FilledButton(
             onPressed: () {
               messenger.hideCurrentMaterialBanner();
               UpdateService.instance.openDownloadPage(update);
             },
-            child: const Text('Сайт загрузки'),
+            child: Text(AppL10n.t('Сайт загрузки')),
           ),
         ],
       ),

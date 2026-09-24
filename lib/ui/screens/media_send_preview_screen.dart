@@ -163,7 +163,7 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
         }
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось обработать изображение')),
+          SnackBar(content: Text(AppL10n.t('Не удалось обработать изображение'))),
         );
       }
     } catch (_) {
@@ -260,13 +260,13 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
     final text = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Текст на фото'),
+        title: Text(AppL10n.t('Текст на фото')),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           maxLines: 3,
           minLines: 1,
-          decoration: const InputDecoration(hintText: 'Введите текст…'),
+          decoration: InputDecoration(hintText: AppL10n.t('Введите текст…')),
         ),
         actions: [
           TextButton(
@@ -364,9 +364,9 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (_textMode)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(right: 8),
-                child: Text('Нажмите на фото',
+                child: Text(AppL10n.t('Нажмите на фото'),
                     style: TextStyle(color: Colors.white54, fontSize: 12)),
               ),
             for (final c in _palette)
@@ -410,8 +410,8 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
             : null,
         title: Text(
           widget.peerName != null && widget.peerName!.isNotEmpty
-              ? 'Отправить → ${widget.peerName}'
-              : 'Отправить фото',
+              ? AppL10n.f('Отправить → {0}', [widget.peerName])
+              : AppL10n.t('Отправить фото'),
           style: const TextStyle(fontSize: 16),
         ),
         actions: _cropMode
@@ -432,7 +432,7 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
                 ? [
                     if (_hasAnnotations)
                       IconButton(
-                        tooltip: 'Отменить',
+                        tooltip: AppL10n.t('Отменить'),
                         onPressed: () => setState(() {
                           if (_texts.isNotEmpty &&
                               (_textMode || _strokes.isEmpty)) {
@@ -455,26 +455,26 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
                   ]
                 : [
                     IconButton(
-                      tooltip: 'Рисовать',
+                      tooltip: AppL10n.t('Рисовать'),
                       onPressed: _busy
                           ? null
                           : () => setState(() => _drawMode = true),
                       icon: const Icon(Icons.brush_rounded),
                     ),
                     IconButton(
-                      tooltip: 'Текст',
+                      tooltip: AppL10n.t('Текст'),
                       onPressed: _busy
                           ? null
                           : () => setState(() => _textMode = true),
                       icon: const Icon(Icons.title_rounded),
                     ),
                     IconButton(
-                      tooltip: 'Повернуть',
+                      tooltip: AppL10n.t('Повернуть'),
                       onPressed: _busy ? null : _rotate,
                       icon: const Icon(Icons.rotate_right_rounded),
                     ),
                     IconButton(
-                      tooltip: 'Обрезать',
+                      tooltip: AppL10n.t('Обрезать'),
                       onPressed: _busy
                           ? null
                           : () => setState(() => _cropMode = true),
@@ -541,8 +541,8 @@ class _MediaSendPreviewScreenState extends State<MediaSendPreviewScreen> {
                           minLines: 1,
                           maxLines: 4,
                           style: const TextStyle(color: Colors.white),
-                          decoration: const InputDecoration(
-                            hintText: 'Подпись...',
+                          decoration: InputDecoration(
+                            hintText: AppL10n.t('Подпись...'),
                             hintStyle: TextStyle(color: Colors.white54),
                             border: InputBorder.none,
                             contentPadding: EdgeInsets.symmetric(

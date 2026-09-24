@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_l10n.dart';
 
 /// One tile in the primary 4-per-row grid or in the "Еще" overflow menu.
 class WebPickerItem {
@@ -65,9 +66,9 @@ Future<String?> showWebMediaPickerSheet(
   final all = [
     ...items,
     if (moreItems.isNotEmpty)
-      const WebPickerItem(
+      WebPickerItem(
         icon: Icons.more_horiz_rounded,
-        label: 'Еще',
+        label: AppL10n.t('Еще'),
         value: 'menu',
         color: Colors.deepPurple,
       ),

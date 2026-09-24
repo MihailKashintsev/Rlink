@@ -11,6 +11,7 @@ import '../services/crypto_service.dart';
 import '../services/image_service.dart';
 import '../services/relay_service.dart';
 import 'emoji_pack_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// Служебный авто-обмен кастомными эмодзи (без карточки в чате).
 class EmojiPackDmService {
@@ -206,8 +207,8 @@ class EmojiPackDmService {
     if (myId.isEmpty) return;
     final canonical = ChatStorageService.normalizeDmPeerId(targetPeerId.trim());
     final rawName = (payload['name'] as String?)?.trim() ?? '';
-    final name = rawName.isEmpty ? 'Набор' : rawName;
-    final previewText = '😊 Набор эмодзи «$name»';
+    final name = rawName.isEmpty ? AppL10n.t('Набор') : rawName;
+    final previewText = AppL10n.f('😊 Набор эмодзи «{0}»', [name]);
     final msgId = 'emojipack_${_uuid.v4()}';
     final invitePayloadJson = jsonEncode(payload);
 
@@ -225,13 +226,13 @@ class EmojiPackDmService {
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
           msgId, MessageStatus.sent);
       await ChatStorageService.instance.loadMessages(canonical);
-      _snack(context, 'Набор сохранён');
+      _snack(context, AppL10n.t('Набор сохранён'));
       return;
     }
     if (!RelayService.instance.isConnected) {
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
           msgId, MessageStatus.failed);
-      _snack(context, 'Для отправки набора нужен relay');
+      _snack(context, AppL10n.t('Для отправки набора нужен relay'));
       return;
     }
     try {
@@ -278,11 +279,11 @@ class EmojiPackDmService {
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
           msgId, MessageStatus.sent);
       await ChatStorageService.instance.loadMessages(canonical);
-      _snack(context, 'Набор отправлен');
+      _snack(context, AppL10n.t('Набор отправлен'));
     } catch (e) {
       await ChatStorageService.instance.updateMessageStatusPreserveDelivered(
           msgId, MessageStatus.failed);
-      _snack(context, 'Не удалось отправить: $e');
+      _snack(context, AppL10n.f('Не удалось отправить: {0}', [e]));
     }
   }
 
@@ -293,7 +294,7 @@ class EmojiPackDmService {
   }) async {
     final payload = await buildPackSharePayload(pack);
     if (payload == null) {
-      _snack(context, 'В наборе нет файлов для отправки');
+      _snack(context, AppL10n.t('В наборе нет файлов для отправки'));
       return;
     }
     await _sendPackPayloadBlob(
@@ -334,7 +335,7 @@ class EmojiPackDmService {
 
     final name = (payload['name'] as String?)?.trim();
     final previewText =
-        (name != null && name.isNotEmpty) ? '😊 Набор эмодзи «$name»' : '😊 Набор эмодзи';
+        (name != null && name.isNotEmpty) ? AppL10n.f('😊 Набор эмодзи «{0}»', [name]) : AppL10n.t('😊 Набор эмодзи');
 
     await ChatStorageService.instance.saveMessage(ChatMessage(
       id: msgId,

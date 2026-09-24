@@ -5,6 +5,7 @@ import '../../services/relay_service.dart';
 import 'bot_builder_screen.dart';
 import '../../services/premium_service.dart';
 import '../widgets/premium_gate.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Справка для разработчиков сторонних ботов: как создать, развернуть,
 /// зарегистрировать бота Rlink и отправить заявку на галочку.
@@ -30,23 +31,19 @@ class _BotDeveloperGuideScreenState extends State<BotDeveloperGuideScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Справка для разработчиков')),
+      appBar: AppBar(title: Text(AppL10n.t('Справка для разработчиков'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
-          const _Info(
+          _Info(
             icon: Icons.lock_outline,
             text:
-                'Бот в Rlink — это ваш процесс на вашем ПК или сервере. Relay только '
-                'доставляет E2E-зашифрованные сообщения и не читает их. Пока процесс '
-                'запущен — бот отвечает по вашим правилам; когда офлайн, собеседник '
-                'видит заглушку «Бот не в сети…», а сообщение ждёт в очереди.',
+                AppL10n.t('Бот в Rlink — это ваш процесс на вашем ПК или сервере. Relay только доставляет E2E-зашифрованные сообщения и не читает их. Пока процесс запущен — бот отвечает по вашим правилам; когда офлайн, собеседник видит заглушку «Бот не в сети…», а сообщение ждёт в очереди.'),
           ),
           const SizedBox(height: 20),
 
-          _h('Путь 1 — без кода (рекомендуется)'),
-          _p('Соберите ответы в конструкторе — приложение выдаст готовый '
-              'Python-файл и зарегистрирует бота в один тап.'),
+          _h(AppL10n.t('Путь 1 — без кода (рекомендуется)')),
+          _p(AppL10n.t('Соберите ответы в конструкторе — приложение выдаст готовый Python-файл и зарегистрирует бота в один тап.')),
           const SizedBox(height: 10),
           FilledButton.icon(
             onPressed: () => Navigator.push(
@@ -54,68 +51,62 @@ class _BotDeveloperGuideScreenState extends State<BotDeveloperGuideScreen> {
               MaterialPageRoute(
                   builder: (_) => PremiumGate(
                 feature: PremiumFeature.botBuilder,
-                title: 'Конструктор ботов',
+                title: AppL10n.t('Конструктор ботов'),
                 description:
-                    'Создание ботов в no-code конструкторе входит в Rlink Premium.',
+                    AppL10n.t('Создание ботов в no-code конструкторе входит в Rlink Premium.'),
                 child: BotBuilderScreen(),
               )),
             ),
             icon: const Icon(Icons.smart_toy_outlined),
-            label: const Text('Открыть конструктор'),
+            label: Text(AppL10n.t('Открыть конструктор')),
           ),
           const SizedBox(height: 24),
 
-          _h('Путь 2 — свой код (полный контроль)'),
-          _step(1, 'Установите клиента ботов (один раз)',
-              'Пакет rlink_bot лежит в репозитории Rlink, папка tools/rlink_bot.'),
+          _h(AppL10n.t('Путь 2 — свой код (полный контроль)')),
+          _step(1, AppL10n.t('Установите клиента ботов (один раз)'),
+              AppL10n.t('Пакет rlink_bot лежит в репозитории Rlink, папка tools/rlink_bot.')),
           _code(
             'cd tools/rlink_bot\npython -m pip install -e .',
             () => _copy('cd tools/rlink_bot\npython -m pip install -e .',
-                'Скопировано'),
+                AppL10n.t('Скопировано')),
           ),
-          _step(2, 'Создайте ключи бота',
-              'Второй командой печатается публичный ключ (64 hex) — он нужен для регистрации.'),
+          _step(2, AppL10n.t('Создайте ключи бота'),
+              AppL10n.t('Второй командой печатается публичный ключ (64 hex) — он нужен для регистрации.')),
           _code(
             'python -m rlink_bot keys init --file bot_keys.json\n'
             'python -m rlink_bot keys show-pub --file bot_keys.json',
             () => _copy(
                 'python -m rlink_bot keys init --file bot_keys.json\n'
                 'python -m rlink_bot keys show-pub --file bot_keys.json',
-                'Скопировано'),
+                AppL10n.t('Скопировано')),
           ),
-          _step(3, 'Зарегистрируйте ник',
-              'В чате с ботом Lib: /newbot ваш_ник, затем вставьте 64 hex ключа. '
-                  'Lib выдаст код заявки (claimCode).'),
-          _step(4, 'Привяжите ключи (создаст rlink_bot_config.json)', ''),
+          _step(3, AppL10n.t('Зарегистрируйте ник'),
+              AppL10n.t('В чате с ботом Lib: /newbot ваш_ник, затем вставьте 64 hex ключа. Lib выдаст код заявки (claimCode).')),
+          _step(4, AppL10n.t('Привяжите ключи (создаст rlink_bot_config.json)'), ''),
           _code(
             'python -m rlink_bot onboard <код из Lib> --file bot_keys.json',
             () => _copy(
-                'python -m rlink_bot onboard <код из Lib> --file bot_keys.json',
-                'Скопировано'),
+                AppL10n.t('python -m rlink_bot onboard <код из Lib> --file bot_keys.json'),
+                AppL10n.t('Скопировано')),
           ),
-          _step(5, 'Опишите логику ответов',
-              'Возьмите tools/rlink_bot/example_echo_bot.py как шаблон: функция '
-                  'handle(sender, text) возвращает ответ. Кнопки-чипы: [btn:Метка|/команда].'),
-          _step(6, 'Запустите и держите онлайн', ''),
+          _step(5, AppL10n.t('Опишите логику ответов'),
+              AppL10n.t('Возьмите tools/rlink_bot/example_echo_bot.py как шаблон: функция handle(sender, text) возвращает ответ. Кнопки-чипы: [btn:Метка|/команда].')),
+          _step(6, AppL10n.t('Запустите и держите онлайн'), ''),
           _code(
             'python -m rlink_bot run --file rlink_bot_config.json',
             () => _copy('python -m rlink_bot run --file rlink_bot_config.json',
-                'Скопировано'),
+                AppL10n.t('Скопировано')),
           ),
           const SizedBox(height: 8),
-          const _Info(
+          _Info(
             icon: Icons.dns_outlined,
             text:
-                'Чтобы бот был онлайн постоянно, запускайте его на сервере под '
-                'systemd / screen / tmux / docker — так процесс переживёт выход из '
-                'сессии и перезагрузку.',
+                AppL10n.t('Чтобы бот был онлайн постоянно, запускайте его на сервере под systemd / screen / tmux / docker — так процесс переживёт выход из сессии и перезагрузку.'),
           ),
           const SizedBox(height: 24),
 
-          _h('Галочка (верификация)'),
-          _p('Когда бот готов и стабильно онлайн, отправьте заявку на галочку. '
-              'Админ увидит её в панели и примет решение. Заявку можно также '
-              'отправить командой Lib: /verify @ваш_ник [комментарий].'),
+          _h(AppL10n.t('Галочка (верификация)')),
+          _p(AppL10n.t('Когда бот готов и стабильно онлайн, отправьте заявку на галочку. Админ увидит её в панели и примет решение. Заявку можно также отправить командой Lib: /verify @ваш_ник [комментарий].')),
           const SizedBox(height: 10),
           FilledButton.icon(
             onPressed: _verifyBusy ? null : _requestVerification,
@@ -125,7 +116,7 @@ class _BotDeveloperGuideScreenState extends State<BotDeveloperGuideScreen> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.verified_outlined),
-            label: Text(_verifyBusy ? 'Загрузка…' : 'Запросить галочку'),
+            label: Text(_verifyBusy ? AppL10n.t('Загрузка…') : AppL10n.t('Запросить галочку')),
           ),
         ],
       ),
@@ -141,7 +132,7 @@ class _BotDeveloperGuideScreenState extends State<BotDeveloperGuideScreen> {
       final ack = await RelayService.instance.sendBotOwnerList();
       if (!mounted) return;
       if (ack['ok'] != true) {
-        _snack('Relay: ${ack['error'] ?? 'не удалось получить список ботов'}');
+        _snack('Relay: ${ack['error'] ?? AppL10n.t('не удалось получить список ботов')}');
         return;
       }
       final raw = ack['bots'];
@@ -152,7 +143,7 @@ class _BotDeveloperGuideScreenState extends State<BotDeveloperGuideScreen> {
         }
       }
       if (bots.isEmpty) {
-        _snack('У вас пока нет зарегистрированных ботов на relay.');
+        _snack(AppL10n.t('У вас пока нет зарегистрированных ботов на relay.'));
         return;
       }
       final picked = await showModalBottomSheet<Map<String, dynamic>>(
@@ -161,9 +152,9 @@ class _BotDeveloperGuideScreenState extends State<BotDeveloperGuideScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('Выберите бота для заявки',
+                child: Text(AppL10n.t('Выберите бота для заявки'),
                     style: TextStyle(fontWeight: FontWeight.w700)),
               ),
               ...bots.map((b) {
@@ -194,9 +185,9 @@ class _BotDeveloperGuideScreenState extends State<BotDeveloperGuideScreen> {
           .sendBotVerifyRequest(botId: botId, note: note ?? '');
       if (!mounted) return;
       if (res['ok'] == true) {
-        _snack('Заявка на галочку для @$handle отправлена ✓');
+        _snack(AppL10n.f('Заявка на галочку для @{0} отправлена ✓', [handle]));
       } else {
-        _snack('Не удалось отправить заявку: ${res['error'] ?? 'ошибка'}');
+        _snack(AppL10n.f('Не удалось отправить заявку: {0}', [res['error'] ?? AppL10n.t('ошибка')]));
       }
     } finally {
       if (mounted) setState(() => _verifyBusy = false);
@@ -208,23 +199,23 @@ class _BotDeveloperGuideScreenState extends State<BotDeveloperGuideScreen> {
     return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Комментарий к заявке'),
+        title: Text(AppL10n.t('Комментарий к заявке')),
         content: TextField(
           controller: ctrl,
           maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'Необязательно: что делает бот, зачем галочка…',
+          decoration: InputDecoration(
+            hintText: AppL10n.t('Необязательно: что делает бот, зачем галочка…'),
             border: OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, ''),
-            child: const Text('Без комментария'),
+            child: Text(AppL10n.t('Без комментария')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Отправить'),
+            child: Text(AppL10n.t('Отправить')),
           ),
         ],
       ),
@@ -310,7 +301,7 @@ class _BotDeveloperGuideScreenState extends State<BotDeveloperGuideScreen> {
               child: TextButton.icon(
                 onPressed: onCopy,
                 icon: const Icon(Icons.copy, size: 15),
-                label: const Text('Копировать'),
+                label: Text(AppL10n.t('Копировать')),
               ),
             ),
           ],

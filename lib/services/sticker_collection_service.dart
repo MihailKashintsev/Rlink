@@ -12,6 +12,7 @@ import '../models/rlv_sticker.dart';
 import '../models/sticker_pack.dart';
 import '../models/tgs_sticker.dart';
 import '../utils/web_file_store.dart';
+import '../l10n/app_l10n.dart';
 
 /// Локальная коллекция стикеров (свои и добавленные из чатов).
 /// • Native: файлы `images/stk_*` + индексы `sticker_collection.json` /
@@ -528,7 +529,7 @@ class StickerCollectionService {
     final packs = await _readPacks();
     final id = _uuid.v4();
     final valid = await _validRels(relPaths);
-    final t = title.trim().isEmpty ? 'Набор' : title.trim();
+    final t = title.trim().isEmpty ? AppL10n.t('Набор') : title.trim();
     packs.insert(
       0,
       StickerPack(

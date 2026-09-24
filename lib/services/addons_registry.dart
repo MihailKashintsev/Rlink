@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../ui/screens/music_screen.dart';
+import '../l10n/app_l10n.dart';
 
 /// One add-on: a self-contained screen the messenger can host.
 ///
@@ -43,17 +44,17 @@ class AddonInfo {
 List<AddonInfo> addons() => [
       AddonInfo(
         id: 'rlink.music',
-        title: 'Музыка',
-        subtitle: 'Плеер, поиск, «Нравится», Линия, текст (бета)',
+        title: AppL10n.t('Музыка'),
+        subtitle: AppL10n.t('Плеер, поиск, «Нравится», Линия, текст (бета)'),
         icon: Icons.library_music_outlined,
-        color: const Color(0xFF00BCD4),
-        keywords: const [
+        color: Color(0xFF00BCD4),
+        keywords: [
           'music',
-          'плеер',
+          AppL10n.t('плеер'),
           'player',
-          'трек',
-          'песня',
-          'линия',
+          AppL10n.t('трек'),
+          AppL10n.t('песня'),
+          AppL10n.t('линия'),
           'audius',
         ],
         open: () => const MusicScreen(),

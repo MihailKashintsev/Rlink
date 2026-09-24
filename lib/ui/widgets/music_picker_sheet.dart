@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/music_catalog_service.dart';
 import '../../services/music_library_service.dart';
 import '../../services/my_tracks_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Pick profile music without storing a file anywhere: search the open
 /// catalog, or paste a link someone shared. Returns the URL to play.
@@ -129,7 +130,7 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
         return Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text('Ничего не нашлось',
+            child: Text(AppL10n.t('Ничего не нашлось'),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: cs.onSurfaceVariant)),
           ),
@@ -144,7 +145,7 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            'Найдите трек, вставьте ссылку выше или загрузите свой в разделе Музыка',
+            AppL10n.t('Найдите трек, вставьте ссылку выше или загрузите свой в разделе Музыка'),
             textAlign: TextAlign.center,
             style: TextStyle(color: cs.onSurfaceVariant),
           ),
@@ -154,7 +155,7 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
     return ListView(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-        child: Text('Моя библиотека',
+        child: Text(AppL10n.t('Моя библиотека'),
             style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -184,11 +185,11 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Музыка в профиле',
+                child: Text(AppL10n.t('Музыка в профиле'),
                     style:
                         TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               ),
@@ -198,8 +199,7 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Трек играет по ссылке — ничего не хранится у нас и никому '
-                  'не нужно его скачивать.',
+                  AppL10n.t('Трек играет по ссылке — ничего не хранится у нас и никому не нужно его скачивать.'),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               ),
@@ -215,7 +215,7 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
                       decoration: InputDecoration(
                         isDense: true,
                         prefixIcon: const Icon(Icons.link, size: 18),
-                        hintText: 'Вставить ссылку на трек',
+                        hintText: AppL10n.t('Вставить ссылку на трек'),
                         hintStyle: const TextStyle(fontSize: 13),
                         filled: true,
                         fillColor:
@@ -235,14 +235,14 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
                       final v = _linkCtrl.text.trim();
                       if (!MusicCatalogService.instance.looksPlayableUrl(v)) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Нужна ссылка http(s)://')),
+                          SnackBar(
+                              content: Text(AppL10n.t('Нужна ссылка http(s)://'))),
                         );
                         return;
                       }
                       Navigator.pop(context, v);
                     },
-                    child: const Text('ОК'),
+                    child: Text(AppL10n.t('ОК')),
                   ),
                 ],
               ),
@@ -257,7 +257,7 @@ class _MusicPickerSheetState extends State<_MusicPickerSheet> {
                 decoration: InputDecoration(
                   isDense: true,
                   prefixIcon: const Icon(Icons.search, size: 18),
-                  hintText: 'Поиск музыки',
+                  hintText: AppL10n.t('Поиск музыки'),
                   hintStyle: const TextStyle(fontSize: 13),
                   filled: true,
                   fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),

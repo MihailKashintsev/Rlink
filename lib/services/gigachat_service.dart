@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 import '../models/chat_message.dart';
 import 'ai_bot_constants.dart';
 import 'chat_storage_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// Интеграция с [GigaChat](https://developers.sber.ru/docs/ru/gigachat) (Сбер).
 /// Ключ: Authorization Key из личного кабинета (Base64 от `client_id:client_secret`).
@@ -101,12 +102,7 @@ class GigachatService {
 
   /// Понятное сообщение при сбое проверки HTTPS (часто VPN, антивирус, Charles, неверное время).
   static String _certFailureHint() {
-    return 'Не удалось проверить сертификат сервера GigaChat (HTTPS). '
-        'Проверьте дату и время на устройстве. Отключите VPN, антивирус с проверкой HTTPS '
-        'и отладочные прокси (Charles, Fiddler). В корпоративной сети попробуйте мобильный интернет '
-        'или сеть без подмены сертификатов. '
-        'Как крайний вариант: Профиль → ИИ (GigaChat) → «Обход проверки сертификата» '
-        '(только узлы Сбера; снижает защиту от перехвата).';
+    return AppL10n.t('Не удалось проверить сертификат сервера GigaChat (HTTPS). Проверьте дату и время на устройстве. Отключите VPN, антивирус с проверкой HTTPS и отладочные прокси (Charles, Fiddler). В корпоративной сети попробуйте мобильный интернет или сеть без подмены сертификатов. Как крайний вариант: Профиль → ИИ (GigaChat) → «Обход проверки сертификата» (только узлы Сбера; снижает защиту от перехвата).');
   }
 
   static GigachatException _fromDioException(DioException e, String context) {
@@ -216,7 +212,7 @@ class GigachatService {
     final map = resp.data as Map<String, dynamic>;
     final token = map['access_token'] as String?;
     if (token == null || token.isEmpty) {
-      throw GigachatException('Нет access_token в ответе OAuth');
+      throw GigachatException(AppL10n.t('Нет access_token в ответе OAuth'));
     }
     final exp = (map['expires_at'] as num?)?.toInt();
     _accessToken = token;
@@ -229,7 +225,7 @@ class GigachatService {
     final auth = await readAuthorizationKey();
     if (auth == null || auth.trim().isEmpty) {
       throw GigachatException(
-        'Не указан ключ GigaChat. Откройте Профиль → блок «ИИ (GigaChat)».',
+        AppL10n.t('Не указан ключ GigaChat. Откройте Профиль → блок «ИИ (GigaChat)».'),
       );
     }
     final token = await _ensureAccessToken(auth);
@@ -251,7 +247,7 @@ class GigachatService {
         data: form,
       );
     } on DioException catch (e) {
-      throw _fromDioException(e, 'Загрузка файла GigaChat');
+      throw _fromDioException(e, AppL10n.t('Загрузка файла GigaChat'));
     }
     if (resp.statusCode != 200 || resp.data is! Map) {
       throw GigachatException(
@@ -260,7 +256,7 @@ class GigachatService {
     }
     final id = (resp.data as Map)['id'] as String?;
     if (id == null || id.isEmpty) {
-      throw GigachatException('Нет id файла в ответе загрузки');
+      throw GigachatException(AppL10n.t('Нет id файла в ответе загрузки'));
     }
     return id;
   }
@@ -333,7 +329,7 @@ class GigachatService {
     final auth = await readAuthorizationKey();
     if (auth == null || auth.trim().isEmpty) {
       throw GigachatException(
-        'Не указан ключ GigaChat. Откройте Профиль → блок «ИИ (GigaChat)».',
+        AppL10n.t('Не указан ключ GigaChat. Откройте Профиль → блок «ИИ (GigaChat)».'),
       );
     }
 
@@ -341,7 +337,7 @@ class GigachatService {
     final history = await _historyFromDb();
     if (history.isEmpty || history.last['role'] != 'user') {
       throw GigachatException(
-        'Нет сообщения пользователя для ответа. Отправьте текст ещё раз.',
+        AppL10n.t('Нет сообщения пользователя для ответа. Отправьте текст ещё раз.'),
       );
     }
 
@@ -349,8 +345,7 @@ class GigachatService {
       {
         'role': 'system',
         'content':
-            'Ты дружелюбный ассистент в мессенджере Rlink. Отвечай по существу, '
-            'на том же языке, что и пользователь. Не выдумывай факты о людях и устройствах в сети.',
+            'Ты дружелюбный ассистент в мессенджере Rlink. Отвечай по существу, на том же языке, что и пользователь. Не выдумывай факты о людях и устройствах в сети.',
       },
       ...history,
     ];
@@ -387,7 +382,7 @@ class GigachatService {
         }
         lastErr = 'HTTP ${r.statusCode}: ${_shortErr(r.data)}';
       } on DioException catch (e) {
-        lastErr = _fromDioException(e, 'Запрос GigaChat');
+        lastErr = _fromDioException(e, AppL10n.t('Запрос GigaChat'));
       } catch (e) {
         lastErr = e;
       }
@@ -396,18 +391,18 @@ class GigachatService {
     if (resp == null || resp.data is! Map) {
       if (lastErr is GigachatException) throw lastErr;
       throw GigachatException(
-        'GigaChat: ${lastErr ?? "не удалось получить ответ"}',
+        'GigaChat: ${lastErr ?? AppL10n.t('не удалось получить ответ')}',
       );
     }
     final map = resp.data as Map<String, dynamic>;
     final choices = map['choices'];
     if (choices is! List || choices.isEmpty) {
-      throw GigachatException('Пустой ответ модели');
+      throw GigachatException(AppL10n.t('Пустой ответ модели'));
     }
     final firstChoice = choices.first as Map;
     final msg = firstChoice['message'];
     if (msg is! Map) {
-      throw GigachatException('Некорректный формат ответа');
+      throw GigachatException(AppL10n.t('Некорректный формат ответа'));
     }
     final parsed = _normalizeAssistantContent(msg['content']);
     if (parsed != null && parsed.isNotEmpty) {
@@ -417,12 +412,11 @@ class GigachatService {
     final fn = msg['function_call'];
     if (fn != null) {
       throw GigachatException(
-        'Модель запросила вызов функции вместо текста ($fn). '
-        'Попробуйте переформулировать вопрос.',
+        AppL10n.f('Модель запросила вызов функции вместо текста ({0}). Попробуйте переформулировать вопрос.', [fn]),
       );
     }
     throw GigachatException(
-      'Модель вернула пустой текст${finish.isNotEmpty ? ' (finish: $finish)' : ''}',
+      AppL10n.f('Модель вернула пустой текст{0}', [finish.isNotEmpty ? ' (finish: $finish)' : '']),
     );
   }
 
@@ -435,7 +429,7 @@ class GigachatService {
       }
       return data.toString();
     } catch (_) {
-      return 'ошибка';
+      return AppL10n.t('ошибка');
     }
   }
 }

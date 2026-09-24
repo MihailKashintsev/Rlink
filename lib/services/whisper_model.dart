@@ -1,3 +1,5 @@
+import '../l10n/app_l10n.dart';
+
 /// Размеры локальной модели Whisper (ggml) для расшифровки аудио.
 ///
 /// Начиная с 1.0.0 ни одна модель не входит в комплект приложения — все
@@ -16,11 +18,11 @@ enum WhisperModelSize {
   String get displayName {
     switch (this) {
       case WhisperModelSize.tiny:
-        return 'Tiny — быстрая';
+        return AppL10n.t('Tiny — быстрая');
       case WhisperModelSize.base:
-        return 'Base — точнее';
+        return AppL10n.t('Base — точнее');
       case WhisperModelSize.small:
-        return 'Small — макс. точность';
+        return AppL10n.t('Small — макс. точность');
     }
   }
 

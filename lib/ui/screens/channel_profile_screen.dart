@@ -18,6 +18,7 @@ import '../../utils/web_file_store.dart';
 import '../widgets/avatar_widget.dart';
 import 'channel_admin_settings_screen.dart';
 import 'channel_profile_edit_dialog.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Профиль канала (баннер, аватар, описание) — доступен подписчикам.
 class ChannelProfileScreen extends StatefulWidget {
@@ -71,13 +72,13 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('История канала обновляется…')),
+          SnackBar(content: Text(AppL10n.t('История канала обновляется…'))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось обновить историю: $e')),
+          SnackBar(content: Text(AppL10n.f('Не удалось обновить историю: {0}', [e]))),
         );
       }
     } finally {
@@ -254,7 +255,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
     final ch = _channel;
     if (ch == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Канал')),
+        appBar: AppBar(title: Text(AppL10n.t('Канал'))),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -290,7 +291,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.share_outlined),
-                tooltip: 'Поделиться каналом',
+                tooltip: AppL10n.t('Поделиться каналом'),
                 onPressed: () {
                   unawaited(RlinkDeepLink.shareChannelInvite(
                     context: context,
@@ -301,13 +302,13 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.link_rounded),
-                tooltip: 'Копировать ссылку',
+                tooltip: AppL10n.t('Копировать ссылку'),
                 onPressed: () {
                   final uri = RlinkDeepLink.channelInviteWebUri(ch.id);
                   Clipboard.setData(ClipboardData(text: uri.toString()));
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Ссылка скопирована: $uri'),
+                      content: Text(AppL10n.f('Ссылка скопирована: {0}', [uri])),
                     ),
                   );
                 },
@@ -316,8 +317,8 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
                   tooltip: canOpenGeneralSettings
-                      ? 'Настройки канала'
-                      : 'Управление каналом',
+                      ? AppL10n.t('Настройки канала')
+                      : AppL10n.t('Управление каналом'),
                   onPressed: () {
                     if (canOpenGeneralSettings) {
                       Navigator.push<void>(
@@ -438,7 +439,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text('${ch.subscriberIds.length} подписчиков',
+                        Text(AppL10n.f('{0} подписчиков', [ch.subscriberIds.length]),
                             style: TextStyle(
                                 color: cs.onSurfaceVariant, fontSize: 14)),
                       ],
@@ -460,7 +461,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('О канале',
+                                Text(AppL10n.t('О канале'),
                                     style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: cs.primary,
@@ -482,7 +483,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                               Icon(Icons.tag_rounded,
                                   size: 18, color: cs.onSurfaceVariant),
                               const SizedBox(width: 6),
-                              SelectableText('Код: ${ch.universalCode}',
+                              SelectableText(AppL10n.f('Код: {0}', [ch.universalCode]),
                                   style: const TextStyle(
                                       fontFamily: 'monospace', fontSize: 13)),
                             ],
@@ -498,7 +499,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                                   ? Icons.notifications_off_outlined
                                   : Icons.notifications_active_outlined),
                               label: Text(
-                                  subscribed ? 'Отписаться' : 'Подписаться'),
+                                  subscribed ? AppL10n.t('Отписаться') : AppL10n.t('Подписаться')),
                             ),
                           ),
                           const SizedBox(height: 10),
@@ -516,7 +517,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                                           strokeWidth: 2),
                                     )
                                   : const Icon(Icons.history_rounded),
-                              label: const Text('Обновить историю канала'),
+                              label: Text(AppL10n.t('Обновить историю канала')),
                             ),
                           ),
                         ],
@@ -526,7 +527,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                               Icon(Icons.shield_outlined,
                                   size: 18, color: cs.onSurfaceVariant),
                               const SizedBox(width: 8),
-                              Text('Вы администратор',
+                              Text(AppL10n.t('Вы администратор'),
                                   style:
                                       TextStyle(color: cs.onSurfaceVariant)),
                             ],
@@ -545,7 +546,7 @@ class _ChannelProfileScreenState extends State<ChannelProfileScreen> {
                   children: [
                     Icon(Icons.grid_view_rounded, size: 18, color: cs.primary),
                     const SizedBox(width: 8),
-                    const Text('Медиа',
+                    Text(AppL10n.t('Медиа'),
                         style: TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 15)),
                     const SizedBox(width: 8),

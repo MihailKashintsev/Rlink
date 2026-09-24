@@ -51,9 +51,9 @@ class _EmojiHubScreenState extends State<EmojiHubScreen> {
         title: Text(AppL10n.t('cm_new_pack')),
         content: TextField(
           controller: ctrl,
-          decoration: const InputDecoration(
-            labelText: 'Название',
-            hintText: 'Мои эмодзи',
+          decoration: InputDecoration(
+            labelText: AppL10n.t('Название'),
+            hintText: AppL10n.t('Мои эмодзи'),
           ),
           autofocus: true,
           onSubmitted: (v) => Navigator.pop(ctx, v),
@@ -72,7 +72,7 @@ class _EmojiHubScreenState extends State<EmojiHubScreen> {
     );
     if (name == null || !mounted) return;
     final id =
-        await EmojiPackService.instance.createPack(name: name.isEmpty ? 'Набор' : name);
+        await EmojiPackService.instance.createPack(name: name.isEmpty ? AppL10n.t('Набор') : name);
     if (!mounted) return;
     await Navigator.push<void>(
       context,
@@ -102,7 +102,7 @@ class _EmojiHubScreenState extends State<EmojiHubScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(
-                      'Пока нет наборов.\nСоздайте набор здесь или в чате с ботом Emoji.',
+                      AppL10n.t('Пока нет наборов.\nСоздайте набор здесь или в чате с ботом Emoji.'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: cs.onSurfaceVariant, height: 1.4),
                     ),
@@ -121,7 +121,7 @@ class _EmojiHubScreenState extends State<EmojiHubScreen> {
                           child: Icon(Icons.tag_faces, color: cs.onPrimaryContainer),
                         ),
                         title: Text(p.name),
-                        subtitle: Text('${p.emojis.length} эмодзи · ${p.id}'),
+                        subtitle: Text(AppL10n.f('{0} эмодзи · {1}', [p.emojis.length, p.id])),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () async {
                           await Navigator.push<void>(

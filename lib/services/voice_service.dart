@@ -12,6 +12,7 @@ import 'package:video_player/video_player.dart';
 import 'embedded_video_pause_bus.dart';
 import 'music_catalog_service.dart' show drivePlayableUrl;
 import '../utils/web_file_store.dart';
+import '../l10n/app_l10n.dart';
 
 /// Тип элемента очереди (квадратик в очереди идёт как видео с дорожкой).
 enum PlaybackMediaKind { voice, audioFile, squareVideo }
@@ -372,11 +373,12 @@ class VoiceService {
   /// Одно сообщение — как очередь из одного элемента.
   Future<void> play(
     String path, {
-    String title = 'Голосовое',
+    String? title,
     PlaybackMediaKind kind = PlaybackMediaKind.voice,
   }) async {
     await playQueue([
-      PlaybackQueueItem(path: path, title: title, kind: kind),
+      PlaybackQueueItem(
+          path: path, title: title ?? AppL10n.t('Голосовое'), kind: kind),
     ]);
   }
 

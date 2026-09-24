@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import '../widgets/music_lyrics_panel.dart';
 import '../widgets/track_upload_sheet.dart';
 import 'music_player_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Built-in music player: catalog search, a local "liked" list and a player
 /// bar. Playback runs through VoiceService, so leaving this screen hands the
@@ -163,14 +164,14 @@ class _MusicScreenState extends State<MusicScreen>
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Музыка'),
+        title: Text(AppL10n.t('Музыка')),
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [
-            Tab(text: 'Линия'),
-            Tab(text: 'Поиск'),
-            Tab(text: 'Мои'),
-            Tab(text: 'Нравится'),
+          tabs: [
+            Tab(text: AppL10n.t('Линия')),
+            Tab(text: AppL10n.t('Поиск')),
+            Tab(text: AppL10n.t('Мои')),
+            Tab(text: AppL10n.t('Нравится')),
           ],
         ),
       ),
@@ -206,8 +207,7 @@ class _MusicScreenState extends State<MusicScreen>
           ? const Center(child: CircularProgressIndicator())
           : _hint(
               cs,
-              'Пусто. Каталог может быть недоступен без VPN — загрузите свой '
-              'трек или лайкните, и он появится здесь.');
+              AppL10n.t('Пусто. Каталог может быть недоступен без VPN — загрузите свой трек или лайкните, и он появится здесь.'));
     }
     return NotificationListener<ScrollNotification>(
       onNotification: (n) {
@@ -245,7 +245,7 @@ class _MusicScreenState extends State<MusicScreen>
             decoration: InputDecoration(
               isDense: true,
               prefixIcon: const Icon(Icons.search, size: 18),
-              hintText: 'Поиск в каталоге',
+              hintText: AppL10n.t('Поиск в каталоге'),
               filled: true,
               fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
               contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -263,8 +263,8 @@ class _MusicScreenState extends State<MusicScreen>
                   ? _hint(
                       cs,
                       _searched
-                          ? 'Ничего не нашлось'
-                          : 'Найдите трек по названию или исполнителю')
+                          ? AppL10n.t('Ничего не нашлось')
+                          : AppL10n.t('Найдите трек по названию или исполнителю'))
                   : ListView.builder(
                       itemCount: _results.length,
                       itemBuilder: (_, i) =>
@@ -288,13 +288,11 @@ class _MusicScreenState extends State<MusicScreen>
             children: [
               Icon(Icons.lock_outline, size: 44, color: cs.onSurfaceVariant),
               const SizedBox(height: 12),
-              const Text('Нужен вход в Google',
+              Text(AppL10n.t('Нужен вход в Google'),
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
               Text(
-                'Треки загружаются на ваш собственный Google Drive — Rlink '
-                'хранит только ссылку. Без привязанного аккаунта загружать '
-                'некуда.',
+                AppL10n.t('Треки загружаются на ваш собственный Google Drive — Rlink хранит только ссылку. Без привязанного аккаунта загружать некуда.'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
               ),
@@ -307,7 +305,7 @@ class _MusicScreenState extends State<MusicScreen>
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.login),
-                label: Text(_signingIn ? 'Входим…' : 'Войти в Google'),
+                label: Text(_signingIn ? AppL10n.t('Входим…') : AppL10n.t('Войти в Google')),
               ),
               if (_signInError != null) ...[
                 const SizedBox(height: 10),
@@ -317,7 +315,7 @@ class _MusicScreenState extends State<MusicScreen>
               ],
               const SizedBox(height: 8),
               Text(
-                'Привязать также можно в Настройки → Google Drive.',
+                AppL10n.t('Привязать также можно в Настройки → Google Drive.'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
@@ -339,7 +337,7 @@ class _MusicScreenState extends State<MusicScreen>
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      googleAccountEmail ?? 'Google подключён',
+                      googleAccountEmail ?? AppL10n.t('Google подключён'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style:
@@ -359,20 +357,20 @@ class _MusicScreenState extends State<MusicScreen>
                       ClipboardData(text: parseMusicRef(ref).url));
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text(
-                          'Загружено. Ссылка скопирована — её можно вставить в профиль.'),
+                          AppL10n.t('Загружено. Ссылка скопирована — её можно вставить в профиль.')),
                     ),
                   );
                 },
                 icon: const Icon(Icons.cloud_upload_outlined),
-                label: const Text('Загрузить трек на Google Drive'),
+                label: Text(AppL10n.t('Загрузить трек на Google Drive')),
               ),
             ),
             Expanded(
               child: mine.isEmpty
                   ? _hint(cs,
-                      'Здесь будут ваши треки.\nФайл лежит на вашем Google Drive — Rlink хранит только ссылку.')
+                      AppL10n.t('Здесь будут ваши треки.\nФайл лежит на вашем Google Drive — Rlink хранит только ссылку.'))
                   : ListView.builder(
                       itemCount: mine.length,
                       itemBuilder: (_, i) {
@@ -407,8 +405,7 @@ class _MusicScreenState extends State<MusicScreen>
       _signingIn = false;
       if (!isGoogleLinked) {
         _signInError = GoogleDriveChannelBackup.lastSignInError ??
-            'Не удалось войти. На iPhone используйте «Привязать через Safari» '
-                'в Настройки → Google Drive.';
+            AppL10n.t('Не удалось войти. На iPhone используйте «Привязать через Safari» в Настройки → Google Drive.');
       }
     });
   }
@@ -418,7 +415,7 @@ class _MusicScreenState extends State<MusicScreen>
       valueListenable: MusicLibraryService.instance.liked,
       builder: (_, refs, __) {
         if (refs.isEmpty) {
-          return _hint(cs, 'Пока пусто — жми ♥ у трека в поиске');
+          return _hint(cs, AppL10n.t('Пока пусто — жми ♥ у трека в поиске'));
         }
         return ListView.builder(
           itemCount: refs.length,
@@ -477,7 +474,7 @@ class _MusicScreenState extends State<MusicScreen>
                     color: cs.secondaryContainer,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Text('30 сек',
+                  child: Text(AppL10n.t('30 сек'),
                       style: TextStyle(
                           fontSize: 9, color: cs.onSecondaryContainer)),
                 ),
@@ -507,7 +504,7 @@ class _MusicScreenState extends State<MusicScreen>
             if (url == null) {
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Трек недоступен')),
+                SnackBar(content: Text(AppL10n.t('Трек недоступен'))),
               );
               return;
             }

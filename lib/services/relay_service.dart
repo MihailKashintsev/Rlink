@@ -18,6 +18,7 @@ import 'profile_service.dart';
 import 'relay_web_warmup.dart';
 import 'diagnostics_log_service.dart';
 import 'secondary_relay_link.dart';
+import '../l10n/app_l10n.dart';
 
 int _relayJsonInt(dynamic v) {
   if (v is int) return v;
@@ -652,7 +653,7 @@ class RelayService with WidgetsBindingObserver {
         }
       } catch (_) {}
       if (myKey.isEmpty) {
-        lastError.value = 'Локальный публичный ключ не инициализирован';
+        lastError.value = AppL10n.t('Локальный публичный ключ не инициализирован');
         return;
       }
     }
@@ -880,7 +881,7 @@ class RelayService with WidgetsBindingObserver {
         ? ''
         : ' (closeCode=$cc${cr == null || cr.isEmpty ? '' : ', $cr'})';
     _relayTrace('[RLINK][Relay] Disconnected$detail');
-    lastError.value = 'Соединение закрыто$detail';
+    lastError.value = AppL10n.f('Соединение закрыто{0}', [detail]);
     for (final c in _botInfoAckCompleters.values) {
       if (!c.isCompleted) {
         c.complete(<String, dynamic>{'ok': false, 'error': 'disconnected'});

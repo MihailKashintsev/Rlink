@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../models/emoji_pack.dart';
 import '../../services/emoji_pack_service.dart';
 import '../../utils/reaction_emoji_key.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Единый расширенный набор реакций, используемый по всему приложению:
 /// 1:1 чат, каналы, комментарии каналов, группы и истории.
@@ -54,7 +55,7 @@ Future<String?> showReactionPickerSheet(BuildContext context) async {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                 child: Text(
-                  'Выберите реакцию',
+                  AppL10n.t('Выберите реакцию'),
                   style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),

@@ -26,7 +26,7 @@ class _StickerCropScreenState extends State<StickerCropScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Стикер'),
+        title: Text(AppL10n.t('Стикер')),
         actions: [
           TextButton(
             onPressed: _busy
@@ -69,7 +69,7 @@ class _StickerCropScreenState extends State<StickerCropScreen> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'Перемещайте и масштабируйте область. Стикер будет квадратным.',
+              AppL10n.t('Перемещайте и масштабируйте область. Стикер будет квадратным.'),
               style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
               textAlign: TextAlign.center,
             ),

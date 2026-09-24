@@ -5,6 +5,7 @@ import '../../services/broadcast_outbox_service.dart';
 import '../../services/channel_service.dart';
 import '../../services/crypto_service.dart';
 import '../../services/group_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Карточка опроса для поста канала или сообщения группы.
 class PollMessageCard extends StatefulWidget {
@@ -84,7 +85,7 @@ class _PollMessageCardState extends State<PollMessageCard> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  poll.question.isEmpty ? 'Опрос' : poll.question,
+                  poll.question.isEmpty ? AppL10n.t('Опрос') : poll.question,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: widget.compact ? 13 : 14,
@@ -101,10 +102,10 @@ class _PollMessageCardState extends State<PollMessageCard> {
                 spacing: 6,
                 runSpacing: 2,
                 children: [
-                  if (poll.anonymous) _chip(cs, 'Анонимно', isOutgoing),
-                  if (poll.multiSelect) _chip(cs, 'Несколько', isOutgoing),
-                  if (poll.quiz) _chip(cs, 'Викторина', isOutgoing),
-                  if (poll.randomOrder) _chip(cs, 'Перемешано', isOutgoing),
+                  if (poll.anonymous) _chip(cs, AppL10n.t('Анонимно'), isOutgoing),
+                  if (poll.multiSelect) _chip(cs, AppL10n.t('Несколько'), isOutgoing),
+                  if (poll.quiz) _chip(cs, AppL10n.t('Викторина'), isOutgoing),
+                  if (poll.randomOrder) _chip(cs, AppL10n.t('Перемешано'), isOutgoing),
                 ],
               ),
             ),
@@ -237,7 +238,7 @@ class _PollMessageCardState extends State<PollMessageCard> {
                 onPressed: _multiSel.isEmpty
                     ? null
                     : () => _submitVote(_multiSel.toList()..sort()),
-                child: const Text('Голосовать'),
+                child: Text(AppL10n.t('Голосовать')),
               ),
             ),
           ],
@@ -245,7 +246,7 @@ class _PollMessageCardState extends State<PollMessageCard> {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Голосов: $totalVotes',
+                AppL10n.f('Голосов: {0}', [totalVotes]),
                 style: TextStyle(
                   fontSize: 11,
                   color: (isOutgoing ? cs.onPrimary : cs.onSurface)

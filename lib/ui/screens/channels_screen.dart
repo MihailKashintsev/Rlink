@@ -81,15 +81,15 @@ ChatMessage _channelPostToForwardMessage(ChannelPost post, String channelId) {
   var t = post.text.trim();
   if (t.isEmpty) {
     if (post.pollJson != null && MessagePoll.tryDecode(post.pollJson) != null) {
-      t = '📊 Опрос';
+      t = AppL10n.t('📊 Опрос');
     } else if (post.imagePath != null) {
-      t = '🖼 Фото';
+      t = AppL10n.t('🖼 Фото');
     } else if (post.videoPath != null) {
       t = '📹 Видео';
     } else if (post.voicePath != null) {
-      t = '🎤 Голос';
+      t = AppL10n.t('🎤 Голос');
     } else if (post.filePath != null) {
-      t = '📎 ${post.fileName ?? 'Файл'}';
+      t = '📎 ${post.fileName ?? AppL10n.t('Файл')}';
     } else {
       t = ' ';
     }
@@ -115,13 +115,13 @@ ChatMessage _channelCommentToForwardMessage(
   var t = c.text.trim();
   if (t.isEmpty) {
     if (c.imagePath != null) {
-      t = '🖼 Фото';
+      t = AppL10n.t('🖼 Фото');
     } else if (c.videoPath != null) {
       t = '📹 Видео';
     } else if (c.voicePath != null) {
-      t = '🎤 Голос';
+      t = AppL10n.t('🎤 Голос');
     } else if (c.filePath != null) {
-      t = '📎 ${c.fileName ?? 'Файл'}';
+      t = '📎 ${c.fileName ?? AppL10n.t('Файл')}';
     } else {
       t = ' ';
     }
@@ -225,8 +225,7 @@ Future<void> _showContactMentionPicker(
         children: [
           ListTile(
             title: Text(AppL10n.t('chn_tag_person')),
-            subtitle: Text('В текст добавится уникальный код (ключ). '
-                'Для других он отобразится как @ник.'),
+            subtitle: Text(AppL10n.t('В текст добавится уникальный код (ключ). Для других он отобразится как @ник.')),
           ),
           for (final c in contacts)
             ListTile(
@@ -293,7 +292,7 @@ Widget _channelsDisabledView(BuildContext context) {
               size: 58, color: cs.onSurfaceVariant),
           const SizedBox(height: 12),
           Text(
-            'Каналы временно недоступны',
+            AppL10n.t('Каналы временно недоступны'),
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -303,7 +302,7 @@ Widget _channelsDisabledView(BuildContext context) {
           ),
           const SizedBox(height: 8),
           Text(
-            'В режиме «только Bluetooth» доступны личные чаты, группы и эфир.',
+            AppL10n.t('В режиме «только Bluetooth» доступны личные чаты, группы и эфир.'),
             style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
@@ -438,7 +437,7 @@ class _ChannelsScreenState extends State<ChannelsScreen>
               children: [
                 FloatingActionButton.small(
                   heroTag: 'joinByLink',
-                  tooltip: 'Войти по ссылке-приглашению',
+                  tooltip: AppL10n.t('Войти по ссылке-приглашению'),
                   onPressed: _pasteInviteAndJoin,
                   child: const Icon(Icons.link_rounded),
                 ),
@@ -468,8 +467,8 @@ class _ChannelsScreenState extends State<ChannelsScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Вставьте ссылку-приглашение или код канала.',
+            Text(
+              AppL10n.t('Вставьте ссылку-приглашение или код канала.'),
               style: TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -515,10 +514,9 @@ class _ChannelsScreenState extends State<ChannelsScreen>
     if (!mounted) return;
     if (ch == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Канал не найден. Подключитесь к сети и попробуйте ещё раз, '
-            'либо попросите прямое приглашение от админа.',
+            AppL10n.t('Канал не найден. Подключитесь к сети и попробуйте ещё раз, либо попросите прямое приглашение от админа.'),
           ),
         ),
       );
@@ -536,7 +534,7 @@ class _ChannelsScreenState extends State<ChannelsScreen>
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Вы подписаны на «${ch.name}»')),
+      SnackBar(content: Text(AppL10n.f('Вы подписаны на «{0}»', [ch.name]))),
     );
     _openChannel(ch);
   }
@@ -590,12 +588,12 @@ class _ChannelsScreenState extends State<ChannelsScreen>
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
               ),
-              child: const Row(children: [
+              child: Row(children: [
                 Icon(Icons.drive_eta_outlined, color: Colors.orange, size: 16),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Привяжите Google Drive в настройках — без него история будет доступна только онлайн',
+                    AppL10n.t('Привяжите Google Drive в настройках — без него история будет доступна только онлайн'),
                     style: TextStyle(fontSize: 12, color: Colors.orange),
                   ),
                 ),
@@ -605,8 +603,8 @@ class _ChannelsScreenState extends State<ChannelsScreen>
             controller: nameCtrl,
             maxLength: 30,
             autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'Название канала',
+            decoration: InputDecoration(
+              hintText: AppL10n.t('Название канала'),
               border: OutlineInputBorder(),
             ),
           ),
@@ -614,8 +612,8 @@ class _ChannelsScreenState extends State<ChannelsScreen>
           TextField(
             controller: descCtrl,
             maxLength: 100,
-            decoration: const InputDecoration(
-              hintText: 'Описание (необязательно)',
+            decoration: InputDecoration(
+              hintText: AppL10n.t('Описание (необязательно)'),
               border: OutlineInputBorder(),
             ),
           ),
@@ -695,8 +693,8 @@ class _ChannelTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (channel.foreignAgent)
-            const Text(
-              'ДАННОЕ СООБЩЕНИЕ СОЗДАНО И (ИЛИ) РАСПРОСТРАНЕНО ИНОСТРАННЫМ АГЕНТОМ',
+            Text(
+              AppL10n.t('ДАННОЕ СООБЩЕНИЕ СОЗДАНО И (ИЛИ) РАСПРОСТРАНЕНО ИНОСТРАННЫМ АГЕНТОМ'),
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
@@ -707,7 +705,7 @@ class _ChannelTile extends StatelessWidget {
             ),
           Text(
             channel.description ??
-                '${channel.subscriberIds.length} подписчиков',
+                AppL10n.f('{0} подписчиков', [channel.subscriberIds.length]),
             style: TextStyle(
                 fontSize: 13, color: cs.onSurface.withValues(alpha: 0.5)),
             maxLines: 1,
@@ -942,17 +940,17 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
           !GoogleDriveChannelBackup.hasRelayAccount &&
           !GoogleDriveChannelBackup.hasValidManualCreds) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             duration: Duration(seconds: 6),
             content: Text(
-                'Пост сохранён, но Google Drive не привязан — история недоступна подписчикам. Привяжите аккаунт в Настройках.'),
+                AppL10n.t('Пост сохранён, но Google Drive не привязан — история недоступна подписчикам. Привяжите аккаунт в Настройках.')),
           ),
         );
         return;
       }
       setState(() {
         _isBackingUp = true;
-        _backupStep = 'Сохранение на Google Drive…';
+        _backupStep = AppL10n.t('Сохранение на Google Drive…');
       });
       try {
         await ChannelBackupService.instance
@@ -1029,24 +1027,24 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                 children: [
                   TextField(
                     controller: qCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Вопрос',
+                    decoration: InputDecoration(
+                      labelText: AppL10n.t('Вопрос'),
                       border: OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: o1,
-                    decoration: const InputDecoration(labelText: 'Вариант 1'),
+                    decoration: InputDecoration(labelText: AppL10n.t('Вариант 1')),
                   ),
                   TextField(
                     controller: o2,
-                    decoration: const InputDecoration(labelText: 'Вариант 2'),
+                    decoration: InputDecoration(labelText: AppL10n.t('Вариант 2')),
                   ),
                   TextField(
                     controller: o3,
-                    decoration: const InputDecoration(
-                        labelText: 'Вариант 3 (необязательно)'),
+                    decoration: InputDecoration(
+                        labelText: AppL10n.t('Вариант 3 (необязательно)')),
                   ),
                   SwitchListTile(
                     value: anon,
@@ -1066,8 +1064,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                   if (quiz)
                     DropdownButtonFormField<int>(
                       initialValue: correctIndex,
-                      decoration: const InputDecoration(
-                          labelText: 'Правильный вариант'),
+                      decoration: InputDecoration(
+                          labelText: AppL10n.t('Правильный вариант')),
                       items: const [
                         DropdownMenuItem(value: 0, child: Text('1')),
                         DropdownMenuItem(value: 1, child: Text('2')),
@@ -1214,7 +1212,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка видео: $e'), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка видео: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1245,7 +1243,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         // On web the recorder returns a blob: URL — read it and stash in OPFS.
         final b = await readWebObjectUrlBytes(raw);
         if (b == null || b.isEmpty) {
-          throw 'не удалось прочитать запись с камеры';
+          throw AppL10n.t('не удалось прочитать запись с камеры');
         }
         bytes = b;
         storedPath = (await writeWebStoredFile(
@@ -1304,7 +1302,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Квадратик: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Квадратик: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1344,8 +1342,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         builder: (ctx) => AlertDialog(
           title: Text(AppL10n.t('cm_large_file')),
           content: Text(
-            'Файл ${(fileBytes.length / 1024).toStringAsFixed(0)} КБ — '
-            'передача по Bluetooth займёт несколько минут. Продолжить?',
+            AppL10n.f('Файл {0} КБ — передача по Bluetooth займёт несколько минут. Продолжить?', [(fileBytes.length / 1024).toStringAsFixed(0)]),
           ),
           actions: [
             TextButton(
@@ -1422,7 +1419,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка файла: $e'), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка файла: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1597,7 +1594,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1667,7 +1664,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка видео: $e'), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка видео: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1744,7 +1741,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Стикер: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Стикер: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1769,7 +1766,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Стикер: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Стикер: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1795,8 +1792,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         builder: (ctx) => AlertDialog(
           title: Text(AppL10n.t('cm_large_file')),
           content: Text(
-            'Файл ${(fileBytes.length / 1024).toStringAsFixed(0)} КБ — '
-            'передача по Bluetooth займёт несколько минут. Продолжить?',
+            AppL10n.f('Файл {0} КБ — передача по Bluetooth займёт несколько минут. Продолжить?', [(fileBytes.length / 1024).toStringAsFixed(0)]),
           ),
           actions: [
             TextButton(
@@ -1874,7 +1870,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка файла: $e'), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка файла: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1980,7 +1976,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -2074,7 +2070,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -2095,19 +2091,19 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       items: [
         WebPickerItem(
           icon: Icons.photo_library_rounded,
-          label: 'Фото',
+          label: AppL10n.t('Фото'),
           value: 'photo',
           color: Colors.green.shade700,
         ),
         WebPickerItem(
           icon: Icons.videocam_rounded,
-          label: 'Видео',
+          label: AppL10n.t('Видео'),
           value: 'video',
           color: Colors.red.shade600,
         ),
         WebPickerItem(
           icon: Icons.insert_drive_file_rounded,
-          label: 'Файл',
+          label: AppL10n.t('Файл'),
           value: 'file',
           color: Colors.blue.shade700,
         ),
@@ -2245,7 +2241,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -2316,7 +2312,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         id: postId,
         channelId: _channel.id,
         authorId: _myId,
-        text: '\u{1F3A4} Голосовое',
+        text: '🎤 Голосовое',
         timestamp: DateTime.now().millisecondsSinceEpoch,
         voicePath: path,
         staffLabel: staffLabel,
@@ -2337,7 +2333,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка голосового: $e'),
+              content: Text(AppL10n.f('Ошибка голосового: {0}', [e])),
               backgroundColor: Colors.red),
         );
       }
@@ -2480,7 +2476,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                           title: Text(nickFor(uid)),
                           subtitle: Text(
                             isMod
-                                ? 'Модератор · ${uid.substring(0, 12)}…'
+                                ? AppL10n.f('Модератор · {0}…', [uid.substring(0, 12)])
                                 : '${uid.substring(0, 12)}…',
                             style: const TextStyle(
                                 fontSize: 11, color: Colors.grey),
@@ -2488,7 +2484,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                           trailing: IconButton(
                             icon: const Icon(Icons.person_remove_outlined,
                                 color: Colors.red),
-                            tooltip: 'Исключить',
+                            tooltip: AppL10n.t('Исключить'),
                             onPressed: () async {
                               await ChannelService.instance
                                   .removeSubscriber(_channel.id, uid);
@@ -2558,10 +2554,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Отписаться от канала?'),
-        content: const Text(
-            'Вы сложите полномочия администратора. Канал исчезнет из ваших '
-            'чатов, но останется у подписчиков.'),
+        title: Text(AppL10n.t('Отписаться от канала?')),
+        content: Text(
+            AppL10n.t('Вы сложите полномочия администратора. Канал исчезнет из ваших чатов, но останется у подписчиков.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -2569,7 +2564,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Отписаться'),
+            child: Text(AppL10n.t('Отписаться')),
           ),
         ],
       ),
@@ -2678,7 +2673,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content: Text('${c.nickname} приглашён в канал')),
+                            content: Text(AppL10n.f('{0} приглашён в канал', [c.nickname]))),
                       );
                     }
                   },
@@ -2715,7 +2710,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                 size: 48, color: cs.primary.withValues(alpha: 0.7)),
             const SizedBox(height: 16),
             Text(
-              'История канала доступна\nчерез Google Drive',
+              AppL10n.t('История канала доступна\nчерез Google Drive'),
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 15, color: cs.onSurface.withValues(alpha: 0.7)),
@@ -2725,7 +2720,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               const CircularProgressIndicator(),
               const SizedBox(height: 12),
               Text(
-                _backupStep.isNotEmpty ? _backupStep : 'Загрузка…',
+                _backupStep.isNotEmpty ? _backupStep : AppL10n.t('Загрузка…'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 13, color: cs.onSurface.withValues(alpha: 0.6)),
@@ -2745,7 +2740,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   Future<void> _restoreFromDrive() async {
     setState(() {
       _isRestoringFromDrive = true;
-      _backupStep = 'Подключение к Google Drive…';
+      _backupStep = AppL10n.t('Подключение к Google Drive…');
     });
     try {
       final ok = await ChannelBackupService.instance.restoreFromDriveUrl(
@@ -2771,10 +2766,10 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
           x25519: CryptoService.instance.x25519PublicKeyBase64,
         ));
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             duration: Duration(seconds: 6),
             content: Text(
-                'Ключ запрошен от автора. Когда автор будет в сети, попробуйте снова.'),
+                AppL10n.t('Ключ запрошен от автора. Когда автор будет в сети, попробуйте снова.')),
           ),
         );
       }
@@ -2788,7 +2783,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
   }
 
   String _nickFor(String id) {
-    if (id == _myId) return 'Вы';
+    if (id == _myId) return AppL10n.t('Вы');
     final contact = ChatStorageService.instance.contactsNotifier.value
         .where((c) => c.publicKeyHex == id)
         .firstOrNull;
@@ -2848,7 +2843,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                         ],
                       ],
                     ),
-                    Text('${_channel.subscriberIds.length} подписчиков',
+                    Text(AppL10n.f('{0} подписчиков', [_channel.subscriberIds.length]),
                         style: TextStyle(
                             fontSize: 12,
                             color: cs.onSurface.withValues(alpha: 0.5))),
@@ -2863,7 +2858,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
             TextButton.icon(
               onPressed: _toggleSubscribe,
               icon: const Icon(Icons.notifications_outlined, size: 18),
-              label: const Text('Подписаться', style: TextStyle(fontSize: 13)),
+              label: Text(AppL10n.t('Подписаться'), style: TextStyle(fontSize: 13)),
             ),
           PopupMenuButton<String>(
             onSelected: (v) async {
@@ -2890,29 +2885,29 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
             },
             itemBuilder: (_) => [
               if (_isAdmin || _isModerator)
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'settings',
                   child: Row(children: [
                     Icon(Icons.settings_outlined, size: 18),
                     SizedBox(width: 8),
-                    Text('Настройки'),
+                    Text(AppL10n.t('Настройки')),
                   ]),
                 ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'share',
                 child: Row(children: [
                   Icon(Icons.share_outlined, size: 18),
                   SizedBox(width: 8),
-                  Text('Поделиться каналом'),
+                  Text(AppL10n.t('Поделиться каналом')),
                 ]),
               ),
               if (_isAdmin)
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'invite',
                   child: Row(children: [
                     Icon(Icons.person_add_outlined, size: 18),
                     SizedBox(width: 8),
-                    Text('Добавить пользователей'),
+                    Text(AppL10n.t('Добавить пользователей')),
                   ]),
                 ),
               if (_isAdmin || _isSubscribed)
@@ -2923,8 +2918,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                     const SizedBox(width: 8),
                     Text(
                       _isAdmin
-                          ? 'Отписаться (сложить полномочия)'
-                          : 'Отписаться',
+                          ? AppL10n.t('Отписаться (сложить полномочия)')
+                          : AppL10n.t('Отписаться'),
                       style: const TextStyle(color: Colors.red),
                     ),
                   ]),
@@ -2961,8 +2956,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               width: double.infinity,
               padding: const EdgeInsets.all(8),
               color: Colors.orange.withValues(alpha: 0.15),
-              child: const Text(
-                'ДАННОЕ СООБЩЕНИЕ (МАТЕРИАЛ) СОЗДАНО И (ИЛИ) РАСПРОСТРАНЕНО ИНОСТРАННЫМ АГЕНТОМ',
+              child: Text(
+                AppL10n.t('ДАННОЕ СООБЩЕНИЕ (МАТЕРИАЛ) СОЗДАНО И (ИЛИ) РАСПРОСТРАНЕНО ИНОСТРАННЫМ АГЕНТОМ'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 10,
@@ -2976,13 +2971,13 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               color: Colors.red.withValues(alpha: 0.15),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.block, size: 16, color: Colors.red),
                   SizedBox(width: 6),
                   Text(
-                    'Канал заблокирован администратором сети',
+                    AppL10n.t('Канал заблокирован администратором сети'),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -3092,9 +3087,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                       const Icon(Icons.drive_eta_outlined,
                           color: Colors.orange, size: 16),
                       const SizedBox(width: 8),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'История канала не сохраняется — подключите Google Drive в Настройках',
+                          AppL10n.t('История канала не сохраняется — подключите Google Drive в Настройках'),
                           style: TextStyle(
                               fontSize: 12, color: Colors.orange),
                         ),
@@ -3118,7 +3113,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               isHoldVideoStarting: false,
               recordingSecondsNotifier: _recordingSecondsNotifier,
               recordingWaveformNotifier: _recordingWaveformNotifier,
-              hintText: 'Новый пост...',
+              hintText: AppL10n.t('Новый пост...'),
               allowMediaRecord: true,
               allowGallery: true,
               locationActive: false,
@@ -3214,7 +3209,7 @@ class _PostCardState extends State<_PostCard> {
           final authorNick = widget.nickFor(post.authorId);
           final label = widget.channelName.isNotEmpty
               ? '${widget.channelName} · $authorNick'
-              : 'Канал · $authorNick';
+              : AppL10n.f('Канал · {0}', [authorNick]);
           await _pickForwardChannelContent(
             context,
             forwardMessage: msg,
@@ -3245,7 +3240,7 @@ class _PostCardState extends State<_PostCard> {
       if (post.text.trim().isNotEmpty)
         MessageMenuAction(
           icon: Icons.text_fields_rounded,
-          label: 'Выделить текст',
+          label: AppL10n.t('Выделить текст'),
           onTap: () {
             Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => TextSelectionViewScreen(text: post.text),
@@ -3390,10 +3385,9 @@ class _PostCardState extends State<_PostCard> {
                   colorScheme: cs,
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text(
-                          'Откройте канал при подключении к сети — '
-                          'запросится история и вложения.',
+                          AppL10n.t('Откройте канал при подключении к сети — запросится история и вложения.'),
                         ),
                       ),
                     );
@@ -3429,7 +3423,7 @@ class _PostCardState extends State<_PostCard> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _ChannelFileAttachRow(
                     storedPath: post.filePath!,
-                    fileName: post.fileName ?? 'Файл',
+                    fileName: post.fileName ?? AppL10n.t('Файл'),
                     fileSize: post.fileSize,
                   ),
                 ),
@@ -3534,8 +3528,8 @@ class _PostCardState extends State<_PostCard> {
                         Flexible(
                           child: Text(
                             post.comments.isEmpty
-                                ? 'Комментировать'
-                                : '${post.comments.length} комментариев',
+                                ? AppL10n.t('Комментировать')
+                                : AppL10n.f('{0} комментариев', [post.comments.length]),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -3773,7 +3767,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка фото: $e'), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка фото: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -3834,7 +3828,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Квадратик: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Квадратик: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -3897,7 +3891,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка видео: $e'), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка видео: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -3931,8 +3925,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         builder: (ctx) => AlertDialog(
           title: Text(AppL10n.t('cm_large_file')),
           content: Text(
-            'Файл ${(fileBytes.length / 1024).toStringAsFixed(0)} КБ — '
-            'передача по Bluetooth займёт несколько минут. Продолжить?',
+            AppL10n.f('Файл {0} КБ — передача по Bluetooth займёт несколько минут. Продолжить?', [(fileBytes.length / 1024).toStringAsFixed(0)]),
           ),
           actions: [
             TextButton(
@@ -3997,7 +3990,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка файла: $e'), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка файла: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -4076,7 +4069,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       );
 
       final caption = _commentCtrl.text.trim();
-      final textForDb = caption.isEmpty ? '\u{1F3A4} Голосовое' : caption;
+      final textForDb = caption.isEmpty ? '🎤 Голосовое' : caption;
       final comment = ChannelComment(
         id: commentId,
         postId: widget.post.id,
@@ -4102,7 +4095,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка голосового: $e'),
+              content: Text(AppL10n.f('Ошибка голосового: {0}', [e])),
               backgroundColor: Colors.red),
         );
       }
@@ -4248,10 +4241,9 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                     colorScheme: cs,
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text(
-                            'Откройте канал при подключении к сети — '
-                            'запросится история и вложения.',
+                            AppL10n.t('Откройте канал при подключении к сети — запросится история и вложения.'),
                           ),
                         ),
                       );
@@ -4289,7 +4281,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: _ChannelFileAttachRow(
                       storedPath: widget.post.filePath!,
-                      fileName: widget.post.fileName ?? 'Файл',
+                      fileName: widget.post.fileName ?? AppL10n.t('Файл'),
                       fileSize: widget.post.fileSize,
                     ),
                   ),
@@ -4325,8 +4317,8 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
               const SizedBox(width: 6),
               Text(
                 _comments.isEmpty
-                    ? 'Нет комментариев'
-                    : '${_comments.length} комментариев',
+                    ? AppL10n.t('Нет комментариев')
+                    : AppL10n.f('{0} комментариев', [_comments.length]),
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -4396,7 +4388,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
             isHoldVideoStarting: false,
             recordingSecondsNotifier: _commentRecordingSeconds,
             recordingWaveformNotifier: _commentWaveformNotifier,
-            hintText: 'Комментарий...',
+            hintText: AppL10n.t('Комментарий...'),
             allowMediaRecord: true,
             allowGallery: true,
             locationActive: false,
@@ -4568,9 +4560,9 @@ class _ChannelFileAttachRow extends StatelessWidget {
 
   String _fmtSize(int? bytes) {
     if (bytes == null) return '';
-    if (bytes < 1024) return '$bytes Б';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} КБ';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} МБ';
+    if (bytes < 1024) return AppL10n.f('{0} Б', [bytes]);
+    if (bytes < 1024 * 1024) return AppL10n.f('{0} КБ', [(bytes / 1024).toStringAsFixed(1)]);
+    return AppL10n.f('{0} МБ', [(bytes / (1024 * 1024)).toStringAsFixed(1)]);
   }
 
   @override
@@ -5009,7 +5001,7 @@ class _CommentBubble extends StatelessWidget {
                   if (text.trim().isNotEmpty)
                     ListTile(
                       leading: const Icon(Icons.text_fields_rounded),
-                      title: const Text('Выделить текст'),
+                      title: Text(AppL10n.t('Выделить текст')),
                       onTap: () => Navigator.pop(ctx, 'selecttext'),
                     ),
                   if (canDelete)
@@ -5029,8 +5021,8 @@ class _CommentBubble extends StatelessWidget {
             final msg = _channelCommentToForwardMessage(comment, channelId);
             final authorNick = nickFor(comment.authorId);
             final label = channelName.isNotEmpty
-                ? '$channelName · комментарий — $authorNick'
-                : 'Канал · комментарий — $authorNick';
+                ? AppL10n.f('{0} · комментарий — {1}', [channelName, authorNick])
+                : AppL10n.f('Канал · комментарий — {0}', [authorNick]);
             await _pickForwardChannelContent(
               context,
               forwardMessage: msg,
@@ -5102,10 +5094,9 @@ class _CommentBubble extends StatelessWidget {
                   colorScheme: cs,
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text(
-                          'Откройте канал при подключении к сети — '
-                          'запросится история и вложения.',
+                          AppL10n.t('Откройте канал при подключении к сети — запросится история и вложения.'),
                         ),
                       ),
                     );
@@ -5142,7 +5133,7 @@ class _CommentBubble extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 6),
                   child: _ChannelFileAttachRow(
                     storedPath: comment.filePath!,
-                    fileName: comment.fileName ?? 'Файл',
+                    fileName: comment.fileName ?? AppL10n.t('Файл'),
                     fileSize: comment.fileSize,
                   ),
                 ),
@@ -5225,7 +5216,7 @@ class _ChannelInviteCard extends StatelessWidget {
                         fontSize: 15,
                         color: cs.onPrimaryContainer,
                       )),
-                  Text('${invite.inviterNick} приглашает',
+                  Text(AppL10n.f('{0} приглашает', [invite.inviterNick]),
                       style: TextStyle(
                         fontSize: 12,
                         color: cs.onPrimaryContainer.withValues(alpha: 0.7),

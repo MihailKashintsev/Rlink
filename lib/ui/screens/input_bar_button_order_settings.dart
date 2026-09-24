@@ -26,7 +26,7 @@ class _InputBarButtonOrderSettingsState
     if (mounted) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Порядок кнопок сохранён')),
+        SnackBar(content: Text(AppL10n.t('Порядок кнопок сохранён'))),
       );
     }
   }
@@ -83,7 +83,7 @@ class _InputBarButtonOrderSettingsState
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'Нажми на кнопку чтобы сменить сторону (←/→). Перетаскивай чтобы изменить порядок.',
+              AppL10n.t('Нажми на кнопку чтобы сменить сторону (←/→). Перетаскивай чтобы изменить порядок.'),
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
@@ -127,7 +127,7 @@ class _InputBarButtonOrderSettingsState
                     ),
                     child: Center(
                       child: Text(
-                        'Текст сообщения...',
+                        AppL10n.t('Текст сообщения...'),
                         style: TextStyle(
                           color: cs.onSurfaceVariant.withValues(alpha: 0.6),
                           fontSize: 14,

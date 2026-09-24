@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/diagnostics_log_service.dart';
+import '../../l10n/app_l10n.dart';
 
 class DiagnosticsScreen extends StatelessWidget {
   const DiagnosticsScreen({super.key});
@@ -10,21 +11,21 @@ class DiagnosticsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Диагностика сети'),
+        title: Text(AppL10n.t('Диагностика сети')),
         actions: [
           IconButton(
-            tooltip: 'Очистить лог',
+            tooltip: AppL10n.t('Очистить лог'),
             onPressed: DiagnosticsLogService.instance.clear,
             icon: const Icon(Icons.delete_outline),
           ),
           IconButton(
-            tooltip: 'Скопировать',
+            tooltip: AppL10n.t('Скопировать'),
             onPressed: () async {
               final text = DiagnosticsLogService.instance.dump();
               await Clipboard.setData(ClipboardData(text: text));
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Лог скопирован')),
+                SnackBar(content: Text(AppL10n.t('Лог скопирован'))),
               );
             },
             icon: const Icon(Icons.copy_rounded),
@@ -35,8 +36,8 @@ class DiagnosticsScreen extends StatelessWidget {
         valueListenable: DiagnosticsLogService.instance.entries,
         builder: (_, entries, __) {
           if (entries.isEmpty) {
-            return const Center(
-              child: Text('Лог пуст. Выполните отправку сообщения/запроса.'),
+            return Center(
+              child: Text(AppL10n.t('Лог пуст. Выполните отправку сообщения/запроса.')),
             );
           }
           return ListView.builder(

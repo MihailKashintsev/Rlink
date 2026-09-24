@@ -9,6 +9,7 @@ import '../../services/bot_code_generator.dart';
 import '../../services/lib_bot_service.dart';
 import '../../services/relay_service.dart';
 import '../../utils/web_file_store.dart';
+import '../../l10n/app_l10n.dart';
 
 /// «Выдаёт код»: готовый Python-файл бота + пошаговое подключение.
 /// Логика бота исполняется на ПК/сервере пользователя; relay только доставляет.
@@ -59,10 +60,10 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
-          ..showSnackBar(SnackBar(content: Text('Скачивается $name')));
+          ..showSnackBar(SnackBar(content: Text(AppL10n.f('Скачивается {0}', [name]))));
       }
     } else {
-      await _copy(code, 'Код скопирован — сохраните как $name');
+      await _copy(code, AppL10n.f('Код скопирован — сохраните как {0}', [name]));
     }
   }
 
@@ -93,8 +94,8 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
     if (botId.length != 64) {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
-        ..showSnackBar(const SnackBar(
-            content: Text('Сначала зарегистрируйте бота (шаг 3).')));
+        ..showSnackBar(SnackBar(
+            content: Text(AppL10n.t('Сначала зарегистрируйте бота (шаг 3).'))));
       return;
     }
     setState(() => _verifyBusy = true);
@@ -109,8 +110,8 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
       ..clearSnackBars()
       ..showSnackBar(SnackBar(
           content: Text(res['ok'] == true
-              ? 'Заявка на галочку отправлена ✓'
-              : 'Не удалось: ${res['error'] ?? 'ошибка'}')));
+              ? AppL10n.t('Заявка на галочку отправлена ✓')
+              : AppL10n.f('Не удалось: {0}', [res['error'] ?? AppL10n.t('ошибка')]))));
   }
 
   @override
@@ -120,24 +121,21 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
     final fileName = BotCodeGenerator.fileName(bp);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Код и подключение')),
+      appBar: AppBar(title: Text(AppL10n.t('Код и подключение'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
-          const _InfoCard(
+          _InfoCard(
             icon: Icons.dns_outlined,
             text:
-                'Бот работает на вашем компьютере или сервере — relay только доставляет '
-                'сообщения. Пока процесс запущен, бот отвечает по вашим правилам. Когда он '
-                'офлайн, собеседник получает заглушку «Бот не в сети, подождите ответа или '
-                'обратитесь к разработчику».',
+                AppL10n.t('Бот работает на вашем компьютере или сервере — relay только доставляет сообщения. Пока процесс запущен, бот отвечает по вашим правилам. Когда он офлайн, собеседник получает заглушку «Бот не в сети, подождите ответа или обратитесь к разработчику».'),
           ),
           const SizedBox(height: 20),
 
           // Шаг 1 — код
-          const _StepHeader(n:1, title: 'Файл бота'),
+          _StepHeader(n:1, title: AppL10n.t('Файл бота')),
           Text(
-            'Готовый $fileName — правила уже внутри, редактировать не нужно.',
+            AppL10n.f('Готовый {0} — правила уже внутри, редактировать не нужно.', [fileName]),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 10),
@@ -147,13 +145,13 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
                 onPressed: _downloadPy,
                 icon: const Icon(kIsWeb ? Icons.download : Icons.copy_all),
                 label:
-                    const Text(kIsWeb ? 'Скачать .py' : 'Скопировать код'),
+                    Text(kIsWeb ? AppL10n.t('Скачать .py') : AppL10n.t('Скопировать код')),
               ),
               const SizedBox(width: 10),
               OutlinedButton.icon(
                 onPressed: () => setState(() => _showCode = !_showCode),
                 icon: Icon(_showCode ? Icons.visibility_off : Icons.code),
-                label: Text(_showCode ? 'Скрыть' : 'Показать'),
+                label: Text(_showCode ? AppL10n.t('Скрыть') : AppL10n.t('Показать')),
               ),
             ],
           ),
@@ -162,17 +160,16 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
             _CodeBlock(
               text: BotCodeGenerator.python(bp),
               onCopy: () =>
-                  _copy(BotCodeGenerator.python(bp), 'Код бота скопирован'),
+                  _copy(BotCodeGenerator.python(bp), AppL10n.t('Код бота скопирован')),
               maxLines: 18,
             ),
           ],
           const SizedBox(height: 22),
 
           // Шаг 2 — установка пакета + ключи
-          const _StepHeader(n:2, title: 'Пакет и ключи (на ПК/сервере)'),
+          _StepHeader(n:2, title: AppL10n.t('Пакет и ключи (на ПК/сервере)')),
           Text(
-            'Один раз установите клиента ботов из репозитория Rlink '
-            '(папка tools/rlink_bot) и создайте ключи:',
+            AppL10n.t('Один раз установите клиента ботов из репозитория Rlink (папка tools/rlink_bot) и создайте ключи:'),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 8),
@@ -186,10 +183,10 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
                 'python -m pip install -e .\n'
                 'python -m rlink_bot keys init --file bot_keys.json\n'
                 'python -m rlink_bot keys show-pub --file bot_keys.json',
-                'Команды скопированы'),
+                AppL10n.t('Команды скопированы')),
           ),
           Text(
-            'Последняя команда печатает публичный ключ бота (64 hex) — он нужен ниже.',
+            AppL10n.t('Последняя команда печатает публичный ключ бота (64 hex) — он нужен ниже.'),
             style: Theme.of(context)
                 .textTheme
                 .bodySmall
@@ -198,10 +195,9 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
           const SizedBox(height: 22),
 
           // Шаг 3 — регистрация в один тап
-          _StepHeader(n: 3, title: 'Зарегистрировать @$handle'),
+          _StepHeader(n: 3, title: AppL10n.f('Зарегистрировать @{0}', [handle])),
           Text(
-            'Вставьте публичный ключ бота из шага 2 — приложение зарегистрирует '
-            'ник на relay и выдаст код заявки. Вручную писать боту Lib не нужно.',
+            AppL10n.t('Вставьте публичный ключ бота из шага 2 — приложение зарегистрирует ник на relay и выдаст код заявки. Вручную писать боту Lib не нужно.'),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 10),
@@ -209,8 +205,8 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
             controller: _pubCtrl,
             maxLines: 2,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            decoration: const InputDecoration(
-              labelText: 'Публичный ключ бота (64 hex)',
+            decoration: InputDecoration(
+              labelText: AppL10n.t('Публичный ключ бота (64 hex)'),
               border: OutlineInputBorder(),
               isDense: true,
             ),
@@ -224,15 +220,14 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.app_registration),
-            label: Text(_registering ? 'Регистрируем…' : 'Зарегистрировать'),
+            label: Text(_registering ? AppL10n.t('Регистрируем…') : AppL10n.t('Зарегистрировать')),
           ),
           if (_result?.ok == true) ...[
             const SizedBox(height: 14),
             _InfoCard(
               icon: Icons.check_circle_outline,
               tone: cs.primary,
-              text: 'Готово! @$handle зарегистрирован. '
-                  'Код заявки для onboard: ${_result!.claimForOnboard}',
+              text: AppL10n.f('Готово! @{0} зарегистрирован. Код заявки для onboard: {1}', [handle, _result!.claimForOnboard]),
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
@@ -246,34 +241,33 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
                       ? Icons.verified
                       : Icons.verified_outlined),
               label: Text(_verifySent
-                  ? 'Заявка на галочку отправлена'
-                  : 'Отправить заявку на галочку'),
+                  ? AppL10n.t('Заявка на галочку отправлена')
+                  : AppL10n.t('Отправить заявку на галочку')),
             ),
           ],
           const SizedBox(height: 22),
 
           // Шаг 4 — onboard + запуск
-          const _StepHeader(n:4, title: 'Onboard и запуск'),
+          _StepHeader(n:4, title: AppL10n.t('Onboard и запуск')),
           Text(
-            'Свяжите ключи с ником (создаст rlink_bot_config.json) и запустите бота:',
+            AppL10n.t('Свяжите ключи с ником (создаст rlink_bot_config.json) и запустите бота:'),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 8),
           _CodeBlock(
             text: 'python -m rlink_bot onboard '
-                '${_result?.claimForOnboard.isNotEmpty == true ? _result!.claimForOnboard : '<код из шага 3>'} '
+                '${_result?.claimForOnboard.isNotEmpty == true ? _result!.claimForOnboard : AppL10n.t('<код из шага 3>')} '
                 '--file bot_keys.json\n'
                 'python $fileName',
             onCopy: () => _copy(
                 'python -m rlink_bot onboard '
-                '${_result?.claimForOnboard.isNotEmpty == true ? _result!.claimForOnboard : '<код из шага 3>'} '
+                '${_result?.claimForOnboard.isNotEmpty == true ? _result!.claimForOnboard : AppL10n.t('<код из шага 3>')} '
                 '--file bot_keys.json\n'
                 'python $fileName',
-                'Команды скопированы'),
+                AppL10n.t('Команды скопированы')),
           ),
           Text(
-            'Пока «python $fileName» запущен — бот онлайн и отвечает по вашим правилам. '
-            'Остановите (Ctrl+C) — включится заглушка на relay.',
+            AppL10n.f('Пока «python {0}» запущен — бот онлайн и отвечает по вашим правилам. Остановите (Ctrl+C) — включится заглушка на relay.', [fileName]),
             style: Theme.of(context)
                 .textTheme
                 .bodySmall
@@ -282,17 +276,17 @@ class _BotBuilderExportScreenState extends State<BotBuilderExportScreen> {
           const SizedBox(height: 22),
 
           // Правила JSON (для повторного импорта)
-          const _StepHeader(n:5, title: 'Резервная копия правил'),
+          _StepHeader(n:5, title: AppL10n.t('Резервная копия правил')),
           Text(
-            'JSON правил — сохраните, чтобы позже снова открыть бота в конструкторе.',
+            AppL10n.t('JSON правил — сохраните, чтобы позже снова открыть бота в конструкторе.'),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () =>
-                _copy(BotCodeGenerator.rulesJson(bp), 'JSON правил скопирован'),
+                _copy(BotCodeGenerator.rulesJson(bp), AppL10n.t('JSON правил скопирован')),
             icon: const Icon(Icons.data_object),
-            label: const Text('Скопировать JSON правил'),
+            label: Text(AppL10n.t('Скопировать JSON правил')),
           ),
         ],
       ),
@@ -372,7 +366,7 @@ class _CodeBlock extends StatelessWidget {
             child: TextButton.icon(
               onPressed: onCopy,
               icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Копировать'),
+              label: Text(AppL10n.t('Копировать')),
             ),
           ),
         ],

@@ -113,12 +113,12 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 Icon(Icons.group_outlined,
                     size: 64, color: cs.primary.withValues(alpha: 0.3)),
                 const SizedBox(height: 16),
-                Text('Нет групп',
+                Text(AppL10n.t('Нет групп'),
                     style: TextStyle(
                         fontSize: 18,
                         color: cs.onSurface.withValues(alpha: 0.5))),
                 const SizedBox(height: 8),
-                Text('Создайте группу или примите приглашение',
+                Text(AppL10n.t('Создайте группу или примите приглашение'),
                     style: TextStyle(
                         fontSize: 13,
                         color: cs.onSurface.withValues(alpha: 0.3))),
@@ -136,7 +136,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   child: Row(children: [
                     Icon(Icons.mail_outline, size: 16, color: cs.primary),
                     const SizedBox(width: 6),
-                    Text('Приглашения',
+                    Text(AppL10n.t('Приглашения'),
                         style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -183,8 +183,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
           controller: nameCtrl,
           maxLength: 30,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Название группы',
+          decoration: InputDecoration(
+            hintText: AppL10n.t('Название группы'),
             border: OutlineInputBorder(),
           ),
         ),
@@ -232,7 +232,7 @@ class _GroupTile extends StatelessWidget {
       ),
       title:
           Text(group.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text('${group.memberIds.length} участников',
+      subtitle: Text(AppL10n.f('{0} участников', [group.memberIds.length]),
           style: TextStyle(
               fontSize: 13, color: cs.onSurface.withValues(alpha: 0.5))),
       onTap: onTap,
@@ -365,10 +365,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   static String _membersLabel(int n) {
     final m10 = n % 10, m100 = n % 100;
     final word = (m10 == 1 && m100 != 11)
-        ? 'участник'
+        ? AppL10n.t('участник')
         : (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14))
-            ? 'участника'
-            : 'участников';
+            ? AppL10n.t('участника')
+            : AppL10n.t('участников');
     return '$n $word';
   }
 
@@ -475,7 +475,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            tooltip: 'Эмодзи и стикеры',
+            tooltip: AppL10n.t('Эмодзи и стикеры'),
           ));
           break;
         case 'media_menu':
@@ -491,7 +491,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            tooltip: 'Галерея медиа',
+            tooltip: AppL10n.t('Галерея медиа'),
           ));
           break;
         case 'voice_video_square':
@@ -507,7 +507,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            tooltip: 'Квадратик',
+            tooltip: AppL10n.t('Квадратик'),
           ));
           break;
       }
@@ -525,7 +525,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final url = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Ссылка'),
+        title: Text(AppL10n.t('Ссылка')),
         content: TextField(
           controller: urlCtrl,
           autofocus: true,
@@ -560,49 +560,49 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final items = <ContextMenuButtonItem>[
       ...editableTextState.contextMenuButtonItems,
       ContextMenuButtonItem(
-        label: 'Жирный',
+        label: AppL10n.t('Жирный'),
         onPressed: () {
           editableTextState.hideToolbar();
           _wrapSelection('**', '**');
         },
       ),
       ContextMenuButtonItem(
-        label: 'Курсив',
+        label: AppL10n.t('Курсив'),
         onPressed: () {
           editableTextState.hideToolbar();
           _wrapSelection('_', '_');
         },
       ),
       ContextMenuButtonItem(
-        label: 'Тонкий',
+        label: AppL10n.t('Тонкий'),
         onPressed: () {
           editableTextState.hideToolbar();
           _wrapSelection('`', '`');
         },
       ),
       ContextMenuButtonItem(
-        label: 'Подчёркнутый',
+        label: AppL10n.t('Подчёркнутый'),
         onPressed: () {
           editableTextState.hideToolbar();
           _wrapSelection('__', '__');
         },
       ),
       ContextMenuButtonItem(
-        label: 'Зачёркнутый',
+        label: AppL10n.t('Зачёркнутый'),
         onPressed: () {
           editableTextState.hideToolbar();
           _wrapSelection('~~', '~~');
         },
       ),
       ContextMenuButtonItem(
-        label: 'Спойлер',
+        label: AppL10n.t('Спойлер'),
         onPressed: () {
           editableTextState.hideToolbar();
           _wrapSelection('||', '||');
         },
       ),
       ContextMenuButtonItem(
-        label: 'Ссылка…',
+        label: AppL10n.t('Ссылка…'),
         onPressed: () {
           editableTextState.hideToolbar();
           _attachLinkToSelection();
@@ -836,11 +836,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('События в группе'),
+        title: Text(AppL10n.t('События в группе')),
         content: SizedBox(
           width: double.maxFinite,
           child: events.isEmpty
-              ? const Text('Пока нет отмеченных событий.')
+              ? Text(AppL10n.t('Пока нет отмеченных событий.'))
               : ListView.builder(
                   shrinkWrap: true,
                   itemCount: events.length,
@@ -849,7 +849,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     final dt = DateTime.fromMillisecondsSinceEpoch(e.startMs);
                     return ListTile(
                       dense: true,
-                      title: Text(e.title.isEmpty ? '(без названия)' : e.title),
+                      title: Text(e.title.isEmpty ? AppL10n.t('(без названия)') : e.title),
                       subtitle: Text(
                         '${dt.day.toString().padLeft(2, '0')}.'
                         '${dt.month.toString().padLeft(2, '0')}.${dt.year} '
@@ -939,7 +939,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Квадратик: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Квадратик: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1022,7 +1022,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Видео: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Видео: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1058,8 +1058,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 children: [
                   TextField(
                     controller: qCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Вопрос',
+                    decoration: InputDecoration(
+                      labelText: AppL10n.t('Вопрос'),
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -1067,36 +1067,36 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   TextField(
                       controller: o1,
                       decoration:
-                          const InputDecoration(labelText: 'Вариант 1')),
+                          InputDecoration(labelText: AppL10n.t('Вариант 1'))),
                   TextField(
                       controller: o2,
                       decoration:
-                          const InputDecoration(labelText: 'Вариант 2')),
+                          InputDecoration(labelText: AppL10n.t('Вариант 2'))),
                   TextField(
                     controller: o3,
-                    decoration: const InputDecoration(
-                        labelText: 'Вариант 3 (необязательно)'),
+                    decoration: InputDecoration(
+                        labelText: AppL10n.t('Вариант 3 (необязательно)')),
                   ),
                   SwitchListTile(
                     value: anon,
                     onChanged: (v) => setSt(() => anon = v),
-                    title: const Text('Анонимный'),
+                    title: Text(AppL10n.t('Анонимный')),
                   ),
                   SwitchListTile(
                     value: multi,
                     onChanged: (v) => setSt(() => multi = v),
-                    title: const Text('Несколько ответов'),
+                    title: Text(AppL10n.t('Несколько ответов')),
                   ),
                   SwitchListTile(
                     value: quiz,
                     onChanged: (v) => setSt(() => quiz = v),
-                    title: const Text('Викторина'),
+                    title: Text(AppL10n.t('Викторина')),
                   ),
                   if (quiz)
                     DropdownButtonFormField<int>(
                       initialValue: correctIndex,
-                      decoration: const InputDecoration(
-                          labelText: 'Правильный вариант'),
+                      decoration: InputDecoration(
+                          labelText: AppL10n.t('Правильный вариант')),
                       items: const [
                         DropdownMenuItem(value: 0, child: Text('1')),
                         DropdownMenuItem(value: 1, child: Text('2')),
@@ -1279,7 +1279,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Ошибка файла: $e'), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка файла: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1325,19 +1325,19 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       items: [
         WebPickerItem(
           icon: Icons.photo_library_rounded,
-          label: 'Фото',
+          label: AppL10n.t('Фото'),
           value: 'photo',
           color: Colors.green.shade700,
         ),
         WebPickerItem(
           icon: Icons.videocam_rounded,
-          label: 'Видео',
+          label: AppL10n.t('Видео'),
           value: 'video',
           color: Colors.red.shade600,
         ),
         WebPickerItem(
           icon: Icons.insert_drive_file_rounded,
-          label: 'Файл',
+          label: AppL10n.t('Файл'),
           value: 'file',
           color: Colors.blue.shade700,
         ),
@@ -1355,12 +1355,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           icon: _pendingLat != null
               ? Icons.location_on
               : Icons.location_on_outlined,
-          label: _pendingLat != null ? 'Убрать геометку' : 'Геометка',
+          label: _pendingLat != null ? AppL10n.t('Убрать геометку') : AppL10n.t('Геометка'),
           value: 'location',
         ),
-        const WebPickerItem(
+        WebPickerItem(
           icon: Icons.poll_outlined,
-          label: 'Опрос',
+          label: AppL10n.t('Опрос'),
           value: 'poll',
         ),
         WebPickerItem(
@@ -1549,7 +1549,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Медиа: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Медиа: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1737,7 +1737,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1826,7 +1826,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Видео: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Видео: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1908,7 +1908,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Стикер: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Стикер: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1933,7 +1933,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Стикер: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Стикер: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -2028,7 +2028,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Файл: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppL10n.f('Файл: {0}', [e])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -2051,10 +2051,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
     final picked = await Navigator.of(context).push<LocationPickResult>(
       MaterialPageRoute(
-        builder: (_) => const LocationMapScreen(
+        builder: (_) => LocationMapScreen(
           allowPicking: true,
-          title: 'Геолокация для группы',
-          confirmButtonLabel: 'Прикрепить геометку',
+          title: AppL10n.t('Геолокация для группы'),
+          confirmButtonLabel: AppL10n.t('Прикрепить геометку'),
         ),
       ),
     );
@@ -2064,8 +2064,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       _pendingLng = picked.longitude;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('📍 Геометка прикреплена к следующему сообщению'),
+      SnackBar(
+        content: Text(AppL10n.t('📍 Геометка прикреплена к следующему сообщению')),
         duration: Duration(seconds: 2),
       ),
     );
@@ -2102,7 +2102,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Приглашение отправлено $targetNick')),
+        SnackBar(content: Text(AppL10n.f('Приглашение отправлено {0}', [targetNick]))),
       );
     }
   }
@@ -2124,9 +2124,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('Пригласить в группу',
+                  child: Text(AppL10n.t('Пригласить в группу'),
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 ),
@@ -2134,8 +2134,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: TextField(
                     controller: searchCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'Искать людей и ботов по нику',
+                    decoration: InputDecoration(
+                      hintText: AppL10n.t('Искать людей и ботов по нику'),
                       prefixIcon: Icon(Icons.search),
                       isDense: true,
                     ),
@@ -2182,9 +2182,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                     },
                                   )),
                           if (query.isNotEmpty && remoteOnly.isNotEmpty) ...[
-                            const Padding(
+                            Padding(
                               padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
-                              child: Text('Найдено в сети',
+                              child: Text(AppL10n.t('Найдено в сети'),
                                   style: TextStyle(
                                       fontSize: 12, color: Colors.grey)),
                             ),
@@ -2198,7 +2198,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                       ? p.shortId
                                       : p.nick),
                                   subtitle: p.isBot
-                                      ? const Text('Бот',
+                                      ? Text(AppL10n.t('Бот'),
                                           style: TextStyle(fontSize: 11))
                                       : null,
                                   onTap: () {
@@ -2228,9 +2228,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Покинуть группу?'),
-        content: const Text(
-            'Вы больше не будете получать сообщения из этой группы.'),
+        title: Text(AppL10n.t('Покинуть группу?')),
+        content: Text(
+            AppL10n.t('Вы больше не будете получать сообщения из этой группы.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -2238,7 +2238,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Покинуть'),
+            child: Text(AppL10n.t('Покинуть')),
           ),
         ],
       ),
@@ -2274,11 +2274,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         : BackupProviders.isLinked(provider);
     if (!hasAccount) {
       messenger.showSnackBar(
-          SnackBar(content: Text('Сначала привяжите $label: Настройки → $label')));
+          SnackBar(content: Text(AppL10n.f('Сначала привяжите {0}: Настройки → {1}', [label, label]))));
       return;
     }
     messenger.showSnackBar(SnackBar(
-        content: Text('Публикация истории в $label…'),
+        content: Text(AppL10n.f('Публикация истории в {0}…', [label])),
         duration: const Duration(seconds: 30)));
     final updated = await GroupBackupService.instance.publishBackup(_group);
     if (!mounted) return;
@@ -2287,10 +2287,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       setState(() => _group = updated);
       messenger.showSnackBar(SnackBar(
           content: Text(
-              'История опубликована (rev ${updated.driveBackupRev}). Новые участники получат её автоматически.')));
+              AppL10n.f('История опубликована (rev {0}). Новые участники получат её автоматически.', [updated.driveBackupRev]))));
     } else {
       messenger.showSnackBar(SnackBar(
-          content: Text('Не удалось опубликовать. Проверьте привязку $label в Настройках.')));
+          content: Text(AppL10n.f('Не удалось опубликовать. Проверьте привязку {0} в Настройках.', [label]))));
     }
   }
 
@@ -2298,15 +2298,15 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   Future<void> _pickBackupProvider() async {
     final linked = BackupProviders.ids.where(BackupProviders.isLinked).toList();
     if (linked.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'Сначала привяжите Google Drive, OneDrive или Dropbox в Настройках')));
+              AppL10n.t('Сначала привяжите Google Drive, OneDrive или Dropbox в Настройках'))));
       return;
     }
     final chosen = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Хранилище резервной копии'),
+        title: Text(AppL10n.t('Хранилище резервной копии')),
         children: [
           for (final id in linked)
             RadioListTile<String>(
@@ -2333,7 +2333,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Редактировать группу'),
+          title: Text(AppL10n.t('Редактировать группу')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -2386,9 +2386,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 controller: nameCtrl,
                 maxLength: 30,
                 autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Название группы',
-                  labelText: 'Название',
+                decoration: InputDecoration(
+                  hintText: AppL10n.t('Название группы'),
+                  labelText: AppL10n.t('Название'),
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -2396,9 +2396,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               TextField(
                 controller: emojiCtrl,
                 maxLength: 2,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: '👥',
-                  labelText: 'Эмодзи-аватар',
+                  labelText: AppL10n.t('Эмодзи-аватар'),
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -2457,14 +2457,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             Text(_group.name,
                 style:
                     const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            Text('${_group.memberIds.length} участников',
+            Text(AppL10n.f('{0} участников', [_group.memberIds.length]),
                 style: TextStyle(
                     fontSize: 13, color: cs.onSurface.withValues(alpha: 0.5))),
             const SizedBox(height: 8),
             if (canManage)
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
-                title: const Text('Редактировать группу'),
+                title: Text(AppL10n.t('Редактировать группу')),
                 onTap: () {
                   Navigator.pop(ctx);
                   _editGroup();
@@ -2472,7 +2472,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               ),
             ListTile(
               leading: const Icon(Icons.people_outline),
-              title: const Text('Участники'),
+              title: Text(AppL10n.t('Участники')),
               onTap: () {
                 Navigator.pop(ctx);
                 _manageMembers();
@@ -2481,7 +2481,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             if (_isCreator)
               ListTile(
                 leading: const Icon(Icons.manage_accounts_outlined),
-                title: const Text('Модераторы'),
+                title: Text(AppL10n.t('Модераторы')),
                 onTap: () {
                   Navigator.pop(ctx);
                   _manageModerators();
@@ -2490,7 +2490,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             ListTile(
               leading: const Icon(Icons.exit_to_app, color: Colors.red),
               title:
-                  const Text('Покинуть группу', style: TextStyle(color: Colors.red)),
+                  Text(AppL10n.t('Покинуть группу'), style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(ctx);
                 _leaveGroup();
@@ -2528,16 +2528,16 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('Участники группы',
+                  child: Text(AppL10n.t('Участники группы'),
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 ),
                 if (currentMembers.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.all(16),
-                    child: Text('Нет участников',
+                    child: Text(AppL10n.t('Нет участников'),
                         style: TextStyle(color: Colors.grey)),
                   )
                 else
@@ -2557,8 +2557,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                           title: Text(nickFor(uid)),
                           subtitle: Text(
                             [
-                              if (isMod) 'Модератор',
-                              if (isReadOnly) 'Только чтение (бот)',
+                              if (isMod) AppL10n.t('Модератор'),
+                              if (isReadOnly) AppL10n.t('Только чтение (бот)'),
                               '${uid.substring(0, 12)}…',
                             ].join(' · '),
                             style: const TextStyle(
@@ -2575,8 +2575,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                         : Icons.visibility_outlined,
                                   ),
                                   tooltip: isReadOnly
-                                      ? 'Разрешить писать'
-                                      : 'Только чтение (для ботов)',
+                                      ? AppL10n.t('Разрешить писать')
+                                      : AppL10n.t('Только чтение (для ботов)'),
                                   onPressed: () async {
                                     final grp = await GroupService.instance
                                         .setReadOnly(
@@ -2592,7 +2592,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                   icon: const Icon(
                                       Icons.person_remove_outlined,
                                       color: Colors.red),
-                                  tooltip: 'Исключить',
+                                  tooltip: AppL10n.t('Исключить'),
                                   onPressed: () async {
                                     await GroupService.instance
                                         .removeMember(_group.id, uid);
@@ -2627,7 +2627,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final contacts = ChatStorageService.instance.contactsNotifier.value;
 
     String nickFor(String id) {
-      if (id == _myId) return 'Вы';
+      if (id == _myId) return AppL10n.t('Вы');
       return contacts
               .where((c) => c.publicKeyHex == id)
               .firstOrNull
@@ -2645,16 +2645,16 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('Модераторы группы',
+                  child: Text(AppL10n.t('Модераторы группы'),
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 ),
                 if (members.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.all(16),
-                    child: Text('Нет участников для назначения',
+                    child: Text(AppL10n.t('Нет участников для назначения'),
                         style: TextStyle(color: Colors.grey)),
                   )
                 else
@@ -2741,11 +2741,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final lines = <String>[];
     final fn = m.forwardFromNick?.trim();
     if (fn != null && fn.isNotEmpty) {
-      lines.add('Переслано от: $fn');
+      lines.add(AppL10n.f('Переслано от: {0}', [fn]));
     } else if (m.forwardFromId != null && m.forwardFromId!.trim().isNotEmpty) {
-      lines.add('Переслано (автор: ${m.forwardFromId})');
+      lines.add(AppL10n.f('Переслано (автор: {0})', [m.forwardFromId]));
     }
-    lines.add('Автор: ${_nickFor(m.senderId)}');
+    lines.add(AppL10n.f('Автор: {0}', [_nickFor(m.senderId)]));
 
     final todo = SharedTodoPayload.tryDecode(m.text);
     if (todo != null) {
@@ -2758,7 +2758,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       final cal = SharedCalendarPayload.tryDecode(m.text);
       if (cal != null) {
         final title = cal.title.trim();
-        lines.add(title.isEmpty ? 'Событие' : title);
+        lines.add(title.isEmpty ? AppL10n.t('Событие') : title);
         if (cal.startMs > 0) {
           final dt = DateTime.fromMillisecondsSinceEpoch(cal.startMs);
           final mm = dt.minute.toString().padLeft(2, '0');
@@ -2771,7 +2771,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         final poll = MessagePoll.tryDecode(m.pollJson);
         if (poll != null) {
           final q = poll.question.trim();
-          lines.add(q.isEmpty ? 'Опрос' : 'Опрос: $q');
+          lines.add(q.isEmpty ? AppL10n.t('Опрос') : AppL10n.f('Опрос: {0}', [q]));
           final labels = poll.displayLabels(m.id);
           for (var i = 0; i < labels.length; i++) {
             lines.add('${i + 1}. ${labels[i]}');
@@ -2787,16 +2787,16 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
 
     if (m.imagePath != null && m.imagePath!.trim().isNotEmpty) {
-      lines.add('[Изображение]');
+      lines.add(AppL10n.t('[Изображение]'));
     }
     if (m.videoPath != null && m.videoPath!.trim().isNotEmpty) {
-      lines.add('[Видео]');
+      lines.add(AppL10n.t('[Видео]'));
     }
     if (m.voicePath != null && m.voicePath!.trim().isNotEmpty) {
-      lines.add('[Голосовое сообщение]');
+      lines.add(AppL10n.t('[Голосовое сообщение]'));
     }
     if (m.latitude != null && m.longitude != null) {
-      lines.add('[Гео: ${m.latitude}, ${m.longitude}]');
+      lines.add(AppL10n.f('[Гео: {0}, {1}]', [m.latitude, m.longitude]));
     }
 
     return lines.join('\n').trim();
@@ -2821,7 +2821,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.text_fields_rounded),
-              title: const Text('Выделить текст'),
+              title: Text(AppL10n.t('Выделить текст')),
               onTap: () => Navigator.pop(ctx, 'selecttext'),
             ),
             ListTile(
@@ -2837,7 +2837,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             if (m.senderId == CryptoService.instance.publicKeyHex)
               ListTile(
                 leading: const Icon(Icons.info_outline),
-                title: const Text('Информация'),
+                title: Text(AppL10n.t('Информация')),
                 onTap: () => Navigator.pop(ctx, 'info'),
               ),
             if (m.senderId == CryptoService.instance.publicKeyHex ||
@@ -2901,7 +2901,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   String _nickFor(String id) {
-    if (id == CryptoService.instance.publicKeyHex) return 'Вы';
+    if (id == CryptoService.instance.publicKeyHex) return AppL10n.t('Вы');
     final contact = ChatStorageService.instance.contactsNotifier.value
         .where((c) => c.publicKeyHex == id)
         .firstOrNull;
@@ -2918,7 +2918,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         children: [
-          _topicChip(cs, label: 'Общая', selected: _currentTopicId == null,
+          _topicChip(cs, label: AppL10n.t('Общая'), selected: _currentTopicId == null,
               onTap: () => _switchTopic(null)),
           for (final t in _topics)
             _topicChip(cs,
@@ -2928,7 +2928,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 onLongPress: () => unawaited(_editTopic(t))),
           ActionChip(
             avatar: const Icon(Icons.add, size: 16),
-            label: const Text('Тема'),
+            label: Text(AppL10n.t('Тема')),
             onPressed: _createTopic,
           ),
         ].map((w) => Padding(
@@ -2986,7 +2986,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                         style: const TextStyle(fontSize: 16),
                         overflow: TextOverflow.ellipsis),
                     Text(
-                        '${_membersLabel(_group.memberIds.length)} · $_onlineCount в сети',
+                        AppL10n.f('{0} · {1} в сети', [_membersLabel(_group.memberIds.length), _onlineCount]),
                         style: TextStyle(
                             fontSize: 12,
                             color: cs.onSurface.withValues(alpha: 0.5))),
@@ -2998,8 +2998,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         ),
         actions: [
           PopupMenuButton<bool>(
-            icon: const Icon(Icons.call_outlined),
-            tooltip: 'Групповой звонок',
+            icon: Icon(Icons.call_outlined),
+            tooltip: AppL10n.t('Групповой звонок'),
             onSelected: (video) => unawaited(startOrJoinGroupCall(
               context,
               groupId: _group.id,
@@ -3007,21 +3007,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               topicId: _currentTopicId,
               video: video,
             )),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: true, child: Text('Видеозвонок')),
-              PopupMenuItem(value: false, child: Text('Аудиозвонок')),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: true, child: Text(AppL10n.t('Видеозвонок'))),
+              PopupMenuItem(value: false, child: Text(AppL10n.t('Аудиозвонок'))),
             ],
           ),
           IconButton(
             icon: const Icon(Icons.calendar_month_outlined),
-            tooltip: 'Календарь группы',
+            tooltip: AppL10n.t('Календарь группы'),
             onPressed: () => unawaited(_openGroupCalendar()),
           ),
           if (_isCreator || _group.canModerate(_myId))
             IconButton(
               icon: const Icon(Icons.person_add_outlined),
               onPressed: _inviteMember,
-              tooltip: 'Пригласить',
+              tooltip: AppL10n.t('Пригласить'),
             ),
           PopupMenuButton<String>(
             onSelected: (v) {
@@ -3043,21 +3043,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     Text(AppL10n.t('common_edit')),
                   ]),
                 ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'topic',
                 child: Row(children: [
                   Icon(Icons.forum_outlined, size: 18),
                   SizedBox(width: 8),
-                  Text('Новая тема'),
+                  Text(AppL10n.t('Новая тема')),
                 ]),
               ),
               if (_isCreator)
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'mods',
                   child: Row(children: [
                     Icon(Icons.manage_accounts_outlined, size: 18),
                     SizedBox(width: 8),
-                    Text('Модераторы'),
+                    Text(AppL10n.t('Модераторы')),
                   ]),
                 ),
               if (_isCreator || _group.canModerate(_myId)) ...[
@@ -3067,8 +3067,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     const Icon(Icons.cloud_upload_outlined, size: 18),
                     const SizedBox(width: 8),
                     Text(_group.driveBackupEnabled
-                        ? 'Обновить историю в ${BackupProviders.label(_group.backupProvider)}'
-                        : 'История в ${BackupProviders.label(_group.backupProvider)}'),
+                        ? AppL10n.f('Обновить историю в {0}', [BackupProviders.label(_group.backupProvider)])
+                        : AppL10n.f('История в {0}', [BackupProviders.label(_group.backupProvider)])),
                   ]),
                 ),
                 PopupMenuItem(
@@ -3076,25 +3076,25 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   child: Row(children: [
                     const Icon(Icons.swap_horiz_outlined, size: 18),
                     const SizedBox(width: 8),
-                    Text('Хранилище: ${BackupProviders.label(_group.backupProvider)}'),
+                    Text(AppL10n.f('Хранилище: {0}', [BackupProviders.label(_group.backupProvider)])),
                   ]),
                 ),
               ],
               if (_isCreator || _group.canModerate(_myId))
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'members',
                   child: Row(children: [
                     Icon(Icons.people_outline, size: 18),
                     SizedBox(width: 8),
-                    Text('Участники'),
+                    Text(AppL10n.t('Участники')),
                   ]),
                 ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'leave',
                 child: Row(children: [
                   Icon(Icons.exit_to_app, size: 18, color: Colors.red),
                   SizedBox(width: 8),
-                  Text('Покинуть', style: TextStyle(color: Colors.red)),
+                  Text(AppL10n.t('Покинуть'), style: TextStyle(color: Colors.red)),
                 ]),
               ),
             ],
@@ -3113,7 +3113,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           Expanded(
             child: _messages.isEmpty
                 ? Center(
-                    child: Text('Нет сообщений',
+                    child: Text(AppL10n.t('Нет сообщений'),
                         style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.3))))
                 : Stack(
@@ -3221,8 +3221,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                           constraints:
                               const BoxConstraints(minWidth: 36, minHeight: 36),
                           tooltip: _showFormatStrip
-                              ? 'Скрыть формат'
-                              : 'Формат выделенного текста',
+                              ? AppL10n.t('Скрыть формат')
+                              : AppL10n.t('Формат выделенного текста'),
                         ),
                       ..._buildGroupInputButtons(cs, leftSide: true),
                       const SizedBox(width: 2),
@@ -3241,8 +3241,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                             contextMenuBuilder: _buildContextMenu,
                             maxLines: AppSettings.instance.sendOnEnter ? 1 : 4,
                             minLines: 1,
-                            decoration: const InputDecoration(
-                              hintText: 'Сообщение...',
+                            decoration: InputDecoration(
+                              hintText: AppL10n.t('Сообщение...'),
                               border: InputBorder.none,
                               contentPadding: EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 10),
@@ -3423,10 +3423,9 @@ class _GroupBubble extends StatelessWidget {
                   colorScheme: cs,
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text(
-                          'Откройте группу при подключении к сети — '
-                          'запросится история и вложения.',
+                          AppL10n.t('Откройте группу при подключении к сети — запросится история и вложения.'),
                         ),
                       ),
                     );
@@ -3693,12 +3692,12 @@ class _GroupInviteCard extends StatelessWidget {
                         fontSize: 15,
                         color: cs.onPrimaryContainer,
                       )),
-                  Text('${invite.inviterNick} приглашает вас',
+                  Text(AppL10n.f('{0} приглашает вас', [invite.inviterNick]),
                       style: TextStyle(
                         fontSize: 12,
                         color: cs.onPrimaryContainer.withValues(alpha: 0.7),
                       )),
-                  Text('${invite.memberIds.length} участников',
+                  Text(AppL10n.f('{0} участников', [invite.memberIds.length]),
                       style: TextStyle(
                         fontSize: 11,
                         color: cs.onPrimaryContainer.withValues(alpha: 0.5),
@@ -3711,7 +3710,7 @@ class _GroupInviteCard extends StatelessWidget {
               onPressed: () {
                 GroupService.instance.removeInvite(invite.groupId);
               },
-              child: Text('Нет',
+              child: Text(AppL10n.t('Нет'),
                   style: TextStyle(
                       color: cs.onPrimaryContainer.withValues(alpha: 0.6))),
             ),
@@ -4072,7 +4071,7 @@ class _CreateTopicDialogState extends State<_CreateTopicDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(_isEditing ? 'Изменить тему' : 'Новая тема'),
+      title: Text(_isEditing ? AppL10n.t('Изменить тему') : AppL10n.t('Новая тема')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4093,7 +4092,7 @@ class _CreateTopicDialogState extends State<_CreateTopicDialog> {
                 child: TextField(
                   controller: _nameCtrl,
                   autofocus: true,
-                  decoration: const InputDecoration(hintText: 'Название темы'),
+                  decoration: InputDecoration(hintText: AppL10n.t('Название темы')),
                 ),
               ),
             ],
@@ -4103,7 +4102,7 @@ class _CreateTopicDialogState extends State<_CreateTopicDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
+          child: Text(AppL10n.t('Отмена')),
         ),
         FilledButton(
           onPressed: () {
@@ -4115,7 +4114,7 @@ class _CreateTopicDialogState extends State<_CreateTopicDialog> {
               (name: name, emoji: emoji.isEmpty ? '💬' : emoji),
             );
           },
-          child: Text(_isEditing ? 'Сохранить' : 'Создать'),
+          child: Text(_isEditing ? AppL10n.t('Сохранить') : AppL10n.t('Создать')),
         ),
       ],
     );

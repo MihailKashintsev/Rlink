@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/channel.dart';
 import '../../services/channel_service.dart';
 import '../../services/chat_storage_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Редактор команды канала: подписи постов, админы ссылок.
 class StaffLinksEditorSheet extends StatefulWidget {
@@ -64,7 +65,7 @@ class _StaffLinksEditorSheetState extends State<StaffLinksEditorSheet> {
   }
 
   String _nickFor(String id) {
-    if (id == widget.myId) return 'Вы';
+    if (id == widget.myId) return AppL10n.t('Вы');
     return ChatStorageService.instance.contactsNotifier.value
             .where((c) => c.publicKeyHex == id)
             .firstOrNull
@@ -120,23 +121,23 @@ class _StaffLinksEditorSheetState extends State<StaffLinksEditorSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Команда и подписи', style: theme.textTheme.titleLarge),
+              Text(AppL10n.t('Команда и подписи'), style: theme.textTheme.titleLarge),
               const SizedBox(height: 8),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: _sign,
-                title: const Text('Подписывать посты'),
-                subtitle: const Text(
-                  'Показывать подпись у авторов с заполненной строкой ниже',
+                title: Text(AppL10n.t('Подписывать посты')),
+                subtitle: Text(
+                  AppL10n.t('Показывать подпись у авторов с заполненной строкой ниже'),
                   style: TextStyle(fontSize: 12),
                 ),
                 onChanged: (v) => setState(() => _sign = v),
               ),
               const Divider(),
-              Text('Админы ссылок', style: theme.textTheme.titleSmall),
+              Text(AppL10n.t('Админы ссылок'), style: theme.textTheme.titleSmall),
               const SizedBox(height: 4),
               if (subscribers.isEmpty)
-                const Text('Нет подписчиков',
+                Text(AppL10n.t('Нет подписчиков'),
                     style: TextStyle(color: Colors.grey))
               else
                 ...subscribers.map((uid) {
@@ -153,7 +154,7 @@ class _StaffLinksEditorSheetState extends State<StaffLinksEditorSheet> {
                   );
                 }),
               const Divider(),
-              Text('Текст подписи по автору',
+              Text(AppL10n.t('Текст подписи по автору'),
                   style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
               ...() {
@@ -185,7 +186,7 @@ class _StaffLinksEditorSheetState extends State<StaffLinksEditorSheet> {
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: _saveLabels,
-                child: const Text('Сохранить подписи'),
+                child: Text(AppL10n.t('Сохранить подписи')),
               ),
             ],
           ),

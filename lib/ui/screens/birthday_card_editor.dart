@@ -12,6 +12,7 @@ import '../../services/image_service.dart';
 import '../../utils/web_file_store.dart';
 import '../../utils/web_object_url.dart';
 import '../widgets/sticker_picker_sheet.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Editor for a birthday greeting card: festive background + draggable text,
 /// emoji, stickers and gallery photos, composited with your own hands.
@@ -89,7 +90,7 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
     _items.add(_CardItem(
       id: _seq++,
       kind: _Kind.text,
-      text: 'С Днём Рождения!',
+      text: AppL10n.t('С Днём Рождения!'),
       color: Colors.white,
       center: const Offset(0.5, 0.30),
       scale: 0.085,
@@ -154,7 +155,7 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
       final bytes = await picked.readAsBytes();
       await _addImageFromBytes(bytes);
     } catch (e) {
-      _snack('Не удалось добавить фото: $e');
+      _snack(AppL10n.f('Не удалось добавить фото: {0}', [e]));
     }
   }
 
@@ -164,7 +165,7 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
       onPickedSticker: (absolutePath) async {
         final bytes = await _loadImageBytes(absolutePath);
         if (bytes == null || bytes.isEmpty) {
-          _snack('Не удалось загрузить стикер');
+          _snack(AppL10n.t('Не удалось загрузить стикер'));
           return;
         }
         await _addImageFromBytes(bytes);
@@ -194,7 +195,7 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
         _selectedId = it.id;
       });
     } catch (e) {
-      _snack('Не удалось прочитать картинку: $e');
+      _snack(AppL10n.f('Не удалось прочитать картинку: {0}', [e]));
     }
   }
 
@@ -258,7 +259,7 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
     } catch (e) {
       if (mounted) {
         setState(() => _exporting = false);
-        _snack('Не удалось собрать открытку: $e');
+        _snack(AppL10n.f('Не удалось собрать открытку: {0}', [e]));
       }
     }
   }
@@ -354,7 +355,7 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
-          title: const Text('Текст'),
+          title: Text(AppL10n.t('Текст')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -363,8 +364,8 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
                 autofocus: true,
                 maxLines: 3,
                 minLines: 1,
-                decoration: const InputDecoration(
-                  hintText: 'Ваше поздравление',
+                decoration: InputDecoration(
+                  hintText: AppL10n.t('Ваше поздравление'),
                 ),
               ),
               const SizedBox(height: 14),
@@ -396,11 +397,11 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена'),
+              child: Text(AppL10n.t('Отмена')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, (ctrl.text, color)),
-              child: const Text('Готово'),
+              child: Text(AppL10n.t('Готово')),
             ),
           ],
         ),
@@ -423,7 +424,7 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF101014),
         foregroundColor: Colors.white,
-        title: Text('Открытка · ${widget.recipientName}',
+        title: Text(AppL10n.f('Открытка · {0}', [widget.recipientName]),
             style: const TextStyle(fontSize: 16)),
         actions: [
           Padding(
@@ -437,7 +438,7 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.check_rounded, size: 18),
-              label: const Text('Отправить'),
+              label: Text(AppL10n.t('Отправить')),
             ),
           ),
         ],
@@ -627,15 +628,15 @@ class _BirthdayCardEditorState extends State<BirthdayCardEditor> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _toolBtn(Icons.gradient_rounded, 'Фон',
+            _toolBtn(Icons.gradient_rounded, AppL10n.t('Фон'),
                 () => setState(() => _bgIndex = (_bgIndex + 1) % _kBackgrounds.length)),
-            _toolBtn(Icons.text_fields_rounded, 'Текст', _addText),
-            _toolBtn(Icons.emoji_emotions_outlined, 'Эмодзи', () {
+            _toolBtn(Icons.text_fields_rounded, AppL10n.t('Текст'), _addText),
+            _toolBtn(Icons.emoji_emotions_outlined, AppL10n.t('Эмодзи'), () {
               // The strip above already shows the palette; nudge focus there.
-              _snack('Выберите эмодзи из строки выше');
+              _snack(AppL10n.t('Выберите эмодзи из строки выше'));
             }),
-            _toolBtn(Icons.sticky_note_2_outlined, 'Стикер', _addSticker),
-            _toolBtn(Icons.photo_outlined, 'Фото', _addPhoto),
+            _toolBtn(Icons.sticky_note_2_outlined, AppL10n.t('Стикер'), _addSticker),
+            _toolBtn(Icons.photo_outlined, AppL10n.t('Фото'), _addPhoto),
           ],
         ),
       ),

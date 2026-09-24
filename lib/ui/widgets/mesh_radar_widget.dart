@@ -7,6 +7,7 @@ import '../../models/contact.dart';
 import '../../services/ble_service.dart';
 import '../../services/chat_storage_service.dart';
 import 'avatar_widget.dart';
+import '../../l10n/app_l10n.dart';
 
 // ── Peer position on radar ──────────────────────────────────────
 
@@ -223,8 +224,8 @@ class _MeshRadarWidgetState extends State<MeshRadarWidget>
                       right: 0,
                       child: Text(
                         peers.isEmpty
-                            ? 'Сканирование mesh-сети...'
-                            : '${peers.length} ${_plural(peers.length)} в сети',
+                            ? AppL10n.t('Сканирование mesh-сети...')
+                            : AppL10n.f('{0} {1} в сети', [peers.length, _plural(peers.length)]),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.grey.shade500,
@@ -256,11 +257,11 @@ class _MeshRadarWidgetState extends State<MeshRadarWidget>
   }
 
   static String _plural(int n) {
-    if (n % 10 == 1 && n % 100 != 11) return 'устройство';
+    if (n % 10 == 1 && n % 100 != 11) return AppL10n.t('устройство');
     if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) {
-      return 'устройства';
+      return AppL10n.t('устройства');
     }
-    return 'устройств';
+    return AppL10n.t('устройств');
   }
 }
 

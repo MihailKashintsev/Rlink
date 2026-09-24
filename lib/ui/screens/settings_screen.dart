@@ -45,6 +45,8 @@ import '../../services/sound_effects_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/web_notification_bridge.dart';
 import '../../utils/web_file_store.dart';
+import '../../utils/chat_background_picker.dart';
+import '../widgets/channel_feed_image.dart' show storedImage;
 import '../screens/rid_screen.dart';
 import '../screens/stickers_hub_screen.dart';
 import '../screens/emoji_hub_screen.dart';
@@ -152,8 +154,9 @@ Future<void> requestDeviceLink(BuildContext context) async {
   if (!RelayService.instance.isConnected) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Не удалось подключиться к интернет-ретранслятору')),
+        SnackBar(
+            content: Text(
+                AppL10n.t('Не удалось подключиться к интернет-ретранслятору'))),
       );
     }
     return;
@@ -166,7 +169,9 @@ Future<void> requestDeviceLink(BuildContext context) async {
   );
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Запрос на связку отправлен: ${contact.nickname}')),
+    SnackBar(
+        content: Text(
+            AppL10n.f('Запрос на связку отправлен: {0}', [contact.nickname]))),
   );
 }
 
@@ -179,23 +184,24 @@ Future<bool?> _pickLinkMethod(BuildContext context) {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Text('Привязать дочернее устройство',
+            child: Text(AppL10n.t('Привязать дочернее устройство'),
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
           ),
           ListTile(
             leading: const Icon(Icons.qr_code_scanner_rounded),
-            title: const Text('Сканировать QR'),
-            subtitle: const Text(
-                'На новом устройстве: «Это дополнительное устройство»',
+            title: Text(AppL10n.t('Сканировать QR')),
+            subtitle: Text(
+                AppL10n.t(
+                    'На новом устройстве: «Это дополнительное устройство»'),
                 style: TextStyle(fontSize: 12)),
             onTap: () => Navigator.pop(ctx, true),
           ),
           ListTile(
             leading: const Icon(Icons.people_outline),
-            title: const Text('Выбрать из контактов'),
-            subtitle: const Text('Устройство уже пользуется Rlink',
+            title: Text(AppL10n.t('Выбрать из контактов')),
+            subtitle: Text(AppL10n.t('Устройство уже пользуется Rlink'),
                 style: TextStyle(fontSize: 12)),
             onTap: () => Navigator.pop(ctx, false),
           ),
@@ -211,7 +217,7 @@ Future<Contact?> _pickContactForLink(BuildContext context) async {
   if (!context.mounted) return null;
   if (contacts.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Нет контактов для связки устройств')),
+      SnackBar(content: Text(AppL10n.t('Нет контактов для связки устройств'))),
     );
     return null;
   }
@@ -222,10 +228,11 @@ Future<Contact?> _pickContactForLink(BuildContext context) async {
       child: ListView(
         shrinkWrap: true,
         children: [
-          const ListTile(
-            title: Text('Выберите устройство'),
+          ListTile(
+            title: Text(AppL10n.t('Выберите устройство')),
             subtitle: Text(
-              'Выбранный контакт получит запрос на привязку как дочернего устройства.',
+              AppL10n.t(
+                  'Выбранный контакт получит запрос на привязку как дочернего устройства.'),
               style: TextStyle(fontSize: 12),
             ),
           ),
@@ -345,18 +352,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
-          const _SectionHeader('Режим дочернего устройства'),
+          _SectionHeader(AppL10n.t('Режим дочернего устройства')),
           ListTile(
             leading: Icon(Icons.lock_person_outlined, color: cs.primary),
-            title: const Text('Доступ ограничен'),
-            subtitle: const Text(
-              'В этом режиме доступны только переписка и отвязка устройства.',
+            title: Text(AppL10n.t('Доступ ограничен')),
+            subtitle: Text(
+              AppL10n.t(
+                  'В этом режиме доступны только переписка и отвязка устройства.'),
               style: TextStyle(fontSize: 12),
             ),
           ),
           ListTile(
             leading: const Icon(Icons.link_rounded),
-            title: const Text('Связано с'),
+            title: Text(AppL10n.t('Связано с')),
             subtitle: Text(
               settings.linkedDeviceNickname.isNotEmpty
                   ? settings.linkedDeviceNickname
@@ -366,8 +374,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.link_off_rounded, color: Colors.red),
-            title: const Text(
-              'Отвязаться от главного устройства',
+            title: Text(
+              AppL10n.t('Отвязаться от главного устройства'),
               style: TextStyle(color: Colors.red),
             ),
             onTap: () => doUnlinkDevice(context),
@@ -428,7 +436,7 @@ class _ProfileMiniCard extends StatelessWidget {
                   Text(
                     profile?.nickname.isNotEmpty == true
                         ? profile!.nickname
-                        : 'Без имени',
+                        : AppL10n.t('Без имени'),
                     style: const TextStyle(
                         fontSize: 17, fontWeight: FontWeight.w600),
                     maxLines: 1,
@@ -440,7 +448,7 @@ class _ProfileMiniCard extends StatelessWidget {
                         ? (profile.username.isNotEmpty
                             ? '@${profile.username}'
                             : '${profile.publicKeyHex.substring(0, 12)}...')
-                        : 'Настройте профиль',
+                        : AppL10n.t('Настройте профиль'),
                     style: TextStyle(
                       fontSize: 12,
                       color: profile?.username.isNotEmpty == true
@@ -537,7 +545,8 @@ class _CategoryGroup extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(item.title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w400)),
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w400)),
           if (item.badge != null) ...[
             const SizedBox(width: 8),
             Container(
@@ -601,16 +610,17 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
         pendingUpdateNotifier.value = update;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Доступно обновление ${update.version}'),
+            content:
+                Text(AppL10n.f('Доступно обновление {0}', [update.version])),
             action: SnackBarAction(
-              label: 'Скачать',
+              label: AppL10n.t('Скачать'),
               onPressed: () => UpdateService.instance.startDownload(update),
             ),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('У вас последняя версия')),
+          SnackBar(content: Text(AppL10n.t('У вас последняя версия'))),
         );
       }
     } finally {
@@ -624,7 +634,7 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             icon: Icons.key_outlined,
             color: const Color(0xFF1DB954),
             title: 'RID',
-            subtitle: 'Ваш RlinkID — перенос, привязка, удаление',
+            subtitle: AppL10n.t('Ваш RlinkID — перенос, привязка, удаление'),
             onTap: () => _open(context, const RidScreen()),
           ),
         ],
@@ -633,22 +643,23 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             icon: Icons.palette_outlined,
             color: const Color(0xFF9C27B0),
             title: AppL10n.t('settings_appearance'),
-            subtitle: 'Тема, цвета, шрифт, фон',
+            subtitle: AppL10n.t('Тема, цвета, шрифт, фон'),
             onTap: () => _open(context, const _AppearancePage()),
           ),
           _CategoryItem(
             icon: Icons.notifications_outlined,
             color: const Color(0xFFF44336),
             title: AppL10n.t('settings_notifications'),
-            subtitle: 'Звуки, рингтон, вибрация',
+            subtitle: AppL10n.t('Звуки, рингтон, вибрация'),
             onTap: () => _open(context, const _NotificationsPage()),
           ),
           if (kIsWeb)
             _CategoryItem(
               icon: Icons.verified_user_outlined,
               color: const Color(0xFF00BCD4),
-              title: 'Разрешения',
-              subtitle: 'Микрофон, камера, уведомления, фоновые пуши',
+              title: AppL10n.t('Разрешения'),
+              subtitle:
+                  AppL10n.t('Микрофон, камера, уведомления, фоновые пуши'),
               onTap: () => _open(context, const _PermissionsPage()),
             ),
         ],
@@ -657,14 +668,14 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             icon: Icons.chat_bubble_outline,
             color: const Color(0xFF2196F3),
             title: AppL10n.t('settings_messaging'),
-            subtitle: 'Отправка, медиа, память',
+            subtitle: AppL10n.t('Отправка, медиа, память'),
             onTap: () => _open(context, const _MessagingPage()),
           ),
           _CategoryItem(
             icon: Icons.tune,
             color: const Color(0xFF9C27B0),
-            title: 'Панель ввода',
-            subtitle: 'Порядок кнопок',
+            title: AppL10n.t('Панель ввода'),
+            subtitle: AppL10n.t('Порядок кнопок'),
             onTap: () => _open(context, const InputBarButtonOrderSettings()),
           ),
           _CategoryItem(
@@ -672,36 +683,37 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             color: const Color(0xFFFFB300),
             title: 'Rlink Premium',
             subtitle: PremiumService.instance.isActive
-                ? 'Подписка активна'
-                : 'Цвет ника, каналы, конструктор ботов',
+                ? AppL10n.t('Подписка активна')
+                : AppL10n.t('Цвет ника, каналы, конструктор ботов'),
             onTap: () => _open(context, const PremiumStatusPage()),
           ),
           _CategoryItem(
             icon: Icons.library_music_outlined,
             color: const Color(0xFF00BCD4),
-            title: 'Музыка',
-            subtitle: 'Плеер, поиск, «Нравится», текст (бета)',
+            title: AppL10n.t('Музыка'),
+            subtitle: AppL10n.t('Плеер, поиск, «Нравится», текст (бета)'),
             onTap: () => _open(context, const MusicScreen()),
           ),
           _CategoryItem(
             icon: Icons.emoji_emotions_outlined,
             color: const Color(0xFFEC407A),
             title: AppL10n.t('emoji_my_packs'),
-            subtitle: 'Свои :код: и анимированные эмодзи',
+            subtitle: AppL10n.t('Свои :код: и анимированные эмодзи'),
             onTap: () => _open(context, const EmojiHubScreen()),
           ),
           _CategoryItem(
             icon: Icons.auto_awesome_motion_outlined,
             color: const Color(0xFF7E57C2),
-            title: 'Стикеры и наборы',
-            subtitle: 'Свои наборы и редактор анимированных стикеров',
+            title: AppL10n.t('Стикеры и наборы'),
+            subtitle:
+                AppL10n.t('Свои наборы и редактор анимированных стикеров'),
             onTap: () => _open(context, const StickersHubScreen()),
           ),
           _CategoryItem(
             icon: Icons.lock_outline,
             color: const Color(0xFF4CAF50),
             title: AppL10n.t('settings_privacy'),
-            subtitle: 'Прочтение, статус онлайн',
+            subtitle: AppL10n.t('Прочтение, статус онлайн'),
             onTap: () => _open(context, const _PrivacyPage()),
           ),
           _CategoryItem(
@@ -716,8 +728,8 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
           _CategoryItem(
             icon: Icons.record_voice_over_outlined,
             color: const Color(0xFFFF7043),
-            title: 'Расшифровка',
-            subtitle: 'Движок и модель',
+            title: AppL10n.t('Расшифровка'),
+            subtitle: AppL10n.t('Движок и модель'),
             onTap: () => _open(context, const _TranscriptionPage()),
           ),
         ],
@@ -726,36 +738,35 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             icon: Icons.wifi_tethering_rounded,
             color: const Color(0xFF009688),
             title: AppL10n.t('settings_section_network'),
-            subtitle: 'BLE, интернет, ретранслятор',
+            subtitle: AppL10n.t('BLE, интернет, ретранслятор'),
             onTap: () => _open(context, const _NetworkPage()),
           ),
           _CategoryItem(
             icon: Icons.add_to_drive_outlined,
             color: const Color(0xFF1A73E8),
             title: 'Google Drive',
-            subtitle: 'Привязка аккаунта, резерв и место',
+            subtitle: AppL10n.t('Привязка аккаунта, резерв и место'),
             onTap: () => _open(context, const _GoogleDrivePage()),
           ),
           _CategoryItem(
             icon: Icons.cloud_outlined,
             color: const Color(0xFF0078D4),
             title: 'OneDrive',
-            subtitle: 'Пока недоступно',
-            badge: 'Скоро',
+            subtitle: AppL10n.t('Пока недоступно'),
+            badge: AppL10n.t('Скоро'),
             onTap: () => showDialog<void>(
               context: context,
               builder: (ctx) => AlertDialog(
-                title: const Text('OneDrive — скоро'),
-                content: const Text(
-                  'Привязка OneDrive ещё не готова — ждём регистрацию '
-                  'приложения в Microsoft. Резервные копии пока доступны '
-                  'через Google Drive и Dropbox.',
+                title: Text(AppL10n.t('OneDrive — скоро')),
+                content: Text(
+                  AppL10n.t(
+                      'Привязка OneDrive ещё не готова — ждём регистрацию приложения в Microsoft. Резервные копии пока доступны через Google Drive и Dropbox.'),
                   style: TextStyle(fontSize: 13),
                 ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('ОК'),
+                    child: Text(AppL10n.t('ОК')),
                   ),
                 ],
               ),
@@ -765,7 +776,7 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             icon: Icons.inventory_2_outlined,
             color: const Color(0xFF0061FF),
             title: 'Dropbox',
-            subtitle: 'Привязка аккаунта для резервных копий',
+            subtitle: AppL10n.t('Привязка аккаунта для резервных копий'),
             onTap: () => _open(
               context,
               _CloudProviderPage(
@@ -778,8 +789,8 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             _CategoryItem(
               icon: Icons.ios_share_rounded,
               color: const Color(0xFF4CAF50),
-              title: 'Установка на iPhone',
-              subtitle: 'Добавить Rlink на главный экран',
+              title: AppL10n.t('Установка на iPhone'),
+              subtitle: AppL10n.t('Добавить Rlink на главный экран'),
               onTap: () => _open(context, const _WebInstallPage()),
             ),
         ],
@@ -788,14 +799,15 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             icon: Icons.storage_outlined,
             color: const Color(0xFF795548),
             title: AppL10n.t('settings_data'),
-            subtitle: 'История, контакты, сброс',
+            subtitle: AppL10n.t('История, контакты, сброс'),
             onTap: () => _open(context, const SettingsDataPage()),
           ),
           _CategoryItem(
             icon: Icons.menu_book_outlined,
             color: const Color(0xFF3949AB),
-            title: 'Документация',
-            subtitle: 'Rlink, боты Lib, python -m rlink_bot onboard — RU / EN',
+            title: AppL10n.t('Документация'),
+            subtitle: AppL10n.t(
+                'Rlink, боты Lib, python -m rlink_bot onboard — RU / EN'),
             onTap: () => DocumentationScreen.open(context),
           ),
           if (isUpdateSupported)
@@ -804,10 +816,11 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
                   ? Icons.sync_rounded
                   : Icons.system_update_alt_rounded,
               color: const Color(0xFF43A047),
-              title: 'Проверить обновление',
+              title: AppL10n.t('Проверить обновление'),
               subtitle: _checkingUpdate
-                  ? 'Проверяем…'
-                  : 'Rlink v${AppVersion.label} — проверить сейчас',
+                  ? AppL10n.t('Проверяем…')
+                  : AppL10n.f(
+                      'Rlink v{0} — проверить сейчас', [AppVersion.label]),
               onTap: () => _manualCheckUpdate(context),
             ),
           _CategoryItem(
@@ -837,7 +850,7 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
         onChanged: (v) => setState(() => _query = v),
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
-          hintText: 'Поиск в настройках',
+          hintText: AppL10n.t('Поиск в настройках'),
           prefixIcon: const Icon(Icons.search),
           suffixIcon: q.isEmpty
               ? null
@@ -878,7 +891,7 @@ class _SettingsCategoryCardsState extends State<SettingsCategoryCards> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 28),
               child: Center(
-                child: Text('Ничего не найдено',
+                child: Text(AppL10n.t('Ничего не найдено'),
                     style: TextStyle(color: cs.onSurfaceVariant)),
               ),
             )
@@ -933,7 +946,13 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
 
   String _fmtBytes(int? b) {
     if (b == null || b < 0) return '—';
-    const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+    final units = [
+      AppL10n.t('Б'),
+      AppL10n.t('КБ'),
+      AppL10n.t('МБ'),
+      AppL10n.t('ГБ'),
+      AppL10n.t('ТБ')
+    ];
     var v = b.toDouble();
     var i = 0;
     while (v >= 1024 && i < units.length - 1) {
@@ -972,11 +991,10 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
     final done = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Привязка через сервер'),
-        content: const Text(
-          'В открывшемся окне войдите в Google и разрешите доступ к Drive, '
-          'затем вернитесь сюда и нажмите «Готово».\n\n'
-          'Токен хранится на сервере — привязка не слетит после перезахода.',
+        title: Text(AppL10n.t('Привязка через сервер')),
+        content: Text(
+          AppL10n.t(
+              'В открывшемся окне войдите в Google и разрешите доступ к Drive, затем вернитесь сюда и нажмите «Готово».\n\nТокен хранится на сервере — привязка не слетит после перезахода.'),
           style: TextStyle(fontSize: 13),
         ),
         actions: [
@@ -986,7 +1004,7 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Готово'),
+            child: Text(AppL10n.t('Готово')),
           ),
         ],
       ),
@@ -999,8 +1017,8 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok
-            ? 'Google Drive привязан (постоянно)'
-            : 'Не удалось завершить привязку — попробуйте ещё раз'),
+            ? AppL10n.t('Google Drive привязан (постоянно)')
+            : AppL10n.t('Не удалось завершить привязку — попробуйте ещё раз')),
       ),
     );
     if (ok) await _load(interactive: false);
@@ -1010,8 +1028,8 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Отвязать Google-аккаунт?'),
-        content: const Text('Привязка будет удалена на этом устройстве.'),
+        title: Text(AppL10n.t('Отвязать Google-аккаунт?')),
+        content: Text(AppL10n.t('Привязка будет удалена на этом устройстве.')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1029,7 +1047,7 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
     if (!mounted) return;
     setState(() => _status = const GoogleDriveSyncStatus());
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Аккаунт отвязан')),
+      SnackBar(content: Text(AppL10n.t('Аккаунт отвязан'))),
     );
   }
 
@@ -1043,18 +1061,21 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
-          const _SectionHeader('Аккаунт'),
+          _SectionHeader(AppL10n.t('Аккаунт')),
           ListTile(
             leading: Icon(
               linked ? Icons.account_circle : Icons.account_circle_outlined,
               color: linked ? cs.primary : null,
             ),
-            title: Text(linked ? _email! : 'Аккаунт не привязан'),
+            title: Text(linked ? _email! : AppL10n.t('Аккаунт не привязан')),
             subtitle: _busy
-                ? const Text('Обновление…', style: TextStyle(fontSize: 12))
+                ? Text(AppL10n.t('Обновление…'), style: TextStyle(fontSize: 12))
                 : (linked && _status?.limitBytes != null
                     ? Text(
-                        'Свободно ${_fmtBytes(_status!.freeBytes)} из ${_fmtBytes(_status!.limitBytes)}',
+                        AppL10n.f('Свободно {0} из {1}', [
+                          _fmtBytes(_status!.freeBytes),
+                          _fmtBytes(_status!.limitBytes)
+                        ]),
                         style: const TextStyle(fontSize: 12),
                       )
                     : null),
@@ -1072,12 +1093,13 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _SectionHeader('Аккаунты'),
+                _SectionHeader(AppL10n.t('Аккаунты')),
                 for (final a in accounts)
                   Builder(builder: (_) {
                     final pairing = a['pairing'] ?? '';
-                    final email =
-                        (a['email'] ?? '').isNotEmpty ? a['email']! : 'Аккаунт';
+                    final email = (a['email'] ?? '').isNotEmpty
+                        ? a['email']!
+                        : AppL10n.t('Аккаунт');
                     final isActive = pairing == active;
                     return ListTile(
                       leading: Icon(
@@ -1088,7 +1110,8 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
                       ),
                       title: Text(email),
                       subtitle: isActive
-                          ? const Text('Активный — для каналов и скачиваний',
+                          ? Text(
+                              AppL10n.t('Активный — для каналов и скачиваний'),
                               style: TextStyle(fontSize: 11))
                           : null,
                       onTap: _busy
@@ -1119,7 +1142,7 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
           }),
           const SizedBox(height: 8),
           if (!linked) ...[
-            const _SectionHeader('Привязка'),
+            _SectionHeader(AppL10n.t('Привязка')),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
               child: GoogleSignInButton(
@@ -1132,7 +1155,8 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
               child: Text(
-                'Вход через сервер — привязка не слетает после перезахода.',
+                AppL10n.t(
+                    'Вход через сервер — привязка не слетает после перезахода.'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ),
@@ -1140,7 +1164,7 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
           if (linked)
             ListTile(
               leading: const Icon(Icons.link_off, color: Colors.red),
-              title: const Text('Отвязать аккаунт',
+              title: Text(AppL10n.t('Отвязать аккаунт'),
                   style: TextStyle(color: Colors.red)),
               onTap: _busy ? null : _disconnect,
             ),
@@ -1148,11 +1172,10 @@ class _GoogleDrivePageState extends State<_GoogleDrivePage> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Text(
               kIsWeb
-                  ? 'Аккаунт используется для резервного копирования каналов. '
-                      'В веб-версии токен доступа живёт около часа — затем '
-                      'потребуется войти заново.'
-                  : 'Аккаунт используется для резервного копирования каналов '
-                      '(если в настройках канала включён резерв).',
+                  ? AppL10n.t(
+                      'Аккаунт используется для резервного копирования каналов. В веб-версии токен доступа живёт около часа — затем потребуется войти заново.')
+                  : AppL10n.t(
+                      'Аккаунт используется для резервного копирования каналов (если в настройках канала включён резерв).'),
               style: const TextStyle(fontSize: 12),
             ),
           ),
@@ -1192,11 +1215,11 @@ class _CloudProviderPageState extends State<_CloudProviderPage> {
     final done = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Привязка через сервер'),
+        title: Text(AppL10n.t('Привязка через сервер')),
         content: Text(
-          'В открывшемся окне войдите в ${widget.title} и разрешите доступ, '
-          'затем вернитесь сюда и нажмите «Готово».\n\n'
-          'Токен хранится на сервере — привязка не слетит после перезахода.',
+          AppL10n.f(
+              'В открывшемся окне войдите в {0} и разрешите доступ, затем вернитесь сюда и нажмите «Готово».\n\nТокен хранится на сервере — привязка не слетит после перезахода.',
+              [widget.title]),
           style: const TextStyle(fontSize: 13),
         ),
         actions: [
@@ -1206,7 +1229,7 @@ class _CloudProviderPageState extends State<_CloudProviderPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Готово'),
+            child: Text(AppL10n.t('Готово')),
           ),
         ],
       ),
@@ -1219,8 +1242,8 @@ class _CloudProviderPageState extends State<_CloudProviderPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok
-            ? '${widget.title} привязан (постоянно)'
-            : 'Не удалось завершить привязку — попробуйте ещё раз'),
+            ? AppL10n.f('{0} привязан (постоянно)', [widget.title])
+            : AppL10n.t('Не удалось завершить привязку — попробуйте ещё раз')),
       ),
     );
   }
@@ -1229,8 +1252,8 @@ class _CloudProviderPageState extends State<_CloudProviderPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Отвязать аккаунт ${widget.title}?'),
-        content: const Text('Привязка будет удалена на этом устройстве.'),
+        title: Text(AppL10n.f('Отвязать аккаунт {0}?', [widget.title])),
+        content: Text(AppL10n.t('Привязка будет удалена на этом устройстве.')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1260,18 +1283,19 @@ class _CloudProviderPageState extends State<_CloudProviderPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
-          const _SectionHeader('Аккаунты'),
+          _SectionHeader(AppL10n.t('Аккаунты')),
           if (accounts.isEmpty)
-            const ListTile(
+            ListTile(
               leading: Icon(Icons.account_circle_outlined),
-              title: Text('Аккаунт не привязан'),
+              title: Text(AppL10n.t('Аккаунт не привязан')),
             )
           else
             for (final a in accounts)
               Builder(builder: (_) {
                 final pairing = a['pairing'] ?? '';
-                final email =
-                    (a['email'] ?? '').isNotEmpty ? a['email']! : 'Аккаунт';
+                final email = (a['email'] ?? '').isNotEmpty
+                    ? a['email']!
+                    : AppL10n.t('Аккаунт');
                 final isActive = pairing == active;
                 return ListTile(
                   leading: Icon(
@@ -1282,7 +1306,7 @@ class _CloudProviderPageState extends State<_CloudProviderPage> {
                   ),
                   title: Text(email),
                   subtitle: isActive
-                      ? const Text('Активный — для резервных копий',
+                      ? Text(AppL10n.t('Активный — для резервных копий'),
                           style: TextStyle(fontSize: 11))
                       : null,
                   onTap: _busy || isActive
@@ -1299,21 +1323,21 @@ class _CloudProviderPageState extends State<_CloudProviderPage> {
                 );
               }),
           const SizedBox(height: 8),
-          const _SectionHeader('Привязка'),
+          _SectionHeader(AppL10n.t('Привязка')),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
             child: FilledButton.icon(
               onPressed: _busy ? null : _linkRelay,
               icon: const Icon(Icons.add_link),
-              label: Text('Привязать ${widget.title}'),
+              label: Text(AppL10n.f('Привязать {0}', [widget.title])),
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Text(
-              'Аккаунт используется для резервного копирования каналов и '
-              'групп (если в настройках канала/группы выбран ${widget.title} '
-              'как место хранения).',
+              AppL10n.f(
+                  'Аккаунт используется для резервного копирования каналов и групп (если в настройках канала/группы выбран {0} как место хранения).',
+                  [widget.title]),
               style: const TextStyle(fontSize: 12),
             ),
           ),
@@ -1412,7 +1436,7 @@ class _AppearancePageState extends State<_AppearancePage> {
                   ),
                 ]),
                 const SizedBox(height: 20),
-                Text('Цветовая схема',
+                Text(AppL10n.t('Цветовая схема'),
                     style: TextStyle(
                         fontSize: 13, color: Theme.of(context).hintColor)),
                 const SizedBox(height: 10),
@@ -1425,7 +1449,7 @@ class _AppearancePageState extends State<_AppearancePage> {
                     return GestureDetector(
                       onTap: () => settings.setAppPalette(i),
                       child: Tooltip(
-                        message: p.name,
+                        message: AppL10n.t(p.name),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           width: 54,
@@ -1501,46 +1525,35 @@ class _AppearancePageState extends State<_AppearancePage> {
           ),
 
           // ── Оформление ───────────────────────────────────────────
-          const _SectionHeader('Оформление'),
+          _SectionHeader(AppL10n.t('Оформление')),
           SwitchListTile(
             secondary: Icon(Icons.crop_square_rounded, color: cs.primary),
-            title: const Text('Минимализм'),
+            title: Text(AppL10n.t('Минимализм')),
             subtitle: Text(
-                'Две краски — фон и акцент. Плоские поверхности, тонкие линии, '
-                'без свечения, градиентов и размытия. Акцент берётся из выбранной палитры.',
+                AppL10n.t(
+                    'Две краски — фон и акцент. Плоские поверхности, тонкие линии, без свечения, градиентов и размытия. Акцент берётся из выбранной палитры.'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             value: settings.minimalist,
             onChanged: (v) => settings.setMinimalist(v),
           ),
           SwitchListTile(
-            secondary:
-                Icon(Icons.auto_awesome_mosaic_rounded, color: cs.primary),
-            title: const Text('Новый дизайн'),
-            subtitle: Text(
-                'Обновлённый стиль в духе заставки: скругления, свечение, '
-                'плавные переходы. Выключи — вернётся прежний вид.',
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            value: settings.newDesignPref,
-            onChanged:
-                settings.minimalist ? null : (v) => settings.setNewDesign(v),
-          ),
-          SwitchListTile(
             secondary: Icon(Icons.wallpaper_rounded, color: cs.primary),
-            title: const Text('Фон в чатах'),
-            subtitle: Text('Показывать фоновую картинку в переписке',
+            title: Text(AppL10n.t('Фон в чатах')),
+            subtitle: Text(AppL10n.t('Показывать фоновую картинку в переписке'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             value: settings.chatBackground,
             onChanged: (v) => settings.setChatBackground(v),
           ),
           // ── Движение и анимации ──────────────────────────────────
-          const _SectionHeader('Движение и анимации'),
+          _SectionHeader(AppL10n.t('Движение и анимации')),
           SwitchListTile(
             secondary: Icon(Icons.blur_on_rounded, color: cs.primary),
-            title: const Text('Жидкое стекло (размытие)'),
+            title: Text(AppL10n.t('Жидкое стекло (размытие)')),
             subtitle: Text(
                 RuntimePlatform.isAndroid
-                    ? 'Размытые «стеклянные» панели. Красиво, но снижает плавность — выключите, если подтормаживает'
-                    : 'Полупрозрачные панели с размытием фона',
+                    ? AppL10n.t(
+                        'Размытые «стеклянные» панели. Красиво, но снижает плавность — выключите, если подтормаживает')
+                    : AppL10n.t('Полупрозрачные панели с размытием фона'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             value: settings.liquidGlassPref,
             onChanged:
@@ -1548,9 +1561,10 @@ class _AppearancePageState extends State<_AppearancePage> {
           ),
           SwitchListTile(
             secondary: Icon(Icons.gradient_rounded, color: cs.primary),
-            title: const Text('Анимированный фон'),
+            title: Text(AppL10n.t('Анимированный фон')),
             subtitle: Text(
-                'Плавно переливающийся градиент. Выключен по умолчанию ради скорости',
+                AppL10n.t(
+                    'Плавно переливающийся градиент. Выключен по умолчанию ради скорости'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             value: settings.animatedGradientPref,
             onChanged: settings.minimalist
@@ -1565,7 +1579,7 @@ class _AppearancePageState extends State<_AppearancePage> {
                 Row(children: [
                   Icon(Icons.auto_awesome_rounded, color: cs.primary, size: 20),
                   const SizedBox(width: 8),
-                  const Text('Интенсивность анимаций'),
+                  Text(AppL10n.t('Интенсивность анимаций')),
                   const Spacer(),
                   Text('${(settings.animationLevel * 100).round()}%',
                       style:
@@ -1580,10 +1594,10 @@ class _AppearancePageState extends State<_AppearancePage> {
           ),
           SwitchListTile(
             secondary: Icon(Icons.battery_saver_rounded, color: cs.primary),
-            title: const Text('Экономия энергии'),
+            title: Text(AppL10n.t('Экономия энергии')),
             subtitle: Text(
-              'Снижать анимации при ${settings.batteryAnimReduceAt}%, '
-              'выключать при ${settings.batteryAnimOffAt}%',
+              AppL10n.f('Снижать анимации при {0}%, выключать при {1}%',
+                  [settings.batteryAnimReduceAt, settings.batteryAnimOffAt]),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             value: settings.batterySaverAnimations,
@@ -1593,9 +1607,10 @@ class _AppearancePageState extends State<_AppearancePage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
               child: Row(children: [
-                const SizedBox(
+                SizedBox(
                     width: 110,
-                    child: Text('Снижать при', style: TextStyle(fontSize: 13))),
+                    child: Text(AppL10n.t('Снижать при'),
+                        style: TextStyle(fontSize: 13))),
                 Expanded(
                   child: Slider(
                     value: settings.batteryAnimReduceAt.toDouble().clamp(5, 50),
@@ -1619,10 +1634,10 @@ class _AppearancePageState extends State<_AppearancePage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Row(children: [
-                const SizedBox(
+                SizedBox(
                     width: 110,
-                    child:
-                        Text('Выключать при', style: TextStyle(fontSize: 13))),
+                    child: Text(AppL10n.t('Выключать при'),
+                        style: TextStyle(fontSize: 13))),
                 Expanded(
                   child: Slider(
                     value: settings.batteryAnimOffAt.toDouble().clamp(0, 20),
@@ -1846,6 +1861,12 @@ class _AppearancePageState extends State<_AppearancePage> {
   void _showLanguagePicker(BuildContext context, AppSettings settings) {
     showModalBottomSheet(
       context: context,
+      // Tall lists must be able to scroll: let the sheet grow to 90% of the
+      // screen and put the locales in a ListView (they were in a plain Column,
+      // so nothing below the fold was reachable).
+      isScrollControlled: true,
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.9),
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
@@ -1868,45 +1889,54 @@ class _AppearancePageState extends State<_AppearancePage> {
                     .titleMedium
                     ?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            ...AppL10n.supportedLocales.map((locale) {
-              final selected = settings.locale == locale.code;
-              final cs = Theme.of(context).colorScheme;
-              final Widget? subtitle;
-              if (locale.showPartialUiHint) {
-                subtitle = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(AppL10n.t('locale_ui_partial_note'),
+            Flexible(
+                child: ListView(
+              shrinkWrap: true,
+              children: [
+                ...AppL10n.supportedLocales.map((locale) {
+                  final selected = settings.locale == locale.code;
+                  final cs = Theme.of(context).colorScheme;
+                  final Widget? subtitle;
+                  if (locale.showPartialUiHint) {
+                    subtitle = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(AppL10n.t('locale_ui_partial_note'),
+                            style: TextStyle(
+                                fontSize: 11,
+                                height: 1.25,
+                                color: cs.tertiary)),
+                        const SizedBox(height: 2),
+                        Text(locale.name,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).hintColor)),
+                      ],
+                    );
+                  } else if (locale.code != 'system') {
+                    subtitle = Text(locale.name,
                         style: TextStyle(
-                            fontSize: 11, height: 1.25, color: cs.tertiary)),
-                    const SizedBox(height: 2),
-                    Text(locale.name,
-                        style: TextStyle(
-                            fontSize: 12, color: Theme.of(context).hintColor)),
-                  ],
-                );
-              } else if (locale.code != 'system') {
-                subtitle = Text(locale.name,
-                    style: TextStyle(
-                        fontSize: 12, color: Theme.of(context).hintColor));
-              } else {
-                subtitle = null;
-              }
-              return ListTile(
-                title: Text(locale.nativeName),
-                subtitle: subtitle,
-                isThreeLine: locale.showPartialUiHint,
-                trailing: selected
-                    ? Icon(Icons.check_rounded,
-                        color: Theme.of(context).colorScheme.primary)
-                    : null,
-                onTap: () {
-                  settings.setLocale(locale.code);
-                  Navigator.pop(ctx);
-                },
-              );
-            }),
-            const SizedBox(height: 8),
+                            fontSize: 12, color: Theme.of(context).hintColor));
+                  } else {
+                    subtitle = null;
+                  }
+                  return ListTile(
+                    title: Text(locale.nativeName),
+                    subtitle: subtitle,
+                    isThreeLine: locale.showPartialUiHint,
+                    trailing: selected
+                        ? Icon(Icons.check_rounded,
+                            color: Theme.of(context).colorScheme.primary)
+                        : null,
+                    onTap: () {
+                      settings.setLocale(locale.code);
+                      Navigator.pop(ctx);
+                    },
+                  );
+                }),
+                const SizedBox(height: 8),
+              ],
+            )),
           ],
         ),
       ),
@@ -1988,9 +2018,9 @@ class _PermissionsPageState extends State<_PermissionsPage> {
         _cam = r == 'granted' ? 'granted' : (r == 'denied' ? 'denied' : _cam);
     });
     if (r == 'denied') {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              'Доступ запрещён. Разрешите его для сайта в настройках браузера.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppL10n.t(
+              'Доступ запрещён. Разрешите его для сайта в настройках браузера.'))));
     }
     await _refresh();
   }
@@ -2045,44 +2075,54 @@ class _PermissionsPageState extends State<_PermissionsPage> {
     final ok = res['ok'] == true;
     final sent = (res['sent'] as num?)?.toInt() ?? 0;
     _snack(ok
-        ? 'Тестовый пуш отправлен ($sent). Сверните приложение — должно прийти уведомление.'
-        : 'Не удалось отправить тест: ${_pushReasonText(res['reason']?.toString())}');
+        ? AppL10n.f(
+            'Тестовый пуш отправлен ({0}). Сверните приложение — должно прийти уведомление.',
+            [
+                sent
+              ])
+        : AppL10n.f('Не удалось отправить тест: {0}',
+            [_pushReasonText(res['reason']?.toString())]));
   }
 
   void _showPushResult(Map<String, Object?> res) {
     if (res['ok'] == true) {
-      _snack('Фоновые уведомления включены ✓');
+      _snack(AppL10n.t('Фоновые уведомления включены ✓'));
     } else {
-      _snack('Не включилось: ${_pushReasonText(res['reason']?.toString())}');
+      _snack(AppL10n.f(
+          'Не включилось: {0}', [_pushReasonText(res['reason']?.toString())]));
     }
   }
 
   String _pushReasonText(String? reason) {
     switch (reason) {
       case 'denied':
-        return 'уведомления запрещены — разрешите их для сайта в настройках браузера';
+        return AppL10n.t(
+            'уведомления запрещены — разрешите их для сайта в настройках браузера');
       case 'not_granted':
-        return 'разрешение не выдано — нажмите «Разрешить» в запросе браузера';
+        return AppL10n.t(
+            'разрешение не выдано — нажмите «Разрешить» в запросе браузера');
       case 'no_push_api':
       case 'no_service_worker':
-        return 'этот браузер не поддерживает фоновые пуши';
+        return AppL10n.t('этот браузер не поддерживает фоновые пуши');
       case 'no_subscription':
       case 'no_keys':
-        return 'не удалось создать подписку (на iPhone добавьте Rlink на экран «Домой»)';
+        return AppL10n.t(
+            'не удалось создать подписку (на iPhone добавьте Rlink на экран «Домой»)');
       case 'no_vapid':
-        return 'relay не отдал ключ пушей';
+        return AppL10n.t('relay не отдал ключ пушей');
       case 'no_subscription_on_relay':
-        return 'сначала включите фоновые уведомления';
+        return AppL10n.t('сначала включите фоновые уведомления');
       case 'bad_args':
-        return 'нет связи с relay или профиля';
+        return AppL10n.t('нет связи с relay или профиля');
       default:
         if (reason != null && reason.startsWith('relay_')) {
-          return 'relay отклонил подписку (${reason.substring(6)})';
+          return AppL10n.f(
+              'relay отклонил подписку ({0})', [reason.substring(6)]);
         }
         if (reason != null && reason.startsWith('http_')) {
-          return 'relay недоступен (${reason.substring(5)})';
+          return AppL10n.f('relay недоступен ({0})', [reason.substring(5)]);
         }
-        return reason ?? 'неизвестная ошибка';
+        return reason ?? AppL10n.t('неизвестная ошибка');
     }
   }
 
@@ -2095,7 +2135,9 @@ class _PermissionsPageState extends State<_PermissionsPage> {
   Widget _statusChip(String status) {
     final granted = status == 'granted';
     final denied = status == 'denied';
-    final label = granted ? 'Разрешено' : (denied ? 'Запрещено' : 'Не задано');
+    final label = granted
+        ? AppL10n.t('Разрешено')
+        : (denied ? AppL10n.t('Запрещено') : AppL10n.t('Не задано'));
     final color =
         granted ? Colors.green : (denied ? Colors.red : Colors.orange);
     return Container(
@@ -2148,7 +2190,9 @@ class _PermissionsPageState extends State<_PermissionsPage> {
             const SizedBox(width: 8),
             FilledButton.tonal(
               onPressed: (_busy || status == 'granted') ? null : onRequest,
-              child: Text(status == 'granted' ? 'Готово' : 'Разрешить'),
+              child: Text(status == 'granted'
+                  ? AppL10n.t('Готово')
+                  : AppL10n.t('Разрешить')),
             ),
           ],
         ),
@@ -2161,10 +2205,10 @@ class _PermissionsPageState extends State<_PermissionsPage> {
     final on = _pushStatus == 'on';
     final off = _pushStatus == 'off';
     final (statusText, statusColor) = on
-        ? ('включены', Colors.green)
+        ? (AppL10n.t('включены'), Colors.green)
         : (off
-            ? ('выключены', Colors.orange)
-            : ('не проверено', cs.onSurfaceVariant));
+            ? (AppL10n.t('выключены'), Colors.orange)
+            : (AppL10n.t('не проверено'), cs.onSurfaceVariant));
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Padding(
@@ -2176,8 +2220,8 @@ class _PermissionsPageState extends State<_PermissionsPage> {
               children: [
                 Icon(Icons.podcasts_rounded, size: 22, color: cs.primary),
                 const SizedBox(width: 10),
-                const Expanded(
-                  child: Text('Фоновые пуши',
+                Expanded(
+                  child: Text(AppL10n.t('Фоновые пуши'),
                       style:
                           TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                 ),
@@ -2188,8 +2232,8 @@ class _PermissionsPageState extends State<_PermissionsPage> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Уведомления приходят, даже когда Rlink закрыт. Включите, затем '
-              'нажмите «Проверить».',
+              AppL10n.t(
+                  'Уведомления приходят, даже когда Rlink закрыт. Включите, затем нажмите «Проверить».'),
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
             ),
             const SizedBox(height: 10),
@@ -2201,7 +2245,7 @@ class _PermissionsPageState extends State<_PermissionsPage> {
                   onPressed: _busy ? null : _requestNotifications,
                   icon:
                       const Icon(Icons.notifications_active_outlined, size: 18),
-                  label: const Text('Включить'),
+                  label: Text(AppL10n.t('Включить')),
                 ),
                 OutlinedButton.icon(
                   onPressed: _pushBusy ? null : _testPush,
@@ -2211,7 +2255,7 @@ class _PermissionsPageState extends State<_PermissionsPage> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.send_outlined, size: 18),
-                  label: const Text('Проверить'),
+                  label: Text(AppL10n.t('Проверить')),
                 ),
               ],
             ),
@@ -2226,35 +2270,35 @@ class _PermissionsPageState extends State<_PermissionsPage> {
     final cs = Theme.of(context).colorScheme;
     return _subScaffold(
       context: context,
-      title: 'Разрешения',
+      title: AppL10n.t('Разрешения'),
       body: ListView(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: Text(
-              'Разрешите доступ один раз — браузер запомнит выбор для этого '
-              'сайта и больше спрашивать не будет.',
+              AppL10n.t(
+                  'Разрешите доступ один раз — браузер запомнит выбор для этого сайта и больше спрашивать не будет.'),
               style: TextStyle(color: cs.onSurfaceVariant),
             ),
           ),
           _tile(
             icon: Icons.mic_rounded,
-            title: 'Микрофон',
-            subtitle: 'Голосовые сообщения и звонки',
+            title: AppL10n.t('Микрофон'),
+            subtitle: AppL10n.t('Голосовые сообщения и звонки'),
             status: _mic,
             onRequest: () => _requestMedia(audio: true, video: false),
           ),
           _tile(
             icon: Icons.videocam_rounded,
-            title: 'Камера',
-            subtitle: 'Видеозвонки',
+            title: AppL10n.t('Камера'),
+            subtitle: AppL10n.t('Видеозвонки'),
             status: _cam,
             onRequest: () => _requestMedia(audio: false, video: true),
           ),
           _tile(
             icon: Icons.notifications_active_rounded,
-            title: 'Уведомления',
-            subtitle: 'Пуши, даже когда приложение закрыто',
+            title: AppL10n.t('Уведомления'),
+            subtitle: AppL10n.t('Пуши, даже когда приложение закрыто'),
             status: _notif,
             onRequest: _requestNotifications,
           ),
@@ -2262,10 +2306,8 @@ class _PermissionsPageState extends State<_PermissionsPage> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'На iPhone уведомления в фоне работают только если добавить Rlink '
-              'на экран «Домой» (как приложение) и один раз нажать «Разрешить». '
-              'После включения нажмите «Проверить» и сверните приложение — '
-              'должно прийти тестовое уведомление.',
+              AppL10n.t(
+                  'На iPhone уведомления в фоне работают только если добавить Rlink на экран «Домой» (как приложение) и один раз нажать «Разрешить». После включения нажмите «Проверить» и сверните приложение — должно прийти тестовое уведомление.'),
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
             ),
           ),
@@ -2307,9 +2349,10 @@ class _NotificationsPageState extends State<_NotificationsPage> {
           if (RuntimePlatform.isAndroid)
             ListTile(
               leading: Icon(Icons.mark_chat_unread_outlined, color: cs.primary),
-              title: const Text('Доставка сообщений в фоне'),
+              title: Text(AppL10n.t('Доставка сообщений в фоне')),
               subtitle: Text(
-                'Почему сообщение могло не прийти, пока Rlink закрыт',
+                AppL10n.t(
+                    'Почему сообщение могло не прийти, пока Rlink закрыт'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
               trailing: const Icon(Icons.chevron_right),
@@ -2352,7 +2395,7 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                   ? cs.primary
                   : Theme.of(context).hintColor,
             ),
-            title: const Text('Рингтон звонка'),
+            title: Text(AppL10n.t('Рингтон звонка')),
             subtitle: Text(
               _ringtoneLabel(settings.callRingtone),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
@@ -2370,9 +2413,10 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                   ? cs.primary
                   : Theme.of(context).hintColor,
             ),
-            title: const Text('Тема «Баян»'),
+            title: Text(AppL10n.t('Тема «Баян»')),
             subtitle: Text(
-              'Те же мелодии, но в тембре аккордеона вместо чистого тона',
+              AppL10n.t(
+                  'Те же мелодии, но в тембре аккордеона вместо чистого тона'),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             value: settings.soundTheme == 1,
@@ -2380,7 +2424,7 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                 ? (v) => unawaited(settings.setSoundTheme(v ? 1 : 0))
                 : null,
           ),
-          _SectionHeader('Звуки приложения'),
+          _SectionHeader(AppL10n.t('Звуки приложения')),
           for (final slot in AppSoundSlot.values)
             ListTile(
               leading: Icon(Icons.music_note_outlined, color: cs.primary),
@@ -2393,7 +2437,7 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                 spacing: 2,
                 children: [
                   IconButton(
-                    tooltip: 'Прослушать',
+                    tooltip: AppL10n.t('Прослушать'),
                     onPressed: settings.notifSound
                         ? () => unawaited(
                               SoundEffectsService.instance.previewSlot(slot),
@@ -2402,7 +2446,7 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                     icon: const Icon(Icons.play_arrow_rounded),
                   ),
                   IconButton(
-                    tooltip: 'Выбрать файл',
+                    tooltip: AppL10n.t('Выбрать файл'),
                     onPressed: settings.notifSound
                         ? () => unawaited(_pickCustomSound(slot))
                         : null,
@@ -2410,7 +2454,7 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                   ),
                   if (settings.customSoundPath(slot.id) != null)
                     IconButton(
-                      tooltip: 'Сбросить',
+                      tooltip: AppL10n.t('Сбросить'),
                       onPressed: () => unawaited(_resetCustomSound(slot)),
                       icon: const Icon(Icons.close_rounded),
                     ),
@@ -2425,12 +2469,12 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                 final permission =
                     (capability?['permission'] as String?) ?? 'default';
                 final label = (capability?['label'] as String?) ??
-                    'Проверяем поддержку браузера';
+                    AppL10n.t('Проверяем поддержку браузера');
                 final canRequest =
                     (capability?['canRequest'] as bool?) ?? false;
                 return ListTile(
                   leading: Icon(Icons.public_rounded, color: cs.primary),
-                  title: const Text('Web-уведомления'),
+                  title: Text(AppL10n.t('Web-уведомления')),
                   subtitle: Text(label,
                       style:
                           TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
@@ -2443,8 +2487,9 @@ class _NotificationsPageState extends State<_NotificationsPage> {
                             if (mounted) setState(() {});
                           }
                         : null,
-                    child: Text(
-                        permission == 'granted' ? 'Обновить' : 'Разрешить'),
+                    child: Text(permission == 'granted'
+                        ? AppL10n.t('Обновить')
+                        : AppL10n.t('Разрешить')),
                   ),
                 );
               },
@@ -2544,11 +2589,13 @@ class _NotificationsPageState extends State<_NotificationsPage> {
 
   String _soundSubtitle(AppSettings settings, AppSoundSlot slot) {
     final custom = settings.customSoundPath(slot.id);
-    if (custom != null) return 'Свой файл: ${p.basename(custom)}';
+    if (custom != null)
+      return AppL10n.f('Свой файл: {0}', [p.basename(custom)]);
     if (slot == AppSoundSlot.incomingCall) {
-      return 'Стандартный: ${_ringtoneLabel(settings.callRingtone)}';
+      return AppL10n.f(
+          'Стандартный: {0}', [_ringtoneLabel(settings.callRingtone)]);
     }
-    return 'Стандартный звук';
+    return AppL10n.t('Стандартный звук');
   }
 
   String _soundMimeForName(String name) {
@@ -2640,9 +2687,10 @@ class _NotificationsPageState extends State<_NotificationsPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ListTile(
-              title: Text('Выберите рингтон'),
-              subtitle: Text('Будет проигрываться при входящем звонке',
+            ListTile(
+              title: Text(AppL10n.t('Выберите рингтон')),
+              subtitle: Text(
+                  AppL10n.t('Будет проигрываться при входящем звонке'),
                   style: TextStyle(fontSize: 12)),
             ),
             for (final idx in const [0, 1, 2])
@@ -2708,8 +2756,8 @@ class _PrivacyPageState extends State<_PrivacyPage> {
           _SectionHeader(AppL10n.t('settings_privacy')),
           ListTile(
             leading: Icon(Icons.shield_outlined, color: cs.primary),
-            title: const Text('Безопасность устройства'),
-            subtitle: Text('Как защищены данные на этом устройстве',
+            title: Text(AppL10n.t('Безопасность устройства')),
+            subtitle: Text(AppL10n.t('Как защищены данные на этом устройстве'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context)
@@ -2717,8 +2765,9 @@ class _PrivacyPageState extends State<_PrivacyPage> {
           ),
           ListTile(
             leading: Icon(Icons.visibility_off_outlined, color: cs.primary),
-            title: const Text('Приватность профиля'),
-            subtitle: Text('Что видят другие: аватар, баннер, теги, др…',
+            title: Text(AppL10n.t('Приватность профиля')),
+            subtitle: Text(
+                AppL10n.t('Что видят другие: аватар, баннер, теги, др…'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context)
@@ -2752,9 +2801,9 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                 color: settings.hideLastSeen
                     ? cs.primary
                     : Theme.of(context).hintColor),
-            title: const Text('Скрыть время последнего визита'),
+            title: Text(AppL10n.t('Скрыть время последнего визита')),
             subtitle: Text(
-              'Другие не увидят, когда вы были в сети',
+              AppL10n.t('Другие не увидят, когда вы были в сети'),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             value: settings.hideLastSeen,
@@ -2765,17 +2814,17 @@ class _PrivacyPageState extends State<_PrivacyPage> {
             current: settings.onlineStatusMode,
             onChanged: (mode) => settings.setOnlineStatusMode(mode),
           ),
-          _SectionHeader('Блокировка'),
+          _SectionHeader(AppL10n.t('Блокировка')),
           SwitchListTile(
             secondary: Icon(Icons.lock_outline,
                 color: AppLockService.instance.isEnabled
                     ? cs.primary
                     : Theme.of(context).hintColor),
-            title: const Text('Блокировка приложения'),
+            title: Text(AppL10n.t('Блокировка приложения')),
             subtitle: Text(
               AppLockService.instance.isEnabled
                   ? _lockMethodLabel(AppLockService.instance.method)
-                  : 'PIN, графический ключ или пароль при запуске',
+                  : AppL10n.t('PIN, графический ключ или пароль при запуске'),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             value: AppLockService.instance.isEnabled,
@@ -2791,14 +2840,14 @@ class _PrivacyPageState extends State<_PrivacyPage> {
           if (AppLockService.instance.isEnabled) ...[
             ListTile(
               leading: const Icon(Icons.timer_outlined),
-              title: const Text('Автоблокировка'),
+              title: Text(AppL10n.t('Автоблокировка')),
               subtitle: Text(
                   _lockTimeoutLabel(AppLockService.instance.timeoutSeconds)),
               onTap: _pickLockTimeout,
             ),
             ListTile(
               leading: const Icon(Icons.password_outlined),
-              title: const Text('Изменить защиту'),
+              title: Text(AppL10n.t('Изменить защиту')),
               subtitle: Text(_lockMethodLabel(AppLockService.instance.method),
                   style: const TextStyle(fontSize: 12)),
               onTap: _enableOrSetPasscode,
@@ -2819,9 +2868,9 @@ class _PrivacyPageState extends State<_PrivacyPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Выберите способ защиты',
+              child: Text(AppL10n.t('Выберите способ защиты'),
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
             ),
             ListTile(
@@ -2833,8 +2882,8 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                 ),
                 child: const Icon(Icons.grid_4x4_rounded, color: Colors.blue),
               ),
-              title: const Text('Графический ключ'),
-              subtitle: const Text('9 точек — соедините пальцем',
+              title: Text(AppL10n.t('Графический ключ')),
+              subtitle: Text(AppL10n.t('9 точек — соедините пальцем'),
                   style: TextStyle(fontSize: 12)),
               onTap: () => Navigator.pop(ctx, LockMethod.pattern),
             ),
@@ -2847,8 +2896,9 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                 ),
                 child: const Icon(Icons.pin_rounded, color: Colors.green),
               ),
-              title: const Text('PIN-код'),
-              subtitle: const Text('4 цифры', style: TextStyle(fontSize: 12)),
+              title: Text(AppL10n.t('PIN-код')),
+              subtitle:
+                  Text(AppL10n.t('4 цифры'), style: TextStyle(fontSize: 12)),
               onTap: () => Navigator.pop(ctx, LockMethod.pin4),
             ),
             ListTile(
@@ -2860,8 +2910,8 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                 ),
                 child: const Icon(Icons.password_rounded, color: Colors.orange),
               ),
-              title: const Text('Пароль'),
-              subtitle: const Text('Буквы, цифры, символы',
+              title: Text(AppL10n.t('Пароль')),
+              subtitle: Text(AppL10n.t('Буквы, цифры, символы'),
                   style: TextStyle(fontSize: 12)),
               onTap: () => Navigator.pop(ctx, LockMethod.text),
             ),
@@ -2899,7 +2949,9 @@ class _PrivacyPageState extends State<_PrivacyPage> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) {
           return AlertDialog(
-            title: Text(first == null ? 'Введите PIN' : 'Повторите PIN'),
+            title: Text(first == null
+                ? AppL10n.t('Введите PIN')
+                : AppL10n.t('Повторите PIN')),
             content: _PinSetupWidget(
               key: ValueKey(first),
               onComplete: (pin) async {
@@ -2913,7 +2965,7 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                 } else {
                   setS(() {
                     first = null;
-                    err = 'PIN не совпадает — введите снова';
+                    err = AppL10n.t('PIN не совпадает — введите снова');
                   });
                 }
               },
@@ -2922,7 +2974,7 @@ class _PrivacyPageState extends State<_PrivacyPage> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Отмена'),
+                child: Text(AppL10n.t('Отмена')),
               ),
             ],
           );
@@ -2938,8 +2990,9 @@ class _PrivacyPageState extends State<_PrivacyPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          title: Text(
-              first == null ? 'Нарисуйте графический ключ' : 'Повторите ключ'),
+          title: Text(first == null
+              ? AppL10n.t('Нарисуйте графический ключ')
+              : AppL10n.t('Повторите ключ')),
           content: SizedBox(
             width: 240,
             height: 260,
@@ -2958,7 +3011,8 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                     key: ValueKey(first?.join(',')),
                     onComplete: (pattern) {
                       if (pattern.length < 4) {
-                        setS(() => err = 'Соедините не менее 4 точек');
+                        setS(() =>
+                            err = AppL10n.t('Соедините не менее 4 точек'));
                         return;
                       }
                       if (first == null) {
@@ -2971,7 +3025,8 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                       } else {
                         setS(() {
                           first = null;
-                          err = 'Ключи не совпадают — начните заново';
+                          err =
+                              AppL10n.t('Ключи не совпадают — начните заново');
                         });
                       }
                     },
@@ -2983,7 +3038,7 @@ class _PrivacyPageState extends State<_PrivacyPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена'),
+              child: Text(AppL10n.t('Отмена')),
             ),
           ],
         ),
@@ -2999,14 +3054,14 @@ class _PrivacyPageState extends State<_PrivacyPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          title: const Text('Установить пароль'),
+          title: Text(AppL10n.t('Установить пароль')),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _PasswordStrengthField(
                   controller: c1,
-                  label: 'Новый пароль',
+                  label: AppL10n.t('Новый пароль'),
                   onChanged: (_) {
                     if (err != null) setS(() => err = null);
                   },
@@ -3016,7 +3071,7 @@ class _PrivacyPageState extends State<_PrivacyPage> {
                   controller: c2,
                   obscureText: true,
                   decoration: InputDecoration(
-                    labelText: 'Повторите пароль',
+                    labelText: AppL10n.t('Повторите пароль'),
                     border: const OutlineInputBorder(),
                     errorText: err,
                   ),
@@ -3027,22 +3082,22 @@ class _PrivacyPageState extends State<_PrivacyPage> {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Отмена')),
+                child: Text(AppL10n.t('Отмена'))),
             FilledButton(
               onPressed: () {
                 final a = c1.text;
                 final b = c2.text;
                 if (a.length < 4) {
-                  setS(() => err = 'Минимум 4 символа');
+                  setS(() => err = AppL10n.t('Минимум 4 символа'));
                   return;
                 }
                 if (a != b) {
-                  setS(() => err = 'Пароли не совпадают');
+                  setS(() => err = AppL10n.t('Пароли не совпадают'));
                   return;
                 }
                 Navigator.pop(ctx, a);
               },
-              child: const Text('Готово'),
+              child: Text(AppL10n.t('Готово')),
             ),
           ],
         ),
@@ -3051,17 +3106,17 @@ class _PrivacyPageState extends State<_PrivacyPage> {
   }
 
   String _lockMethodLabel(LockMethod m) => switch (m) {
-        LockMethod.pin4 => 'PIN-код (4 цифры)',
-        LockMethod.pattern => 'Графический ключ',
-        LockMethod.text => 'Текстовый пароль',
+        LockMethod.pin4 => AppL10n.t('PIN-код (4 цифры)'),
+        LockMethod.pattern => AppL10n.t('Графический ключ'),
+        LockMethod.text => AppL10n.t('Текстовый пароль'),
       };
 
   Future<void> _pickLockTimeout() async {
-    const opts = [
-      (0, 'Сразу'),
-      (60, 'Через 1 минуту'),
-      (300, 'Через 5 минут'),
-      (900, 'Через 15 минут'),
+    final opts = [
+      (0, AppL10n.t('Сразу')),
+      (60, AppL10n.t('Через 1 минуту')),
+      (300, AppL10n.t('Через 5 минут')),
+      (900, AppL10n.t('Через 15 минут')),
     ];
     final chosen = await showModalBottomSheet<int>(
       context: context,
@@ -3088,10 +3143,10 @@ class _PrivacyPageState extends State<_PrivacyPage> {
   }
 
   String _lockTimeoutLabel(int s) => s == 0
-      ? 'Сразу'
+      ? AppL10n.t('Сразу')
       : s < 3600
-          ? 'Через ${s ~/ 60} мин'
-          : 'Через ${s ~/ 3600} ч';
+          ? AppL10n.f('Через {0} мин', [s ~/ 60])
+          : AppL10n.f('Через {0} ч', [s ~/ 3600]);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -3131,7 +3186,7 @@ class _MessagingPageState extends State<_MessagingPage> {
       context: context,
       title: AppL10n.t('settings_messaging'),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
+        padding: EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
           _SectionHeader(AppL10n.t('settings_messaging')),
           SwitchListTile(
@@ -3150,9 +3205,9 @@ class _MessagingPageState extends State<_MessagingPage> {
                 color: settings.emojiSuggestionsEnabled
                     ? cs.primary
                     : Theme.of(context).hintColor),
-            title: const Text('Подсказки эмодзи'),
+            title: Text(AppL10n.t('Подсказки эмодзи')),
             subtitle: Text(
-              'Стикер или кастомный эмодзи по набранному эмодзи',
+              AppL10n.t('Стикер или кастомный эмодзи по набранному эмодзи'),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             value: settings.emojiSuggestionsEnabled,
@@ -3160,12 +3215,14 @@ class _MessagingPageState extends State<_MessagingPage> {
           ),
           if (settings.emojiSuggestionsEnabled) ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
               child: SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'both', label: Text('Оба')),
-                  ButtonSegment(value: 'stickers', label: Text('Стикеры')),
-                  ButtonSegment(value: 'emoji', label: Text('Эмодзи')),
+                segments: [
+                  ButtonSegment(value: 'both', label: Text(AppL10n.t('Оба'))),
+                  ButtonSegment(
+                      value: 'stickers', label: Text(AppL10n.t('Стикеры'))),
+                  ButtonSegment(
+                      value: 'emoji', label: Text(AppL10n.t('Эмодзи'))),
                 ],
                 selected: {settings.emojiSuggestionsMode},
                 onSelectionChanged: (s) =>
@@ -3174,7 +3231,7 @@ class _MessagingPageState extends State<_MessagingPage> {
             ),
             ListTile(
               leading: Icon(Icons.link_rounded, color: cs.primary),
-              title: const Text('Управление привязками'),
+              title: Text(AppL10n.t('Управление привязками')),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context)
                   .push(rlinkOpaquePushRoute(const EmojiBindingsScreen())),
@@ -3186,11 +3243,11 @@ class _MessagingPageState extends State<_MessagingPage> {
                   color: settings.useSystemGallery
                       ? cs.primary
                       : Theme.of(context).hintColor),
-              title: const Text('Системная галерея'),
+              title: Text(AppL10n.t('Системная галерея')),
               subtitle: Text(
                 settings.useSystemGallery
-                    ? 'Выбор фото через галерею системы'
-                    : 'Выбор фото во встроенной галерее Rlink',
+                    ? AppL10n.t('Выбор фото через галерею системы')
+                    : AppL10n.t('Выбор фото во встроенной галерее Rlink'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
               value: settings.useSystemGallery,
@@ -3266,10 +3323,11 @@ class _ProfilePageState extends State<_ProfilePage> {
           if (profile != null)
             ListTile(
               leading: Icon(Icons.emoji_emotions_outlined, color: cs.primary),
-              title: const Text('Эмодзи-статус'),
+              title: Text(AppL10n.t('Эмодзи-статус')),
               subtitle: profile.statusEmoji.isEmpty
                   ? Text(
-                      'Рядом с именем в меню; виден контактам в сети',
+                      AppL10n.t(
+                          'Рядом с именем в меню; виден контактам в сети'),
                       style: TextStyle(
                         fontSize: 12,
                         color: cs.onSurfaceVariant,
@@ -3283,7 +3341,7 @@ class _ProfilePageState extends State<_ProfilePage> {
               trailing: profile.statusEmoji.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear),
-                      tooltip: 'Убрать',
+                      tooltip: AppL10n.t('Убрать'),
                       onPressed: () => _clearEmojiStatus(),
                     )
                   : null,
@@ -3292,9 +3350,9 @@ class _ProfilePageState extends State<_ProfilePage> {
           ListTile(
             leading:
                 Icon(Icons.auto_awesome_motion_outlined, color: cs.primary),
-            title: const Text('Стикеры и наборы'),
-            subtitle: const Text(
-              'Свои наборы и добавление стикеров из переписки',
+            title: Text(AppL10n.t('Стикеры и наборы')),
+            subtitle: Text(
+              AppL10n.t('Свои наборы и добавление стикеров из переписки'),
               style: TextStyle(fontSize: 12),
             ),
             onTap: () => Navigator.push<void>(
@@ -3305,8 +3363,8 @@ class _ProfilePageState extends State<_ProfilePage> {
           ListTile(
             leading: Icon(Icons.emoji_emotions, color: cs.primary),
             title: Text(AppL10n.t('cm_emoji')),
-            subtitle: const Text(
-              'Свои :shortcode: и бот Emoji',
+            subtitle: Text(
+              AppL10n.t('Свои :shortcode: и бот Emoji'),
               style: TextStyle(fontSize: 12),
             ),
             onTap: () => Navigator.push<void>(
@@ -3356,7 +3414,7 @@ class _ProfilePageState extends State<_ProfilePage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Эмодзи-статус',
+              Text(AppL10n.t('Эмодзи-статус'),
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               SizedBox(
@@ -3381,9 +3439,9 @@ class _ProfilePageState extends State<_ProfilePage> {
               const SizedBox(height: 10),
               TextField(
                 controller: manualCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Свой статус',
-                  hintText: '😀 или :my_emoji:',
+                decoration: InputDecoration(
+                  labelText: AppL10n.t('Свой статус'),
+                  hintText: AppL10n.t('😀 или :my_emoji:'),
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -3400,7 +3458,7 @@ class _ProfilePageState extends State<_ProfilePage> {
                   setState(() {});
                   await sendProfileToAllContacts();
                 },
-                child: const Text('Сохранить статус'),
+                child: Text(AppL10n.t('Сохранить статус')),
               ),
             ],
           ),
@@ -3501,43 +3559,45 @@ class _WebInstallPage extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return _subScaffold(
       context: context,
-      title: 'Установка на iPhone',
+      title: AppL10n.t('Установка на iPhone'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
-          const _SectionHeader('Safari на iPhone'),
+          _SectionHeader(AppL10n.t('Safari на iPhone')),
           _InstallStepTile(
             index: 1,
             icon: Icons.open_in_browser_rounded,
-            title: 'Откройте Rlink в Safari',
-            subtitle:
-                'На iPhone установка на главный экран работает именно из Safari.',
+            title: AppL10n.t('Откройте Rlink в Safari'),
+            subtitle: AppL10n.t(
+                'На iPhone установка на главный экран работает именно из Safari.'),
           ),
           _InstallStepTile(
             index: 2,
             icon: Icons.ios_share_rounded,
-            title: 'Нажмите кнопку «Поделиться»',
-            subtitle: 'Она находится в нижней панели Safari.',
+            title: AppL10n.t('Нажмите кнопку «Поделиться»'),
+            subtitle: AppL10n.t('Она находится в нижней панели Safari.'),
           ),
           _InstallStepTile(
             index: 3,
             icon: Icons.add_box_outlined,
-            title: 'Выберите «На экран Домой»',
-            subtitle: 'Если пункта не видно, прокрутите список действий ниже.',
+            title: AppL10n.t('Выберите «На экран Домой»'),
+            subtitle: AppL10n.t(
+                'Если пункта не видно, прокрутите список действий ниже.'),
           ),
           _InstallStepTile(
             index: 4,
             icon: Icons.check_circle_outline_rounded,
-            title: 'Нажмите «Добавить»',
-            subtitle:
-                'После этого Rlink будет запускаться с главного экрана как приложение.',
+            title: AppL10n.t('Нажмите «Добавить»'),
+            subtitle: AppL10n.t(
+                'После этого Rlink будет запускаться с главного экрана как приложение.'),
           ),
           const SizedBox(height: 8),
           ListTile(
             leading: Icon(Icons.info_outline_rounded, color: cs.primary),
-            title: const Text('После установки'),
-            subtitle: const Text(
-              'Откройте Rlink с иконки на главном экране и разрешите уведомления, микрофон и камеру при первом запросе.',
+            title: Text(AppL10n.t('После установки')),
+            subtitle: Text(
+              AppL10n.t(
+                  'Откройте Rlink с иконки на главном экране и разрешите уведомления, микрофон и камеру при первом запросе.'),
               style: TextStyle(fontSize: 12),
             ),
           ),
@@ -3623,7 +3683,7 @@ class _NetworkPageState extends State<_NetworkPage> {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
           // ── Связка устройств ──────────────────────────────────────
-          const _SectionHeader('Связка устройств'),
+          _SectionHeader(AppL10n.t('Связка устройств')),
           if (settings.isDeviceLinked) ...[
             ListTile(
               leading: Icon(
@@ -3633,29 +3693,30 @@ class _NetworkPageState extends State<_NetworkPage> {
                 color: cs.primary,
               ),
               title: Text(settings.isPrimaryDevice
-                  ? 'Главное устройство'
-                  : 'Дочернее устройство'),
+                  ? AppL10n.t('Главное устройство')
+                  : AppL10n.t('Дочернее устройство')),
               subtitle: Text(
                 settings.linkedDeviceNickname.isNotEmpty
-                    ? 'Связано: ${settings.linkedDeviceNickname}'
+                    ? AppL10n.f('Связано: {0}', [settings.linkedDeviceNickname])
                     : settings.linkedDevicePublicKey,
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ),
             ListTile(
               leading: const Icon(Icons.link_off_rounded, color: Colors.red),
-              title: const Text('Отвязать устройство',
+              title: Text(AppL10n.t('Отвязать устройство'),
                   style: TextStyle(color: Colors.red)),
-              subtitle: const Text('Связка будет снята на обоих устройствах',
+              subtitle: Text(
+                  AppL10n.t('Связка будет снята на обоих устройствах'),
                   style: TextStyle(fontSize: 12)),
               onTap: () => doUnlinkDevice(context),
             ),
           ] else ...[
             ListTile(
               leading: Icon(Icons.link_rounded, color: cs.primary),
-              title: const Text('Привязать дочернее устройство'),
-              subtitle: const Text(
-                  'Выберите контакт и отправьте запрос на связку',
+              title: Text(AppL10n.t('Привязать дочернее устройство')),
+              subtitle: Text(
+                  AppL10n.t('Выберите контакт и отправьте запрос на связку'),
                   style: TextStyle(fontSize: 12)),
               onTap: () => requestDeviceLink(context),
             ),
@@ -3712,15 +3773,16 @@ class _NetworkPageState extends State<_NetworkPage> {
           if (RuntimePlatform.isWeb)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Text('В web-версии доступен только интернет-режим.',
+              child: Text(
+                  AppL10n.t('В web-версии доступен только интернет-режим.'),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             ),
           if (settings.isDeviceLinked)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
-                'В режиме связки Bluetooth автоматически выключен, '
-                'используется только интернет.',
+                AppL10n.t(
+                    'В режиме связки Bluetooth автоматически выключен, используется только интернет.'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ),
@@ -3769,7 +3831,7 @@ class _NetworkPageState extends State<_NetworkPage> {
 
           // ── Ретранслятор ───────────────────────────────────────────
           if (settings.connectionMode >= 1) ...[
-            const _SectionHeader('Ретранслятор'),
+            _SectionHeader(AppL10n.t('Ретранслятор')),
             ValueListenableBuilder<RelayState>(
               valueListenable: RelayService.instance.state,
               builder: (_, relayState, __) {
@@ -3835,7 +3897,7 @@ class _NetworkPageState extends State<_NetworkPage> {
             ),
             ListTile(
               leading: Icon(Icons.bug_report_outlined, color: cs.primary),
-              title: const Text('Диагностика связи'),
+              title: Text(AppL10n.t('Диагностика связи')),
               subtitle: ValueListenableBuilder<String?>(
                 valueListenable: RelayService.instance.lastError,
                 builder: (_, lastErr, __) {
@@ -3871,15 +3933,15 @@ class _NetworkPageState extends State<_NetworkPage> {
                 await Clipboard.setData(ClipboardData(text: diag));
                 if (!context.mounted) return;
                 messenger.showSnackBar(
-                  const SnackBar(content: Text('Диагностика скопирована')),
+                  SnackBar(content: Text(AppL10n.t('Диагностика скопирована'))),
                 );
               },
             ),
             ListTile(
               leading: Icon(Icons.list_alt_rounded, color: cs.primary),
-              title: const Text('Живой лог доставки'),
-              subtitle: const Text(
-                'TX/RX/DROP трассировка сообщений и запросов',
+              title: Text(AppL10n.t('Живой лог доставки')),
+              subtitle: Text(
+                AppL10n.t('TX/RX/DROP трассировка сообщений и запросов'),
                 style: TextStyle(fontSize: 12),
               ),
               onTap: () => Navigator.push(
@@ -3889,9 +3951,9 @@ class _NetworkPageState extends State<_NetworkPage> {
             ),
             ListTile(
               leading: Icon(Icons.hub_outlined, color: cs.primary),
-              title: const Text('Статус mesh'),
-              subtitle: const Text(
-                'Кто рядом по Bluetooth, что ещё не доставлено',
+              title: Text(AppL10n.t('Статус mesh')),
+              subtitle: Text(
+                AppL10n.t('Кто рядом по Bluetooth, что ещё не доставлено'),
                 style: TextStyle(fontSize: 12),
               ),
               onTap: () => Navigator.push(
@@ -3901,9 +3963,9 @@ class _NetworkPageState extends State<_NetworkPage> {
             ),
             ListTile(
               leading: Icon(Icons.radar, color: cs.primary),
-              title: const Text('Радар mesh-сети'),
-              subtitle: const Text(
-                'Кто рядом визуально: напрямую и через сеть',
+              title: Text(AppL10n.t('Радар mesh-сети')),
+              subtitle: Text(
+                AppL10n.t('Кто рядом визуально: напрямую и через сеть'),
                 style: TextStyle(fontSize: 12),
               ),
               onTap: () => Navigator.push(
@@ -3913,10 +3975,11 @@ class _NetworkPageState extends State<_NetworkPage> {
             ),
             ListTile(
               leading: Icon(Icons.dns_outlined, color: cs.primary),
-              title: const Text('Свой relay-сервер'),
+              title: Text(AppL10n.t('Свой relay-сервер')),
               subtitle: Text(
                 settings.relayServerUrl.trim().isEmpty
-                    ? 'По умолчанию (${RelayService.defaultServerUrl})'
+                    ? AppL10n.f(
+                        'По умолчанию ({0})', [RelayService.defaultServerUrl])
                     : settings.relayServerUrl,
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
@@ -3934,17 +3997,14 @@ class _NetworkPageState extends State<_NetworkPage> {
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Свой relay-сервер'),
+        title: Text(AppL10n.t('Свой relay-сервер')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Сюда впиши адрес своего relay (например wss://my-server.example). '
-              'Официальный сервер при этом не отключается — приложение держит '
-              'лёгкое соединение и с ним тоже, чтобы достучаться до тех, кто '
-              'свой relay не настраивал. Платежи и другие сервисы всё равно '
-              'остаются только на официальном сервере.',
+              AppL10n.t(
+                  'Сюда впиши адрес своего relay (например wss://my-server.example). Официальный сервер при этом не отключается — приложение держит лёгкое соединение и с ним тоже, чтобы достучаться до тех, кто свой relay не настраивал. Платежи и другие сервисы всё равно остаются только на официальном сервере.'),
               style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(ctx).colorScheme.onSurfaceVariant),
@@ -3964,15 +4024,15 @@ class _NetworkPageState extends State<_NetworkPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, ''),
-            child: const Text('Сбросить'),
+            child: Text(AppL10n.t('Сбросить')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('Отмена')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Сохранить'),
+            child: Text(AppL10n.t('Сохранить')),
           ),
         ],
       ),
@@ -3983,8 +4043,9 @@ class _NetworkPageState extends State<_NetworkPage> {
         !result.startsWith('wss://')) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Адрес должен начинаться с ws:// или wss://')),
+        SnackBar(
+            content:
+                Text(AppL10n.t('Адрес должен начинаться с ws:// или wss://'))),
       );
       return;
     }
@@ -3995,8 +4056,8 @@ class _NetworkPageState extends State<_NetworkPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(result.isEmpty
-            ? 'Сброшено на сервер по умолчанию'
-            : 'Сохранено, переподключаюсь...'),
+            ? AppL10n.t('Сброшено на сервер по умолчанию')
+            : AppL10n.t('Сохранено, переподключаюсь...')),
       ),
     );
   }
@@ -4006,17 +4067,18 @@ class _NetworkPageState extends State<_NetworkPage> {
     if (RuntimePlatform.isWeb && mode != 1) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('В web-версии доступен только интернет-режим')),
+        SnackBar(
+            content:
+                Text(AppL10n.t('В web-версии доступен только интернет-режим'))),
       );
       return;
     }
     if (settings.isDeviceLinked) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'В режиме связки устройств доступен только интернет-режим')),
+        SnackBar(
+            content: Text(AppL10n.t(
+                'В режиме связки устройств доступен только интернет-режим'))),
       );
       return;
     }
@@ -4199,19 +4261,9 @@ class _ChatBgTile extends StatelessWidget {
   const _ChatBgTile({required this.settings});
 
   Future<void> _pickBg(BuildContext context) async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked == null || !context.mounted) return;
-    if (RuntimePlatform.isWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Фон чата на web пока не поддерживается')),
-      );
-      return;
-    }
-    final appDir = await getApplicationDocumentsDirectory();
-    final dest = File(p.join(
-        appDir.path, 'chat_bg_${DateTime.now().millisecondsSinceEpoch}.jpg'));
-    await File(picked.path).copy(dest.path);
-    await settings.setChatBgForPeer('__global__', dest.path);
+    final path = await pickAndStoreChatBackground();
+    if (path == null || !context.mounted) return;
+    await settings.setChatBgForPeer('__global__', path);
   }
 
   /// Убирает глобальный фон чата: очищает настройку и удаляет сам файл.
@@ -4230,8 +4282,8 @@ class _ChatBgTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bgPath = settings.chatBgForPeer('__global__');
-    final hasBg =
-        !RuntimePlatform.isWeb && bgPath != null && File(bgPath).existsSync();
+    final hasBg = bgPath != null &&
+        (RuntimePlatform.isWeb ? isWebStoredFile(bgPath) : File(bgPath).existsSync());
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -4240,8 +4292,7 @@ class _ChatBgTile extends StatelessWidget {
           leading: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: hasBg
-                ? Image.file(File(bgPath),
-                    width: 44, height: 44, fit: BoxFit.cover)
+                ? storedImage(bgPath, fit: BoxFit.cover, width: 44, height: 44)
                 : Container(
                     width: 44,
                     height: 44,
@@ -4252,11 +4303,9 @@ class _ChatBgTile extends StatelessWidget {
           ),
           title: Text(AppL10n.t('settings_chat_bg')),
           subtitle: Text(
-            RuntimePlatform.isWeb
-                ? 'Недоступно в web-версии'
-                : bgPath != null
-                    ? AppL10n.t('settings_chat_bg_custom')
-                    : AppL10n.t('settings_chat_bg_none'),
+            bgPath != null
+                ? AppL10n.t('settings_chat_bg_custom')
+                : AppL10n.t('settings_chat_bg_none'),
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           trailing: IconButton(
@@ -4321,12 +4370,13 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
   bool get _isWeb => RuntimePlatform.isWeb;
   bool get _isApple => RuntimePlatform.isIos || RuntimePlatform.isDesktopMacos;
 
-  static String _fmtMb(int bytes) => '${(bytes / (1024 * 1024)).round()} МБ';
+  static String _fmtMb(int bytes) =>
+      AppL10n.f('{0} МБ', [(bytes / (1024 * 1024)).round()]);
 
   String _onDeviceSubtitle() {
-    if (_isWeb) return 'whisper.cpp в браузере (WASM)';
-    if (_isApple) return 'WhisperKit — встроенный движок Apple';
-    return 'whisper.cpp на устройстве';
+    if (_isWeb) return AppL10n.t('whisper.cpp в браузере (WASM)');
+    if (_isApple) return AppL10n.t('WhisperKit — встроенный движок Apple');
+    return AppL10n.t('whisper.cpp на устройстве');
   }
 
   Future<void> _refreshInstalled() async {
@@ -4343,7 +4393,9 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
       await ModelDownloadService.instance.ensureDownloaded(size);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Модель «${size.displayName}» установлена')),
+        SnackBar(
+            content: Text(
+                AppL10n.f('Модель «{0}» установлена', [size.displayName]))),
       );
       await _refreshInstalled();
     } catch (e) {
@@ -4356,7 +4408,8 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
     await ModelDownloadService.instance.delete(size);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Модель «${size.displayName}» удалена')),
+      SnackBar(
+          content: Text(AppL10n.f('Модель «{0}» удалена', [size.displayName]))),
     );
     await _refreshInstalled();
   }
@@ -4370,15 +4423,15 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
 
     return _subScaffold(
       context: context,
-      title: 'Расшифровка',
+      title: AppL10n.t('Расшифровка'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
-          const _SectionHeader('Движок расшифровки'),
+          _SectionHeader(AppL10n.t('Движок расшифровки')),
           RadioListTile<TranscriptionEngine>(
             value: TranscriptionEngine.onDevice,
             groupValue: engine,
-            title: const Text('На устройстве (локально)'),
+            title: Text(AppL10n.t('На устройстве (локально)')),
             subtitle: Text(_onDeviceSubtitle(),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             onChanged: (v) {
@@ -4388,23 +4441,23 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
           RadioListTile<TranscriptionEngine>(
             value: TranscriptionEngine.cloud,
             groupValue: engine,
-            title: const Text('Облако (Hugging Face)'),
-            subtitle: Text('Аудио отправляется на сервер',
+            title: Text(AppL10n.t('Облако (Hugging Face)')),
+            subtitle: Text(AppL10n.t('Аудио отправляется на сервер'),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             onChanged: (v) {
               if (v != null) settings.setTranscriptionEngine(v);
             },
           ),
           if (engine == TranscriptionEngine.onDevice) ...[
-            const _SectionHeader('Модель'),
+            _SectionHeader(AppL10n.t('Модель')),
             for (final s in WhisperModelSize.values)
               _modelTile(context, s, size),
             if (_isWeb)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Text(
-                  'В браузере используется встроенная модель (tiny); '
-                  'загрузка дополнительных моделей недоступна.',
+                  AppL10n.t(
+                      'В браузере используется встроенная модель (tiny); загрузка дополнительных моделей недоступна.'),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               )
@@ -4412,8 +4465,8 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Text(
-                  'WhisperKit скачивает выбранную модель автоматически '
-                  'при первом запуске.',
+                  AppL10n.t(
+                      'WhisperKit скачивает выбранную модель автоматически при первом запуске.'),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               ),
@@ -4436,7 +4489,7 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
           groupValue: selected,
           title: Text(s.displayName),
           subtitle: Text(
-            '≈ ${_fmtMb(s.approxBytes)}${s.isBundled ? ' · встроена' : ''}',
+            '≈ ${_fmtMb(s.approxBytes)}${s.isBundled ? AppL10n.t(' · встроена') : ''}',
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           onChanged: disabled
@@ -4484,7 +4537,7 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
                 const Icon(Icons.check_circle,
                     color: Color(0xFF4CAF50), size: 18),
                 const SizedBox(width: 6),
-                const Text('Установлена', style: TextStyle(fontSize: 12)),
+                Text(AppL10n.t('Установлена'), style: TextStyle(fontSize: 12)),
                 const Spacer(),
                 TextButton.icon(
                   onPressed: busy ? null : () => _deleteModel(s),
@@ -4496,7 +4549,7 @@ class _TranscriptionPageState extends State<_TranscriptionPage> {
                 FilledButton.tonalIcon(
                   onPressed: busy ? null : () => _downloadModel(s),
                   icon: const Icon(Icons.download, size: 18),
-                  label: const Text('Скачать'),
+                  label: Text(AppL10n.t('Скачать')),
                 ),
               ],
             ],
@@ -4658,9 +4711,9 @@ class _PeerSearchSheetState extends State<_PeerSearchSheet> {
     }
     if (id == null || !_pubKey64.hasMatch(id)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Нужен полный ключ (64 hex) или онлайн-пир по короткому коду'),
+        SnackBar(
+          content: Text(AppL10n.t(
+              'Нужен полный ключ (64 hex) или онлайн-пир по короткому коду')),
         ),
       );
       return;
@@ -5161,43 +5214,52 @@ class SettingsSearchEntry {
 List<SettingsSearchEntry> settingsSearchEntries() => [
       SettingsSearchEntry(
           AppL10n.t('settings_appearance'),
-          'Тема, цвета, шрифт, фон',
+          AppL10n.t('Тема, цвета, шрифт, фон'),
           Icons.palette_outlined,
           () => const _AppearancePage()),
       SettingsSearchEntry(
           AppL10n.t('settings_notifications'),
-          'Звуки, рингтон, вибрация',
+          AppL10n.t('Звуки, рингтон, вибрация'),
           Icons.notifications_outlined,
           () => const _NotificationsPage()),
       SettingsSearchEntry(
           AppL10n.t('settings_messaging'),
-          'Отправка, медиа, память, галерея',
+          AppL10n.t('Отправка, медиа, память, галерея'),
           Icons.chat_bubble_outline,
           () => const _MessagingPage()),
-      SettingsSearchEntry('Панель ввода', 'Порядок кнопок', Icons.tune,
+      SettingsSearchEntry(
+          AppL10n.t('Панель ввода'),
+          AppL10n.t('Порядок кнопок'),
+          Icons.tune,
           () => const InputBarButtonOrderSettings()),
       SettingsSearchEntry(
           AppL10n.t('emoji_my_packs'),
-          'Свои :код: и анимированные эмодзи',
+          AppL10n.t('Свои :код: и анимированные эмодзи'),
           Icons.emoji_emotions_outlined,
           () => const EmojiHubScreen()),
       SettingsSearchEntry(
           AppL10n.t('settings_privacy'),
-          'Прочтение, статус онлайн',
+          AppL10n.t('Прочтение, статус онлайн'),
           Icons.lock_outline,
           () => const _PrivacyPage()),
-      SettingsSearchEntry('Расшифровка', 'Движок и модель',
-          Icons.record_voice_over_outlined, () => const _TranscriptionPage()),
+      SettingsSearchEntry(
+          AppL10n.t('Расшифровка'),
+          AppL10n.t('Движок и модель'),
+          Icons.record_voice_over_outlined,
+          () => const _TranscriptionPage()),
       SettingsSearchEntry(
           AppL10n.t('settings_section_network'),
-          'BLE, интернет, ретранслятор',
+          AppL10n.t('BLE, интернет, ретранслятор'),
           Icons.wifi_tethering,
           () => const _NetworkPage()),
       SettingsSearchEntry(
           AppL10n.t('settings_data'),
-          'История, контакты, сброс',
+          AppL10n.t('История, контакты, сброс'),
           Icons.storage_outlined,
           () => const SettingsDataPage()),
-      SettingsSearchEntry('Профиль', 'Имя, аватар, теги, музыка',
-          Icons.person_outline, () => const _ProfilePage()),
+      SettingsSearchEntry(
+          AppL10n.t('Профиль'),
+          AppL10n.t('Имя, аватар, теги, музыка'),
+          Icons.person_outline,
+          () => const _ProfilePage()),
     ];

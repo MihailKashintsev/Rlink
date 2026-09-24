@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../l10n/app_l10n.dart';
 
 class LocationPickResult {
   final double latitude;
@@ -101,7 +102,7 @@ Future<void> showLocationActionsSheet(
           if (includeInAppViewer)
             ListTile(
               leading: const Icon(Icons.map_rounded),
-              title: const Text('Открыть карту в приложении'),
+              title: Text(AppL10n.t('Открыть карту в приложении')),
               onTap: () {
                 Navigator.of(ctx).pop();
                 unawaited(
@@ -111,7 +112,7 @@ Future<void> showLocationActionsSheet(
                         initialLat: latitude,
                         initialLng: longitude,
                         allowPicking: false,
-                        title: 'Геолокация',
+                        title: AppL10n.t('Геолокация'),
                         confirmButtonLabel: '',
                       ),
                     ),
@@ -121,7 +122,7 @@ Future<void> showLocationActionsSheet(
             ),
           ListTile(
             leading: const Icon(Icons.navigation_outlined),
-            title: const Text('Карты по умолчанию'),
+            title: Text(AppL10n.t('Карты по умолчанию')),
             onTap: () {
               Navigator.of(ctx).pop();
               unawaited(_openDefaultMaps(latitude, longitude));
@@ -137,7 +138,7 @@ Future<void> showLocationActionsSheet(
           ),
           ListTile(
             leading: const Icon(Icons.explore_outlined),
-            title: const Text('Яндекс Карты'),
+            title: Text(AppL10n.t('Яндекс Карты')),
             onTap: () {
               Navigator.of(ctx).pop();
               unawaited(_openYandexMaps(latitude, longitude));
@@ -145,13 +146,13 @@ Future<void> showLocationActionsSheet(
           ),
           ListTile(
             leading: const Icon(Icons.copy),
-            title: const Text('Скопировать координаты'),
+            title: Text(AppL10n.t('Скопировать координаты')),
             onTap: () {
               Navigator.of(ctx).pop();
               Clipboard.setData(ClipboardData(text: '$latStr, $lngStr'));
               ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                const SnackBar(
-                  content: Text('Координаты скопированы'),
+                SnackBar(
+                  content: Text(AppL10n.t('Координаты скопированы')),
                   duration: Duration(seconds: 2),
                 ),
               );
@@ -170,14 +171,16 @@ class LocationMapScreen extends StatefulWidget {
   final String title;
   final String confirmButtonLabel;
 
-  const LocationMapScreen({
+  LocationMapScreen({
     super.key,
     this.initialLat,
     this.initialLng,
     this.allowPicking = true,
-    this.title = 'Карта',
-    this.confirmButtonLabel = 'Выбрать точку',
-  });
+    String? title,
+    String? confirmButtonLabel,
+  })  : title = title ?? AppL10n.t('Карта'),
+        confirmButtonLabel =
+            confirmButtonLabel ?? AppL10n.t('Выбрать точку');
 
   @override
   State<LocationMapScreen> createState() => _LocationMapScreenState();
@@ -294,13 +297,13 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         text = data['display_name']?.toString() ?? '';
       }
       setState(() {
-        _addressText = text.isNotEmpty ? text : 'Адрес не найден';
+        _addressText = text.isNotEmpty ? text : AppL10n.t('Адрес не найден');
         _resolvingAddress = false;
       });
     } catch (_) {
       if (!mounted || reqToken != _addressRequestToken) return;
       setState(() {
-        _addressText = 'Адрес недоступен';
+        _addressText = AppL10n.t('Адрес недоступен');
         _resolvingAddress = false;
       });
     }
@@ -333,9 +336,9 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
           }
         }
       }
-      _showSnack('Адрес не найден');
+      _showSnack(AppL10n.t('Адрес не найден'));
     } catch (_) {
-      _showSnack('Поиск адреса недоступен');
+      _showSnack(AppL10n.t('Поиск адреса недоступен'));
     } finally {
       if (mounted) setState(() => _searching = false);
     }
@@ -348,7 +351,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (showErrors) {
-          _showSnack('Включите геолокацию в настройках телефона');
+          _showSnack(AppL10n.t('Включите геолокацию в настройках телефона'));
         }
         return;
       }
@@ -359,7 +362,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        if (showErrors) _showSnack('Нет доступа к геолокации');
+        if (showErrors) _showSnack(AppL10n.t('Нет доступа к геолокации'));
         return;
       }
 
@@ -386,7 +389,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         moveMap: true,
       );
     } catch (_) {
-      if (showErrors) _showSnack('Не удалось определить местоположение');
+      if (showErrors) _showSnack(AppL10n.t('Не удалось определить местоположение'));
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -441,7 +444,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: IconButton(
-              tooltip: _google3dEnabled ? '2D режим' : '3D режим',
+              tooltip: _google3dEnabled ? AppL10n.t('2D режим') : AppL10n.t('3D режим'),
               onPressed: () {
                 setState(() => _google3dEnabled = !_google3dEnabled);
                 _setSelectedPoint(_selectedPoint, moveMap: true, zoom: 14);
@@ -501,7 +504,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         title: Text(widget.title),
         actions: [
           IconButton(
-            tooltip: 'Открыть во внешних картах',
+            tooltip: AppL10n.t('Открыть во внешних картах'),
             onPressed: () => showLocationActionsSheet(
               context,
               latitude: _selectedPoint.latitude,
@@ -525,7 +528,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                       textInputAction: TextInputAction.search,
                       onSubmitted: (_) => _searchAddress(),
                       decoration: InputDecoration(
-                        hintText: 'Поиск по адресу',
+                        hintText: AppL10n.t('Поиск по адресу'),
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _searching
                             ? const Padding(
@@ -534,7 +537,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                                     CircularProgressIndicator(strokeWidth: 2),
                               )
                             : IconButton(
-                                tooltip: 'Найти',
+                                tooltip: AppL10n.t('Найти'),
                                 onPressed: _searchAddress,
                                 icon: const Icon(Icons.arrow_forward_rounded),
                               ),
@@ -561,13 +564,13 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                           color: Colors.black.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Padding(
+                        child: Padding(
                           padding: EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 8,
                           ),
                           child: Text(
-                            'Нажмите по карте, чтобы выбрать точку',
+                            AppL10n.t('Нажмите по карте, чтобы выбрать точку'),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Colors.white,
@@ -605,8 +608,8 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                   const SizedBox(height: 6),
                   Text(
                     _resolvingAddress
-                        ? 'Определяем адрес...'
-                        : (_addressText ?? 'Адрес не найден'),
+                        ? AppL10n.t('Определяем адрес...')
+                        : (_addressText ?? AppL10n.t('Адрес не найден')),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -617,7 +620,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                   if (!_canUseGoogleInApp) ...[
                     const SizedBox(height: 6),
                     Text(
-                      '3D режим доступен во внешних Яндекс/Google картах',
+                      AppL10n.t('3D режим доступен во внешних Яндекс/Google картах'),
                       style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.65),
                         fontSize: 11,
@@ -642,7 +645,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                                 )
                               : const Icon(Icons.my_location_rounded),
                           label: Text(
-                              _locating ? 'Определяем...' : 'Мое положение'),
+                              _locating ? AppL10n.t('Определяем...') : AppL10n.t('Мое положение')),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -655,7 +658,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                             includeInAppViewer: false,
                           ),
                           icon: const Icon(Icons.map_outlined),
-                          label: const Text('Внешние карты'),
+                          label: Text(AppL10n.t('Внешние карты')),
                         ),
                       ),
                     ],

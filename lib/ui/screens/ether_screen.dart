@@ -18,6 +18,7 @@ import '../../services/profile_service.dart';
 import 'chat_screen.dart';
 import 'location_map_screen.dart';
 import '../rlink_nav_routes.dart';
+import '../../l10n/app_l10n.dart';
 
 class EtherScreen extends StatefulWidget {
   const EtherScreen({super.key});
@@ -85,8 +86,8 @@ class _EtherScreenState extends State<EtherScreen> {
     if (detectedName != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            'Нельзя упоминать имена в Эфире — это защита от травли',
+          content: Text(
+            AppL10n.t('Нельзя упоминать имена в Эфире — это защита от травли'),
             style: TextStyle(fontSize: 13),
           ),
           backgroundColor: Colors.red.shade700,
@@ -121,8 +122,8 @@ class _EtherScreenState extends State<EtherScreen> {
               perm == LocationPermission.deniedForever) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Нет доступа к геолокации'),
+                SnackBar(
+                  content: Text(AppL10n.t('Нет доступа к геолокации')),
                   behavior: SnackBarBehavior.floating,
                 ),
               );
@@ -195,37 +196,37 @@ class _EtherScreenState extends State<EtherScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
             Icon(Icons.shield_outlined, size: 24),
             SizedBox(width: 8),
-            Text('Правила Эфира'),
+            Text(AppL10n.t('Правила Эфира')),
           ],
         ),
-        content: const SingleChildScrollView(
+        content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                  'Эфир — это общее пространство для всех рядом. Чтобы оно было безопасным, соблюдайте правила:\n'),
-              Text('1. Запрещены оскорбления, мат и буллинг',
+                  AppL10n.t('Эфир — это общее пространство для всех рядом. Чтобы оно было безопасным, соблюдайте правила:\n')),
+              Text(AppL10n.t('1. Запрещены оскорбления, мат и буллинг'),
                   style: TextStyle(fontWeight: FontWeight.w600)),
               SizedBox(height: 4),
-              Text('2. Запрещены упоминания имён (защита от травли)',
+              Text(AppL10n.t('2. Запрещены упоминания имён (защита от травли)'),
                   style: TextStyle(fontWeight: FontWeight.w600)),
               SizedBox(height: 4),
-              Text('3. Запрещены угрозы и призывы к насилию',
+              Text(AppL10n.t('3. Запрещены угрозы и призывы к насилию'),
                   style: TextStyle(fontWeight: FontWeight.w600)),
               SizedBox(height: 4),
-              Text('4. Запрещена реклама и спам',
+              Text(AppL10n.t('4. Запрещена реклама и спам'),
                   style: TextStyle(fontWeight: FontWeight.w600)),
               SizedBox(height: 4),
-              Text('5. Запрещён контент 18+',
+              Text(AppL10n.t('5. Запрещён контент 18+'),
                   style: TextStyle(fontWeight: FontWeight.w600)),
               SizedBox(height: 12),
               Text(
-                  'Нарушения автоматически фильтруются. Сообщения исчезают через 1 час.',
+                  AppL10n.t('Нарушения автоматически фильтруются. Сообщения исчезают через 1 час.'),
                   style: TextStyle(fontSize: 13, color: Colors.grey)),
             ],
           ),
@@ -236,7 +237,7 @@ class _EtherScreenState extends State<EtherScreen> {
               AppSettings.instance.setEtherRulesAccepted(true);
               Navigator.pop(ctx);
             },
-            child: const Text('Принимаю'),
+            child: Text(AppL10n.t('Принимаю')),
           ),
         ],
       ),
@@ -298,8 +299,8 @@ class _EtherScreenState extends State<EtherScreen> {
                   ),
                   child: Text(
                     count > 0
-                        ? 'Слышат $count ${_peersWord(count)} · исчезает через 1 ч'
-                        : 'Никого рядом · сообщения исчезнут через 1 час',
+                        ? AppL10n.f('Слышат {0} {1} · исчезает через 1 ч', [count, _peersWord(count)])
+                        : AppL10n.t('Никого рядом · сообщения исчезнут через 1 час'),
                     key: ValueKey<int>(count),
                     style: TextStyle(
                       fontSize: 12,
@@ -338,8 +339,7 @@ class _EtherScreenState extends State<EtherScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Режим: только через сервер (без BLE) — видят все, кто сейчас '
-                'в сети, а не только те, кто рядом · исчезает через 1 ч',
+                AppL10n.t('Режим: только через сервер (без BLE) — видят все, кто сейчас в сети, а не только те, кто рядом · исчезает через 1 ч'),
                 style: TextStyle(
                   fontSize: 12,
                   letterSpacing: 0.1,
@@ -380,16 +380,16 @@ class _EtherScreenState extends State<EtherScreen> {
   }
 
   String _peersWord(int n) {
-    if (n % 100 >= 11 && n % 100 <= 14) return 'устройств';
+    if (n % 100 >= 11 && n % 100 <= 14) return AppL10n.t('устройств');
     switch (n % 10) {
       case 1:
-        return 'устройство';
+        return AppL10n.t('устройство');
       case 2:
       case 3:
       case 4:
-        return 'устройства';
+        return AppL10n.t('устройства');
       default:
-        return 'устройств';
+        return AppL10n.t('устройств');
     }
   }
 }
@@ -443,7 +443,7 @@ class _EmptyEtherState extends State<_EmptyEther>
         ),
         const SizedBox(height: 20),
         Text(
-          'В эфире тихо...',
+          AppL10n.t('В эфире тихо...'),
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -452,7 +452,7 @@ class _EmptyEtherState extends State<_EmptyEther>
         ),
         const SizedBox(height: 8),
         Text(
-          'Напиши что-нибудь — все рядом услышат',
+          AppL10n.t('Напиши что-нибудь — все рядом услышат'),
           style: TextStyle(
             fontSize: 13,
             color: cs.onSurface.withValues(alpha: 0.4),
@@ -640,7 +640,7 @@ class _EtherCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   if (msg.isOwn)
                     Text(
-                      'вы',
+                      AppL10n.t('вы'),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -671,7 +671,7 @@ class _EtherCard extends StatelessWidget {
                     )
                   else
                     Text(
-                      'аноним',
+                      AppL10n.t('аноним'),
                       style: TextStyle(
                         fontSize: 11,
                         letterSpacing: 0.3,
@@ -734,9 +734,9 @@ class _EtherCard extends StatelessWidget {
 
   String _relativeTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'только что';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} мин';
-    return '${diff.inHours} ч';
+    if (diff.inSeconds < 60) return AppL10n.t('только что');
+    if (diff.inMinutes < 60) return AppL10n.f('{0} мин', [diff.inMinutes]);
+    return AppL10n.f('{0} ч', [diff.inHours]);
   }
 }
 
@@ -815,8 +815,8 @@ class _EtherInputState extends State<_EtherInput>
               children: [
                 Text(
                   o.anonymous
-                      ? 'Режим: анонимно'
-                      : 'Режим: открыто · ${o.attachGeo ? (o.hasCustomLocation ? "с гео (точка на карте)" : "с гео (текущее положение)") : "без гео"}',
+                      ? AppL10n.t('Режим: анонимно')
+                      : AppL10n.f('Режим: открыто · {0}', [o.attachGeo ? (o.hasCustomLocation ? AppL10n.t('с гео (точка на карте)') : AppL10n.t('с гео (текущее положение)')) : AppL10n.t('без гео')]),
                   style: TextStyle(
                     fontSize: 11,
                     color: cs.onSurface.withValues(alpha: 0.45),
@@ -839,8 +839,8 @@ class _EtherInputState extends State<_EtherInput>
                         style: const TextStyle(fontSize: 14),
                         decoration: InputDecoration(
                           hintText: o.anonymous
-                              ? 'Анонимное сообщение...'
-                              : 'Сообщение от ${ProfileService.instance.profile?.nickname ?? "вас"}...',
+                              ? AppL10n.t('Анонимное сообщение...')
+                              : AppL10n.f('Сообщение от {0}...', [ProfileService.instance.profile?.nickname ?? AppL10n.t('вас')]),
                           hintStyle: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.4),
                             fontSize: 14,

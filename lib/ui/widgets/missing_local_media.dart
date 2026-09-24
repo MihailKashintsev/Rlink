@@ -9,6 +9,7 @@ import '../../models/group.dart';
 import '../../models/message_poll.dart';
 import '../../models/shared_collab.dart';
 import '../../services/image_service.dart';
+import '../../l10n/app_l10n.dart';
 
 bool _hasLocalFile(String? storedPath) {
   if (kIsWeb && _isInlineWebMediaRef(storedPath)) return true;
@@ -105,8 +106,8 @@ class ClearedMediaPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = isOutgoing ? colorScheme.onPrimary : colorScheme.primary;
     final label = (isDirectChat && !isOutgoing)
-        ? 'Загрузить от собеседника'
-        : 'Загрузить';
+        ? AppL10n.t('Загрузить от собеседника')
+        : AppL10n.t('Загрузить');
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Align(

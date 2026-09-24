@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/group_call_directory.dart';
 import '../../services/group_call_service.dart';
 import '../screens/group_call_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 /// "A call is going on here — join" plate at the top of a group chat / topic.
 /// Rooms are per (group, topic), so switching topics switches the banner.
@@ -61,9 +62,9 @@ class GroupCallChatBanner extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(inThis ? 'Вы в звонке' : 'Идёт групповой звонок',
+                    Text(inThis ? AppL10n.t('Вы в звонке') : AppL10n.t('Идёт групповой звонок'),
                         style: const TextStyle(fontWeight: FontWeight.w700)),
-                    Text('Участников: $count/$kMaxCallParticipants',
+                    Text(AppL10n.f('Участников: {0}/{1}', [count, kMaxCallParticipants]),
                         style: TextStyle(
                             fontSize: 12, color: cs.onSurfaceVariant)),
                   ],
@@ -90,8 +91,8 @@ class GroupCallChatBanner extends StatelessWidget {
                         }
                       },
                 child: Text(inThis
-                    ? 'Открыть'
-                    : (full ? 'Заполнена' : 'Присоединиться')),
+                    ? AppL10n.t('Открыть')
+                    : (full ? AppL10n.t('Заполнена') : AppL10n.t('Присоединиться'))),
               ),
             ],
           ),
@@ -138,7 +139,7 @@ class GroupCallReturnPill extends StatelessWidget {
                         const Icon(Icons.call, size: 16, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'Звонок · ${svc.participants.value.length} · вернуться',
+                          AppL10n.f('Звонок · {0} · вернуться', [svc.participants.value.length]),
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 13,

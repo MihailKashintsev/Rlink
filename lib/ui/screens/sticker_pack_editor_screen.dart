@@ -104,7 +104,7 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
                           ),
                           const Spacer(),
                           Text(
-                            '${sel.length} выбрано',
+                            AppL10n.f('{0} выбрано', [sel.length]),
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ],
@@ -187,13 +187,13 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите название набора')),
+        SnackBar(content: Text(AppL10n.t('Введите название набора'))),
       );
       return;
     }
     if (_selectedRels.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Выберите хотя бы один стикер')),
+        SnackBar(content: Text(AppL10n.t('Выберите хотя бы один стикер'))),
       );
       return;
     }
@@ -220,14 +220,14 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(_isEdit ? 'Редактировать набор' : 'Новый набор'),
+          title: Text(_isEdit ? AppL10n.t('Редактировать набор') : AppL10n.t('Новый набор')),
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEdit ? 'Редактировать набор' : 'Новый набор'),
+        title: Text(_isEdit ? AppL10n.t('Редактировать набор') : AppL10n.t('Новый набор')),
         actions: [
           TextButton(
             onPressed: _save,
@@ -240,8 +240,8 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
         children: [
           TextField(
             controller: _titleCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Название набора',
+            decoration: InputDecoration(
+              labelText: AppL10n.t('Название набора'),
               border: OutlineInputBorder(),
             ),
           ),
@@ -251,15 +251,15 @@ class _StickerPackEditorScreenState extends State<StickerPackEditorScreen> {
             icon: const Icon(Icons.grid_view),
             label: Text(
               _selectedRels.isEmpty
-                  ? 'Выбрать стикеры из коллекции'
-                  : 'Изменить выбор (${_selectedRels.length})',
+                  ? AppL10n.t('Выбрать стикеры из коллекции')
+                  : AppL10n.f('Изменить выбор ({0})', [_selectedRels.length]),
             ),
           ),
           if (_allLibraryFiles.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 24),
               child: Text(
-                'В коллекции пока нет стикеров. Отправьте или сохраните стикер из чата.',
+                AppL10n.t('В коллекции пока нет стикеров. Отправьте или сохраните стикер из чата.'),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),

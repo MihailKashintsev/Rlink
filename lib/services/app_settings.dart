@@ -10,6 +10,7 @@ import 'whisper_model.dart';
 import 'web_account_bundle.dart';
 import 'web_identity_portable.dart';
 import '../utils/reaction_emoji_key.dart';
+import '../l10n/app_l10n.dart';
 
 /// Глобальные настройки приложения — тема, уведомления, акцентный цвет.
 /// Является ChangeNotifier: виджеты перестраиваются при изменениях.
@@ -74,7 +75,6 @@ class AppSettings extends ChangeNotifier {
   static const _keyAppPalette = 'app_palette'; // preset index
   static const _keyAnimatedGradient = 'animated_gradient';
   static const _keyLiquidGlass = 'liquid_glass';
-  static const _keyNewDesign = 'new_design';
   static const _keyMinimalist = 'minimalist_theme';
   static const _keyChatBackground = 'chat_background';
   static const _keySystemGallery = 'use_system_gallery';
@@ -204,7 +204,6 @@ class AppSettings extends ChangeNotifier {
   // «Стеклянное» размытие (BackdropFilter) очень дорого на Android → по
   // умолчанию выключено там; на iOS/десктопе (быстрее) — включено.
   bool _liquidGlass = !RuntimePlatform.isAndroid;
-  bool _newDesign = true;
   bool _minimalist = false;
   bool _chatBackground = true;
   bool _useSystemGallery = false;
@@ -275,10 +274,10 @@ class AppSettings extends ChangeNotifier {
   bool get minimalist => _minimalist;
   bool get animatedGradient => _animatedGradient && !_minimalist;
   bool get liquidGlass => _liquidGlass && !_minimalist;
-  bool get newDesign => _newDesign && !_minimalist;
+  // The new design is the only design now; minimalism is a flat variant of it.
+  bool get newDesign => !_minimalist;
   bool get animatedGradientPref => _animatedGradient;
   bool get liquidGlassPref => _liquidGlass;
-  bool get newDesignPref => _newDesign;
   bool get chatBackground => _chatBackground;
 
   /// Pick media with the OS picker instead of Rlink's own gallery sheet.
@@ -384,11 +383,11 @@ class AppSettings extends ChangeNotifier {
         Color(0xFF9E9E9E), // gray
       ][_onlineStatusMode.clamp(0, 3)];
 
-  String get onlineStatusLabel => const [
-        'В сети',
-        'Не беспокоить',
-        'Занят — не писать',
-        'Не в сети',
+  String get onlineStatusLabel => [
+        AppL10n.t('В сети'),
+        AppL10n.t('Не беспокоить'),
+        AppL10n.t('Занят — не писать'),
+        AppL10n.t('Не в сети'),
       ][_onlineStatusMode.clamp(0, 3)];
 
   /// Расширенная палитра акцентных цветов (16 оттенков).
@@ -515,7 +514,6 @@ class AppSettings extends ChangeNotifier {
     _appPalette = (_prefs.getInt(_keyAppPalette) ?? 0).clamp(0, 99);
     _animatedGradient = _prefs.getBool(_keyAnimatedGradient) ?? false;
     _liquidGlass = _prefs.getBool(_keyLiquidGlass) ?? !RuntimePlatform.isAndroid;
-    _newDesign = _prefs.getBool(_keyNewDesign) ?? true;
     _minimalist = _prefs.getBool(_keyMinimalist) ?? false;
     _chatBackground = _prefs.getBool(_keyChatBackground) ?? true;
     _useSystemGallery = _prefs.getBool(_keySystemGallery) ?? false;
@@ -770,11 +768,6 @@ class AppSettings extends ChangeNotifier {
     _notifySettingsChanged();
   }
 
-  Future<void> setNewDesign(bool v) async {
-    _newDesign = v;
-    await _runPrefsWrite((p) => p.setBool(_keyNewDesign, v));
-    _notifySettingsChanged();
-  }
 
   Future<void> setUseSystemGallery(bool v) async {
     _useSystemGallery = v;

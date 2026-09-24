@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'google_drive_channel_backup.dart';
 import 'music_catalog_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// A track the user uploaded to their own Google Drive.
 ///
@@ -48,7 +49,7 @@ class MyTrack {
         artist: artist,
         streamUrl: url,
         artworkUrl: artwork,
-        source: 'Мои',
+        source: AppL10n.t('Мои'),
       );
 }
 
@@ -105,7 +106,7 @@ class MyTracksService {
       );
       if (link == null) {
         lastError = GoogleDriveChannelBackup.lastSignInError ??
-            'Не удалось загрузить на Google Drive';
+            AppL10n.t('Не удалось загрузить на Google Drive');
         return null;
       }
       // webContentLink points at drive.google.com, which sends no CORS header

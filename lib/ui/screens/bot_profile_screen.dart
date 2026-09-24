@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/relay_service.dart';
 import '../widgets/avatar_widget.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Публичный профиль relay-бота (каталог): метаданные, verified, команды.
 class BotProfileScreen extends StatefulWidget {
@@ -32,7 +33,7 @@ class _BotProfileScreenState extends State<BotProfileScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Бот')),
+      appBar: AppBar(title: Text(AppL10n.t('Бот'))),
       body: FutureBuilder<Map<String, dynamic>?>(
         future: _load,
         builder: (context, snap) {
@@ -46,8 +47,8 @@ class _BotProfileScreenState extends State<BotProfileScreen> {
                 padding: const EdgeInsets.all(24),
                 child: Text(
                   data == null
-                      ? 'Не удалось загрузить данные бота. Проверьте relay и ник.'
-                      : 'Бот не найден: ${data['error'] ?? 'ошибка'}',
+                      ? AppL10n.t('Не удалось загрузить данные бота. Проверьте relay и ник.')
+                      : AppL10n.f('Бот не найден: {0}', [data['error'] ?? AppL10n.t('ошибка')]),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -127,12 +128,12 @@ class _BotProfileScreenState extends State<BotProfileScreen> {
               FilledButton.icon(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.chat_outlined),
-                label: const Text('Написать'),
+                label: Text(AppL10n.t('Написать')),
               ),
               if (list.isNotEmpty) ...[
                 const SizedBox(height: 28),
                 Text(
-                  'Команды',
+                  AppL10n.t('Команды'),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),

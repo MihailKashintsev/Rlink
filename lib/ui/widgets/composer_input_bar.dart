@@ -17,6 +17,7 @@ import 'status_emoji_view.dart';
 import 'telegram_media_record_button.dart';
 import 'translate_action.dart';
 import 'unified_emoji_picker.dart';
+import '../../l10n/app_l10n.dart';
 
 /// A person suggested in the @-mention picker. [id] is the public-key hex that
 /// gets inserted into the text as the `&hex` mention token.
@@ -446,7 +447,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
           ),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          tooltip: 'Эмодзи',
+          tooltip: AppL10n.t('Эмодзи'),
         );
       },
     );
@@ -466,7 +467,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
       ),
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      tooltip: 'Галерея и вложения',
+      tooltip: AppL10n.t('Галерея и вложения'),
     );
   }
 
@@ -510,7 +511,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
         fullscreenDialog: true,
         builder: (ctx) => _FullscreenComposerEditor(
           controller: widget.controller,
-          hintText: widget.hintText ?? 'Сообщение...',
+          hintText: widget.hintText ?? AppL10n.t('Сообщение...'),
           isSending: widget.isSending,
           onSend: () {
             Navigator.of(ctx).pop();
@@ -575,12 +576,12 @@ class ComposerInputBarState extends State<ComposerInputBar> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          btn('Ж', '**', '**',
+          btn(AppL10n.t('Ж'), '**', '**',
               style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: cs.onSurface)),
-          btn('К', '_', '_',
+          btn(AppL10n.t('К'), '_', '_',
               style: TextStyle(
                   fontSize: 16,
                   fontStyle: FontStyle.italic,
@@ -598,7 +599,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
                   color: cs.onSurface)),
           IconButton(
             visualDensity: VisualDensity.compact,
-            tooltip: 'Скрытый',
+            tooltip: AppL10n.t('Скрытый'),
             icon: Icon(Icons.visibility_off_outlined,
                 size: 20, color: cs.onSurface),
             onPressed: () => _wrapSelection('||', '||'),
@@ -606,7 +607,7 @@ class ComposerInputBarState extends State<ComposerInputBar> {
           const Spacer(),
           IconButton(
             visualDensity: VisualDensity.compact,
-            tooltip: 'Перевести',
+            tooltip: AppL10n.t('Перевести'),
             icon: Icon(Icons.translate, size: 20, color: cs.primary),
             onPressed: () {
               final sel = widget.controller.selection;
@@ -651,20 +652,20 @@ class ComposerInputBarState extends State<ComposerInputBar> {
       final selectedText = sel.textInside(widget.controller.text);
       items.addAll([
         ContextMenuButtonItem(
-            label: 'Перевести',
+            label: AppL10n.t('Перевести'),
             onPressed: () {
               editableState.hideToolbar();
               showTranslateResult(context, selectedText);
             }),
         ContextMenuButtonItem(
-            label: 'Жирный', onPressed: () => fmt('**', '**')),
-        ContextMenuButtonItem(label: 'Курсив', onPressed: () => fmt('_', '_')),
+            label: AppL10n.t('Жирный'), onPressed: () => fmt('**', '**')),
+        ContextMenuButtonItem(label: AppL10n.t('Курсив'), onPressed: () => fmt('_', '_')),
         ContextMenuButtonItem(
-            label: 'Зачёркнутый', onPressed: () => fmt('~~', '~~')),
+            label: AppL10n.t('Зачёркнутый'), onPressed: () => fmt('~~', '~~')),
         ContextMenuButtonItem(
-            label: 'Подчёркнутый', onPressed: () => fmt('__', '__')),
+            label: AppL10n.t('Подчёркнутый'), onPressed: () => fmt('__', '__')),
         ContextMenuButtonItem(
-            label: 'Скрытый', onPressed: () => fmt('||', '||')),
+            label: AppL10n.t('Скрытый'), onPressed: () => fmt('||', '||')),
       ]);
     }
     return AdaptiveTextSelectionToolbar.buttonItems(
@@ -876,8 +877,8 @@ class ComposerInputBarState extends State<ComposerInputBar> {
                                   style: textStyle,
                                   decoration: InputDecoration(
                                     hintText: widget.isRecording
-                                        ? 'Запись... ${s}s.$t'
-                                        : (widget.hintText ?? 'Сообщение...'),
+                                        ? AppL10n.f('Запись... {0}s.{1}', [s, t])
+                                        : (widget.hintText ?? AppL10n.t('Сообщение...')),
                                     hintStyle: TextStyle(
                                         color: cs.onSurfaceVariant
                                             .withValues(alpha: 0.6)),
@@ -1451,7 +1452,7 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
           icon: const Icon(Icons.close_rounded),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Сообщение'),
+        title: Text(AppL10n.t('Сообщение')),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -1464,7 +1465,7 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.send_rounded, size: 18),
-              label: const Text('Отправить'),
+              label: Text(AppL10n.t('Отправить')),
             ),
           ),
         ],
@@ -1551,13 +1552,13 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               ChoiceChip(
-                label: const Text('Столбец'),
+                label: Text(AppL10n.t('Столбец')),
                 selected: _layout == _CollageLayout.column,
                 onSelected: (_) =>
                     setState(() => _layout = _CollageLayout.column),
               ),
               ChoiceChip(
-                label: const Text('Сетка'),
+                label: Text(AppL10n.t('Сетка')),
                 selected: _layout == _CollageLayout.grid,
                 onSelected: (_) => setState(() => _layout = _CollageLayout.grid),
               ),
@@ -1568,7 +1569,7 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
                         ? Icons.vertical_align_top_rounded
                         : Icons.vertical_align_bottom_rounded,
                     size: 18),
-                label: Text(_mediaOnTop ? 'Фото сверху' : 'Фото снизу'),
+                label: Text(_mediaOnTop ? AppL10n.t('Фото сверху') : AppL10n.t('Фото снизу')),
                 onPressed: () => setState(() => _mediaOnTop = !_mediaOnTop),
               ),
             ],
@@ -1640,9 +1641,9 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
             padding: const EdgeInsets.symmetric(horizontal: 6),
             children: [
               btn(Icons.undo_rounded, _undo.isEmpty ? null : _undoAction,
-                  tip: 'Отменить'),
+                  tip: AppL10n.t('Отменить')),
               btn(Icons.redo_rounded, _redo.isEmpty ? null : _redoAction,
-                  tip: 'Вернуть'),
+                  tip: AppL10n.t('Вернуть')),
               _sep(cs),
               textBtn('B', () => _wrap('**', '**'),
                   weight: FontWeight.w800, on: active.contains('b')),
@@ -1652,23 +1653,23 @@ class _FullscreenComposerEditorState extends State<_FullscreenComposerEditor> {
               textBtn('S', () => _wrap('~~', '~~'),
                   strike: true, on: active.contains('s')),
               btn(Icons.code_rounded, () => _wrap('`', '`'),
-                  tip: 'Моно', on: active.contains('code')),
+                  tip: AppL10n.t('Моно'), on: active.contains('code')),
               btn(Icons.visibility_off_outlined, () => _wrap('||', '||'),
-                  tip: 'Спойлер', on: active.contains('sp')),
+                  tip: AppL10n.t('Спойлер'), on: active.contains('sp')),
               btn(Icons.format_quote_rounded, () => _insertLinePrefix('> '),
-                  tip: 'Цитата'),
+                  tip: AppL10n.t('Цитата')),
               btn(Icons.format_list_bulleted_rounded,
                   () => _insertLinePrefix('• '),
-                  tip: 'Список'),
-              btn(Icons.table_chart_outlined, _insertTable, tip: 'Таблица'),
-              btn(Icons.emoji_emotions_outlined, _openEmoji, tip: 'Эмодзи'),
+                  tip: AppL10n.t('Список')),
+              btn(Icons.table_chart_outlined, _insertTable, tip: AppL10n.t('Таблица')),
+              btn(Icons.emoji_emotions_outlined, _openEmoji, tip: AppL10n.t('Эмодзи')),
               if (widget.onSendComposedImage != null)
                 btn(Icons.add_photo_alternate_outlined, _pickPhotos,
-                    tip: 'Фото (коллаж)'),
+                    tip: AppL10n.t('Фото (коллаж)')),
               _sep(cs),
               btn(Icons.format_clear_rounded,
                   active.isEmpty ? null : _exitFmts,
-                  tip: 'Сбросить оформление'),
+                  tip: AppL10n.t('Сбросить оформление')),
             ],
           ),
         ),
@@ -1729,22 +1730,22 @@ class _TableSizeDialogState extends State<_TableSizeDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Таблица'),
+      title: Text(AppL10n.t('Таблица')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _stepper('Строк', _rows, (v) => setState(() => _rows = v)),
-          _stepper('Столбцов', _cols, (v) => setState(() => _cols = v)),
+          _stepper(AppL10n.t('Строк'), _rows, (v) => setState(() => _rows = v)),
+          _stepper(AppL10n.t('Столбцов'), _cols, (v) => setState(() => _cols = v)),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
+          child: Text(AppL10n.t('Отмена')),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, (_rows, _cols)),
-          child: const Text('Создать'),
+          child: Text(AppL10n.t('Создать')),
         ),
       ],
     );

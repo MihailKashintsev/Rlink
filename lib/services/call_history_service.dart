@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'chat_storage_service.dart';
 import '../models/chat_message.dart';
+import '../l10n/app_l10n.dart';
 
 /// Одна запись в журнале звонков (локально на устройстве).
 class CallHistoryEntry {
@@ -206,16 +207,16 @@ class CallHistoryService {
 
   Future<void> _saveChatCallMessage(CallHistoryEntry entry) async {
     try {
-      final title = entry.video ? 'Видеозвонок' : 'Звонок';
+      final title = entry.video ? AppL10n.t('Видеозвонок') : AppL10n.t('Звонок');
       final String durationText;
       if (entry.outcome == 'missed') {
-        durationText = entry.incoming ? 'пропущен' : 'нет ответа';
+        durationText = entry.incoming ? AppL10n.t('пропущен') : AppL10n.t('нет ответа');
       } else if (entry.outcome == 'declined') {
-        durationText = 'отклонён';
+        durationText = AppL10n.t('отклонён');
       } else {
         final dur = entry.duration;
         durationText = dur.inSeconds <= 0
-            ? 'не состоялся'
+            ? AppL10n.t('не состоялся')
             : '${dur.inMinutes.remainder(60).toString().padLeft(2, '0')}:${dur.inSeconds.remainder(60).toString().padLeft(2, '0')}';
       }
       await ChatStorageService.instance.saveMessage(

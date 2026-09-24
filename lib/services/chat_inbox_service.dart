@@ -8,6 +8,7 @@ import 'channel_service.dart';
 import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'group_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// Вид элемента в списке чатов (для фильтров).
 enum ChatInboxItemKind { saved, dm, group, channel }
@@ -227,7 +228,7 @@ class ChatInboxService extends ChangeNotifier {
     _tabs.add(ChatInboxTab(
       id: id,
       preset: null,
-      customName: name.trim().isEmpty ? 'Группа' : name.trim(),
+      customName: name.trim().isEmpty ? AppL10n.t('Группа') : name.trim(),
       customMemberKeys: List<String>.from(memberKeys),
     ));
     _selectedTabId = id;
@@ -286,15 +287,15 @@ class ChatInboxService extends ChangeNotifier {
   String tabLabel(ChatInboxTab t) {
     switch (t.preset) {
       case 'all':
-        return 'Все';
+        return AppL10n.t('Все');
       case 'dm':
-        return 'Чаты';
+        return AppL10n.t('Чаты');
       case 'channel':
-        return 'Каналы';
+        return AppL10n.t('Каналы');
       case 'group':
-        return 'Группы';
+        return AppL10n.t('Группы');
       default:
-        return t.customName.isEmpty ? 'Группа' : t.customName;
+        return t.customName.isEmpty ? AppL10n.t('Группа') : t.customName;
     }
   }
 }

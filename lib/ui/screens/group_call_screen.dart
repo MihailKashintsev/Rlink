@@ -11,6 +11,7 @@ import '../../services/group_call_service.dart';
 import '../../services/group_service.dart';
 import '../../services/screen_share_helper.dart';
 import '../widgets/avatar_widget.dart';
+import '../../l10n/app_l10n.dart';
 
 const _kReactionEmojis = ['👍', '❤️', '😂', '😮', '👏', '🔥'];
 
@@ -20,7 +21,7 @@ Contact? _contactOf(String id) => ChatStorageService.instance
     .firstOrNull;
 
 String _nameOf(String id) {
-  if (id == CryptoService.instance.publicKeyHex) return 'Вы';
+  if (id == CryptoService.instance.publicKeyHex) return AppL10n.t('Вы');
   return _contactOf(id)?.nickname ??
       '${id.substring(0, id.length.clamp(0, 8))}…';
 }
@@ -266,7 +267,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    p.screenSharing ? '${_nameOf(id)} · экран' : _nameOf(id),
+                    p.screenSharing ? AppL10n.f('{0} · экран', [_nameOf(id)]) : _nameOf(id),
                     style: const TextStyle(color: Colors.white, fontSize: 13),
                   ),
                 ),
@@ -436,7 +437,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                     IconButton(
                       icon: const Icon(Icons.keyboard_arrow_down,
                           color: Colors.white, size: 30),
-                      tooltip: 'Свернуть',
+                      tooltip: AppL10n.t('Свернуть'),
                       onPressed: () => Navigator.of(context).maybePop(),
                     ),
                     Expanded(
@@ -452,8 +453,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                                   fontWeight: FontWeight.w700)),
                           Text(
                               ids.length <= 1
-                                  ? 'Ждём участников…'
-                                  : 'Участников: ${ids.length}/$kMaxCallParticipants',
+                                  ? AppL10n.t('Ждём участников…')
+                                  : AppL10n.f('Участников: {0}/{1}', [ids.length, kMaxCallParticipants]),
                               style: const TextStyle(
                                   color: Colors.white60, fontSize: 12)),
                         ],
@@ -462,13 +463,13 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                     IconButton(
                       icon: const Icon(Icons.person_add_alt_1,
                           color: Colors.white),
-                      tooltip: 'Пригласить',
+                      tooltip: AppL10n.t('Пригласить'),
                       onPressed: _showInvite,
                     ),
                     IconButton(
                       icon: const Icon(Icons.people_alt_outlined,
                           color: Colors.white),
-                      tooltip: 'Участники',
+                      tooltip: AppL10n.t('Участники'),
                       onPressed: _showParticipants,
                     ),
                   ],
@@ -686,9 +687,9 @@ class _ParticipantsSheet extends StatelessWidget {
               shrinkWrap: true,
               padding: const EdgeInsets.symmetric(vertical: 12),
               children: [
-                const Padding(
+                Padding(
                   padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text('Участники',
+                  child: Text(AppL10n.t('Участники'),
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 17,
@@ -714,10 +715,10 @@ class _ParticipantsSheet extends StatelessWidget {
                     ),
                     subtitle: Text(
                       [
-                        if (p.muted) 'микрофон выкл',
-                        if (p.cameraOn) 'камера',
-                        if (p.screenSharing) 'экран',
-                        if (!p.connected && p.id != me) 'подключается…',
+                        if (p.muted) AppL10n.t('микрофон выкл'),
+                        if (p.cameraOn) AppL10n.t('камера'),
+                        if (p.screenSharing) AppL10n.t('экран'),
+                        if (!p.connected && p.id != me) AppL10n.t('подключается…'),
                       ].join(' · '),
                       style: const TextStyle(color: Colors.white54),
                     ),
@@ -729,15 +730,15 @@ class _ParticipantsSheet extends StatelessWidget {
                               if (v == 'video') svc.forceVideoOff(p.id);
                               if (v == 'kick') svc.kick(p.id);
                             },
-                            itemBuilder: (_) => const [
+                            itemBuilder: (_) => [
                               PopupMenuItem(
                                   value: 'mute',
-                                  child: Text('Выключить микрофон')),
+                                  child: Text(AppL10n.t('Выключить микрофон'))),
                               PopupMenuItem(
                                   value: 'video',
-                                  child: Text('Выключить видео')),
+                                  child: Text(AppL10n.t('Выключить видео'))),
                               PopupMenuItem(
-                                  value: 'kick', child: Text('Исключить')),
+                                  value: 'kick', child: Text(AppL10n.t('Исключить'))),
                             ],
                           )
                         : null,
@@ -799,18 +800,18 @@ class _InviteSheetState extends State<_InviteSheet> {
               shrinkWrap: true,
               padding: const EdgeInsets.symmetric(vertical: 12),
               children: [
-                const Padding(
+                Padding(
                   padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text('Пригласить в звонок',
+                  child: Text(AppL10n.t('Пригласить в звонок'),
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 17,
                           fontWeight: FontWeight.w700)),
                 ),
                 if (c.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.all(16),
-                    child: Text('Некого приглашать',
+                    child: Text(AppL10n.t('Некого приглашать'),
                         style: TextStyle(color: Colors.white54)),
                   ),
                 for (final id in c)
@@ -844,16 +845,16 @@ void openGroupCallScreen(BuildContext context, String title) {
 
 String _titleFor(GroupCallRoomInfo? r, String? groupName) {
   if (groupName != null) return groupName;
-  return r?.isGroupRoom == true ? 'Групповой звонок' : 'Звонок';
+  return r?.isGroupRoom == true ? AppL10n.t('Групповой звонок') : AppL10n.t('Звонок');
 }
 
 Future<void> _showStartError(BuildContext context, Object e) async {
   if (!context.mounted) return;
   final msg = e is StateError && e.message == 'busy'
-      ? 'Вы уже в звонке'
+      ? AppL10n.t('Вы уже в звонке')
       : e is StateError && e.message == 'full'
-          ? 'Комната заполнена (до $kMaxCallParticipants человек)'
-          : 'Не удалось начать звонок';
+          ? AppL10n.f('Комната заполнена (до {0} человек)', [kMaxCallParticipants])
+          : AppL10n.t('Не удалось начать звонок');
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 }
 
@@ -894,10 +895,10 @@ Future<void> startAdHocCall(
 /// Invite prompt shown app-wide when someone rings us into a room.
 Future<void> showGroupCallInviteDialog(
     BuildContext context, GroupCallInvite invite) async {
-  String title = 'Звонок';
+  String title = AppL10n.t('Звонок');
   if (invite.room.groupId != null) {
     final g = await GroupService.instance.getGroup(invite.room.groupId!);
-    title = g?.name ?? 'Групповой звонок';
+    title = g?.name ?? AppL10n.t('Групповой звонок');
   }
   if (!context.mounted) return;
   final accept = await showDialog<bool>(
@@ -906,14 +907,14 @@ Future<void> showGroupCallInviteDialog(
     builder: (ctx) => AlertDialog(
       title: Text(title),
       content: Text(
-          '${_nameOf(invite.fromId)} зовёт вас в ${invite.room.video ? "видео" : "аудио"}звонок'),
+          AppL10n.f('{0} зовёт вас в {1}звонок', [_nameOf(invite.fromId), invite.room.video ? AppL10n.t('видео') : AppL10n.t('аудио')])),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отклонить')),
+            child: Text(AppL10n.t('Отклонить'))),
         FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Присоединиться')),
+            child: Text(AppL10n.t('Присоединиться'))),
       ],
     ),
   );

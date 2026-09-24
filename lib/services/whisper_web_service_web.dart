@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:js' as js;
+import '../l10n/app_l10n.dart';
 
 /// Web implementation using whisper.cpp WASM.
 /// Uses JS object window.rlinkWhisper (whisper_web.js).
@@ -33,7 +34,7 @@ class WhisperWebServiceImpl {
       final supported = whisper.callMethod('isSupported');
       if (supported != true) {
         throw StateError(
-            'WebAssembly или IndexedDB не поддерживаются браузером');
+            AppL10n.t('WebAssembly или IndexedDB не поддерживаются браузером'));
       }
 
       if (onProgress != null) {

@@ -11,6 +11,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'app_settings.dart';
 import 'runtime_platform.dart';
 import '../utils/web_file_store.dart';
+import '../l10n/app_l10n.dart';
 
 enum ActionSound {
   messageSent,
@@ -27,8 +28,9 @@ enum CallFxSound {
   bee('🐝', 'Пчела');
 
   final String emoji;
-  final String label;
-  const CallFxSound(this.emoji, this.label);
+  final String _label;
+  const CallFxSound(this.emoji, this._label);
+  String get label => AppL10n.t(_label);
 }
 
 enum AppSoundSlot {
@@ -40,8 +42,9 @@ enum AppSoundSlot {
   notification('notification', 'Уведомление');
 
   final String id;
-  final String label;
-  const AppSoundSlot(this.id, this.label);
+  final String _label;
+  const AppSoundSlot(this.id, this._label);
+  String get label => AppL10n.t(_label);
 }
 
 class SoundEffectsService {

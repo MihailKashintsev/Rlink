@@ -29,7 +29,7 @@ class _AvatarCropScreenState extends State<AvatarCropScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.white,
-        title: const Text('Обрезка аватара'),
+        title: Text(AppL10n.t('Обрезка аватара')),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 6),
@@ -87,7 +87,7 @@ class _AvatarCropScreenState extends State<AvatarCropScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
             child: Text(
-              'Двигайте и масштабируйте фото — так аватар и будет выглядеть.',
+              AppL10n.t('Двигайте и масштабируйте фото — так аватар и будет выглядеть.'),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.66),

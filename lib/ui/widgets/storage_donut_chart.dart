@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../services/app_storage_breakdown_service.dart';
+import '../../l10n/app_l10n.dart';
 
 String formatStorageBytes(int bytes) {
   if (bytes <= 0) return '0 B';
@@ -39,7 +40,7 @@ class StorageDonutChart extends StatelessWidget {
         height: 200,
         child: Center(
           child: Text(
-            'Нет данных для диаграммы',
+            AppL10n.t('Нет данных для диаграммы'),
             style: TextStyle(color: Theme.of(context).hintColor),
           ),
         ),
@@ -81,7 +82,7 @@ class StorageDonutChart extends StatelessWidget {
                             ),
                       ),
                       Text(
-                        'всего',
+                        AppL10n.t('всего'),
                         style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,

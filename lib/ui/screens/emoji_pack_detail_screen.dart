@@ -52,7 +52,7 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
     if (pack == null) return;
     if (pack.emojis.isEmpty) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('В наборе нет эмодзи')));
+          .showSnackBar(SnackBar(content: Text(AppL10n.t('В наборе нет эмодзи'))));
       return;
     }
     final picked = await showForwardDmTargetSheet(context);
@@ -71,10 +71,10 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Переименовать'),
+        title: Text(AppL10n.t('Переименовать')),
         content: TextField(
           controller: ctrl,
-          decoration: const InputDecoration(labelText: 'Название'),
+          decoration: InputDecoration(labelText: AppL10n.t('Название')),
           autofocus: true,
         ),
         actions: [
@@ -96,7 +96,7 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(AppL10n.t('cm_delete_pack_q')),
-        content: const Text('Файлы эмодзи будут удалены с устройства.'),
+        content: Text(AppL10n.t('Файлы эмодзи будут удалены с устройства.')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
@@ -121,8 +121,8 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.emoji_emotions_outlined),
-              title: const Text('Привязать к эмодзи'),
-              subtitle: Text('Заменять обычный эмодзи на :${e.shortcode}: при наборе'),
+              title: Text(AppL10n.t('Привязать к эмодзи')),
+              subtitle: Text(AppL10n.f('Заменять обычный эмодзи на :{0}: при наборе', [e.shortcode])),
               onTap: () => Navigator.pop(ctx, 'bind'),
             ),
             ListTile(
@@ -146,7 +146,7 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Удалить :${e.shortcode}:?'),
+        title: Text(AppL10n.f('Удалить :{0}:?', [e.shortcode])),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppL10n.t('common_cancel'))),
           FilledButton(
@@ -174,7 +174,7 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
     if (pack == null) {
       return Scaffold(
         appBar: AppBar(title: Text(AppL10n.t('cm_pack'))),
-        body: const Center(child: Text('Набор не найден')),
+        body: Center(child: Text(AppL10n.t('Набор не найден'))),
       );
     }
     return Scaffold(
@@ -183,7 +183,7 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.ios_share_rounded),
-            tooltip: 'Поделиться',
+            tooltip: AppL10n.t('Поделиться'),
             onPressed: _sharePack,
           ),
           IconButton(icon: const Icon(Icons.drive_file_rename_outline), onPressed: _rename),
@@ -196,10 +196,7 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
       body: pack.emojis.isEmpty
           ? Center(
               child: Text(
-                'Пусто. Добавьте эмодзи в чате с ботом Emoji:\n'
-                '/pack ${pack.id}\n'
-                '/add :код:\n'
-                'затем отправьте картинку.',
+                AppL10n.f('Пусто. Добавьте эмодзи в чате с ботом Emoji:\n/pack {0}\n/add :код:\nзатем отправьте картинку.', [pack.id]),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: cs.onSurfaceVariant, height: 1.35),
               ),

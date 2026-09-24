@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../services/update_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Окно-предупреждение, которое показывается, когда обновление УЖЕ скачано в
 /// фоне: «приложение перезапустится для установки». Небольшой обратный отсчёт,
@@ -57,13 +58,11 @@ class _UpdateRestartDialogState extends State<UpdateRestartDialog> {
     final cs = Theme.of(context).colorScheme;
     return AlertDialog(
       icon: Icon(Icons.system_update_rounded, color: cs.primary, size: 34),
-      title: Text('Обновление ${widget.update.version} загружено'),
+      title: Text(AppL10n.f('Обновление {0} загружено', [widget.update.version])),
       content: Text(
         _installing
-            ? 'Устанавливаем обновление…'
-            : 'Приложение перезапустится для установки'
-                '${_left > 0 ? ' через $_left с' : ''}.\n'
-                'Заверши то, что не хочешь потерять.',
+            ? AppL10n.t('Устанавливаем обновление…')
+            : AppL10n.f('Приложение перезапустится для установки{0}.\nЗаверши то, что не хочешь потерять.', [_left > 0 ? AppL10n.f(' через {0} с', [_left]) : '']),
         textAlign: TextAlign.center,
         style: TextStyle(color: cs.onSurfaceVariant, height: 1.35),
       ),
@@ -82,10 +81,10 @@ class _UpdateRestartDialogState extends State<UpdateRestartDialog> {
               ),
             ]
           : [
-              TextButton(onPressed: _later, child: const Text('Позже')),
+              TextButton(onPressed: _later, child: Text(AppL10n.t('Позже'))),
               FilledButton(
                 onPressed: _install,
-                child: const Text('Перезапустить'),
+                child: Text(AppL10n.t('Перезапустить')),
               ),
             ],
     );
@@ -126,14 +125,14 @@ class UpdateProgressTile extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Обновление ${ready.version} загружено',
+                            AppL10n.f('Обновление {0} загружено', [ready.version]),
                             style: const TextStyle(
                                 fontWeight: FontWeight.w600, fontSize: 13.5),
                           ),
                         ),
                         FilledButton(
                           onPressed: () => UpdateService.instance.install(),
-                          child: const Text('Установить'),
+                          child: Text(AppL10n.t('Установить')),
                         ),
                       ],
                     )
@@ -149,9 +148,9 @@ class UpdateProgressTile extends StatelessWidget {
                                   CircularProgressIndicator(strokeWidth: 2),
                             ),
                             const SizedBox(width: 10),
-                            const Expanded(
+                            Expanded(
                               child: Text(
-                                'Загрузка обновления…',
+                                AppL10n.t('Загрузка обновления…'),
                                 style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 13.5),

@@ -7,6 +7,7 @@ import 'dart:js_interop';
 
 import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
+import '../l10n/app_l10n.dart';
 
 const _fileName = 'rlink_identity.json';
 
@@ -85,13 +86,13 @@ Future<bool> confirmIdentityDownloadPrompt() async {
       ..style.padding = '18px'
       ..style.boxShadow = '0 10px 30px rgba(0,0,0,.35)';
     final title = html.DivElement()
-      ..text = 'Обновить файл сохранения?'
+      ..text = AppL10n.t('Обновить файл сохранения?')
       ..style.fontWeight = '700'
       ..style.fontSize = '17px'
       ..style.marginBottom = '10px';
     final body = html.DivElement()
       ..text =
-          'Важно заменить старый файл сохранения на новый, чтобы не потерять последние изменения (профиль, аватар, баннер, чаты, группы, каналы и настройки).'
+          AppL10n.t('Важно заменить старый файл сохранения на новый, чтобы не потерять последние изменения (профиль, аватар, баннер, чаты, группы, каналы и настройки).')
       ..style.fontSize = '14px'
       ..style.lineHeight = '1.4'
       ..style.marginBottom = '14px';
@@ -100,7 +101,7 @@ Future<bool> confirmIdentityDownloadPrompt() async {
       ..style.justifyContent = 'flex-end'
       ..style.gap = '10px';
     final cancel = html.ButtonElement()
-      ..text = 'Отмена'
+      ..text = AppL10n.t('Отмена')
       ..style.background = '#3a3a3a'
       ..style.color = '#fff'
       ..style.border = 'none'
@@ -108,7 +109,7 @@ Future<bool> confirmIdentityDownloadPrompt() async {
       ..style.padding = '8px 12px'
       ..style.cursor = 'pointer';
     final download = html.ButtonElement()
-      ..text = 'Скачать файл сохранения'
+      ..text = AppL10n.t('Скачать файл сохранения')
       ..style.background = '#2e7d32'
       ..style.color = '#fff'
       ..style.border = 'none'

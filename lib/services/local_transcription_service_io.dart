@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'whisper_ffi.dart';
 import 'model_download_service.dart';
 import 'whisper_kit_apple.dart';
+import '../l10n/app_l10n.dart';
 
 /// IO-specific code for LocalTranscriptionService (native platforms only).
 ///
@@ -56,8 +57,7 @@ class LocalTranscriptionServiceIO {
     final modelPath = await resolveModelPath(size: size);
     if (!File(modelPath).existsSync()) {
       throw StateError(
-        'Модель «${size.displayName}» ещё не скачана. '
-        'Скачайте её в первой настройке или в Настройках → Расшифровка.',
+        AppL10n.f('Модель «{0}» ещё не скачана. Скачайте её в первой настройке или в Настройках → Расшифровка.', [size.displayName]),
       );
     }
     WhisperFfi.instance.load();
@@ -88,12 +88,12 @@ class LocalTranscriptionServiceIO {
             'toWav', {'src': audioPath, 'dst': dst});
         if (r != null && File(r).existsSync()) wavPath = r;
       } catch (e) {
-        throw StateError('Не удалось декодировать аудио для расшифровки: $e');
+        throw StateError(AppL10n.f('Не удалось декодировать аудио для расшифровки: {0}', [e]));
       }
     }
     final text =
         await WhisperFfi.instance.transcribeAsync(wavPath, language: language);
-    if (text.trim().isEmpty) throw StateError('Речь не распознана');
+    if (text.trim().isEmpty) throw StateError(AppL10n.t('Речь не распознана'));
     return text.trim();
   }
 

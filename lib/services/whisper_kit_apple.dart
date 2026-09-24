@@ -1,4 +1,5 @@
 import 'package:flutter_whisper_kit/flutter_whisper_kit.dart';
+import '../l10n/app_l10n.dart';
 
 /// Тонкая обёртка над WhisperKit (Apple Neural Engine) — on-device STT для
 /// iOS/macOS. Изолирует зависимость `flutter_whisper_kit`; вызывается только
@@ -29,7 +30,7 @@ class WhisperKitApple {
     if (_loaded && _loadedVariant == variant) return;
     final loaded = await _whisper.loadModel(variant);
     if (loaded == null || loaded.isEmpty) {
-      throw StateError('WhisperKit: не удалось загрузить модель ($variant)');
+      throw StateError(AppL10n.f('WhisperKit: не удалось загрузить модель ({0})', [variant]));
     }
     _loaded = true;
     _loadedVariant = variant;
@@ -59,7 +60,7 @@ class WhisperKitApple {
     });
     final result = await _whisper.transcribeFromFile(audioPath, options: decode);
     final text = (result?.text ?? '').trim();
-    if (text.isEmpty) throw StateError('Речь не распознана');
+    if (text.isEmpty) throw StateError(AppL10n.t('Речь не распознана'));
     return text;
   }
 }

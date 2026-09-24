@@ -26,8 +26,8 @@ Future<void> showTranslateResult(BuildContext context, String text) async {
   if (translated == null) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(const SnackBar(
-          content: Text('Не удалось перевести. Проверьте соединение.')));
+      ..showSnackBar(SnackBar(
+          content: Text(AppL10n.t('Не удалось перевести. Проверьте соединение.'))));
     return;
   }
 
@@ -47,7 +47,7 @@ Future<void> showTranslateResult(BuildContext context, String text) async {
               Row(children: [
                 Icon(Icons.translate, size: 20, color: cs.primary),
                 const SizedBox(width: 8),
-                Text('Перевод',
+                Text(AppL10n.t('Перевод'),
                     style: Theme.of(ctx)
                         .textTheme
                         .titleMedium
@@ -72,7 +72,7 @@ Future<void> showTranslateResult(BuildContext context, String text) async {
                       Navigator.pop(ctx);
                     },
                     icon: const Icon(Icons.copy, size: 18),
-                    label: const Text('Копировать'),
+                    label: Text(AppL10n.t('Копировать')),
                   ),
                 ],
               ),

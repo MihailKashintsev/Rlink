@@ -14,16 +14,16 @@ class ChatInboxFiltersManageScreen extends StatelessWidget {
     final inbox = ChatInboxService.instance;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Фильтры чатов'),
+        title: Text(AppL10n.t('Фильтры чатов')),
         actions: [
           TextButton(
             onPressed: () async {
               final ok = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: const Text('Сбросить фильтры?'),
-                  content: const Text(
-                    'Вернётся набор «Все», «Чаты», «Каналы», «Группы».',
+                  title: Text(AppL10n.t('Сбросить фильтры?')),
+                  content: Text(
+                    AppL10n.t('Вернётся набор «Все», «Чаты», «Каналы», «Группы».'),
                   ),
                   actions: [
                     TextButton(
@@ -39,7 +39,7 @@ class ChatInboxFiltersManageScreen extends StatelessWidget {
               );
               if (ok == true) await inbox.resetDefaultTabs();
             },
-            child: const Text('Сброс'),
+            child: Text(AppL10n.t('Сброс')),
           ),
         ],
       ),
@@ -52,8 +52,7 @@ class ChatInboxFiltersManageScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  'Удерживайте и перетащите, чтобы изменить порядок вкладок на главном экране. '
-                  'Свайп влево или кнопка удаляет вкладку.',
+                  AppL10n.t('Удерживайте и перетащите, чтобы изменить порядок вкладок на главном экране. Свайп влево или кнопка удаляет вкладку.'),
                   style: TextStyle(
                     fontSize: 13,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -74,10 +73,10 @@ class ChatInboxFiltersManageScreen extends StatelessWidget {
                       title: Text(label),
                       subtitle: t.preset == null
                           ? Text(
-                              '${t.customMemberKeys.length} чатов',
+                              AppL10n.f('{0} чатов', [t.customMemberKeys.length]),
                               style: const TextStyle(fontSize: 12),
                             )
-                          : const Text('Встроенный фильтр',
+                          : Text(AppL10n.t('Встроенный фильтр'),
                               style: TextStyle(fontSize: 12)),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline),
@@ -85,7 +84,7 @@ class ChatInboxFiltersManageScreen extends StatelessWidget {
                           final ok = await showDialog<bool>(
                             context: context,
                             builder: (ctx) => AlertDialog(
-                              title: const Text('Удалить вкладку?'),
+                              title: Text(AppL10n.t('Удалить вкладку?')),
                               content: Text('«$label»'),
                               actions: [
                                 TextButton(
@@ -118,7 +117,7 @@ class ChatInboxFiltersManageScreen extends StatelessWidget {
           );
         },
         icon: const Icon(Icons.add),
-        label: const Text('Своя группа'),
+        label: Text(AppL10n.t('Своя группа')),
       ),
     );
   }

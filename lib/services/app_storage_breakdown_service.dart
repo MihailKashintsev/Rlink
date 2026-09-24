@@ -12,6 +12,7 @@ import 'group_service.dart';
 import 'image_service.dart';
 import 'runtime_platform.dart';
 import 'story_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// Один сегмент круговой диаграммы «Данные».
 class AppStorageSegment {
@@ -176,51 +177,51 @@ Future<AppStorageBreakdown> scanAppStorageBreakdown() async {
   final segments = <AppStorageSegment>[
     AppStorageSegment(
       id: 'databases',
-      title: 'Базы SQLite',
+      title: AppL10n.t('Базы SQLite'),
       subtitle:
-          'Личные чаты, группы, каналы, очередь загрузок, outbox — ${_fmtMb(databasesTotal)}',
+          AppL10n.f('Личные чаты, группы, каналы, очередь загрузок, outbox — {0}', [_fmtMb(databasesTotal)]),
       bytes: databasesTotal,
       argbColor: cDb,
     ),
     AppStorageSegment(
       id: 'images',
-      title: 'Изображения',
-      subtitle: 'ЛС, группы, каналы — ${_fmtMb(imagesTotal)}',
+      title: AppL10n.t('Изображения'),
+      subtitle: AppL10n.f('ЛС, группы, каналы — {0}', [_fmtMb(imagesTotal)]),
       bytes: imagesTotal,
       argbColor: cImg,
     ),
     AppStorageSegment(
       id: 'video',
-      title: 'Видео',
-      subtitle: 'ЛС, группы, каналы — ${_fmtMb(videoTotal)}',
+      title: AppL10n.t('Видео'),
+      subtitle: AppL10n.f('ЛС, группы, каналы — {0}', [_fmtMb(videoTotal)]),
       bytes: videoTotal,
       argbColor: cVid,
     ),
     AppStorageSegment(
       id: 'voice',
-      title: 'Аудио / голос',
-      subtitle: 'ЛС, группы, каналы — ${_fmtMb(voiceTotal)}',
+      title: AppL10n.t('Аудио / голос'),
+      subtitle: AppL10n.f('ЛС, группы, каналы — {0}', [_fmtMb(voiceTotal)]),
       bytes: voiceTotal,
       argbColor: cVoice,
     ),
     AppStorageSegment(
       id: 'files',
-      title: 'Файлы',
-      subtitle: 'Вложения в ЛС и каналах — ${_fmtMb(filesTotal)}',
+      title: AppL10n.t('Файлы'),
+      subtitle: AppL10n.f('Вложения в ЛС и каналах — {0}', [_fmtMb(filesTotal)]),
       bytes: filesTotal,
       argbColor: cFile,
     ),
     AppStorageSegment(
       id: 'stories',
-      title: 'Истории',
-      subtitle: 'JSON и медиа — ${_fmtMb(storiesTotal)}',
+      title: AppL10n.t('Истории'),
+      subtitle: AppL10n.f('JSON и медиа — {0}', [_fmtMb(storiesTotal)]),
       bytes: storiesTotal,
       argbColor: cStory,
     ),
     AppStorageSegment(
       id: 'other',
-      title: 'Прочее',
-      subtitle: 'Аватары, фоны, кэш в папке приложения — ${_fmtMb(otherTotal)}',
+      title: AppL10n.t('Прочее'),
+      subtitle: AppL10n.f('Аватары, фоны, кэш в папке приложения — {0}', [_fmtMb(otherTotal)]),
       bytes: otherTotal,
       argbColor: cOther,
     ),
@@ -232,10 +233,10 @@ Future<AppStorageBreakdown> scanAppStorageBreakdown() async {
 }
 
 String _fmtMb(int bytes) {
-  if (bytes <= 0) return '0 МБ';
+  if (bytes <= 0) return AppL10n.t('0 МБ');
   final mb = bytes / (1024 * 1024);
-  if (mb < 0.01) return '${(bytes / 1024).toStringAsFixed(1)} КБ';
-  return '${mb.toStringAsFixed(2)} МБ';
+  if (mb < 0.01) return AppL10n.f('{0} КБ', [(bytes / 1024).toStringAsFixed(1)]);
+  return AppL10n.f('{0} МБ', [mb.toStringAsFixed(2)]);
 }
 
 /// Очистка по идентификатору сегмента (см. [AppStorageSegment.id]).
@@ -248,28 +249,28 @@ Future<void> clearStorageSegment(
       await ChatStorageService.instance.clearAllMessageMediaColumn('image_path');
       await GroupService.instance.clearAllGroupMessagesMediaColumn('image_path');
       await ChannelService.instance.clearAllChannelMediaColumn('image_path');
-      onMessage('Изображения удалены из базы и с диска');
+      onMessage(AppL10n.t('Изображения удалены из базы и с диска'));
       return;
     case 'video':
       await ChatStorageService.instance.clearAllMessageMediaColumn('video_path');
       await GroupService.instance.clearAllGroupMessagesMediaColumn('video_path');
       await ChannelService.instance.clearAllChannelMediaColumn('video_path');
-      onMessage('Видео удалены');
+      onMessage(AppL10n.t('Видео удалены'));
       return;
     case 'voice':
       await ChatStorageService.instance.clearAllMessageMediaColumn('voice_path');
       await GroupService.instance.clearAllGroupMessagesMediaColumn('voice_path');
       await ChannelService.instance.clearAllChannelMediaColumn('voice_path');
-      onMessage('Аудио удалены');
+      onMessage(AppL10n.t('Аудио удалены'));
       return;
     case 'files':
       await ChatStorageService.instance.clearAllMessageMediaColumn('file_path');
       await ChannelService.instance.clearAllChannelMediaColumn('file_path');
-      onMessage('Файлы-вложения удалены');
+      onMessage(AppL10n.t('Файлы-вложения удалены'));
       return;
     case 'stories':
       await StoryService.instance.reset();
-      onMessage('Истории очищены');
+      onMessage(AppL10n.t('Истории очищены'));
       return;
     case 'databases':
       throw UnsupportedError('databases');

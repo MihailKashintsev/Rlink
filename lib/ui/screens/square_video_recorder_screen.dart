@@ -102,7 +102,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
       _cameras = logicalCamerasForSquareVideo(raw);
       if (_cameras.isEmpty) {
         setState(() {
-          _initError = 'Камера недоступна';
+          _initError = AppL10n.t('Камера недоступна');
           _isInitializing = false;
         });
         return;
@@ -115,7 +115,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _initError = 'Ошибка камеры: $e';
+          _initError = AppL10n.f('Ошибка камеры: {0}', [e]);
           _isInitializing = false;
         });
       }
@@ -211,7 +211,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
       debugPrint('[SquareVideo] switchCamera while recording: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось сменить камеру: $e')),
+          SnackBar(content: Text(AppL10n.f('Не удалось сменить камеру: {0}', [e]))),
         );
       }
       _recordingTimer?.cancel();
@@ -256,7 +256,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
       if (mounted) {
         setState(() => _isRecording = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось начать запись: $e')),
+          SnackBar(content: Text(AppL10n.f('Не удалось начать запись: {0}', [e]))),
         );
       }
     }
@@ -286,7 +286,7 @@ class _VideoOverlayState extends State<_VideoOverlay>
       debugPrint('[SquareVideo] pause toggle: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Пауза записи недоступна: $e')),
+          SnackBar(content: Text(AppL10n.f('Пауза записи недоступна: {0}', [e]))),
         );
       }
     }
@@ -533,9 +533,9 @@ class _VideoOverlayState extends State<_VideoOverlay>
           child: Text(
             _isRecording
                 ? (_recordingPaused
-                    ? 'Пауза · смотрите запись · ▶ продолжить'
-                    : 'Нажмите для остановки · ⏸ пауза')
-                : 'Нажмите для записи',
+                    ? AppL10n.t('Пауза · смотрите запись · ▶ продолжить')
+                    : AppL10n.t('Нажмите для остановки · ⏸ пауза'))
+                : AppL10n.t('Нажмите для записи'),
             key: ValueKey('$_isRecording-$_recordingPaused'),
             style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
             textAlign: TextAlign.center,

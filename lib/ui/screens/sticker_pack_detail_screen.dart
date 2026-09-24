@@ -66,8 +66,8 @@ class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(AppL10n.t('cm_delete_pack_q')),
-        content: const Text(
-          'Стикеры останутся в общей коллекции, удалится только группировка.',
+        content: Text(
+          AppL10n.t('Стикеры останутся в общей коллекции, удалится только группировка.'),
         ),
         actions: [
           TextButton(
@@ -100,7 +100,7 @@ class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
     if (pack == null) {
       return Scaffold(
         appBar: AppBar(title: Text(AppL10n.t('cm_pack'))),
-        body: const Center(child: Text('Набор не найден')),
+        body: Center(child: Text(AppL10n.t('Набор не найден'))),
       );
     }
     return Scaffold(
@@ -109,7 +109,7 @@ class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.share_outlined),
-            tooltip: 'Поделиться паком',
+            tooltip: AppL10n.t('Поделиться паком'),
             onPressed: () => unawaited(_sharePack(context, pack)),
           ),
           IconButton(
@@ -137,14 +137,14 @@ class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Text(
-                'Источник: ${pack.sourcePeerLabel ?? pack.sourcePeerId ?? ''}',
+                AppL10n.f('Источник: {0}', [pack.sourcePeerLabel ?? pack.sourcePeerId ?? '']),
                 style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
               ),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Text(
-              '${_files.length} стикеров',
+              AppL10n.f('{0} стикеров', [_files.length]),
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: cs.primary,

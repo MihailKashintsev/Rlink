@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../models/bot_blueprint.dart';
 import '../../services/bot_blueprint_store.dart';
 import 'bot_builder_export_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 /// No-code конструктор бота: правила «триггер → ответ» без единой строки кода.
 /// На выходе — готовый Python-файл (см. [BotBuilderExportScreen]).
@@ -74,11 +75,11 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
   Future<void> _generate() async {
     _syncFromControllers();
     if (_bp.name.trim().isEmpty) {
-      _toast('Дайте боту имя.');
+      _toast(AppL10n.t('Дайте боту имя.'));
       return;
     }
     if (!_bp.handleValid) {
-      _toast('Ник: 2–32 символа (a-z, 0-9, _).');
+      _toast(AppL10n.t('Ник: 2–32 символа (a-z, 0-9, _).'));
       return;
     }
     await _save();
@@ -112,14 +113,14 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.existing == null ? 'Новый бот' : 'Бот'),
+        title: Text(widget.existing == null ? AppL10n.t('Новый бот') : AppL10n.t('Бот')),
         actions: [
           IconButton(
-            tooltip: 'Сохранить черновик',
+            tooltip: AppL10n.t('Сохранить черновик'),
             icon: const Icon(Icons.save_outlined),
             onPressed: () async {
               await _save();
-              if (mounted) _toast('Черновик сохранён');
+              if (mounted) _toast(AppL10n.t('Черновик сохранён'));
             },
           ),
         ],
@@ -127,29 +128,29 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
-          _sectionTitle('Профиль'),
+          _sectionTitle(AppL10n.t('Профиль')),
           _profileCard(),
           const SizedBox(height: 20),
-          _sectionTitle('Приветствие'),
-          _hint('Ответ на /start, /menu и на первое сообщение.'),
+          _sectionTitle(AppL10n.t('Приветствие')),
+          _hint(AppL10n.t('Ответ на /start, /menu и на первое сообщение.')),
           const SizedBox(height: 8),
           TextField(
             controller: _welcomeCtrl,
             maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Привет! Я бот…',
+            decoration: InputDecoration(
+              hintText: AppL10n.t('Привет! Я бот…'),
               border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 10),
           _ButtonsEditor(
-            title: 'Кнопки приветствия',
+            title: AppL10n.t('Кнопки приветствия'),
             buttons: _bp.welcomeButtons,
             onChanged: () => setState(() {}),
           ),
           const SizedBox(height: 20),
-          _sectionTitle('Правила'),
-          _hint('Срабатывает первое подходящее правило сверху вниз.'),
+          _sectionTitle(AppL10n.t('Правила')),
+          _hint(AppL10n.t('Срабатывает первое подходящее правило сверху вниз.')),
           const SizedBox(height: 8),
           ..._bp.rules.asMap().entries.map((e) => _ruleCard(e.key, e.value)),
           const SizedBox(height: 4),
@@ -160,34 +161,34 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
                   reply: '',
                 ))),
             icon: const Icon(Icons.add),
-            label: const Text('Добавить правило'),
+            label: Text(AppL10n.t('Добавить правило')),
           ),
           const SizedBox(height: 20),
-          _sectionTitle('Если ничего не совпало'),
+          _sectionTitle(AppL10n.t('Если ничего не совпало')),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: _bp.echoOnUnmatched,
             onChanged: (v) => setState(() => _bp.echoOnUnmatched = v),
-            title: const Text('Эхо — повторять сообщение пользователя'),
+            title: Text(AppL10n.t('Эхо — повторять сообщение пользователя')),
           ),
           if (!_bp.echoOnUnmatched) ...[
             TextField(
               controller: _fallbackCtrl,
               maxLines: 2,
-              decoration: const InputDecoration(
-                hintText: 'Не понял. Напишите /help…',
+              decoration: InputDecoration(
+                hintText: AppL10n.t('Не понял. Напишите /help…'),
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 10),
             _ButtonsEditor(
-              title: 'Кнопки ответа',
+              title: AppL10n.t('Кнопки ответа'),
               buttons: _bp.fallbackButtons,
               onChanged: () => setState(() {}),
             ),
           ],
           const SizedBox(height: 20),
-          _sectionTitle('Предпросмотр'),
+          _sectionTitle(AppL10n.t('Предпросмотр')),
           _previewPanel(),
           const SizedBox(height: 24),
           FilledButton.icon(
@@ -196,7 +197,7 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
             ),
             onPressed: _generate,
             icon: const Icon(Icons.terminal),
-            label: const Text('Готово → получить код'),
+            label: Text(AppL10n.t('Готово → получить код')),
           ),
         ],
       ),
@@ -243,8 +244,8 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
                       TextField(
                         controller: _nameCtrl,
                         onChanged: (_) => setState(() {}),
-                        decoration: const InputDecoration(
-                          labelText: 'Имя бота',
+                        decoration: InputDecoration(
+                          labelText: AppL10n.t('Имя бота'),
                           isDense: true,
                           border: OutlineInputBorder(),
                         ),
@@ -258,7 +259,7 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
                         ],
                         onChanged: (_) => setState(() {}),
                         decoration: InputDecoration(
-                          labelText: '@ник',
+                          labelText: AppL10n.t('@ник'),
                           isDense: true,
                           prefixText: '@',
                           border: const OutlineInputBorder(),
@@ -266,7 +267,7 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
                               ? 'a-z, 0-9, _  (2–32)'
                               : (_bp.handleValid
                                   ? '@${_bp.sanitizedHandle}'
-                                  : 'слишком коротко'),
+                                  : AppL10n.t('слишком коротко')),
                         ),
                       ),
                     ],
@@ -277,8 +278,8 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
             const SizedBox(height: 10),
             TextField(
               controller: _descCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Описание (для каталога)',
+              decoration: InputDecoration(
+                labelText: AppL10n.t('Описание (для каталога)'),
                 isDense: true,
                 border: OutlineInputBorder(),
               ),
@@ -299,7 +300,7 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Эмодзи',
+              Text(AppL10n.t('Эмодзи'),
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               Wrap(
@@ -325,7 +326,7 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
                     .toList(),
               ),
               const SizedBox(height: 16),
-              const Text('Цвет',
+              Text(AppL10n.t('Цвет'),
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               Wrap(
@@ -359,7 +360,7 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Готово'),
+                  child: Text(AppL10n.t('Готово')),
                 ),
               ),
             ],
@@ -380,7 +381,7 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
           children: [
             Row(
               children: [
-                Text('Правило ${index + 1}',
+                Text(AppL10n.f('Правило {0}', [index + 1]),
                     style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: cs.onSurfaceVariant)),
@@ -435,15 +436,15 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
               initialValue: rule.reply,
               maxLines: 3,
               onChanged: (v) => rule.reply = v,
-              decoration: const InputDecoration(
-                labelText: 'Ответ',
+              decoration: InputDecoration(
+                labelText: AppL10n.t('Ответ'),
                 isDense: true,
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 8),
             _ButtonsEditor(
-              title: 'Кнопки',
+              title: AppL10n.t('Кнопки'),
               buttons: rule.buttons,
               onChanged: () => setState(() {}),
             ),
@@ -467,7 +468,7 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
           if (_preview.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text('Напишите сообщение — увидите ответ бота',
+              child: Text(AppL10n.t('Напишите сообщение — увидите ответ бота'),
                   style: TextStyle(color: cs.onSurfaceVariant)),
             )
           else
@@ -486,9 +487,9 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
                 child: TextField(
                   controller: _previewCtrl,
                   onSubmitted: (_) => _runPreview(),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     isDense: true,
-                    hintText: 'Тест-сообщение…',
+                    hintText: AppL10n.t('Тест-сообщение…'),
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -500,7 +501,7 @@ class _BotBuilderScreenState extends State<BotBuilderScreen> {
               ),
               if (_preview.isNotEmpty)
                 IconButton(
-                  tooltip: 'Очистить',
+                  tooltip: AppL10n.t('Очистить'),
                   onPressed: () => setState(_preview.clear),
                   icon: const Icon(Icons.clear_all),
                 ),
@@ -609,7 +610,7 @@ class _ButtonsEditor extends StatelessWidget {
                 onChanged();
               },
               icon: const Icon(Icons.add, size: 16),
-              label: const Text('Кнопка'),
+              label: Text(AppL10n.t('Кнопка')),
             ),
           ],
         ),
@@ -625,9 +626,9 @@ class _ButtonsEditor extends StatelessWidget {
                   child: TextFormField(
                     initialValue: b.label,
                     onChanged: (v) => b.label = v,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       isDense: true,
-                      hintText: 'Метка',
+                      hintText: AppL10n.t('Метка'),
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -638,9 +639,9 @@ class _ButtonsEditor extends StatelessWidget {
                   child: TextFormField(
                     initialValue: b.command,
                     onChanged: (v) => b.command = v,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       isDense: true,
-                      hintText: '/команда',
+                      hintText: AppL10n.t('/команда'),
                       border: OutlineInputBorder(),
                     ),
                   ),

@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/web_file_store.dart';
+import '../l10n/app_l10n.dart';
 
 /// Состояние аккаунта Google Drive для экрана настроек (квота из [about.get]).
 class GoogleDriveSyncStatus {
@@ -125,7 +126,7 @@ class GoogleDriveChannelBackup {
         }
       }
       if (token.isEmpty) {
-        _lastSignInError = 'Пустой код';
+        _lastSignInError = AppL10n.t('Пустой код');
         return false;
       }
       final expiry = DateTime.now()
@@ -149,7 +150,7 @@ class GoogleDriveChannelBackup {
       }
     } catch (e, st) {
       debugPrint('[RLINK][Drive] linkWithPastedToken failed: $e\n$st');
-      _lastSignInError = 'Код недействителен или истёк. Получите новый.';
+      _lastSignInError = AppL10n.t('Код недействителен или истёк. Получите новый.');
       return false;
     }
   }
@@ -238,12 +239,12 @@ class GoogleDriveChannelBackup {
   static Future<bool> finishRelayLink() async {
     final pairing = _pendingPairing;
     if (pairing == null || pairing.isEmpty) {
-      _lastSignInError = 'Сначала откройте вход';
+      _lastSignInError = AppL10n.t('Сначала откройте вход');
       return false;
     }
     final res = await _fetchRelayCreds(pairing);
     if (res == null) {
-      _lastSignInError = 'Вход ещё не подтверждён. Завершите его в браузере.';
+      _lastSignInError = AppL10n.t('Вход ещё не подтверждён. Завершите его в браузере.');
       return false;
     }
     final email = res.$2 ?? '';
@@ -575,14 +576,14 @@ class GoogleDriveChannelBackup {
       if (!hasValidManualCreds && !hasRelayAccount && accountPairing == null) {
         final account = await ensureUserSignedIn(interactive: true);
         if (account == null) {
-          _lastSignInError = 'Аккаунт Google не привязан';
+          _lastSignInError = AppL10n.t('Аккаунт Google не привязан');
           return false;
         }
       }
       final client = await _driveAuthClient(
           interactive: true, relayPairing: accountPairing);
       if (client == null) {
-        _lastSignInError = 'Нет доступа к Google Drive';
+        _lastSignInError = AppL10n.t('Нет доступа к Google Drive');
         return false;
       }
       try {
@@ -688,18 +689,16 @@ class GoogleDriveChannelBackup {
   /// Понятное пользователю сообщение вместо сырого PlatformException.
   static String _humanizeSignInError(Object e) {
     if (_isDeveloperError(e)) {
-      return 'Обычный вход через Google недоступен в этой сборке. '
-          'Используйте «Добавить аккаунт Google (постоянно)» — вход пройдёт '
-          'через сервер Rlink и не требует дополнительной настройки.';
+      return AppL10n.t('Обычный вход через Google недоступен в этой сборке. Используйте «Добавить аккаунт Google (постоянно)» — вход пройдёт через сервер Rlink и не требует дополнительной настройки.');
     }
     final s = e.toString();
     if (s.toLowerCase().contains('network')) {
-      return 'Нет соединения с Google. Проверьте интернет и повторите.';
+      return AppL10n.t('Нет соединения с Google. Проверьте интернет и повторите.');
     }
     if (s.contains('12501') || s.toLowerCase().contains('canceled')) {
-      return 'Вход отменён.';
+      return AppL10n.t('Вход отменён.');
     }
-    return 'Не удалось войти. Попробуйте «Добавить аккаунт Google (постоянно)».';
+    return AppL10n.t('Не удалось войти. Попробуйте «Добавить аккаунт Google (постоянно)».');
   }
 
   static Future<GoogleSignInAccount?> ensureUserSignedIn({
@@ -955,14 +954,14 @@ class GoogleDriveChannelBackup {
       if (!hasValidManualCreds && !hasRelayAccount && accountPairing == null) {
         final account = await ensureUserSignedIn(interactive: true);
         if (account == null) {
-          _lastSignInError = 'Аккаунт Google не привязан';
+          _lastSignInError = AppL10n.t('Аккаунт Google не привязан');
           return null;
         }
       }
       final client = await _driveAuthClient(
           interactive: true, relayPairing: accountPairing);
       if (client == null) {
-        _lastSignInError = 'Нет доступа к Google Drive';
+        _lastSignInError = AppL10n.t('Нет доступа к Google Drive');
         return null;
       }
       try {

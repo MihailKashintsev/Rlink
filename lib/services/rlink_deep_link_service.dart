@@ -18,6 +18,7 @@ import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
 import 'profile_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// Вход по ссылке `rlink://channel/...` (macOS / iOS / Android).
 class RlinkDeepLinkService {
@@ -95,7 +96,7 @@ class RlinkDeepLinkService {
             UserProfile.avatarEmojis[idx % UserProfile.avatarEmojis.length]);
     final nick = u.nickname.isNotEmpty
         ? u.nickname
-        : (existing?.nickname ?? 'Пользователь');
+        : (existing?.nickname ?? AppL10n.t('Пользователь'));
 
     final contact = (existing ??
             Contact(
@@ -149,14 +150,14 @@ class RlinkDeepLinkService {
     if (contact == null) {
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('Это ваш собственный QR-код.')),
+          SnackBar(content: Text(AppL10n.t('Это ваш собственный QR-код.'))),
         );
       }
       return;
     }
     if (!ctx.mounted) return;
     ScaffoldMessenger.of(ctx).showSnackBar(
-      SnackBar(content: Text('${contact.nickname} добавлен(а) в контакты')),
+      SnackBar(content: Text(AppL10n.f('{0} добавлен(а) в контакты', [contact.nickname]))),
     );
     await nav.push(rlinkChatRoute(ChatScreen(
       peerId: contact.publicKeyHex,
@@ -176,9 +177,9 @@ class RlinkDeepLinkService {
     if (row == null) {
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Канал не найден на устройстве. Нужно приглашение или синхронизация с подписчиками.',
+              AppL10n.t('Канал не найден на устройстве. Нужно приглашение или синхронизация с подписчиками.'),
             ),
           ),
         );
@@ -203,7 +204,7 @@ class RlinkDeepLinkService {
     if (bot == null) {
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('Бот не найден в этой версии Rlink.')),
+          SnackBar(content: Text(AppL10n.t('Бот не найден в этой версии Rlink.'))),
         );
       }
       return;

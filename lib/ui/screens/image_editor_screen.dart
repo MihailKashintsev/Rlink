@@ -198,7 +198,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.copy),
-            title: const Text('Копировать'),
+            title: Text(AppL10n.t('Копировать')),
             onTap: () async {
               Navigator.pop(context);
               await Clipboard.setData(ClipboardData(text: block.text));
@@ -206,7 +206,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.auto_fix_off_outlined),
-            title: const Text('Стереть'),
+            title: Text(AppL10n.t('Стереть')),
             onTap: () {
               Navigator.pop(context);
               setState(() => _ocrEraseRects.add(block.boundingBox));
@@ -362,13 +362,13 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Добавить текст'),
+        title: Text(AppL10n.t('Добавить текст')),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(
             controller: ctrl,
             autofocus: true,
             textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(hintText: 'Введите текст...'),
+            decoration: InputDecoration(hintText: AppL10n.t('Введите текст...')),
           ),
           const SizedBox(height: 12),
           StatefulBuilder(
@@ -542,7 +542,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                             final result = await showDialog<String>(
                               context: context,
                               builder: (ctx) => AlertDialog(
-                                title: const Text('Изменить текст'),
+                                title: Text(AppL10n.t('Изменить текст')),
                                 content: TextField(controller: ctrl, autofocus: true),
                                 actions: [
                                   TextButton(
@@ -669,14 +669,14 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         );
       case _Mode.ocr:
         if (_ocrRunning) {
-          return const SizedBox(
+          return SizedBox(
             height: 44,
             child: Center(
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               SizedBox(width: 16, height: 16,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
               SizedBox(width: 10),
-              Text('Распознавание текста…',
+              Text(AppL10n.t('Распознавание текста…'),
                   style: TextStyle(color: Colors.white70, fontSize: 13)),
             ])),
           );
@@ -686,8 +686,8 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           child: Center(
             child: Text(
               _ocrBlocks.isEmpty
-                  ? 'Текст не найден'
-                  : 'Нажмите на блок текста — Копировать / Стереть',
+                  ? AppL10n.t('Текст не найден')
+                  : AppL10n.t('Нажмите на блок текста — Копировать / Стереть'),
               style: const TextStyle(color: Colors.white60, fontSize: 12),
             ),
           ),
@@ -701,11 +701,11 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       IconData,
       String
     )>[
-      (_Mode.draw, Icons.brush, 'Рисунок'),
-      (_Mode.text, Icons.title, 'Текст'),
-      (_Mode.blur, Icons.blur_on, 'Блюр'),
-      (_Mode.rotate, Icons.rotate_90_degrees_ccw, 'Поворот'),
-      (_Mode.crop, Icons.crop, 'Кадр'),
+      (_Mode.draw, Icons.brush, AppL10n.t('Рисунок')),
+      (_Mode.text, Icons.title, AppL10n.t('Текст')),
+      (_Mode.blur, Icons.blur_on, AppL10n.t('Блюр')),
+      (_Mode.rotate, Icons.rotate_90_degrees_ccw, AppL10n.t('Поворот')),
+      (_Mode.crop, Icons.crop, AppL10n.t('Кадр')),
       if (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
         (_Mode.ocr, Icons.document_scanner_outlined, 'OCR'),
     ];
@@ -985,18 +985,18 @@ class _BlurToolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(children: [
-            seg(Icons.brush, 'Кисть', !rectMode, () => onRectMode(false)),
-            seg(Icons.crop_square, 'Область', rectMode, () => onRectMode(true)),
+            seg(Icons.brush, AppL10n.t('Кисть'), !rectMode, () => onRectMode(false)),
+            seg(Icons.crop_square, AppL10n.t('Область'), rectMode, () => onRectMode(true)),
           ]),
           Row(children: [
-            const Text('Сила',
+            Text(AppL10n.t('Сила'),
                 style: TextStyle(color: Colors.white70, fontSize: 12)),
             Expanded(
               child: Slider(
                   value: sigma, min: 4, max: 28, onChanged: onSigmaChange),
             ),
             if (!rectMode) ...[
-              const Text('Кисть',
+              Text(AppL10n.t('Кисть'),
                   style: TextStyle(color: Colors.white70, fontSize: 12)),
               Expanded(
                 child: Slider(
@@ -1004,9 +1004,9 @@ class _BlurToolbar extends StatelessWidget {
               ),
             ],
           ]),
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(bottom: 6),
-            child: Text('Проведите по тому, что нужно скрыть',
+            child: Text(AppL10n.t('Проведите по тому, что нужно скрыть'),
                 style: TextStyle(color: Colors.white38, fontSize: 11)),
           ),
         ],
@@ -1094,8 +1094,8 @@ class _TextHint extends StatelessWidget {
       height: 78,
       color: Colors.black,
       alignment: Alignment.center,
-      child: const Text(
-        'Нажми на фото, чтобы добавить текст\nДважды нажми на текст, чтобы изменить',
+      child: Text(
+        AppL10n.t('Нажми на фото, чтобы добавить текст\nДважды нажми на текст, чтобы изменить'),
         textAlign: TextAlign.center,
         style: TextStyle(color: Colors.white54, fontSize: 13),
       ),
@@ -1117,9 +1117,9 @@ class _RotateToolbar extends StatelessWidget {
       height: 78,
       color: Colors.black,
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-        _Btn(Icons.rotate_left, '90° влево', onLeft),
-        _Btn(Icons.rotate_right, '90° вправо', onRight),
-        _Btn(Icons.flip, 'Зеркало', onFlip),
+        _Btn(Icons.rotate_left, AppL10n.t('90° влево'), onLeft),
+        _Btn(Icons.rotate_right, AppL10n.t('90° вправо'), onRight),
+        _Btn(Icons.flip, AppL10n.t('Зеркало'), onFlip),
       ]),
     );
   }
@@ -1172,7 +1172,7 @@ class _CropToolbar extends StatelessWidget {
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
           _Btn(Icons.crop_square, '1:1', onSquare),
           _Btn(Icons.crop_landscape, '16:9', onWide),
-          _Btn(Icons.crop_free, 'Сбросить', onReset),
+          _Btn(Icons.crop_free, AppL10n.t('Сбросить'), onReset),
           Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Text(
               '${(crop.width * 100).round()}×${(crop.height * 100).round()}%',

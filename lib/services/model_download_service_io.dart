@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'whisper_model.dart';
+import '../l10n/app_l10n.dart';
 
 /// Скачивание и хранение ggml-моделей Whisper (native-платформы).
 ///
@@ -80,7 +81,7 @@ class ModelDownloadService {
       final len = await tmpFile.length();
       if (len < 1024 * 1024) {
         if (tmpFile.existsSync()) await tmpFile.delete();
-        throw StateError('Загрузка повреждена ($len Б)');
+        throw StateError(AppL10n.f('Загрузка повреждена ({0} Б)', [len]));
       }
       await tmpFile.rename(path);
       progress.value = 1.0;
@@ -89,7 +90,7 @@ class ModelDownloadService {
       try {
         if (tmpFile.existsSync()) await tmpFile.delete();
       } catch (_) {}
-      throw StateError('Не удалось скачать модель: ${e.message ?? e.type.name}');
+      throw StateError(AppL10n.f('Не удалось скачать модель: {0}', [e.message ?? e.type.name]));
     } finally {
       downloading.value = null;
       progress.value = null;

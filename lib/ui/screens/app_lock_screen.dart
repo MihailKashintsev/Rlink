@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../services/app_lock_service.dart';
 import '../widgets/security_visuals.dart';
+import '../../l10n/app_l10n.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Overlay wrapper
@@ -155,7 +156,7 @@ class _Pin4LockScreenState extends State<_Pin4LockScreen>
               children: [
                 LockGlyph(size: 48, color: cs.primary),
                 const SizedBox(height: 16),
-                Text('Rlink заблокирован',
+                Text(AppL10n.t('Rlink заблокирован'),
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 6),
                 AnimatedDefaultTextStyle(
@@ -164,7 +165,7 @@ class _Pin4LockScreenState extends State<_Pin4LockScreen>
                     color: isError ? cs.error : cs.onSurfaceVariant,
                     fontSize: 14,
                   ),
-                  child: Text(isError ? 'Неверный PIN' : 'Введите PIN-код'),
+                  child: Text(isError ? AppL10n.t('Неверный PIN') : AppL10n.t('Введите PIN-код')),
                 ),
                 const SizedBox(height: 32),
                 // 4 dots
@@ -348,7 +349,7 @@ class _PatternLockScreenState extends State<_PatternLockScreen>
       children: [
         LockGlyph(size: 46, color: _error ? cs.error : cs.primary),
         const SizedBox(height: 16),
-        Text('Rlink заблокирован',
+        Text(AppL10n.t('Rlink заблокирован'),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 6),
         AnimatedDefaultTextStyle(
@@ -358,8 +359,8 @@ class _PatternLockScreenState extends State<_PatternLockScreen>
             fontSize: 14,
           ),
           child: Text(_error
-              ? 'Неверный графический ключ'
-              : 'Нарисуйте графический ключ'),
+              ? AppL10n.t('Неверный графический ключ')
+              : AppL10n.t('Нарисуйте графический ключ')),
         ),
         const SizedBox(height: 36),
         AnimatedBuilder(
@@ -605,7 +606,7 @@ class _TextLockScreenState extends State<_TextLockScreen>
         children: [
           LockGlyph(size: 46, color: _error ? cs.error : cs.primary),
           const SizedBox(height: 16),
-          Text('Rlink заблокирован',
+          Text(AppL10n.t('Rlink заблокирован'),
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
           AnimatedDefaultTextStyle(
@@ -614,7 +615,7 @@ class _TextLockScreenState extends State<_TextLockScreen>
               color: _error ? cs.error : cs.onSurfaceVariant,
               fontSize: 14,
             ),
-            child: Text(_error ? 'Неверный пароль' : 'Введите пароль'),
+            child: Text(_error ? AppL10n.t('Неверный пароль') : AppL10n.t('Введите пароль')),
           ),
           const SizedBox(height: 32),
           AnimatedBuilder(
@@ -637,7 +638,7 @@ class _TextLockScreenState extends State<_TextLockScreen>
                 if (_error) setState(() => _error = false);
               },
               decoration: InputDecoration(
-                hintText: 'Пароль',
+                hintText: AppL10n.t('Пароль'),
                 filled: true,
                 fillColor: cs.surfaceContainerHigh,
                 border: OutlineInputBorder(
@@ -664,7 +665,7 @@ class _TextLockScreenState extends State<_TextLockScreen>
             width: double.infinity,
             child: FilledButton(
               onPressed: (_busy || _success) ? null : _submit,
-              child: const Text('Войти'),
+              child: Text(AppL10n.t('Войти')),
             ),
           ),
         ],

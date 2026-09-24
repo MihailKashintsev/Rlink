@@ -21,6 +21,7 @@ import 'group_service.dart';
 import 'image_service.dart';
 import 'profile_service.dart';
 import 'relay_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// Reassembly buffer for a chunked avatar/banner during a link snapshot.
 class _MediaAsm {
@@ -373,7 +374,7 @@ class DeviceLinkSyncService {
         _progressTotal = (data['total'] as num?)?.toInt() ?? 0;
         _progressDone = 0;
         _progressAvatars.clear();
-        _emitProgress('Перенос профиля…');
+        _emitProgress(AppL10n.t('Перенос профиля…'));
         return;
       case 'profile':
         await _applyProfile(data);
@@ -382,18 +383,18 @@ class DeviceLinkSyncService {
         final c = _decodeContact(data);
         if (c != null) {
           await ChatStorageService.instance.saveContact(c);
-          _bumpProgress('Контакты', emoji: c.avatarEmoji, color: c.avatarColor);
+          _bumpProgress(AppL10n.t('Контакты'), emoji: c.avatarEmoji, color: c.avatarColor);
         }
         return;
       case 'chan':
         await _applyChannel(data);
-        _bumpProgress('Каналы',
+        _bumpProgress(AppL10n.t('Каналы'),
             emoji: (data['em'] as String?) ?? '📢',
             color: (data['col'] as num?)?.toInt() ?? 0xFF42A5F5);
         return;
       case 'grp':
         await _applyGroup(data);
-        _bumpProgress('Группы',
+        _bumpProgress(AppL10n.t('Группы'),
             emoji: (data['em'] as String?) ?? '👥',
             color: (data['col'] as num?)?.toInt() ?? 0xFF5C6BC0);
         return;
@@ -413,7 +414,7 @@ class DeviceLinkSyncService {
         if (msg == null) return;
         _suppressLocalMirror(msg.id);
         await ChatStorageService.instance.saveMessage(msg);
-        _bumpProgress('Сообщения');
+        _bumpProgress(AppL10n.t('Сообщения'));
         return;
       case 'dm_status':
         final msgId = data['id'] as String?;
@@ -484,7 +485,7 @@ class DeviceLinkSyncService {
         tags: (data['tags'] as List?)?.map((e) => e.toString()).toList(),
         statusEmoji: data['statusEmoji'] as String?,
       );
-      _bumpProgress('Профиль');
+      _bumpProgress(AppL10n.t('Профиль'));
     } catch (e) {
       debugPrint('[RLINK][LinkSync] applyProfile failed: $e');
     }
@@ -767,7 +768,7 @@ class DeviceLinkSyncService {
     if (msg.videoPath != null) return '📹 Видео';
     if (msg.filePath != null || msg.fileName != null) {
       final name = (msg.fileName ?? '').trim();
-      return name.isEmpty ? '📎 Файл' : '📎 $name';
+      return name.isEmpty ? AppL10n.t('📎 Файл') : '📎 $name';
     }
     if (msg.imagePath != null) return '📷 Фото';
     return ' ';

@@ -13,6 +13,7 @@ import 'crypto_service.dart';
 import 'gossip_router.dart';
 import 'peer_key_directory.dart';
 import '../models/chat_message.dart';
+import '../l10n/app_l10n.dart';
 
 /// Status of an upload task.
 enum UploadStatus { pending, uploading, done, failed }
@@ -534,16 +535,16 @@ class MediaUploadQueue {
   }
 
   String _liveActivityLabel(UploadTask t) {
-    if (t.isVideo) return t.isSquare ? 'Видео' : 'Видео';
-    if (t.isVoice) return 'Голосовое';
+    if (t.isVideo) return t.isSquare ? AppL10n.t('Видео') : AppL10n.t('Видео');
+    if (t.isVoice) return AppL10n.t('Голосовое');
     if (t.isFile) {
       final n = t.fileName;
       if (n != null && n.isNotEmpty) {
         return n.length > 28 ? '${n.substring(0, 28)}…' : n;
       }
-      return 'Файл';
+      return AppL10n.t('Файл');
     }
-    return 'Фото';
+    return AppL10n.t('Фото');
   }
 
   Future<String?> _recipientX25519(String recipientKey) async {

@@ -26,7 +26,7 @@ class RidScreen extends StatelessWidget {
           const SizedBox(height: 8),
           _RidCard(rid: rid),
           const SizedBox(height: 24),
-          const _SectionLabel('Действия'),
+          _SectionLabel(AppL10n.t('Действия')),
           ListenableBuilder(
             listenable: AppSettings.instance,
             builder: (context, _) {
@@ -35,31 +35,31 @@ class RidScreen extends StatelessWidget {
                 return _ActionTile(
                   icon: Icons.link_off_rounded,
                   iconColor: Colors.red,
-                  title: 'Отвязать устройство',
-                  subtitle: 'Связка будет снята на обоих устройствах',
+                  title: AppL10n.t('Отвязать устройство'),
+                  subtitle: AppL10n.t('Связка будет снята на обоих устройствах'),
                   onTap: () => doUnlinkDevice(context),
                 );
               }
               return _ActionTile(
                 icon: Icons.link_rounded,
-                title: 'Привязать дочернее устройство',
-                subtitle: 'Выберите контакт и отправьте запрос на связку',
+                title: AppL10n.t('Привязать дочернее устройство'),
+                subtitle: AppL10n.t('Выберите контакт и отправьте запрос на связку'),
                 onTap: () => requestDeviceLink(context),
               );
             },
           ),
           _ActionTile(
             icon: Icons.swap_horiz_rounded,
-            title: 'Перенести аккаунт',
-            subtitle: 'Переехать на новое устройство или браузер',
+            title: AppL10n.t('Перенести аккаунт'),
+            subtitle: AppL10n.t('Переехать на новое устройство или браузер'),
             onTap: () => _showTransferInfo(context, rid),
           ),
           _ActionTile(
             icon: Icons.delete_forever_rounded,
             iconColor: Colors.red,
             titleColor: Colors.red,
-            title: 'Удалить RID с устройства',
-            subtitle: 'Без возможности сохранения — необратимо',
+            title: AppL10n.t('Удалить RID с устройства'),
+            subtitle: AppL10n.t('Без возможности сохранения — необратимо'),
             onTap: () => _confirmDelete(context),
           ),
         ],
@@ -79,14 +79,10 @@ class RidScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Перенос аккаунта', style: Theme.of(ctx).textTheme.titleLarge),
+              Text(AppL10n.t('Перенос аккаунта'), style: Theme.of(ctx).textTheme.titleLarge),
               const SizedBox(height: 12),
-              const Text(
-                '1. Откройте Rlink на новом устройстве или в браузере.\n'
-                '2. На экране регистрации нажмите «У меня уже есть аккаунт».\n'
-                '3. Введите RID, показанный ниже.\n'
-                '4. Здесь появится запрос на подтверждение — примите его, чтобы '
-                'начать перенос.',
+              Text(
+                AppL10n.t('1. Откройте Rlink на новом устройстве или в браузере.\n2. На экране регистрации нажмите «У меня уже есть аккаунт».\n3. Введите RID, показанный ниже.\n4. Здесь появится запрос на подтверждение — примите его, чтобы начать перенос.'),
               ),
               const SizedBox(height: 16),
               Container(
@@ -123,8 +119,7 @@ class RidScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  'После подтверждения это устройство будет очищено. Отменить '
-                  'перенос нельзя.',
+                  AppL10n.t('После подтверждения это устройство будет очищено. Отменить перенос нельзя.'),
                   style: TextStyle(fontSize: 12, color: Colors.red.shade300),
                 ),
               ),
@@ -139,22 +134,19 @@ class RidScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить RID?'),
-        content: const Text(
-          'С этого устройства будут удалены ключи, вся переписка и профиль. '
-          'Восстановить RID после этого нельзя — сохранить его для повторного '
-          'использования негде. Если вы хотите переехать на другое устройство, '
-          'используйте «Перенести аккаунт» вместо этого.',
+        title: Text(AppL10n.t('Удалить RID?')),
+        content: Text(
+          AppL10n.t('С этого устройства будут удалены ключи, вся переписка и профиль. Восстановить RID после этого нельзя — сохранить его для повторного использования негде. Если вы хотите переехать на другое устройство, используйте «Перенести аккаунт» вместо этого.'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+            child: Text(AppL10n.t('Отмена')),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+            child: Text(AppL10n.t('Удалить')),
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/chat_message.dart';
 import '../../services/app_settings.dart';
 import '../../services/chat_storage_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// "Message info" for a DM you sent: sent / delivered / read.
 /// Read comes from the other side's read cursor (see ChatStorageService
@@ -33,7 +34,7 @@ Future<void> showDmMessageInfo(BuildContext context, ChatMessage msg) {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text('Информация о сообщении',
+            child: Text(AppL10n.t('Информация о сообщении'),
                 style: Theme.of(context).textTheme.titleMedium),
           ),
           Padding(
@@ -45,31 +46,31 @@ Future<void> showDmMessageInfo(BuildContext context, ChatMessage msg) {
                 color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text(text.isEmpty ? '📎 Вложение' : text,
+              child: Text(text.isEmpty ? AppL10n.t('📎 Вложение') : text,
                   maxLines: 3, overflow: TextOverflow.ellipsis),
             ),
           ),
           row(
             Icons.check,
             cs.onSurfaceVariant,
-            'Отправлено',
+            AppL10n.t('Отправлено'),
             '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}, ${AppSettings.instance.formatTime(dt)}',
           ),
           row(
             Icons.done_all,
             delivered ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.5),
-            delivered ? 'Доставлено' : 'Пока не доставлено',
-            delivered ? 'Сообщение получено на устройстве' : 'Ждём подтверждения',
+            delivered ? AppL10n.t('Доставлено') : AppL10n.t('Пока не доставлено'),
+            delivered ? AppL10n.t('Сообщение получено на устройстве') : AppL10n.t('Ждём подтверждения'),
           ),
           row(
             Icons.done_all,
             read ? Colors.blue.shade400 : cs.onSurfaceVariant.withValues(alpha: 0.5),
-            read ? 'Прочитано' : 'Пока не прочитано',
+            read ? AppL10n.t('Прочитано') : AppL10n.t('Пока не прочитано'),
             read
-                ? 'Собеседник открыл чат'
+                ? AppL10n.t('Собеседник открыл чат')
                 : (myReceipts
-                    ? 'Покажется, когда собеседник прочитает (если у него включены отчёты)'
-                    : 'Вы отключили отчёты о прочтении — они не показываются'),
+                    ? AppL10n.t('Покажется, когда собеседник прочитает (если у него включены отчёты)')
+                    : AppL10n.t('Вы отключили отчёты о прочтении — они не показываются')),
           ),
           const SizedBox(height: 8),
         ],

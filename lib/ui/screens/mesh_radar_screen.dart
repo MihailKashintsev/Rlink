@@ -7,6 +7,7 @@ import '../../services/ble_service.dart';
 import '../../services/chat_storage_service.dart';
 import '../widgets/avatar_widget.dart';
 import 'chat_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Visual "who's nearby" view: direct BLE peers close to the center, known
 /// contacts reachable only through the mesh further out, positioned by
@@ -154,11 +155,11 @@ class _MeshRadarScreenState extends State<MeshRadarScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Радар mesh-сети'),
+        title: Text(AppL10n.t('Радар mesh-сети')),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Обновить',
+            tooltip: AppL10n.t('Обновить'),
             onPressed: _loadContacts,
           ),
         ],
@@ -202,7 +203,7 @@ class _MeshRadarScreenState extends State<MeshRadarScreen>
           if (peers.isEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 24),
-              child: Text('Никого не видно поблизости',
+              child: Text(AppL10n.t('Никого не видно поблизости'),
                   style: TextStyle(color: cs.onSurfaceVariant)),
             ),
           Padding(
@@ -211,10 +212,10 @@ class _MeshRadarScreenState extends State<MeshRadarScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _Legend(
-                    color: cs.primary, label: 'Напрямую по Bluetooth'),
+                    color: cs.primary, label: AppL10n.t('Напрямую по Bluetooth')),
                 const SizedBox(width: 20),
                 _Legend(
-                    color: cs.onSurfaceVariant, label: 'Через сеть (mesh)'),
+                    color: cs.onSurfaceVariant, label: AppL10n.t('Через сеть (mesh)')),
               ],
             ),
           ),
@@ -293,7 +294,7 @@ class _CenterDot extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          const Text('Я', style: TextStyle(fontSize: 10, color: Colors.white)),
+          Text(AppL10n.t('Я'), style: TextStyle(fontSize: 10, color: Colors.white)),
         ],
       );
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/shared_collab.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Совместный список дел в сообщении чата / группы.
 class SharedTodoMessageCard extends StatelessWidget {
@@ -44,7 +45,7 @@ class SharedTodoMessageCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  p.title.isEmpty ? 'Список дел' : p.title,
+                  p.title.isEmpty ? AppL10n.t('Список дел') : p.title,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,

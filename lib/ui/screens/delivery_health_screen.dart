@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/delivery_health_service.dart';
 import '../../services/relay_service.dart';
 import '../../services/runtime_platform.dart';
+import '../../l10n/app_l10n.dart';
 
 /// "Why didn't my message arrive" diagnostics + fixes: foreground-service
 /// status, battery-optimization exemption, OEM autostart deep link, and live
@@ -61,12 +62,12 @@ class _DeliveryHealthScreenState extends State<DeliveryHealthScreen>
   }
 
   String _formatAgo(int ms) {
-    if (ms <= 0) return 'ещё не запускался';
+    if (ms <= 0) return AppL10n.t('ещё не запускался');
     final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ms));
-    if (d.inMinutes < 1) return 'только что';
-    if (d.inHours < 1) return '${d.inMinutes} мин назад';
-    if (d.inDays < 1) return '${d.inHours} ч назад';
-    return '${d.inDays} дн назад';
+    if (d.inMinutes < 1) return AppL10n.t('только что');
+    if (d.inHours < 1) return AppL10n.f('{0} мин назад', [d.inMinutes]);
+    if (d.inDays < 1) return AppL10n.f('{0} ч назад', [d.inHours]);
+    return AppL10n.f('{0} дн назад', [d.inDays]);
   }
 
   @override
@@ -75,16 +76,13 @@ class _DeliveryHealthScreenState extends State<DeliveryHealthScreen>
 
     if (!RuntimePlatform.isAndroid) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Доставка сообщений')),
+        appBar: AppBar(title: Text(AppL10n.t('Доставка сообщений'))),
         body: Padding(
           padding: const EdgeInsets.all(20),
           child: Text(
             RuntimePlatform.isIos
-                ? 'На iOS фоновая доставка ограничена системой: сообщения, '
-                    'пришедшие пока приложение закрыто, вы увидите при следующем '
-                    'открытии Rlink. Это ограничение платформы, а не Rlink.'
-                : 'Приложение открыто в браузере/на этой платформе — фоновая '
-                    'доставка не требует отдельной настройки здесь.',
+                ? AppL10n.t('На iOS фоновая доставка ограничена системой: сообщения, пришедшие пока приложение закрыто, вы увидите при следующем открытии Rlink. Это ограничение платформы, а не Rlink.')
+                : AppL10n.t('Приложение открыто в браузере/на этой платформе — фоновая доставка не требует отдельной настройки здесь.'),
             style: TextStyle(color: cs.onSurfaceVariant, height: 1.4),
           ),
         ),
@@ -92,7 +90,7 @@ class _DeliveryHealthScreenState extends State<DeliveryHealthScreen>
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Доставка сообщений')),
+      appBar: AppBar(title: Text(AppL10n.t('Доставка сообщений'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -101,41 +99,39 @@ class _DeliveryHealthScreenState extends State<DeliveryHealthScreen>
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                 children: [
                   Text(
-                    'Почему сообщение могло не прийти, пока Rlink закрыт, и как это '
-                    'исправить.',
+                    AppL10n.t('Почему сообщение могло не прийти, пока Rlink закрыт, и как это исправить.'),
                     style: TextStyle(color: cs.onSurfaceVariant, height: 1.4),
                   ),
                   const SizedBox(height: 16),
                   _StatusTile(
                     icon: Icons.dns_outlined,
-                    title: 'Соединение с relay',
+                    title: AppL10n.t('Соединение с relay'),
                     valueBuilder: (context) => ValueListenableBuilder<RelayState>(
                       valueListenable: RelayService.instance.state,
                       builder: (context, state, _) => _StatusBadge(
                         ok: state == RelayState.connected,
                         text: state == RelayState.connected
-                            ? 'подключено'
-                            : 'нет соединения',
+                            ? AppL10n.t('подключено')
+                            : AppL10n.t('нет соединения'),
                       ),
                     ),
                   ),
                   _StatusTile(
                     icon: Icons.settings_backup_restore,
-                    title: 'Фоновая служба Rlink',
-                    subtitle: 'Последний запуск: ${_formatAgo(_fgLastStartedAtMs)}',
+                    title: AppL10n.t('Фоновая служба Rlink'),
+                    subtitle: AppL10n.f('Последний запуск: {0}', [_formatAgo(_fgLastStartedAtMs)]),
                     valueBuilder: (_) =>
-                        _StatusBadge(ok: _fgRunning, text: _fgRunning ? 'активна' : 'не активна'),
+                        _StatusBadge(ok: _fgRunning, text: _fgRunning ? AppL10n.t('активна') : AppL10n.t('не активна')),
                   ),
                   _StatusTile(
                     icon: Icons.battery_charging_full,
-                    title: 'Исключение из оптимизации батареи',
+                    title: AppL10n.t('Исключение из оптимизации батареи'),
                     subtitle: _batteryIgnored
                         ? null
-                        : 'Без этого система может останавливать приём сообщений, '
-                            'пока приложение закрыто',
+                        : AppL10n.t('Без этого система может останавливать приём сообщений, пока приложение закрыто'),
                     valueBuilder: (_) => _StatusBadge(
                       ok: _batteryIgnored,
-                      text: _batteryIgnored ? 'разрешено' : 'не разрешено',
+                      text: _batteryIgnored ? AppL10n.t('разрешено') : AppL10n.t('не разрешено'),
                     ),
                     trailing: _batteryIgnored
                         ? null
@@ -145,22 +141,18 @@ class _DeliveryHealthScreenState extends State<DeliveryHealthScreen>
                                   .requestIgnoreBatteryOptimizations();
                               await _refresh();
                             },
-                            child: const Text('Разрешить'),
+                            child: Text(AppL10n.t('Разрешить')),
                           ),
                   ),
                   const SizedBox(height: 8),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.rocket_launch_outlined, color: cs.primary),
-                    title: const Text('Автозапуск'),
+                    title: Text(AppL10n.t('Автозапуск')),
                     subtitle: Text(
                       _manufacturer.isEmpty
-                          ? 'На некоторых производителях (Xiaomi, Huawei, Oppo, Vivo…) '
-                              'нужно отдельно разрешить автозапуск — иначе система '
-                              'выгружает приложение из памяти.'
-                          : 'Производитель устройства: $_manufacturer. Если сообщения '
-                              'приходят с задержкой, проверьте автозапуск для Rlink в '
-                              'настройках устройства.',
+                          ? AppL10n.t('На некоторых производителях (Xiaomi, Huawei, Oppo, Vivo…) нужно отдельно разрешить автозапуск — иначе система выгружает приложение из памяти.')
+                          : AppL10n.f('Производитель устройства: {0}. Если сообщения приходят с задержкой, проверьте автозапуск для Rlink в настройках устройства.', [_manufacturer]),
                       style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, height: 1.4),
                     ),
                     trailing: const Icon(Icons.chevron_right),

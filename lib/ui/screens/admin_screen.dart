@@ -215,20 +215,20 @@ class _AdminScreenState extends State<AdminScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin Panel'),
+        title: Text('Admin Panel'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.lock_outline),
-            tooltip: 'Сменить пароль',
+            icon: Icon(Icons.lock_outline),
+            tooltip: AppL10n.t('Сменить пароль'),
             onPressed: _changePassword,
           ),
         ],
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [
-            Tab(icon: Icon(Icons.verified_outlined), text: 'Заявки'),
-            Tab(icon: Icon(Icons.tv_outlined), text: 'Каналы'),
-            Tab(icon: Icon(Icons.smart_toy_outlined), text: 'Боты'),
+          tabs: [
+            Tab(icon: Icon(Icons.verified_outlined), text: AppL10n.t('Заявки')),
+            Tab(icon: Icon(Icons.tv_outlined), text: AppL10n.t('Каналы')),
+            Tab(icon: Icon(Icons.smart_toy_outlined), text: AppL10n.t('Боты')),
             Tab(icon: Icon(Icons.workspace_premium_outlined), text: 'Premium'),
           ],
         ),
@@ -240,7 +240,7 @@ class _AdminScreenState extends State<AdminScreen>
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: 'Поиск...',
+                hintText: AppL10n.t('Поиск...'),
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _query.isEmpty
                     ? null
@@ -298,8 +298,8 @@ class _AdminScreenState extends State<AdminScreen>
                 const SizedBox(height: 16),
                 Text(
                   requests.isEmpty
-                      ? 'Нет запросов на верификацию'
-                      : 'Ничего не найдено',
+                      ? AppL10n.t('Нет запросов на верификацию')
+                      : AppL10n.t('Ничего не найдено'),
                   style: TextStyle(color: cs.onSurfaceVariant),
                 ),
               ],
@@ -345,7 +345,7 @@ class _AdminScreenState extends State<AdminScreen>
             if (filtered.isEmpty) {
               return Center(
                 child: Text(
-                  all.isEmpty ? 'Нет каналов' : 'Ничего не найдено',
+                  all.isEmpty ? AppL10n.t('Нет каналов') : AppL10n.t('Ничего не найдено'),
                   style: TextStyle(color: cs.onSurfaceVariant),
                 ),
               );
@@ -397,13 +397,13 @@ class _AdminScreenState extends State<AdminScreen>
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.orange),
               ),
-              child: const Row(
+              child: Row(
                 children: [
                   Icon(Icons.wifi_off, color: Colors.orange, size: 18),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Relay не подключён — управление ботами недоступно',
+                      AppL10n.t('Relay не подключён — управление ботами недоступно'),
                       style: TextStyle(color: Colors.orange, fontSize: 13),
                     ),
                   ),
@@ -434,9 +434,9 @@ class _AdminScreenState extends State<AdminScreen>
             ),
           ListTile(
             leading: const Icon(Icons.settings_ethernet_outlined),
-            title: const Text('Relay-боты (админ)'),
+            title: Text(AppL10n.t('Relay-боты (админ)')),
             subtitle:
-                const Text('Поиск по @нику, названию, botId или коду бота'),
+                Text(AppL10n.t('Поиск по @нику, названию, botId или коду бота')),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -449,7 +449,7 @@ class _AdminScreenState extends State<AdminScreen>
                   },
                 ),
                 IconButton(
-                  tooltip: 'Обновить',
+                  tooltip: AppL10n.t('Обновить'),
                   onPressed: _relayBotsLoading
                       ? null
                       : () => unawaited(_loadRelayBots()),
@@ -471,8 +471,8 @@ class _AdminScreenState extends State<AdminScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
                 _query.isNotEmpty
-                    ? 'Ничего не найдено по "$_query"'
-                    : 'Нет зарегистрированных ботов',
+                    ? AppL10n.f('Ничего не найдено по "{0}"', [_query])
+                    : AppL10n.t('Нет зарегистрированных ботов'),
                 style: TextStyle(color: cs.onSurfaceVariant),
               ),
             )
@@ -486,10 +486,10 @@ class _AdminScreenState extends State<AdminScreen>
                   onRevoke: () => _confirmAndRevokeRelayBot(b),
                 )),
           const Divider(height: 26),
-          const ListTile(
+          ListTile(
             leading: Icon(Icons.smart_toy_outlined),
-            title: Text('Встроенные боты приложения'),
-            subtitle: Text('Локальный переключатель Lib/GigaChat'),
+            title: Text(AppL10n.t('Встроенные боты приложения')),
+            subtitle: Text(AppL10n.t('Локальный переключатель Lib/GigaChat')),
           ),
           ...builtins.map((bot) {
             final isEnabled = enabled.contains(bot.id);
@@ -535,7 +535,7 @@ class _AdminScreenState extends State<AdminScreen>
     ));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${req.channelName} верифицирован')),
+        SnackBar(content: Text(AppL10n.f('{0} верифицирован', [req.channelName]))),
       );
     }
   }
@@ -544,7 +544,7 @@ class _AdminScreenState extends State<AdminScreen>
     await ChannelService.instance.removeVerificationRequest(req.channelId);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${req.channelName} отклонён')),
+        SnackBar(content: Text(AppL10n.f('{0} отклонён', [req.channelName]))),
       );
     }
   }
@@ -564,7 +564,7 @@ class _AdminScreenState extends State<AdminScreen>
       ));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${ch.name}: галочка снята')),
+          SnackBar(content: Text(AppL10n.f('{0}: галочка снята', [ch.name]))),
         );
       }
     } else {
@@ -582,7 +582,7 @@ class _AdminScreenState extends State<AdminScreen>
       ));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${ch.name}: верифицирован')),
+          SnackBar(content: Text(AppL10n.f('{0}: верифицирован', [ch.name]))),
         );
       }
     }
@@ -600,8 +600,8 @@ class _AdminScreenState extends State<AdminScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(newValue
-            ? '${ch.name}: помечен как ИНОАГЕНТ'
-            : '${ch.name}: метка ИНОАГЕНТ снята'),
+            ? AppL10n.f('{0}: помечен как ИНОАГЕНТ', [ch.name])
+            : AppL10n.f('{0}: метка ИНОАГЕНТ снята', [ch.name])),
       ));
     }
   }
@@ -618,8 +618,8 @@ class _AdminScreenState extends State<AdminScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(newValue
-            ? '${ch.name}: заблокирован'
-            : '${ch.name}: разблокирован'),
+            ? AppL10n.f('{0}: заблокирован', [ch.name])
+            : AppL10n.f('{0}: разблокирован', [ch.name])),
       ));
     }
   }
@@ -630,9 +630,7 @@ class _AdminScreenState extends State<AdminScreen>
       builder: (ctx) => AlertDialog(
         title: Text(AppL10n.t('cm_delete_channel_q')),
         content: Text(
-            'Канал "${ch.name}" будет удалён у всех по уникальному коду '
-            '${ch.universalCode.isNotEmpty ? ch.universalCode : ch.id.substring(0, 8)}… '
-            '(не по имени). Действие необратимо.'),
+            AppL10n.f('Канал "{0}" будет удалён у всех по уникальному коду {1}… (не по имени). Действие необратимо.', [ch.name, ch.universalCode.isNotEmpty ? ch.universalCode : ch.id.substring(0, 8)])),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -657,7 +655,7 @@ class _AdminScreenState extends State<AdminScreen>
     await ChannelService.instance.deleteChannel(ch.id);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${ch.name} удалён')),
+        SnackBar(content: Text(AppL10n.f('{0} удалён', [ch.name]))),
       );
     }
   }
@@ -691,22 +689,21 @@ class _AdminScreenState extends State<AdminScreen>
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 24),
         children: [
           Text(
-            'Выдача подписки вручную',
+            AppL10n.t('Выдача подписки вручную'),
             style: TextStyle(
                 fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface),
           ),
           const SizedBox(height: 2),
           Text(
-            'Полный ID пользователя (64 hex) — «Полный ID» в его профиле. '
-            'Дни добавляются к оставшемуся сроку.',
+            AppL10n.t('Полный ID пользователя (64 hex) — «Полный ID» в его профиле. Дни добавляются к оставшемуся сроку.'),
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _premiumIdCtrl,
             decoration: InputDecoration(
-              labelText: 'ID пользователя',
-              hintText: '64 символа 0-9a-f',
+              labelText: AppL10n.t('ID пользователя'),
+              hintText: AppL10n.t('64 символа 0-9a-f'),
               isDense: true,
               border:
                   OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -722,7 +719,7 @@ class _AdminScreenState extends State<AdminScreen>
                   controller: _premiumDaysCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: 'Дней',
+                    labelText: AppL10n.t('Дней'),
                     isDense: true,
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -733,14 +730,14 @@ class _AdminScreenState extends State<AdminScreen>
               FilledButton.icon(
                 onPressed: _premiumLoading ? null : _grantPremium,
                 icon: const Icon(Icons.add),
-                label: const Text('Выдать'),
+                label: Text(AppL10n.t('Выдать')),
               ),
               const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: _premiumLoading
                     ? null
                     : () => _revokePremium(_premiumIdCtrl.text),
-                child: const Text('Снять'),
+                child: Text(AppL10n.t('Снять')),
               ),
             ],
           ),
@@ -749,7 +746,7 @@ class _AdminScreenState extends State<AdminScreen>
             children: [
               for (final d in const [7, 30, 90, 365])
                 ActionChip(
-                  label: Text('$d дн.'),
+                  label: Text(AppL10n.f('{0} дн.', [d])),
                   onPressed: () =>
                       setState(() => _premiumDaysCtrl.text = '$d'),
                 ),
@@ -759,7 +756,7 @@ class _AdminScreenState extends State<AdminScreen>
           Row(
             children: [
               Expanded(
-                child: Text('Активные подписки (${_premiumSubs.length})',
+                child: Text(AppL10n.f('Активные подписки ({0})', [_premiumSubs.length]),
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w700)),
               ),
@@ -784,7 +781,7 @@ class _AdminScreenState extends State<AdminScreen>
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Center(
-                child: Text('Пока никого',
+                child: Text(AppL10n.t('Пока никого'),
                     style: TextStyle(color: cs.onSurfaceVariant)),
               ),
             ),
@@ -809,11 +806,11 @@ class _AdminScreenState extends State<AdminScreen>
       title: Text('${id.substring(0, id.length.clamp(0, 16))}…',
           style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
       subtitle: Text(
-        '${active ? 'до' : 'истекла'} '
+        '${active ? AppL10n.t('до') : AppL10n.t('истекла')} '
         '${until.day.toString().padLeft(2, '0')}.'
         '${until.month.toString().padLeft(2, '0')}.${until.year}'
-        '${active ? ' · $left дн.' : ''}'
-        '${s['source'] == 'admin' ? ' · выдана вручную' : ''}',
+        '${active ? AppL10n.f(' · {0} дн.', [left]) : ''}'
+        '${s['source'] == 'admin' ? AppL10n.t(' · выдана вручную') : ''}',
         style: const TextStyle(fontSize: 11),
       ),
       trailing: Row(
@@ -821,12 +818,12 @@ class _AdminScreenState extends State<AdminScreen>
         children: [
           IconButton(
             icon: const Icon(Icons.edit_outlined, size: 20),
-            tooltip: 'Подставить ID в форму',
+            tooltip: AppL10n.t('Подставить ID в форму'),
             onPressed: () => setState(() => _premiumIdCtrl.text = id),
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 20),
-            tooltip: 'Снять подписку',
+            tooltip: AppL10n.t('Снять подписку'),
             onPressed: _premiumLoading ? null : () => _revokePremium(id),
           ),
         ],
@@ -864,8 +861,8 @@ class _AdminScreenState extends State<AdminScreen>
     final id = _premiumIdCtrl.text.trim().toLowerCase();
     final days = int.tryParse(_premiumDaysCtrl.text.trim()) ?? 0;
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(id) || days <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Нужен полный ID (64 hex) и число дней больше нуля'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppL10n.t('Нужен полный ID (64 hex) и число дней больше нуля')),
       ));
       return;
     }
@@ -881,13 +878,13 @@ class _AdminScreenState extends State<AdminScreen>
     if (data['ok'] == true) {
       _premiumIdCtrl.clear();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Выдано $days дн.')),
+        SnackBar(content: Text(AppL10n.f('Выдано {0} дн.', [days]))),
       );
       await _loadPremiumSubs();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content:
-            Text(_translateBotError(data['error']?.toString() ?? 'ошибка')),
+            Text(_translateBotError(data['error']?.toString() ?? AppL10n.t('ошибка'))),
       ));
     }
   }
@@ -908,23 +905,23 @@ class _AdminScreenState extends State<AdminScreen>
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content:
-            Text(_translateBotError(data['error']?.toString() ?? 'ошибка')),
+            Text(_translateBotError(data['error']?.toString() ?? AppL10n.t('ошибка'))),
       ));
     }
   }
 
   String _translateBotError(String raw) {
     if (raw.contains('forbidden')) {
-      return 'Доступ запрещён: убедитесь, что RELAY_ADMIN_HASH настроен на сервере и пароль в приложении совпадает';
+      return AppL10n.t('Доступ запрещён: убедитесь, что RELAY_ADMIN_HASH настроен на сервере и пароль в приложении совпадает');
     }
-    if (raw.contains('offline')) return 'Нет подключения к relay';
-    if (raw.contains('timeout')) return 'Relay не ответил (timeout 20 с)';
-    if (raw.contains('bad_admin_hash')) return 'Неверный формат хэша пароля';
-    if (raw.contains('bad_bot_id')) return 'Неверный botId';
-    if (raw.contains('bad_user_id')) return 'Неверный ID пользователя (нужно 64 hex)';
-    if (raw.contains('bad_action')) return 'Неизвестное действие';
-    if (raw.contains('not_found')) return 'Бот не найден';
-    if (raw.contains('empty_patch')) return 'Нечего обновлять';
+    if (raw.contains('offline')) return AppL10n.t('Нет подключения к relay');
+    if (raw.contains('timeout')) return AppL10n.t('Relay не ответил (timeout 20 с)');
+    if (raw.contains('bad_admin_hash')) return AppL10n.t('Неверный формат хэша пароля');
+    if (raw.contains('bad_bot_id')) return AppL10n.t('Неверный botId');
+    if (raw.contains('bad_user_id')) return AppL10n.t('Неверный ID пользователя (нужно 64 hex)');
+    if (raw.contains('bad_action')) return AppL10n.t('Неизвестное действие');
+    if (raw.contains('not_found')) return AppL10n.t('Бот не найден');
+    if (raw.contains('empty_patch')) return AppL10n.t('Нечего обновлять');
     return raw;
   }
 
@@ -982,12 +979,12 @@ class _AdminScreenState extends State<AdminScreen>
       await _loadRelayBots();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Параметры бота обновлены')),
+        SnackBar(content: Text(AppL10n.t('Параметры бота обновлены'))),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
       );
     }
   }
@@ -996,10 +993,9 @@ class _AdminScreenState extends State<AdminScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить бота из relay?'),
+        title: Text(AppL10n.t('Удалить бота из relay?')),
         content: Text(
-          'Бот @${bot.handle} (${bot.botId.substring(0, 12)}...) будет отозван. '
-          'Доступы будут закрыты, владельцу придётся пересоздать бота.',
+          AppL10n.f('Бот @{0} ({1}...) будет отозван. Доступы будут закрыты, владельцу придётся пересоздать бота.', [bot.handle, bot.botId.substring(0, 12)]),
         ),
         actions: [
           TextButton(
@@ -1053,15 +1049,15 @@ class _AdminScreenState extends State<AdminScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Сменить пароль'),
+        title: Text(AppL10n.t('Сменить пароль')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: oldCtrl,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Текущий пароль',
+              decoration: InputDecoration(
+                labelText: AppL10n.t('Текущий пароль'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -1069,8 +1065,8 @@ class _AdminScreenState extends State<AdminScreen>
             TextField(
               controller: newCtrl,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Новый пароль',
+              decoration: InputDecoration(
+                labelText: AppL10n.t('Новый пароль'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -1078,8 +1074,8 @@ class _AdminScreenState extends State<AdminScreen>
             TextField(
               controller: confirmCtrl,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Подтвердите пароль',
+              decoration: InputDecoration(
+                labelText: AppL10n.t('Подтвердите пароль'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -1096,8 +1092,8 @@ class _AdminScreenState extends State<AdminScreen>
               final oldHash = sha256Hex(oldCtrl.text);
               if (oldHash != AppSettings.instance.adminPasswordHash) {
                 messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Неверный текущий пароль'),
+                  SnackBar(
+                    content: Text(AppL10n.t('Неверный текущий пароль')),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -1106,8 +1102,8 @@ class _AdminScreenState extends State<AdminScreen>
               if (newCtrl.text.isEmpty) return;
               if (newCtrl.text != confirmCtrl.text) {
                 messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Пароли не совпадают'),
+                  SnackBar(
+                    content: Text(AppL10n.t('Пароли не совпадают')),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -1124,7 +1120,7 @@ class _AdminScreenState extends State<AdminScreen>
                   messenger.showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Relay не сменил пароль: ${_translateBotError(relayAck['error']?.toString() ?? 'request_failed')}',
+                        AppL10n.f('Relay не сменил пароль: {0}', [_translateBotError(relayAck['error']?.toString() ?? 'request_failed')]),
                       ),
                       backgroundColor: Colors.red,
                     ),
@@ -1158,9 +1154,9 @@ class _AdminScreenState extends State<AdminScreen>
               await RelayService.instance.putAccountSyncBlob(sealed);
               if (ctx.mounted) Navigator.pop(ctx);
               messenger.showSnackBar(
-                const SnackBar(
+                SnackBar(
                   content: Text(
-                    'Пароль изменён — relay и устройства синхронизированы',
+                    AppL10n.t('Пароль изменён — relay и устройства синхронизированы'),
                   ),
                 ),
               );
@@ -1216,7 +1212,7 @@ class _RequestTile extends StatelessWidget {
                       Text(request.channelName,
                           style: const TextStyle(
                               fontWeight: FontWeight.w600, fontSize: 16)),
-                      Text('${request.subscriberCount} подписчиков',
+                      Text(AppL10n.f('{0} подписчиков', [request.subscriberCount]),
                           style: TextStyle(
                               fontSize: 12, color: cs.onSurfaceVariant)),
                     ],
@@ -1249,7 +1245,7 @@ class _RequestTile extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: onApprove,
                   icon: const Icon(Icons.verified, size: 18),
-                  label: const Text('Верифицировать'),
+                  label: Text(AppL10n.t('Верифицировать')),
                 ),
               ],
             ),
@@ -1329,9 +1325,9 @@ class _RelayAdminBot {
   }
 
   String get lastSeenFormatted {
-    if (online) return 'сейчас онлайн';
+    if (online) return AppL10n.t('сейчас онлайн');
     final s = _formatDateTime(lastSeenAt);
-    return s.isEmpty ? 'активности ещё нет' : s;
+    return s.isEmpty ? AppL10n.t('активности ещё нет') : s;
   }
 
   static String _formatDate(int ms) {
@@ -1418,31 +1414,31 @@ class _RelayBotActivity {
   String get label {
     switch (type) {
       case 'connect':
-        return 'подключился';
+        return AppL10n.t('подключился');
       case 'disconnect':
-        return 'отключился';
+        return AppL10n.t('отключился');
       case 'packet_in':
       case 'blob_in':
-        return 'получил сообщение';
+        return AppL10n.t('получил сообщение');
       case 'packet_out':
       case 'blob_out':
-        return 'ответил';
+        return AppL10n.t('ответил');
       case 'api_call':
         return 'Bot API';
       case 'commands_set':
-        return 'команды обновлены';
+        return AppL10n.t('команды обновлены');
       case 'owner_patch':
-        return 'владелец изменил профиль';
+        return AppL10n.t('владелец изменил профиль');
       case 'owner_revoke':
-        return 'владелец отозвал';
+        return AppL10n.t('владелец отозвал');
       case 'admin_update':
-        return 'админ изменил статус';
+        return AppL10n.t('админ изменил статус');
       case 'verify_request':
-        return 'запросил галочку';
+        return AppL10n.t('запросил галочку');
       case 'claim':
-        return 'зарегистрирован';
+        return AppL10n.t('зарегистрирован');
       default:
-        return type.isEmpty ? 'событие' : type;
+        return type.isEmpty ? AppL10n.t('событие') : type;
     }
   }
 
@@ -1513,7 +1509,7 @@ class _RelayBotAdminTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Код: ${bot.adminCode.isEmpty ? (bot.botId.length >= 12 ? bot.botId.substring(0, 12) : bot.botId).toUpperCase() : bot.adminCode}',
+                        AppL10n.f('Код: {0}', [bot.adminCode.isEmpty ? (bot.botId.length >= 12 ? bot.botId.substring(0, 12) : bot.botId).toUpperCase() : bot.adminCode]),
                         style: TextStyle(
                           fontSize: 11,
                           fontFamily: 'monospace',
@@ -1545,13 +1541,13 @@ class _RelayBotAdminTile extends StatelessWidget {
             if (bot.createdAtFormatted.isNotEmpty) ...[
               const SizedBox(height: 2),
               Text(
-                'Зарегистрирован: ${bot.createdAtFormatted}',
+                AppL10n.f('Зарегистрирован: {0}', [bot.createdAtFormatted]),
                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
             ],
             const SizedBox(height: 2),
             Text(
-              'Последняя активность: ${bot.lastSeenFormatted}',
+              AppL10n.f('Последняя активность: {0}', [bot.lastSeenFormatted]),
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 6),
@@ -1573,7 +1569,7 @@ class _RelayBotAdminTile extends StatelessWidget {
                 if (bot.online) _chip('ONLINE', Colors.green),
                 if (bot.verified) _chip('VERIFIED', Colors.blue),
                 if (bot.verifyRequested && !bot.verified)
-                  _chip('ЗАПРОС ГАЛОЧКИ', Colors.amber.shade800),
+                  _chip(AppL10n.t('ЗАПРОС ГАЛОЧКИ'), Colors.amber.shade800),
                 if (bot.blocked) _chip('BLOCKED', Colors.red),
                 if (bot.revoked) _chip('REVOKED', Colors.red.shade900),
               ],
@@ -1597,8 +1593,7 @@ class _RelayBotAdminTile extends StatelessWidget {
                             size: 16, color: Colors.amber.shade800),
                         const SizedBox(width: 6),
                         Text(
-                          'Заявка на верификацию'
-                          '${bot.verifyRequestedAt > 0 ? ' · ${_RelayAdminBot._formatDateTime(bot.verifyRequestedAt)}' : ''}',
+                          AppL10n.f('Заявка на верификацию{0}', [bot.verifyRequestedAt > 0 ? ' · ${_RelayAdminBot._formatDateTime(bot.verifyRequestedAt)}' : '']),
                           style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -1625,8 +1620,8 @@ class _RelayBotAdminTile extends StatelessWidget {
                   tilePadding: EdgeInsets.zero,
                   childrenPadding: EdgeInsets.zero,
                   dense: true,
-                  title: const Text(
-                    'История активности',
+                  title: Text(
+                    AppL10n.t('История активности'),
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                   children: bot.activity.take(6).map((a) {
@@ -1658,7 +1653,7 @@ class _RelayBotAdminTile extends StatelessWidget {
                     size: 16,
                   ),
                   label:
-                      Text(bot.verified ? 'Снять галочку' : 'Выдать галочку'),
+                      Text(bot.verified ? AppL10n.t('Снять галочку') : AppL10n.t('Выдать галочку')),
                 ),
                 OutlinedButton.icon(
                   onPressed: bot.revoked ? null : onToggleBlocked,
@@ -1667,7 +1662,7 @@ class _RelayBotAdminTile extends StatelessWidget {
                     size: 16,
                     color: bot.blocked ? Colors.red : null,
                   ),
-                  label: Text(bot.blocked ? 'Разблокировать' : 'Блокировать'),
+                  label: Text(bot.blocked ? AppL10n.t('Разблокировать') : AppL10n.t('Блокировать')),
                 ),
                 FilledButton.icon(
                   onPressed: bot.revoked ? null : onRevoke,
@@ -1774,12 +1769,12 @@ class _ChannelAdminTile extends StatelessWidget {
                           ],
                         ],
                       ),
-                      Text('${channel.subscriberIds.length} подписчиков',
+                      Text(AppL10n.f('{0} подписчиков', [channel.subscriberIds.length]),
                           style: TextStyle(
                               fontSize: 12, color: cs.onSurfaceVariant)),
                       const SizedBox(height: 2),
                       Text(
-                        'Код: ${channel.universalCode.isNotEmpty ? channel.universalCode : "—"} · id ${channel.id.length >= 8 ? channel.id.substring(0, 8) : channel.id}…',
+                        AppL10n.f('Код: {0} · id {1}…', [channel.universalCode.isNotEmpty ? channel.universalCode : "—", channel.id.length >= 8 ? channel.id.substring(0, 8) : channel.id]),
                         style: TextStyle(
                           fontSize: 11,
                           color: cs.onSurfaceVariant.withValues(alpha: 0.85),
@@ -1796,8 +1791,8 @@ class _ChannelAdminTile extends StatelessWidget {
               Wrap(
                 spacing: 6,
                 children: [
-                  if (channel.foreignAgent) _chip('ИНОАГЕНТ', Colors.orange),
-                  if (channel.blocked) _chip('ЗАБЛОКИРОВАН', Colors.red),
+                  if (channel.foreignAgent) _chip(AppL10n.t('ИНОАГЕНТ'), Colors.orange),
+                  if (channel.blocked) _chip(AppL10n.t('ЗАБЛОКИРОВАН'), Colors.red),
                 ],
               ),
             ],
@@ -1815,7 +1810,7 @@ class _ChannelAdminTile extends StatelessWidget {
                     color: channel.verified ? Colors.blue : null,
                   ),
                   label: Text(
-                    channel.verified ? 'Снять галочку' : 'Галочка',
+                    channel.verified ? AppL10n.t('Снять галочку') : AppL10n.t('Галочка'),
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),
@@ -1825,7 +1820,7 @@ class _ChannelAdminTile extends StatelessWidget {
                       size: 16,
                       color: channel.foreignAgent ? Colors.orange : null),
                   label: Text(
-                    channel.foreignAgent ? 'Снять ИА' : 'ИНОАГЕНТ',
+                    channel.foreignAgent ? AppL10n.t('Снять ИА') : AppL10n.t('ИНОАГЕНТ'),
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),
@@ -1834,7 +1829,7 @@ class _ChannelAdminTile extends StatelessWidget {
                   icon: Icon(Icons.block,
                       size: 16, color: channel.blocked ? Colors.red : null),
                   label: Text(
-                    channel.blocked ? 'Разблок.' : 'Блок.',
+                    channel.blocked ? AppL10n.t('Разблок.') : AppL10n.t('Блок.'),
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),

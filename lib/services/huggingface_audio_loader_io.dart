@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import '../l10n/app_l10n.dart';
 
 Future<Uint8List> loadAudioBytesForHuggingFace(
   String audioPath,
@@ -20,5 +21,5 @@ Future<Uint8List> loadAudioBytesForHuggingFace(
     final data = response.data;
     if (data != null && data.isNotEmpty) return Uint8List.fromList(data);
   }
-  throw ArgumentError('Файл не найден: $audioPath');
+  throw ArgumentError(AppL10n.f('Файл не найден: {0}', [audioPath]));
 }

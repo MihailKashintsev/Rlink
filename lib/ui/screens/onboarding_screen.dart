@@ -24,6 +24,7 @@ import '../widgets/avatar_widget.dart';
 import '../../main.dart' show navigatorKey;
 import '../../services/rlink_deep_link_service.dart';
 import 'chat_list_screen.dart';
+import '../../l10n/app_l10n.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -61,7 +62,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _sendRestoreRequest() async {
     final id = _restoreIdController.text.trim().toLowerCase();
     if (!_hex64.hasMatch(id)) {
-      _showSnack('ID должен быть 64 hex-символа');
+      _showSnack(AppL10n.t('ID должен быть 64 hex-символа'));
       return;
     }
     AccountTransferService.instance.adoptedIdentityLive.addListener(_onIdentityAdopted);
@@ -99,9 +100,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? get _usernameError {
     final u = _usernameController.text.trim();
     if (u.isEmpty) return null;
-    if (u.length < 3) return 'Минимум 3 символа';
+    if (u.length < 3) return AppL10n.t('Минимум 3 символа');
     if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(u)) {
-      return 'Только буквы, цифры и _';
+      return AppL10n.t('Только буквы, цифры и _');
     }
     return null;
   }
@@ -122,11 +123,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         RegExp(r'[^a-z0-9_.]'), '');
 
     if (nick.length < 2) {
-      _showSnack('Имя должно быть не короче 2 символов');
+      _showSnack(AppL10n.t('Имя должно быть не короче 2 символов'));
       return;
     }
     if (nick.length > _maxNickLength) {
-      _showSnack('Имя не должно превышать $_maxNickLength символов');
+      _showSnack(AppL10n.f('Имя не должно превышать {0} символов', [_maxNickLength]));
       return;
     }
     if (_usernameError != null) {
@@ -170,7 +171,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         );
       }
     } catch (e) {
-      if (mounted) _showSnack('Ошибка регистрации: $e', isError: true);
+      if (mounted) _showSnack(AppL10n.f('Ошибка регистрации: {0}', [e]), isError: true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -273,7 +274,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Мессенджер без интернета через Bluetooth',
+                AppL10n.t('Мессенджер без интернета через Bluetooth'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
               ),
@@ -338,7 +339,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Нажми на аватар чтобы выбрать эмодзи',
+                AppL10n.t('Нажми на аватар чтобы выбрать эмодзи'),
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
               ),
               const SizedBox(height: 16),
@@ -390,7 +391,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     color: cs.onSurface,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'Твоё имя',
+                    hintText: AppL10n.t('Твоё имя'),
                     hintStyle: TextStyle(color: cs.onSurfaceVariant),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -426,7 +427,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   decoration: InputDecoration(
                     hintText:
-                        'Юзернейм (мин. 3 символа; пусто — сгенерируем сами)',
+                        AppL10n.t('Юзернейм (мин. 3 символа; пусто — сгенерируем сами)'),
                     hintStyle: TextStyle(color: cs.onSurfaceVariant),
                     prefixIcon: Icon(Icons.alternate_email,
                         size: 20, color: cs.onSurfaceVariant),
@@ -470,8 +471,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2, color: Colors.white),
                           )
-                        : const Text(
-                            'Начать',
+                        : Text(
+                            AppL10n.t('Начать'),
                             style: TextStyle(
                                 fontSize: 17, fontWeight: FontWeight.w600),
                           ),
@@ -481,7 +482,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 TextButton(
                   onPressed: _loading ? null : _enterRestoreMode,
                   child: Text(
-                    'У меня уже есть аккаунт',
+                    AppL10n.t('У меня уже есть аккаунт'),
                     style: TextStyle(color: cs.onSurfaceVariant),
                   ),
                 ),
@@ -494,7 +495,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             ),
                           ),
                   child: Text(
-                    'Это дополнительное устройство',
+                    AppL10n.t('Это дополнительное устройство'),
                     style: TextStyle(color: cs.onSurfaceVariant),
                   ),
                 ),
@@ -546,14 +547,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         Icon(Icons.swap_horiz_rounded, color: cs.primary, size: 48),
         const SizedBox(height: 16),
         Text(
-          'Перенос аккаунта',
+          AppL10n.t('Перенос аккаунта'),
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: cs.onSurface),
         ),
         const SizedBox(height: 8),
         Text(
-          'Введите уникальный ID (64 hex-символа) своего аккаунта — его можно '
-          'скопировать в Настройках на старом устройстве. Там нужно будет '
-          'подтвердить перенос.',
+          AppL10n.t('Введите уникальный ID (64 hex-символа) своего аккаунта — его можно скопировать в Настройках на старом устройстве. Там нужно будет подтвердить перенос.'),
           textAlign: TextAlign.center,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
@@ -564,7 +563,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           maxLines: 2,
           style: const TextStyle(fontSize: 14, fontFamily: 'monospace'),
           decoration: InputDecoration(
-            hintText: '64-символьный ID',
+            hintText: AppL10n.t('64-символьный ID'),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide.none,
@@ -582,8 +581,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
-            'После подтверждения на старом устройстве оно будет очищено. '
-            'Отменить перенос нельзя.',
+            AppL10n.t('После подтверждения на старом устройстве оно будет очищено. Отменить перенос нельзя.'),
             style: TextStyle(color: Colors.red.shade300, fontSize: 12),
             textAlign: TextAlign.center,
           ),
@@ -594,7 +592,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           height: 52,
           child: FilledButton(
             onPressed: _sendRestoreRequest,
-            child: const Text('Отправить запрос', style: TextStyle(fontSize: 16)),
+            child: Text(AppL10n.t('Отправить запрос'), style: TextStyle(fontSize: 16)),
           ),
         ),
       ],
@@ -611,10 +609,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             children: [
               Icon(Icons.block, color: cs.error, size: 48),
               const SizedBox(height: 16),
-              Text('Запрос отклонён', style: TextStyle(fontSize: 18, color: cs.onSurface)),
+              Text(AppL10n.t('Запрос отклонён'), style: TextStyle(fontSize: 18, color: cs.onSurface)),
               const SizedBox(height: 8),
               Text(
-                'Старое устройство не подтвердило перенос.',
+                AppL10n.t('Старое устройство не подтвердило перенос.'),
                 style: TextStyle(color: cs.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
@@ -624,7 +622,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   _restoreRequested = false;
                   AccountTransferService.instance.wasDenied.value = false;
                 }),
-                child: const Text('Попробовать снова'),
+                child: Text(AppL10n.t('Попробовать снова')),
               ),
             ],
           );
@@ -644,7 +642,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               },
             ),
             const SizedBox(height: 20),
-            const Text('Ожидание подтверждения на старом устройстве…',
+            Text(AppL10n.t('Ожидание подтверждения на старом устройстве…'),
                 textAlign: TextAlign.center),
             const SizedBox(height: 8),
             ValueListenableBuilder<TransferProgress?>(
@@ -711,7 +709,7 @@ class _LinkAsChildScreenState extends State<_LinkAsChildScreen> {
     final cs = Theme.of(context).colorScheme;
     final pubkey = CryptoService.instance.publicKeyHex;
     return Scaffold(
-      appBar: AppBar(title: const Text('Дополнительное устройство')),
+      appBar: AppBar(title: Text(AppL10n.t('Дополнительное устройство'))),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -722,7 +720,7 @@ class _LinkAsChildScreenState extends State<_LinkAsChildScreen> {
                     Icon(Icons.check_circle,
                         color: Colors.green.shade400, size: 64),
                     const SizedBox(height: 16),
-                    const Text('Привязано!', textAlign: TextAlign.center),
+                    Text(AppL10n.t('Привязано!'), textAlign: TextAlign.center),
                   ]
                 : [
                     Container(
@@ -740,8 +738,7 @@ class _LinkAsChildScreenState extends State<_LinkAsChildScreen> {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'Отсканируйте этот код на основном устройстве:\n'
-                      'Настройки → RID → «Привязать дочернее устройство»',
+                      AppL10n.t('Отсканируйте этот код на основном устройстве:\nНастройки → RID → «Привязать дочернее устройство»'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/music_lyrics_service.dart';
 import '../../services/voice_service.dart';
+import '../../l10n/app_l10n.dart';
 
 /// Live transcription under the player (beta). Not real lyrics: the track is
 /// run through on-device speech recognition, so singing over instruments is
@@ -68,7 +69,7 @@ class _MusicLyricsPanelState extends State<MusicLyricsPanel> {
               },
               icon: Icon(_open ? Icons.expand_more : Icons.lyrics_outlined,
                   size: 18),
-              label: const Text('Текст (бета)', style: TextStyle(fontSize: 12)),
+              label: Text(AppL10n.t('Текст (бета)'), style: TextStyle(fontSize: 12)),
             ),
           ],
         ),
@@ -77,15 +78,15 @@ class _MusicLyricsPanelState extends State<MusicLyricsPanel> {
             valueListenable: svc.state,
             builder: (_, st, __) {
               if (st.forUrl != widget.url) {
-                return _note(cs, 'Готовим расшифровку…');
+                return _note(cs, AppL10n.t('Готовим расшифровку…'));
               }
               if (st.error.isNotEmpty) return _note(cs, st.error);
               if (st.phase == LyricsPhase.lookingUp) {
-                return _note(cs, 'Ищем текст песни…');
+                return _note(cs, AppL10n.t('Ищем текст песни…'));
               }
               if (st.phase == LyricsPhase.downloadingModel) {
                 return _note(
-                    cs, 'Загружаем модель… ${(st.progress * 100).round()}%');
+                    cs, AppL10n.f('Загружаем модель… {0}%', [(st.progress * 100).round()]));
               }
               if (st.phase == LyricsPhase.transcribing) {
                 return Padding(
@@ -100,7 +101,7 @@ class _MusicLyricsPanelState extends State<MusicLyricsPanel> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Распознаём трек — это занимает несколько минут',
+                        AppL10n.t('Распознаём трек — это занимает несколько минут'),
                         textAlign: TextAlign.center,
                         style:
                             TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
@@ -110,7 +111,7 @@ class _MusicLyricsPanelState extends State<MusicLyricsPanel> {
                 );
               }
               if (st.lines.isEmpty) {
-                return _note(cs, 'Не удалось разобрать слова в этом треке');
+                return _note(cs, AppL10n.t('Не удалось разобрать слова в этом треке'));
               }
               return ValueListenableBuilder<double>(
                 valueListenable: VoiceService.instance.playProgress,
@@ -128,7 +129,7 @@ class _MusicLyricsPanelState extends State<MusicLyricsPanel> {
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Text(
-                            'Текста нет в базе — распознано на слух, возможны ошибки',
+                            AppL10n.t('Текста нет в базе — распознано на слух, возможны ошибки'),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 fontSize: 10,

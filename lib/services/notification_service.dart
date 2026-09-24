@@ -8,6 +8,7 @@ import 'app_settings.dart';
 import 'sound_effects_service.dart';
 import 'web_notification_bridge.dart';
 import 'in_app_notification_service.dart';
+import '../l10n/app_l10n.dart';
 
 /// Единая служба локальных уведомлений.
 ///
@@ -61,7 +62,7 @@ class NotificationService {
       requestBadgePermission: false,
       requestSoundPermission: false,
     );
-    const linuxInit = LinuxInitializationSettings(defaultActionName: 'Открыть');
+    final linuxInit = LinuxInitializationSettings(defaultActionName: AppL10n.t('Открыть'));
     final WindowsInitializationSettings? windowsInit =
         defaultTargetPlatform == TargetPlatform.windows
             ? const WindowsInitializationSettings(
@@ -156,7 +157,7 @@ class NotificationService {
     await _show(
       id: _stableId('dm', peerId),
       channelId: 'personal',
-      channelName: 'Личные сообщения',
+      channelName: AppL10n.t('Личные сообщения'),
       title: title,
       body: body,
       payload: 'dm:$peerId',
@@ -185,8 +186,8 @@ class NotificationService {
     try {
       final androidDetails = AndroidNotificationDetails(
         'rlink_calls',
-        'Звонки',
-        channelDescription: 'Входящие звонки',
+        AppL10n.t('Звонки'),
+        channelDescription: AppL10n.t('Входящие звонки'),
         importance: Importance.max,
         priority: Priority.max,
         category: AndroidNotificationCategory.call,
@@ -202,15 +203,15 @@ class NotificationService {
         // Fallback for when the full-screen banner doesn't actually take
         // over (DND, OEM restrictions, Android decided to show this as a
         // plain heads-up instead) — still answerable from the shade itself.
-        actions: const [
+        actions: [
           AndroidNotificationAction(
             'call_decline',
-            'Отклонить',
+            AppL10n.t('Отклонить'),
             titleColor: Color(0xFFE53935),
           ),
           AndroidNotificationAction(
             'call_accept',
-            'Принять',
+            AppL10n.t('Принять'),
             titleColor: Color(0xFF43A047),
             showsUserInterface: true,
           ),
@@ -219,7 +220,7 @@ class NotificationService {
       await _plugin.show(
         id: _stableId('call', peerId),
         title: title,
-        body: isVideo ? 'Видеозвонок' : 'Аудиозвонок',
+        body: isVideo ? AppL10n.t('Видеозвонок') : AppL10n.t('Аудиозвонок'),
         notificationDetails: NotificationDetails(android: androidDetails),
         payload: 'dm:$peerId',
       );
@@ -260,7 +261,7 @@ class NotificationService {
     await _show(
       id: _stableId('group', groupId),
       channelId: 'groups',
-      channelName: 'Группы',
+      channelName: AppL10n.t('Группы'),
       title: title,
       body: body,
       payload: 'group:$groupId',
@@ -295,7 +296,7 @@ class NotificationService {
     await _show(
       id: _stableId('channel', channelId),
       channelId: 'channels',
-      channelName: 'Каналы',
+      channelName: AppL10n.t('Каналы'),
       title: title,
       body: body,
       payload: 'channel:$channelId',

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import '../l10n/app_l10n.dart';
 
 /// Desktop (Windows/Linux/macOS): крестик окна не завершает процесс —
 /// окно уходит в трей, relay и уведомления продолжают работать.
@@ -30,18 +31,18 @@ class DesktopTrayService with WindowListener, TrayListener {
       items: [
         MenuItem(
           key: 'open',
-          label: 'Открыть Rlink',
+          label: AppL10n.t('Открыть Rlink'),
           onClick: (_) => unawaited(showWindow()),
         ),
         MenuItem(
           key: 'hide',
-          label: 'Свернуть в трей',
+          label: AppL10n.t('Свернуть в трей'),
           onClick: (_) => unawaited(hideWindow()),
         ),
         MenuItem.separator(),
         MenuItem(
           key: 'quit',
-          label: 'Выход',
+          label: AppL10n.t('Выход'),
           onClick: (_) => unawaited(quitCompletely()),
         ),
       ],
