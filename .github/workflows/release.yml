@@ -304,4 +304,14 @@ jobs:
           $SCP manifest.json "$HOST:$DIR/manifest.json"
           # Keep ONLY the current version on the relay (GitHub keeps full history).
           $SSH $HOST "cd $DIR && for f in Rlink-*.apk rlink_*_windows.zip rlink_*_macos.zip rlink_*_linux.tar.gz; do [ -e \"\$f\" ] || continue; case \"\$f\" in Rlink-${V}-arm64.apk|Rlink-${V}-arm32.apk|rlink_${V}_windows.zip|rlink_${V}_macos.zip|rlink_${V}_linux.tar.gz) : ;; *) rm -f \"\$f\" && echo \"removed old \$f\" ;; esac; done && chmod -R 755 $DIR && ls -lah $DIR"
+          # Stable download URLs (/updates/latest/Rlink-arm64.apk …) that always
+          # point at the current release; nginx also redirects old versioned
+          # links to them. Symlinks live in a subdir so the prune loop above
+          # never touches them.
+          LN="mkdir -p $DIR/latest"
+          [ -f "artifacts/Rlink-${V}-arm64.apk" ] && LN="$LN && ln -sfn ../Rlink-${V}-arm64.apk $DIR/latest/Rlink-arm64.apk"
+          [ -f "artifacts/Rlink-${V}-arm32.apk" ] && LN="$LN && ln -sfn ../Rlink-${V}-arm32.apk $DIR/latest/Rlink-arm32.apk"
+          [ -f "artifacts/rlink_${V}_windows.zip" ] && LN="$LN && ln -sfn ../rlink_${V}_windows.zip $DIR/latest/Rlink-windows.zip"
+          [ -f "artifacts/rlink_${V}_macos.zip" ] && LN="$LN && ln -sfn ../rlink_${V}_macos.zip $DIR/latest/Rlink-macos.zip"
+          $SSH $HOST "$LN"
           echo "relay update published: $V"
