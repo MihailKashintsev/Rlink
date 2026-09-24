@@ -43,6 +43,51 @@
     }
   }
 
+  // Decodes an audio/video blob URL to 16 kHz mono PCM ourselves. Used as a
+  // fallback when transformers.js' own decode fails (video containers such as a
+  // quick-video .mp4 are not always accepted by AudioContext({sampleRate})).
+  async function decodeTo16kMono(url) {
+    const buf = await (await fetch(url)).arrayBuffer();
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    try {
+      const audio = await new Promise((resolve, reject) => {
+        const p = ctx.decodeAudioData(buf.slice(0), resolve, reject);
+        if (p && typeof p.then === 'function') p.then(resolve, reject);
+      });
+      const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      const frames = Math.max(1, Math.ceil(audio.duration * 16000));
+      const off = new Off(1, frames, 16000);
+      const src = off.createBufferSource();
+      src.buffer = audio;
+      src.connect(off.destination);
+      src.start(0);
+      const rendered = await off.startRendering();
+      return rendered.getChannelData(0);
+    } finally {
+      try { await ctx.close(); } catch (_) {}
+    }
+  }
+
+  async function runAsr(audioPath, opts) {
+    try {
+      return await _asr(audioPath, opts);
+    } catch (e1) {
+      if (typeof audioPath !== 'string') throw e1;
+      console.warn('[whisper-web] direct decode failed, retrying with manual decode:', e1);
+      let pcm;
+      try {
+        pcm = await decodeTo16kMono(audioPath);
+      } catch (e2) {
+        throw new Error('Не удалось прочитать звук из файла (' +
+          ((e2 && e2.message) ? e2.message : e2) + ')');
+      }
+      return await _asr(pcm, opts);
+    }
+  }
+
+  
+
   window.rlinkWhisper = {
     isSupported() {
       return (
@@ -150,7 +195,7 @@
       const lang = (language || '').trim();
       if (lang) opts.language = lang;
 
-      const out = await _asr(audioPath, opts);
+      const out = await runAsr(audioPath, opts);
       if (out && typeof out.text === 'string') return out.text;
       if (Array.isArray(out) && out[0] && typeof out[0].text === 'string') {
         return out[0].text;
@@ -183,7 +228,7 @@
       const lang = (language || '').trim();
       if (lang) opts.language = lang;
 
-      const out = await _asr(audioPath, opts);
+      const out = await runAsr(audioPath, opts);
       const chunks = (out && out.chunks) || [];
       const segs = chunks.map((c) => {
         const ts = c.timestamp || [];

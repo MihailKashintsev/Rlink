@@ -28,7 +28,9 @@ Future<web.FileSystemDirectoryHandle> _filesDirectory() async {
 
 Future<web.File?> _readFile(String path) async {
   if (!path.startsWith(_prefix)) return null;
-  final name = path.substring(_prefix.length);
+  // Callers pass paths with markers appended (`…sq.mp4#rlink_square`); the
+  // stored file's real name has no fragment/query.
+  final name = path.substring(_prefix.length).split('#').first.split('?').first;
   if (name.isEmpty) return null;
   final dir = await _filesDirectory();
   final fh = await dir
