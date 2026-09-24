@@ -418,16 +418,71 @@ class UpdateService {
     await _installChannel.invokeMethod('installApk', {'path': apkPath});
   }
 
+  /// Windows: unpack over the install folder and relaunch, from a detached
+  /// PowerShell that outlives this process. Written to survive the two things
+  /// that made "restart" leave the OLD version behind (and not relaunch):
+  /// * the app's own files stay locked for a moment after `exit` — wait for the
+  ///   process to end and retry the copy instead of a blind 2 s sleep;
+  /// * Windows PowerShell 5.1 reads a BOM-less script as ANSI, which garbles
+  ///   Cyrillic user/folder names — the script is written with a UTF-8 BOM.
+  /// It logs to `%TEMP%\rlink_update.log` (look there if an update ever fails)
+  /// and always relaunches the app, the new build if the copy worked.
   Future<void> _installWindows(String zipPath) async {
-    final dir = await getTemporaryDirectory();
-    final appDir = File(Platform.resolvedExecutable).parent.path;
+    final tmp = (await getTemporaryDirectory()).path;
     final exePath = Platform.resolvedExecutable;
-    final script =
-        'Start-Sleep 2\nExpand-Archive -Force "$zipPath" "${dir.path}\\upd"\nCopy-Item "${dir.path}\\upd\\*" "$appDir" -Recurse -Force\nStart-Process "$exePath"';
-    final f = File('${dir.path}\\update.ps1')..writeAsStringSync(script);
+    final appDir = File(exePath).parent.path;
+    String q(String v) => v.replaceAll("'", "''"); // PowerShell '...' literal
+    const template = r'''
+$ErrorActionPreference = 'Continue'
+$log = '__LOG__'
+function Log($m) { try { Add-Content -LiteralPath $log -Value ('[' + (Get-Date -Format s) + '] ' + $m) -Encoding UTF8 } catch {} }
+Log 'update start'
+$zip = '__ZIP__'
+$app = '__APP__'
+$exe = '__EXE__'
+$stage = Join-Path '__TMP__' 'rlink_upd'
+try { Wait-Process -Id __PID__ -Timeout 30 -ErrorAction SilentlyContinue } catch {}
+Start-Sleep -Milliseconds 500
+try {
+  if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
+  Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force -ErrorAction Stop
+  Log 'unpacked'
+} catch { Log ('unpack failed: ' + $_) }
+$ok = $false
+for ($i = 0; $i -lt 40 -and -not $ok; $i++) {
+  try {
+    Copy-Item -Path (Join-Path $stage '*') -Destination $app -Recurse -Force -ErrorAction Stop
+    $ok = $true
+  } catch {
+    Log ('copy attempt ' + $i + ' failed: ' + $_)
+    Start-Sleep -Seconds 1
+  }
+}
+Log ('copy ok=' + $ok)
+try { Start-Process -FilePath $exe -WorkingDirectory $app; Log 'started' } catch { Log ('start failed: ' + $_) }
+''';
+    final script = template
+        .replaceAll('__LOG__', q('$tmp\\rlink_update.log'))
+        .replaceAll('__ZIP__', q(zipPath))
+        .replaceAll('__APP__', q(appDir))
+        .replaceAll('__EXE__', q(exePath))
+        .replaceAll('__TMP__', q(tmp))
+        .replaceAll('__PID__', '$pid');
+    final f = File('$tmp\\rlink_update.ps1')
+      ..writeAsBytesSync([0xEF, 0xBB, 0xBF, ...utf8.encode(script)]);
     await Process.start(
-        'powershell', ['-ExecutionPolicy', 'Bypass', '-File', f.path],
-        mode: ProcessStartMode.detached);
+      'powershell',
+      [
+        '-NoProfile',
+        '-WindowStyle',
+        'Hidden',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        f.path,
+      ],
+      mode: ProcessStartMode.detached,
+    );
     exit(0);
   }
 
