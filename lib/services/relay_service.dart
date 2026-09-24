@@ -806,6 +806,30 @@ class RelayService with WidgetsBindingObserver {
   }
 
   /// Force reconnect — disconnect and reconnect immediately.
+  /// Pings the live socket and waits briefly for a pong. Tearing down a
+  /// WORKING link is risky on networks that drop new connections (DPI): the
+  /// relay log showed `client_reconnect` closes that were never followed by a
+  /// new registration. So callers probe first and only reconnect when dead.
+  Future<bool> _probeAlive() async {
+    if (!isConnected) return false;
+    final before = _lastPongAt;
+    _safeSend({'type': 'ping'}, context: 'probe');
+    for (var i = 0; i < 16; i++) {
+      await Future.delayed(const Duration(milliseconds: 250));
+      if (_lastPongAt.isAfter(before)) return true;
+      if (!isConnected) return false;
+    }
+    return false;
+  }
+
+  /// Refresh from the UI / on resume: keeps a healthy connection, reconnects
+  /// only when it does not answer. Returns true if the existing link is alive.
+  Future<bool> refreshIfDead() async {
+    if (await _probeAlive()) return true;
+    await reconnect();
+    return false;
+  }
+
   Future<void> reconnect() async {
     final now = DateTime.now();
     if (_reconnectInProgress) {
@@ -954,8 +978,8 @@ class RelayService with WidgetsBindingObserver {
     final since = DateTime.now().difference(_lastPongAt);
     if (since > const Duration(seconds: 30)) {
       _relayTrace(
-          '[RLINK][Relay] Lifecycle resumed, stale pong (${since.inSeconds}s) → reconnect');
-      reconnect();
+          '[RLINK][Relay] Lifecycle resumed, stale pong (${since.inSeconds}s) → probe');
+      unawaited(refreshIfDead());
     }
   }
 

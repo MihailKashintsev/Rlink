@@ -3897,8 +3897,21 @@ class _NetworkPageState extends State<_NetworkPage> {
                               tooltip: connected
                                   ? AppL10n.t('tool_reconnect')
                                   : AppL10n.t('tool_connect'),
-                              onPressed: () =>
-                                  RelayService.instance.reconnect(),
+                              onPressed: () async {
+                                // Keep a healthy connection (new ones can be
+                                // dropped by the network); reconnect only if
+                                // the server does not answer.
+                                final messenger = ScaffoldMessenger.of(context);
+                                final alive = connected &&
+                                    await RelayService.instance.refreshIfDead();
+                                if (alive) {
+                                  messenger.showSnackBar(SnackBar(
+                                      content: Text(AppL10n.t(
+                                          'Соединение с сервером в порядке'))));
+                                } else if (!connected) {
+                                  await RelayService.instance.reconnect();
+                                }
+                              },
                             ),
                           ],
                         ),

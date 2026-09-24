@@ -2033,4 +2033,5 @@ const Map<String, String> trEs = <String, String>{
   'Баланс качества и размера': 'Equilibrio entre calidad y tamaño',
   'Чётче картинка, но файл больше': 'Imagen más nítida, pero archivo más grande',
   'Запись — до 1 минуты: удерживайте кнопку, проведите вверх, чтобы закрепить, влево — отменить.': 'Hasta 1 minuto: mantén el botón, desliza hacia arriba para fijar y a la izquierda para cancelar.',
+  'Соединение с сервером в порядке': 'La conexión con el servidor está bien',
 };

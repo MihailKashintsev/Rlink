@@ -2033,4 +2033,5 @@ const Map<String, String> trFr = <String, String>{
   'Баланс качества и размера': 'Équilibre qualité / taille',
   'Чётче картинка, но файл больше': 'Image plus nette, mais fichier plus lourd',
   'Запись — до 1 минуты: удерживайте кнопку, проведите вверх, чтобы закрепить, влево — отменить.': 'Jusqu\'à 1 minute : maintenez le bouton, glissez vers le haut pour verrouiller, vers la gauche pour annuler.',
+  'Соединение с сервером в порядке': 'La connexion au serveur est correcte',
 };
