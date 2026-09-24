@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 import '../../services/call_service.dart';
 import '../../services/call_proximity_service.dart';
@@ -54,6 +55,23 @@ class _CallScreenState extends State<CallScreen>
 
   /// В видеозвонке: true — большой кадр собеседника, false — большой свой.
   bool _mainShowsPeer = true;
+  VoidCallback? _localRevListener;
+  bool _flipping = false;
+
+  Future<void> _flipCamera() async {
+    if (_flipping) return;
+    _flipping = true;
+    try {
+      final ok = await CallService.instance.switchCamera();
+      if (!ok && mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(AppL10n.t('Не удалось переключить камеру'))),
+        );
+      }
+    } finally {
+      _flipping = false;
+    }
+  }
 
   // Falling-emoji overlay for in-call reaction sounds (see _openFxSheet).
   // _rainKey changes on every trigger so a repeat of the same emoji restarts
@@ -99,12 +117,23 @@ class _CallScreenState extends State<CallScreen>
       final local = await CallService.instance.getLocalStream();
       if (!mounted) return;
       _localRenderer.srcObject = local;
+      // Web/desktop camera flip swaps the video track inside the same stream;
+      // re-attach it so the preview picks up the new camera.
+      _localRevListener = () async {
+        final st = await CallService.instance.getLocalStream();
+        if (!mounted) return;
+        _localRenderer.srcObject = null;
+        _localRenderer.srcObject = st;
+        setState(() {});
+      };
+      CallService.instance.localVideoRevision.addListener(_localRevListener!);
     } catch (e) {
       debugPrint('[CallScreen] _init error: $e');
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
-            content: Text(AppL10n.t('Не удалось получить доступ к микрофону/камере'))),
+            content: Text(
+                AppL10n.t('Не удалось получить доступ к микрофону/камере'))),
       );
       Navigator.maybeOf(context)?.maybePop();
       return;
@@ -327,6 +356,10 @@ class _CallScreenState extends State<CallScreen>
     }
     unawaited(CallProximityService.instance.stop());
     _ambient.dispose();
+    if (_localRevListener != null) {
+      CallService.instance.localVideoRevision
+          .removeListener(_localRevListener!);
+    }
     _localRenderer.dispose();
     _remoteRenderer.dispose();
     super.dispose();
@@ -334,7 +367,8 @@ class _CallScreenState extends State<CallScreen>
 
   void _screenShareFailedSnack() {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(AppL10n.t('Демонстрация экрана недоступна на этом устройстве'))));
+        content: Text(
+            AppL10n.t('Демонстрация экрана недоступна на этом устройстве'))));
   }
 
   Future<void> _end() async {
@@ -569,7 +603,8 @@ class _CallScreenState extends State<CallScreen>
           );
         }
         final label = switch (phase) {
-          CallPhase.ringing when widget.session.incoming => AppL10n.t('Входящий звонок'),
+          CallPhase.ringing when widget.session.incoming =>
+            AppL10n.t('Входящий звонок'),
           CallPhase.ringing => AppL10n.t('Ждём ответа…'),
           CallPhase.connecting => AppL10n.t('Соединение…'),
           CallPhase.failed => AppL10n.t('Соединение не удалось'),
@@ -638,8 +673,7 @@ class _CallScreenState extends State<CallScreen>
       // view here left-aligned the row on wide desktop windows).
       final n = screenShare ? 6 : 5;
       final gap = box.maxWidth >= 520 ? 18.0 : 6.0;
-      final size =
-          ((box.maxWidth - 24 - gap * (n - 1)) / n).clamp(44.0, 64.0);
+      final size = ((box.maxWidth - 24 - gap * (n - 1)) / n).clamp(44.0, 64.0);
       final buttons = <Widget>[
         _CallButton(
           size: size,
@@ -683,9 +717,8 @@ class _CallScreenState extends State<CallScreen>
           builder: (_, speaker, __) {
             return _CallButton(
               size: size,
-              icon: speaker
-                  ? Icons.volume_up_rounded
-                  : Icons.volume_down_rounded,
+              icon:
+                  speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
               label: AppL10n.t('Динамик'),
               active: speaker,
               onTap: () async {
@@ -779,42 +812,39 @@ class _CallScreenState extends State<CallScreen>
                 child: surface(mainRenderer, mirror: !mainRemote),
               ),
             ),
-            // Self/other preview — tap to swap which feed is fullscreen.
-            Positioned(
-              right: 12,
-              top: 12,
+            // Self/other preview — tap to swap which feed is fullscreen, drag to
+            // move it to another corner.
+            _CallThumbnail(
               width: 116,
               height: 168,
-              child: GestureDetector(
-                onTap: () => setState(() => _mainShowsPeer = !_mainShowsPeer),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white38, width: 1.5),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black54, blurRadius: 8),
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      surface(thumbRenderer, mirror: mainRemote),
-                      Positioned(
-                        right: 5,
-                        bottom: 5,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.black45,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.swap_horiz_rounded,
-                              size: 15, color: Colors.white),
+              onTap: () => setState(() => _mainShowsPeer = !_mainShowsPeer),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white38, width: 1.5),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black54, blurRadius: 8),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    surface(thumbRenderer, mirror: mainRemote),
+                    Positioned(
+                      right: 5,
+                      bottom: 5,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.black45,
+                          shape: BoxShape.circle,
                         ),
+                        child: const Icon(Icons.swap_horiz_rounded,
+                            size: 15, color: Colors.white),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -888,9 +918,7 @@ class _CallScreenState extends State<CallScreen>
                         const SizedBox(width: 12),
                         _videoCtl(
                           Icons.flip_camera_ios_rounded,
-                          onTap: _camOn
-                              ? () => CallService.instance.switchCamera()
-                              : null,
+                          onTap: _camOn ? _flipCamera : null,
                         ),
                         const SizedBox(width: 12),
                         ValueListenableBuilder<bool>(
@@ -1203,6 +1231,100 @@ class _EmojiRainOverlayState extends State<_EmojiRainOverlay>
           );
         },
       ),
+    );
+  }
+}
+
+
+/// Preview in the corner of a video call: tap swaps the feeds, drag moves it and
+/// it snaps to the nearest corner. A [PointerInterceptor] sits over the web
+/// camera view (an HTML element) — without it the browser swallows the taps and
+/// drags before Flutter sees them.
+class _CallThumbnail extends StatefulWidget {
+  final double width;
+  final double height;
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _CallThumbnail({
+    required this.width,
+    required this.height,
+    required this.child,
+    required this.onTap,
+  });
+
+  @override
+  State<_CallThumbnail> createState() => _CallThumbnailState();
+}
+
+class _CallThumbnailState extends State<_CallThumbnail> {
+  static const _margin = 12.0;
+  static const _bottomReserve = 118.0; // keeps clear of the control bar
+
+  Alignment _corner = Alignment.topRight;
+  Offset? _drag; // top-left while dragging
+
+  Offset _rest(Size box) {
+    final left = _corner.x < 0 ? _margin : box.width - widget.width - _margin;
+    final top = _corner.y < 0
+        ? _margin
+        : box.height - widget.height - _bottomReserve;
+    return Offset(left, top);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: LayoutBuilder(builder: (context, c) {
+        final box = c.biggest;
+        final pos = _drag ?? _rest(box);
+        return Stack(children: [
+          AnimatedPositioned(
+            duration: _drag == null
+                ? const Duration(milliseconds: 220)
+                : Duration.zero,
+            curve: Curves.easeOutCubic,
+            left: pos.dx,
+            top: pos.dy,
+            width: widget.width,
+            height: widget.height,
+            child: Stack(children: [
+              widget.child,
+              Positioned.fill(
+                child: PointerInterceptor(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onTap,
+                    onPanStart: (_) => setState(() => _drag = _rest(box)),
+                    onPanUpdate: (d) {
+                      final cur = _drag ?? _rest(box);
+                      setState(() => _drag = Offset(
+                            (cur.dx + d.delta.dx)
+                                .clamp(0.0, box.width - widget.width),
+                            (cur.dy + d.delta.dy)
+                                .clamp(0.0, box.height - widget.height),
+                          ));
+                    },
+                    onPanEnd: (_) {
+                      final p = _drag ?? _rest(box);
+                      final cx = p.dx + widget.width / 2;
+                      final cy = p.dy + widget.height / 2;
+                      setState(() {
+                        _corner = Alignment(
+                          cx < box.width / 2 ? -1 : 1,
+                          cy < box.height / 2 ? -1 : 1,
+                        );
+                        _drag = null;
+                      });
+                    },
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ]);
+      }),
     );
   }
 }

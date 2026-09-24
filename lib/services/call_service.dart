@@ -760,10 +760,67 @@ class CallService {
     }
   }
 
-  Future<void> switchCamera() async {
-    final tracks = _localStream?.getVideoTracks() ?? const <MediaStreamTrack>[];
-    if (tracks.isEmpty) return;
-    await Helper.switchCamera(tracks.first);
+  /// Bumped after the local video track was swapped by [switchCamera] on
+  /// web/desktop, so the call screen re-binds its local preview.
+  final ValueNotifier<int> localVideoRevision = ValueNotifier<int>(0);
+
+  /// Flips between the front and back camera. Returns false when nothing
+  /// changed (single camera / failure).
+  ///
+  /// Phones (native) rotate the camera in place via the plugin. On web and
+  /// desktop `Helper.switchCamera` needs a deviceId and is not implemented, so
+  /// there the next video device is opened and the track replaced in the local
+  /// stream AND in the peer connection's sender.
+  Future<bool> switchCamera() async {
+    final stream = _localStream;
+    final tracks = stream?.getVideoTracks() ?? const <MediaStreamTrack>[];
+    if (stream == null || tracks.isEmpty) return false;
+    final old = tracks.first;
+    final nativePhone = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+    try {
+      if (nativePhone) return await Helper.switchCamera(old);
+
+      final cams = await Helper.cameras;
+      if (cams.length < 2) return false;
+      final curId = old.getSettings()['deviceId']?.toString() ?? '';
+      final idx = cams.indexWhere((c) => c.deviceId == curId);
+      final next = cams[(idx + 1) % cams.length];
+      final wasEnabled = old.enabled;
+      // Release the current camera first: iOS Safari (and some webcams) cannot
+      // open a second device while the first is still running.
+      await old.stop();
+      MediaStream? ns;
+      for (final id in [next.deviceId, curId]) {
+        if (id.isEmpty) continue;
+        try {
+          ns = await navigator.mediaDevices.getUserMedia({
+            'audio': false,
+            'video': {
+              'deviceId': {'exact': id},
+            },
+          });
+          break;
+        } catch (e) {
+          debugPrint('[RLINK][Call] switchCamera open $id failed: $e');
+        }
+      }
+      if (ns == null || ns.getVideoTracks().isEmpty) return false;
+      final nt = ns.getVideoTracks().first;
+      nt.enabled = wasEnabled;
+      await stream.removeTrack(old);
+      await stream.addTrack(nt);
+      final senders = await _pc?.getSenders() ?? const <RTCRtpSender>[];
+      for (final sender in senders) {
+        if (sender.track?.kind == 'video') await sender.replaceTrack(nt);
+      }
+      localVideoRevision.value++;
+      return true;
+    } catch (e) {
+      debugPrint('[RLINK][Call] switchCamera failed: $e');
+      return false;
+    }
   }
 
   Future<void> setSpeakerphone(bool enabled) async {

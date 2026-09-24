@@ -700,7 +700,8 @@ class ImageService {
   Future<String?> mergeVideoSegments(List<String> inputPaths) async {
     if (inputPaths.isEmpty) return null;
     if (inputPaths.length == 1) return inputPaths.first;
-    if (!Platform.isIOS && !Platform.isAndroid) return inputPaths.last;
+    // Web: no muxer — and touching dart:io Platform there throws. Keep the last part.
+    if (kIsWeb || (!Platform.isIOS && !Platform.isAndroid)) return inputPaths.last;
     final temp = await getTemporaryDirectory();
     final out = p.join(temp.path, 'merge_${_uuid.v4()}.mp4');
     try {

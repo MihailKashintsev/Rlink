@@ -312,14 +312,18 @@ class RelayService with WidgetsBindingObserver {
   static const _kCloseNormal = 1000;
   static const _kCloseReconnect = 4000;
 
-  Future<void> _safeSend(
+  /// Writes [payload] to the socket. Returns false when nothing was written
+  /// (no socket / the browser threw) so callers that must not lose data — chunked
+  /// media — can wait for a reconnect and retry instead of silently skipping.
+  Future<bool> _safeSend(
     Map<String, dynamic> payload, {
     String context = '',
   }) async {
     final ch = _channel;
-    if (ch == null) return;
+    if (ch == null) return false;
     try {
       ch.sink.add(jsonEncode(payload));
+      return true;
     } catch (e) {
       final msg = e.toString();
       _relayTrace(
@@ -329,6 +333,29 @@ class RelayService with WidgetsBindingObserver {
       if (!_intentionalClose && !_disposed) {
         unawaited(reconnect());
       }
+      return false;
+    }
+  }
+
+  /// Incremented on every successful connect: lets a long transfer notice that
+  /// the socket was replaced while it was sending (chunks written to the old,
+  /// dying socket may never have arrived).
+  int connectionGeneration = 0;
+
+  /// Completes true once the relay is connected (immediately if it already is),
+  /// false after [timeout].
+  Future<bool> waitForConnected(Duration timeout) async {
+    if (isConnected) return true;
+    final c = Completer<bool>();
+    void listener() {
+      if (isConnected && !c.isCompleted) c.complete(true);
+    }
+
+    state.addListener(listener);
+    try {
+      return await c.future.timeout(timeout, onTimeout: () => false);
+    } finally {
+      state.removeListener(listener);
     }
   }
 
@@ -824,6 +851,7 @@ class RelayService with WidgetsBindingObserver {
       // из background сразу проверить, жив ли сокет.
       _attachLifecycleObserver();
 
+      connectionGeneration++;
       state.value = RelayState.connected;
       lastError.value = null;
       _relayTrace('[RLINK][Relay] Connected and registered via $connectedUrl');
@@ -1183,7 +1211,7 @@ class RelayService with WidgetsBindingObserver {
   ///
   /// Also uses `blob` type — bypasses rate limiting and the 256 KB packet limit.
   /// Relay limit per message: 10 MB raw (chunk after base64 ≈ 267 KB for 200 KB raw).
-  Future<void> sendBlobChunk({
+  Future<bool> sendBlobChunk({
     required String recipientKey,
     required String fromId,
     required String msgId,
@@ -1199,7 +1227,7 @@ class RelayService with WidgetsBindingObserver {
     String? caption,
     bool viewOnce = false,
   }) async {
-    if (!isConnected) return;
+    if (!isConnected) return false;
     final b64 = base64Encode(chunkData);
     // Route by the full public key for compatibility with both old and new
     // relay servers.
@@ -1225,11 +1253,15 @@ class RelayService with WidgetsBindingObserver {
       if (chunkIdx == 0 && viewOnce) 'vo': true,
     };
     try {
-      await _safeSend(msg, context: 'sendBlobChunk');
-      debugPrint('[RLINK][Relay] Sent blob chunk $chunkIdx/$chunkTotal '
-          '(${chunkData.length} bytes) for $msgId');
+      final ok = await _safeSend(msg, context: 'sendBlobChunk');
+      if (ok) {
+        debugPrint('[RLINK][Relay] Sent blob chunk $chunkIdx/$chunkTotal '
+            '(${chunkData.length} bytes) for $msgId');
+      }
+      return ok;
     } catch (e) {
       debugPrint('[RLINK][Relay] Failed to send blob chunk: $e');
+      return false;
     }
   }
 

@@ -2034,4 +2034,6 @@ const Map<String, String> trEn = <String, String>{
   'Чётче картинка, но файл больше': 'Sharper picture, larger file',
   'Запись — до 1 минуты: удерживайте кнопку, проведите вверх, чтобы закрепить, влево — отменить.': 'Up to 1 minute: hold the button, swipe up to lock, swipe left to cancel.',
   'Соединение с сервером в порядке': 'The connection to the server is fine',
+  'Не удалось отправить: нет связи с сервером. Повторите позже.': 'Could not send: no connection to the server. Try again later.',
+  'Не удалось переключить камеру': 'Could not switch the camera',
 };

@@ -14,7 +14,8 @@ import 'telegram_media_record_button.dart' show RecordKeep;
 /// центру — камера в выбранной форме, слева над полем ввода — вспышка и
 /// переворот камеры. Поле ввода остаётся видимым (слой лежит только над чатом).
 class QuickVideoRecordingOverlay extends StatefulWidget {
-  final CameraController controller;
+  /// Null while the camera is being switched (the frame shows a placeholder).
+  final CameraController? controller;
   final QuickVideoShape shape;
   final ValueListenable<double> seconds;
   final double maxSeconds;
@@ -79,13 +80,9 @@ class _QuickVideoRecordingOverlayState
   void _onFlipTap() {
     if (widget.switching || _awaitingSwitch) return;
     _awaitingSwitch = true;
-    // The platform view of the web camera can't live inside a Transform.
-    if (!kIsWeb) {
-      _flip.animateTo(0.5,
-          duration: const Duration(milliseconds: 180), curve: Curves.easeIn);
-    }
+    _flip.animateTo(0.5,
+        duration: const Duration(milliseconds: 180), curve: Curves.easeIn);
     widget.onFlip();
-    if (kIsWeb) _awaitingSwitch = false;
   }
 
   @override
@@ -95,35 +92,73 @@ class _QuickVideoRecordingOverlayState
       builder: (context, c) {
         final side = math.max(
             120.0, math.min(c.maxWidth * 0.8, math.min(c.maxHeight * 0.78, 380.0)));
-        Widget frame = SquareVideoFramedCameraView(
-          controller: widget.controller,
-          squareSize: side,
-          isRecording: true,
-          recordingSeconds: widget.seconds,
-          maxDuration: widget.maxSeconds,
-          recordingPaused: widget.paused,
-          isPaused: widget.paused,
-          pausePreview: widget.pausePreview,
-          shape: widget.shape,
-          showTimer: false,
-        );
-        if (!kIsWeb) {
-          frame = AnimatedBuilder(
-            animation: _flip,
-            builder: (_, child) {
-              final v = _flip.value;
-              final angle = (v <= 0.5 ? v : v - 1) * math.pi;
-              return Transform(
-                alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..setEntry(3, 2, 0.0012)
-                  ..rotateY(angle),
-                child: child,
+        final cam = widget.controller;
+        Widget frame = cam != null
+            ? SquareVideoFramedCameraView(
+                controller: cam,
+                squareSize: side,
+                isRecording: true,
+                recordingSeconds: widget.seconds,
+                maxDuration: widget.maxSeconds,
+                recordingPaused: widget.paused,
+                isPaused: widget.paused,
+                pausePreview: widget.pausePreview,
+                shape: widget.shape,
+                showTimer: false,
+              )
+            : SizedBox(
+                width: side + 6,
+                height: side + 6,
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: QuickVideoClip(
+                    shape: widget.shape,
+                    child: const ColoredBox(color: Color(0xFF111111)),
+                  ),
+                ),
               );
-            },
-            child: frame,
-          );
-        }
+        frame = AnimatedBuilder(
+          animation: _flip,
+          builder: (_, child) {
+            final v = _flip.value;
+            if (kIsWeb) {
+              // The web camera is an HTML <video> that cannot be transformed,
+              // so a shaped "curtain" closes over it (scaleX 0→1) while the
+              // camera swaps and opens again (1→0) — reads as a flip.
+              final cover = v <= 0.5 ? v * 2 : (1 - v) * 2;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  child!,
+                  if (cover > 0.001)
+                    Transform.scale(
+                      scaleX: cover,
+                      child: SizedBox(
+                        width: side + 6,
+                        height: side + 6,
+                        child: Padding(
+                          padding: const EdgeInsets.all(3),
+                          child: QuickVideoClip(
+                            shape: widget.shape,
+                            child: const ColoredBox(color: Color(0xFF111111)),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            }
+            final angle = (v <= 0.5 ? v : v - 1) * math.pi;
+            return Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..setEntry(3, 2, 0.0012)
+                ..rotateY(angle),
+              child: child,
+            );
+          },
+          child: frame,
+        );
         return Stack(
           children: [
             // Scrim: dims the chat (bright white for front-camera "flash").

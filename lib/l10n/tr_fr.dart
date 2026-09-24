@@ -2034,4 +2034,6 @@ const Map<String, String> trFr = <String, String>{
   'Чётче картинка, но файл больше': 'Image plus nette, mais fichier plus lourd',
   'Запись — до 1 минуты: удерживайте кнопку, проведите вверх, чтобы закрепить, влево — отменить.': 'Jusqu\'à 1 minute : maintenez le bouton, glissez vers le haut pour verrouiller, vers la gauche pour annuler.',
   'Соединение с сервером в порядке': 'La connexion au serveur est correcte',
+  'Не удалось отправить: нет связи с сервером. Повторите позже.': 'Échec de l\'envoi : pas de connexion au serveur. Réessayez plus tard.',
+  'Не удалось переключить камеру': 'Impossible de changer de caméra',
 };

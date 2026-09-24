@@ -672,8 +672,8 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
 
-    // 2. BLE gossip chunks — only when relay is unavailable.
-    if (!blobSent) {
+    // 2. BLE gossip chunks — only when relay is unavailable (no BLE on web).
+    if (!blobSent && !kIsWeb) {
       final compressed = ImageService.instance.compress(bytes);
       final sealed = await _sealMediaForRecipient(compressed, _resolvedPeerId);
       if (sealed == null) return false;
@@ -735,35 +735,65 @@ class _ChatScreenState extends State<ChatScreen> {
     final relayRecipientKey = _resolvedPeerId;
     MediaUploadQueue.instance.setExternalProgress(msgId, 0.01);
     try {
-      for (var i = 0; i < total; i++) {
-        final offset = i * chunkBytes;
-        final end = (offset + chunkBytes) > compressed.length
-            ? compressed.length
-            : offset + chunkBytes;
-        final chunk = Uint8List.sublistView(compressed, offset, end);
-        await RelayService.instance.sendBlobChunk(
-          recipientKey: relayRecipientKey,
-          fromId: myId,
-          msgId: msgId,
-          chunkIdx: i,
-          chunkTotal: total,
-          chunkData: chunk,
-          isVoice: isVoice,
-          isVideo: isVideo,
-          isSquare: isSquare,
-          isFile: isFile,
-          isSticker: isSticker,
-          fileName: fileName,
-          caption: caption,
-        );
-        // Determinate gauge on the bubble (kept < 1.0 until fully sent).
-        MediaUploadQueue.instance
-            .setExternalProgress(msgId, ((i + 1) / total) * 0.99);
-        // Gentle pacing: mobile browsers and proxies are more stable with
-        // smaller, less bursty WebSocket frames.
-        await Future.delayed(
-          const Duration(milliseconds: kIsWeb ? 120 : 50),
-        );
+      // A long video is hundreds of chunks. If the socket drops meanwhile
+      // (flaky network / iOS suspends the PWA) chunks written to the dying
+      // socket never arrive and the receiver never assembles the file — so
+      // wait for the reconnect, retry the chunk that failed, and if the socket
+      // was replaced during the transfer send everything once more (the
+      // receiver keys chunks by index, duplicates are harmless).
+      for (var pass = 0; pass < 2; pass++) {
+        final generation = RelayService.instance.connectionGeneration;
+        for (var i = 0; i < total; i++) {
+          final offset = i * chunkBytes;
+          final end = (offset + chunkBytes) > compressed.length
+              ? compressed.length
+              : offset + chunkBytes;
+          final chunk = Uint8List.sublistView(compressed, offset, end);
+          var sent = false;
+          for (var attempt = 0; attempt < 4 && !sent; attempt++) {
+            if (!await RelayService.instance
+                .waitForConnected(const Duration(seconds: 45))) {
+              break;
+            }
+            sent = await RelayService.instance.sendBlobChunk(
+              recipientKey: relayRecipientKey,
+              fromId: myId,
+              msgId: msgId,
+              chunkIdx: i,
+              chunkTotal: total,
+              chunkData: chunk,
+              isVoice: isVoice,
+              isVideo: isVideo,
+              isSquare: isSquare,
+              isFile: isFile,
+              isSticker: isSticker,
+              fileName: fileName,
+              caption: caption,
+            );
+            if (!sent) {
+              await Future.delayed(const Duration(milliseconds: 400));
+            }
+          }
+          if (!sent) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(AppL10n.t(
+                    'Не удалось отправить: нет связи с сервером. Повторите позже.')),
+                backgroundColor: Colors.red,
+              ));
+            }
+            throw StateError('relay_unavailable_during_media_send');
+          }
+          // Determinate gauge on the bubble (kept < 1.0 until fully sent).
+          MediaUploadQueue.instance
+              .setExternalProgress(msgId, ((i + 1) / total) * 0.99);
+          // Gentle pacing: mobile browsers and proxies are more stable with
+          // smaller, less bursty WebSocket frames.
+          await Future.delayed(
+            const Duration(milliseconds: kIsWeb ? 40 : 50),
+          );
+        }
+        if (RelayService.instance.connectionGeneration == generation) break;
       }
     } finally {
       MediaUploadQueue.instance.setExternalProgress(msgId, 1.0); // clear
@@ -2182,13 +2212,29 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _onHoldRecordingLockChanged(bool locked) {
     if (!locked) return;
-    if (_dmHoldVideoCam != null) return;
+    if (_dmHoldIsVideo) return;
     setState(() => _voiceHoldLocked = true);
   }
 
   Future<void> _toggleDmHoldVideoPause() async {
     final cam = _dmHoldVideoCam;
     if (cam == null || !cam.value.isInitialized) return;
+    if (kIsWeb) {
+      // Browsers cannot join recordings, so pause the ONE recording instead of
+      // stopping it into segments (no review-while-paused preview on web).
+      try {
+        if (_dmHoldVideoPausedNotifier.value) {
+          await cam.resumeVideoRecording();
+          if (mounted) _dmHoldVideoPausedNotifier.value = false;
+        } else {
+          await cam.pauseVideoRecording();
+          if (mounted) _dmHoldVideoPausedNotifier.value = true;
+        }
+      } catch (e) {
+        debugPrint('[DmHoldVideo] web pause toggle: $e');
+      }
+      return;
+    }
     try {
       if (_dmHoldVideoPausedNotifier.value) {
         await _disposeDmHoldPausePreview();
@@ -2299,6 +2345,51 @@ class _ChatScreenState extends State<ChatScreen> {
     unawaited(_applyDmHoldTorch());
   }
 
+  /// True while a quick video is being recorded — also during a camera switch,
+  /// when [_dmHoldVideoCam] is briefly null (the composer must not mistake that
+  /// for a voice recording).
+  bool get _dmHoldIsVideo => _dmHoldVideoCam != null || _dmHoldSwitchingCam;
+
+  Future<void> _discardDmHoldSegments() async {
+    for (final path in _dmHoldVideoSegments) {
+      try {
+        await File(path).delete();
+      } catch (_) {}
+    }
+    _dmHoldVideoSegments.clear();
+  }
+
+  /// Opens [d]; retries because a browser / phone needs a moment to release the
+  /// previous camera before another one can be started (NotReadableError).
+  Future<CameraController> _openDmHoldCamera(CameraDescription d) async {
+    Object? err;
+    for (var i = 0; i < 3; i++) {
+      final c = CameraController(
+        d,
+        AppSettings.instance.quickVideoQuality.preset,
+        enableAudio: true,
+        imageFormatGroup: ImageFormatGroup.jpeg,
+      );
+      try {
+        await c.initialize();
+        return c;
+      } catch (e) {
+        err = e;
+        try {
+          await c.dispose();
+        } catch (_) {}
+        await Future.delayed(Duration(milliseconds: 350 * (i + 1)));
+      }
+    }
+    throw err ?? StateError('camera_init_failed');
+  }
+
+  Future<void> _waitDmHoldSwitchDone() async {
+    for (var i = 0; i < 100 && _dmHoldSwitchingCam; i++) {
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+  }
+
   Future<void> _switchDmHoldCamera() async {
     final session = _dmHoldSession;
     final ctrl = _dmHoldVideoCam;
@@ -2308,46 +2399,54 @@ class _ChatScreenState extends State<ChatScreen> {
         _dmHoldCameraList.length < 2) {
       return;
     }
+    final wasPaused = _dmHoldVideoPausedNotifier.value;
+    final prevIndex = _dmHoldCameraIndex;
     setState(() => _dmHoldSwitchingCam = true);
     CameraController? newCam;
     try {
       if (ctrl.value.isRecordingVideo) {
         final stopped = await ctrl.stopVideoRecording();
-        if (stopped.path.isNotEmpty) {
+        if (kIsWeb) {
+          // A browser cannot join two recordings into one file, so the clip
+          // restarts with the new camera (what you see is what is sent).
+          _recordingSecondsNotifier.value = 0;
+        } else if (stopped.path.isNotEmpty) {
           _dmHoldVideoSegments.add(stopped.path);
         }
       }
-      final next = (_dmHoldCameraIndex + 1) % _dmHoldCameraList.length;
+      if (kIsWeb) await _discardDmHoldSegments();
       await ctrl.dispose();
-      _dmHoldVideoCam = null;
+      if (mounted) {
+        setState(() => _dmHoldVideoCam = null);
+      } else {
+        _dmHoldVideoCam = null;
+      }
       if (!mounted || session != _dmHoldSession) {
-        for (final p in _dmHoldVideoSegments) {
-          try {
-            await File(p).delete();
-          } catch (_) {}
-        }
-        _dmHoldVideoSegments.clear();
+        await _discardDmHoldSegments();
         return;
       }
-      _dmHoldCameraIndex = next;
-      newCam = CameraController(
-        _dmHoldCameraList[next],
-        AppSettings.instance.quickVideoQuality.preset,
-        enableAudio: true,
-        imageFormatGroup: ImageFormatGroup.jpeg,
-      );
-      await newCam.initialize();
+      final next = (prevIndex + 1) % _dmHoldCameraList.length;
+      try {
+        newCam = await _openDmHoldCamera(_dmHoldCameraList[next]);
+        _dmHoldCameraIndex = next;
+      } catch (e) {
+        // The other camera would not start: go back to the previous one and
+        // keep recording instead of throwing the whole clip away.
+        debugPrint('[DmHoldVideo] switch cam failed, restoring: $e');
+        newCam = await _openDmHoldCamera(_dmHoldCameraList[prevIndex]);
+        _dmHoldCameraIndex = prevIndex;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppL10n.f('Смена камеры: {0}', [e]))),
+          );
+        }
+      }
       if (!mounted || session != _dmHoldSession) {
         await newCam.dispose();
-        for (final p in _dmHoldVideoSegments) {
-          try {
-            await File(p).delete();
-          } catch (_) {}
-        }
-        _dmHoldVideoSegments.clear();
+        await _discardDmHoldSegments();
         return;
       }
-      if (!_dmHoldVideoPausedNotifier.value) {
+      if (!wasPaused) {
         await newCam.startVideoRecording();
       }
       if (!mounted || session != _dmHoldSession) {
@@ -2360,19 +2459,16 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         } catch (_) {}
         await newCam.dispose();
-        for (final p in _dmHoldVideoSegments) {
-          try {
-            await File(p).delete();
-          } catch (_) {}
-        }
-        _dmHoldVideoSegments.clear();
+        await _discardDmHoldSegments();
         return;
       }
       setState(() => _dmHoldVideoCam = newCam);
       unawaited(_applyDmHoldTorch());
     } catch (e) {
       debugPrint('[DmHoldVideo] switch cam: $e');
-      await newCam?.dispose();
+      try {
+        await newCam?.dispose();
+      } catch (_) {}
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppL10n.f('Смена камеры: {0}', [e]))),
@@ -2387,12 +2483,7 @@ class _ChatScreenState extends State<ChatScreen> {
       } else {
         _dmHoldVideoCam = null;
       }
-      for (final p in _dmHoldVideoSegments) {
-        try {
-          await File(p).delete();
-        } catch (_) {}
-      }
-      _dmHoldVideoSegments.clear();
+      await _discardDmHoldSegments();
       _sendActivity(Activity.stopped);
     } finally {
       if (mounted && session == _dmHoldSession) {
@@ -8309,40 +8400,44 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                           ),
                         ),
-                      if (_dmHoldVideoCam != null)
+                      if (_dmHoldIsVideo)
                         ValueListenableBuilder<bool>(
                           valueListenable: _dmHoldVideoPausedNotifier,
                           builder: (_, paused, __) =>
                               ValueListenableBuilder<bool>(
                             valueListenable: _dmHoldFlashOn,
-                            builder: (_, flash, __) => ListenableBuilder(
-                              listenable: _dmHoldVideoCam!,
-                              builder: (_, __) {
-                                final cam = _dmHoldVideoCam;
-                                if (cam == null || !cam.value.isInitialized) {
-                                  return const SizedBox.shrink();
-                                }
-                                return Positioned.fill(
-                                  child: QuickVideoRecordingOverlay(
-                                    controller: cam,
-                                    shape:
-                                        AppSettings.instance.quickVideoShape,
-                                    seconds: _recordingSecondsNotifier,
-                                    maxSeconds: _kQuickVideoMaxSeconds,
-                                    paused: paused,
-                                    pausePreview: _dmHoldPausePreview,
-                                    isFront: cam.description.lensDirection ==
-                                        CameraLensDirection.front,
-                                    flashOn: flash,
-                                    canFlip: _dmHoldCameraList.length > 1,
-                                    switching: _dmHoldSwitchingCam,
-                                    onToggleFlash: _toggleDmHoldFlash,
-                                    onFlip: () =>
-                                        unawaited(_switchDmHoldCamera()),
-                                  ),
-                                );
-                              },
-                            ),
+                            builder: (_, flash, __) {
+                              final cam = _dmHoldVideoCam;
+                              Widget overlay(CameraController? c) =>
+                                  Positioned.fill(
+                                    child: QuickVideoRecordingOverlay(
+                                      controller: c,
+                                      shape:
+                                          AppSettings.instance.quickVideoShape,
+                                      seconds: _recordingSecondsNotifier,
+                                      maxSeconds: _kQuickVideoMaxSeconds,
+                                      paused: paused,
+                                      pausePreview: _dmHoldPausePreview,
+                                      isFront: c?.description.lensDirection ==
+                                          CameraLensDirection.front,
+                                      flashOn: flash,
+                                      canFlip: _dmHoldCameraList.length > 1,
+                                      switching: _dmHoldSwitchingCam,
+                                      onToggleFlash: _toggleDmHoldFlash,
+                                      onFlip: () =>
+                                          unawaited(_switchDmHoldCamera()),
+                                    ),
+                                  );
+                              // Between cameras there is no controller: keep the
+                              // dimmed frame up instead of flashing the chat.
+                              if (cam == null || !cam.value.isInitialized) {
+                                return overlay(null);
+                              }
+                              return ListenableBuilder(
+                                listenable: cam,
+                                builder: (_, __) => overlay(cam),
+                              );
+                            },
                           ),
                         ),
                     ],
@@ -8453,11 +8548,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     isSending: _isSending,
                     onSendComposedImage: _sendComposedImage,
                     isRecording: _isRecording,
-                    isVoiceRecordingMode:
-                        _isRecording && _dmHoldVideoCam == null,
-                    voiceControlsEnabled: _isRecording &&
-                        _dmHoldVideoCam == null &&
-                        _voiceHoldLocked,
+                    isVoiceRecordingMode: _isRecording && !_dmHoldIsVideo,
+                    voiceControlsEnabled:
+                        _isRecording && !_dmHoldIsVideo && _voiceHoldLocked,
                     recordingPaused: _isVoiceRecordingPaused,
                     isHoldVideoStarting: _dmHoldVideoStarting,
                     recordingSecondsNotifier: _recordingSecondsNotifier,
@@ -8511,7 +8604,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     onVoiceHoldStart: _startVoiceRecording,
                     onVideoHoldStart: _startDmHoldSquareVideo,
                     onHoldReleaseSend: () async {
-                      if (_dmHoldVideoCam != null) {
+                      if (_dmHoldIsVideo) {
+                        await _waitDmHoldSwitchDone();
                         await _finishDmHoldSquareVideo(send: true);
                       } else {
                         await _stopAndSendVoice();

@@ -152,6 +152,7 @@ dependencies:
 
   # On-device OCR for image editor (Android + iOS only; web-gated)
   google_mlkit_text_recognition: ^0.13.0
+  pointer_interceptor: ^0.10.1+3
 
 dev_dependencies:
   flutter_test:
