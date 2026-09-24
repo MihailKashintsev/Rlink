@@ -12,10 +12,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// Обновления берём со СВОЕГО сервера (relay), а не с GitHub — в РФ GitHub
 /// часто режется/тормозит. Relay отдаёт манифест + сами бинарники:
-///   https://185.244.172.90.nip.io/updates/manifest.json
+///   https://relay.rendergames.ru/updates/manifest.json
 /// Манифест: { version, notes, assets: { android|windows|macos|linux|ios } }.
-const _kUpdateManifestUrl =
-    'https://185.244.172.90.nip.io/updates/manifest.json';
+/// The same server under two names — some networks stall TLS for one of them.
+const _kUpdateManifestUrls = <String>[
+  'https://relay.rendergames.ru/updates/manifest.json',
+  'https://185.244.172.90.nip.io/updates/manifest.json',
+];
 
 /// Уведомление UI о доступном обновлении (после фоновой проверки).
 final ValueNotifier<UpdateInfo?> pendingUpdateNotifier =
@@ -86,10 +89,24 @@ class UpdateService {
       final info = await PackageInfo.fromPlatform();
       final current = _normalizeVersionTag(info.version);
 
-      final response = await _dio.getUri(
-        Uri.parse(_kUpdateManifestUrl),
-        options: Options(responseType: ResponseType.plain),
-      );
+      Response<dynamic>? response;
+      Object? lastError;
+      for (final u in _kUpdateManifestUrls) {
+        try {
+          response = await _dio.getUri(
+            Uri.parse(u),
+            options: Options(
+              responseType: ResponseType.plain,
+              receiveTimeout: const Duration(seconds: 12),
+              sendTimeout: const Duration(seconds: 12),
+            ),
+          );
+          break;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      if (response == null) throw lastError ?? StateError('no manifest');
       final data = response.data;
       final Map<String, dynamic> manifest = data is String
           ? jsonDecode(data) as Map<String, dynamic>

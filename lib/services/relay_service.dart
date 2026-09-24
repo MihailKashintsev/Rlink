@@ -15,7 +15,6 @@ import 'chat_storage_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
 import 'profile_service.dart';
-import 'relay_web_warmup.dart';
 import 'diagnostics_log_service.dart';
 import 'secondary_relay_link.dart';
 import '../l10n/app_l10n.dart';
@@ -105,17 +104,26 @@ class RelayService with WidgetsBindingObserver {
   /// Default public relay server — always tried, so a broken custom relay
   /// (see [AppSettings.relayServerUrl]) degrades to "slower to connect",
   /// never "no connectivity at all".
-  static const defaultServerUrl = 'wss://185.244.172.90.nip.io';
+  static const defaultServerUrl = 'wss://relay.rendergames.ru';
+
+  /// Same server under its old name. Some networks stall the TLS handshake for
+  /// `*.nip.io` names (SNI filtering), others may do so for the new domain, so
+  /// both are raced on connect and old app versions keep working.
+  static const legacyServerUrl = 'wss://185.244.172.90.nip.io';
   static const List<String> fallbackServerUrls = <String>[
     defaultServerUrl,
+    legacyServerUrl,
   ];
+
+  /// True for any hostname of the official relay (it is one server).
+  static bool isOfficialUrl(String url) => fallbackServerUrls.contains(url);
 
   /// URLs to try, in order, for the next [connect] call. A user-configured
   /// relay (self-hosted, for independence from the default server) is tried
   /// first; the default is always appended as a safety net.
   List<String> get _urlsToTry {
     final custom = AppSettings.instance.relayServerUrl.trim();
-    if (custom.isEmpty || custom == defaultServerUrl) return fallbackServerUrls;
+    if (custom.isEmpty || isOfficialUrl(custom)) return fallbackServerUrls;
     return [custom, ...fallbackServerUrls];
   }
 
@@ -139,8 +147,7 @@ class RelayService with WidgetsBindingObserver {
 
   void _syncSecondaryLink() {
     final connectedUrl = _connectedServerUrl;
-    final needsSecondary =
-        connectedUrl != null && connectedUrl != defaultServerUrl;
+    final needsSecondary = connectedUrl != null && !isOfficialUrl(connectedUrl);
     if (!needsSecondary) {
       _secondary?.dispose();
       _secondary = null;
@@ -623,6 +630,54 @@ class RelayService with WidgetsBindingObserver {
     );
   }
 
+  /// Opens the relay WebSocket on several URLs at once (each started 1.5 s after
+  /// the previous) and returns the first that becomes ready; the others are
+  /// closed before anything is registered on them (the relay keeps one
+  /// connection per key). A network that drops some handshakes then costs at
+  /// most a short stagger instead of a full 12 s timeout per URL.
+  Future<({WebSocketChannel ws, String url})?> _openFirstReady(
+      List<String> urls, void Function(Exception) onError) async {
+    final done = Completer<({WebSocketChannel ws, String url})?>();
+    var remaining = urls.length;
+    void failed(String url, Object e) {
+      onError(Exception('$url: $e'));
+      if (--remaining == 0 && !done.isCompleted) done.complete(null);
+    }
+
+    for (var i = 0; i < urls.length; i++) {
+      final url = urls[i];
+      unawaited(() async {
+        await Future<void>.delayed(Duration(milliseconds: 1500 * i));
+        if (done.isCompleted) {
+          remaining--;
+          return;
+        }
+        WebSocketChannel? ws;
+        try {
+          debugPrint('[RLINK][Relay] Connecting to $url');
+          ws = WebSocketChannel.connect(Uri.parse(url));
+          // A network that silently drops the TLS handshake (DPI / bad VPN
+          // exit) never errors: without a timeout the state stayed
+          // "connecting" for minutes and no retry ran.
+          await ws.ready.timeout(const Duration(seconds: 12));
+          if (!done.isCompleted) {
+            done.complete((ws: ws, url: url));
+          } else {
+            ws.sink.close(_kCloseNormal, 'lost_race').ignore();
+            remaining--;
+          }
+        } catch (e) {
+          // Not awaited: closing a socket that never connected can itself hang.
+          try {
+            ws?.sink.close(_kCloseNormal, 'connect_failed').ignore();
+          } catch (_) {}
+          failed(url, e);
+        }
+      }());
+    }
+    return done.future;
+  }
+
   Future<void> connect() async {
     if (!_blockSyncAttached) {
       _blockSyncAttached = true;
@@ -664,41 +719,17 @@ class RelayService with WidgetsBindingObserver {
 
     String? connectedUrl;
     Exception? lastConnectError;
-    for (final url in _urlsToTry) {
-      WebSocketChannel? pending;
+    final won = await _openFirstReady(_urlsToTry, (e) => lastConnectError = e);
+    if (connectEpoch != _connectEpoch) {
       try {
-        if (kIsWeb) {
-          final httpBase = url.replaceFirst('wss://', 'https://');
-          await warmupRelayWebSession(httpBase);
-        }
-        debugPrint('[RLINK][Relay] Connecting to $url');
-        final ws = pending = WebSocketChannel.connect(Uri.parse(url));
-        // A network that silently drops the TLS handshake (DPI / bad VPN exit)
-        // never errors: without a timeout the state stayed "connecting" for
-        // minutes and no retry ran. Fail fast → backoff reconnect.
-        await ws.ready.timeout(const Duration(seconds: 12));
-        if (connectEpoch != _connectEpoch) {
-          try {
-            await ws.sink.close(_kCloseNormal, 'superseded_connect');
-          } catch (_) {}
-          return;
-        }
-        _channel = ws;
-        _channelStream = ws.stream.asBroadcastStream();
-        connectedUrl = url;
-        break;
-      } catch (e) {
-        // Not awaited: closing a socket that never connected can itself hang.
-        try {
-          pending?.sink.close(_kCloseNormal, 'connect_failed').ignore();
-        } catch (_) {}
-        try {
-          await _channel?.sink.close(_kCloseNormal, 'connect_failed');
-        } catch (_) {}
-        _channel = null;
-        _channelStream = null;
-        lastConnectError = Exception('$url: $e');
-      }
+        won?.ws.sink.close(_kCloseNormal, 'superseded_connect').ignore();
+      } catch (_) {}
+      return;
+    }
+    if (won != null) {
+      _channel = won.ws;
+      _channelStream = won.ws.stream.asBroadcastStream();
+      connectedUrl = won.url;
     }
     if (connectedUrl == null || _channel == null) {
       final msg = (lastConnectError ?? Exception('No relay endpoint available'))
