@@ -1324,7 +1324,13 @@ class ChannelService {
     final ch = await getChannel(channelId);
     if (ch == null || ch.adminId != currentAdminId) return null;
     if (newAdminId == currentAdminId) return null;
-    if (!ch.subscriberIds.contains(newAdminId)) return null;
+    // Ownership goes to an existing administrator of the channel (moderator or
+    // link admin); a plain subscriber is accepted too for older callers.
+    if (!ch.subscriberIds.contains(newAdminId) &&
+        !ch.moderatorIds.contains(newAdminId) &&
+        !ch.linkAdminIds.contains(newAdminId)) {
+      return null;
+    }
 
     final subs = List<String>.from(ch.subscriberIds);
     if (!subs.contains(currentAdminId)) subs.add(currentAdminId);

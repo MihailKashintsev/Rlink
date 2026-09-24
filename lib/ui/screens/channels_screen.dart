@@ -212,8 +212,7 @@ Future<void> _showContactMentionPicker(
   final contacts = ChatStorageService.instance.contactsNotifier.value;
   if (contacts.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(AppL10n.t('chn_no_contacts_add'))),
+      SnackBar(content: Text(AppL10n.t('chn_no_contacts_add'))),
     );
     return;
   }
@@ -225,7 +224,8 @@ Future<void> _showContactMentionPicker(
         children: [
           ListTile(
             title: Text(AppL10n.t('chn_tag_person')),
-            subtitle: Text(AppL10n.t('В текст добавится уникальный код (ключ). Для других он отобразится как @ник.')),
+            subtitle: Text(AppL10n.t(
+                'В текст добавится уникальный код (ключ). Для других он отобразится как @ник.')),
           ),
           for (final c in contacts)
             ListTile(
@@ -302,7 +302,8 @@ Widget _channelsDisabledView(BuildContext context) {
           ),
           const SizedBox(height: 8),
           Text(
-            AppL10n.t('В режиме «только Bluetooth» доступны личные чаты, группы и эфир.'),
+            AppL10n.t(
+                'В режиме «только Bluetooth» доступны личные чаты, группы и эфир.'),
             style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
@@ -516,7 +517,8 @@ class _ChannelsScreenState extends State<ChannelsScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            AppL10n.t('Канал не найден. Подключитесь к сети и попробуйте ещё раз, либо попросите прямое приглашение от админа.'),
+            AppL10n.t(
+                'Канал не найден. Подключитесь к сети и попробуйте ещё раз, либо попросите прямое приглашение от админа.'),
           ),
         ),
       );
@@ -558,8 +560,7 @@ class _ChannelsScreenState extends State<ChannelsScreen>
     if (AppSettings.instance.isLinkedChildDevice) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(AppL10n.t('chn_create_main_only')),
+          content: Text(AppL10n.t('chn_create_main_only')),
         ),
       );
       return;
@@ -593,7 +594,8 @@ class _ChannelsScreenState extends State<ChannelsScreen>
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    AppL10n.t('Привяжите Google Drive в настройках — без него история будет доступна только онлайн'),
+                    AppL10n.t(
+                        'Привяжите Google Drive в настройках — без него история будет доступна только онлайн'),
                     style: TextStyle(fontSize: 12, color: Colors.orange),
                   ),
                 ),
@@ -694,7 +696,8 @@ class _ChannelTile extends StatelessWidget {
         children: [
           if (channel.foreignAgent)
             Text(
-              AppL10n.t('ДАННОЕ СООБЩЕНИЕ СОЗДАНО И (ИЛИ) РАСПРОСТРАНЕНО ИНОСТРАННЫМ АГЕНТОМ'),
+              AppL10n.t(
+                  'ДАННОЕ СООБЩЕНИЕ СОЗДАНО И (ИЛИ) РАСПРОСТРАНЕНО ИНОСТРАННЫМ АГЕНТОМ'),
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
@@ -942,8 +945,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             duration: Duration(seconds: 6),
-            content: Text(
-                AppL10n.t('Пост сохранён, но Google Drive не привязан — история недоступна подписчикам. Привяжите аккаунт в Настройках.')),
+            content: Text(AppL10n.t(
+                'Пост сохранён, но Google Drive не привязан — история недоступна подписчикам. Привяжите аккаунт в Настройках.')),
           ),
         );
         return;
@@ -1035,11 +1038,13 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                   const SizedBox(height: 8),
                   TextField(
                     controller: o1,
-                    decoration: InputDecoration(labelText: AppL10n.t('Вариант 1')),
+                    decoration:
+                        InputDecoration(labelText: AppL10n.t('Вариант 1')),
                   ),
                   TextField(
                     controller: o2,
-                    decoration: InputDecoration(labelText: AppL10n.t('Вариант 2')),
+                    decoration:
+                        InputDecoration(labelText: AppL10n.t('Вариант 2')),
                   ),
                   TextField(
                     controller: o3,
@@ -1212,7 +1217,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(AppL10n.f('Ошибка видео: {0}', [e])), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка видео: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1302,7 +1308,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Квадратик: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Квадратик: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1342,7 +1350,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         builder: (ctx) => AlertDialog(
           title: Text(AppL10n.t('cm_large_file')),
           content: Text(
-            AppL10n.f('Файл {0} КБ — передача по Bluetooth займёт несколько минут. Продолжить?', [(fileBytes.length / 1024).toStringAsFixed(0)]),
+            AppL10n.f(
+                'Файл {0} КБ — передача по Bluetooth займёт несколько минут. Продолжить?',
+                [(fileBytes.length / 1024).toStringAsFixed(0)]),
           ),
           actions: [
             TextButton(
@@ -1419,7 +1429,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(AppL10n.f('Ошибка файла: {0}', [e])), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка файла: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1594,7 +1605,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Ошибка: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1664,7 +1677,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(AppL10n.f('Ошибка видео: {0}', [e])), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка видео: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1741,7 +1755,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Стикер: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Стикер: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1766,7 +1782,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Стикер: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Стикер: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1792,7 +1810,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         builder: (ctx) => AlertDialog(
           title: Text(AppL10n.t('cm_large_file')),
           content: Text(
-            AppL10n.f('Файл {0} КБ — передача по Bluetooth займёт несколько минут. Продолжить?', [(fileBytes.length / 1024).toStringAsFixed(0)]),
+            AppL10n.f(
+                'Файл {0} КБ — передача по Bluetooth займёт несколько минут. Продолжить?',
+                [(fileBytes.length / 1024).toStringAsFixed(0)]),
           ),
           actions: [
             TextButton(
@@ -1870,7 +1890,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(AppL10n.f('Ошибка файла: {0}', [e])), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка файла: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1976,7 +1997,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Ошибка: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -2070,7 +2093,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Ошибка: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -2150,7 +2175,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     if (bytes == null || bytes.isEmpty || !mounted) return;
     final fileName = picked!.name.isNotEmpty
         ? picked.name
-        : (choice == 'gif' ? 'animation.gif' : (choice == 'video' ? 'video.mp4' : 'file.bin'));
+        : (choice == 'gif'
+            ? 'animation.gif'
+            : (choice == 'video' ? 'video.mp4' : 'file.bin'));
     await _publishBytesPostWeb(
       bytes: bytes,
       fileName: fileName,
@@ -2241,7 +2268,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Ошибка: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Ошибка: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -2476,7 +2505,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                           title: Text(nickFor(uid)),
                           subtitle: Text(
                             isMod
-                                ? AppL10n.f('Модератор · {0}…', [uid.substring(0, 12)])
+                                ? AppL10n.f(
+                                    'Модератор · {0}…', [uid.substring(0, 12)])
                                 : '${uid.substring(0, 12)}…',
                             style: const TextStyle(
                                 fontSize: 11, color: Colors.grey),
@@ -2555,8 +2585,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(AppL10n.t('Отписаться от канала?')),
-        content: Text(
-            AppL10n.t('Вы сложите полномочия администратора. Канал исчезнет из ваших чатов, но останется у подписчиков.')),
+        content: Text(AppL10n.t(
+            'Вы сложите полномочия администратора. Канал исчезнет из ваших чатов, но останется у подписчиков.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -2614,75 +2644,79 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
           constraints:
               BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
           child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(AppL10n.t('chn_invite_to_channel'),
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            ),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-            ...available.map((c) => ListTile(
-                  leading: AvatarWidget(
-                    initials: c.nickname.isNotEmpty
-                        ? c.nickname[0].toUpperCase()
-                        : '?',
-                    color: c.avatarColor,
-                    emoji: c.avatarEmoji,
-                    imagePath: c.avatarImagePath,
-                    size: 40,
-                  ),
-                  title: Text(c.nickname),
-                  onTap: () async {
-                    Navigator.pop(ctx);
-                    final myProfile = ProfileService.instance.profile;
-                    // Send directed channel invite
-                    await GossipRouter.instance.sendChannelInvite(
-                      channelId: _channel.id,
-                      channelName: _channel.name,
-                      adminId: _channel.adminId,
-                      inviterId: CryptoService.instance.publicKeyHex,
-                      inviterNick: myProfile?.nickname ?? '',
-                      targetPublicKey: c.publicKeyHex,
-                      avatarColor: _channel.avatarColor,
-                      avatarEmoji: _channel.avatarEmoji,
-                      description: _channel.description,
-                      createdAt: _channel.createdAt,
-                    );
-                    await InviteDmService.sendChannelInviteDm(
-                      targetPublicKey: c.publicKeyHex,
-                      payload: {
-                        'channelId': _channel.id,
-                        'channelName': _channel.name,
-                        'adminId': _channel.adminId,
-                        'inviterId': CryptoService.instance.publicKeyHex,
-                        'inviterNick': myProfile?.nickname ?? '',
-                        'avatarColor': _channel.avatarColor,
-                        'avatarEmoji': _channel.avatarEmoji,
-                        if (_channel.description != null)
-                          'description': _channel.description,
-                        'createdAt': _channel.createdAt,
-                      },
-                    );
-                    // Also broadcast updated meta
-                    await _channel.broadcastGossipMeta();
-                    _load();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(AppL10n.f('{0} приглашён в канал', [c.nickname]))),
-                      );
-                    }
-                  },
-                )),
-                ],
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(AppL10n.t('chn_invite_to_channel'),
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
               ),
-            ),
-            const SizedBox(height: 16),
-          ],
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    ...available.map((c) => ListTile(
+                          leading: AvatarWidget(
+                            initials: c.nickname.isNotEmpty
+                                ? c.nickname[0].toUpperCase()
+                                : '?',
+                            color: c.avatarColor,
+                            emoji: c.avatarEmoji,
+                            imagePath: c.avatarImagePath,
+                            size: 40,
+                          ),
+                          title: Text(c.nickname),
+                          onTap: () async {
+                            Navigator.pop(ctx);
+                            final myProfile = ProfileService.instance.profile;
+                            // Send directed channel invite
+                            await GossipRouter.instance.sendChannelInvite(
+                              channelId: _channel.id,
+                              channelName: _channel.name,
+                              adminId: _channel.adminId,
+                              inviterId: CryptoService.instance.publicKeyHex,
+                              inviterNick: myProfile?.nickname ?? '',
+                              targetPublicKey: c.publicKeyHex,
+                              avatarColor: _channel.avatarColor,
+                              avatarEmoji: _channel.avatarEmoji,
+                              description: _channel.description,
+                              createdAt: _channel.createdAt,
+                            );
+                            await InviteDmService.sendChannelInviteDm(
+                              targetPublicKey: c.publicKeyHex,
+                              payload: {
+                                'channelId': _channel.id,
+                                'channelName': _channel.name,
+                                'adminId': _channel.adminId,
+                                'inviterId':
+                                    CryptoService.instance.publicKeyHex,
+                                'inviterNick': myProfile?.nickname ?? '',
+                                'avatarColor': _channel.avatarColor,
+                                'avatarEmoji': _channel.avatarEmoji,
+                                if (_channel.description != null)
+                                  'description': _channel.description,
+                                'createdAt': _channel.createdAt,
+                              },
+                            );
+                            // Also broadcast updated meta
+                            await _channel.broadcastGossipMeta();
+                            _load();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content: Text(AppL10n.f(
+                                        '{0} приглашён в канал',
+                                        [c.nickname]))),
+                              );
+                            }
+                          },
+                        )),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
           ),
         ),
       ),
@@ -2753,8 +2787,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
       if (ok) {
         await _loadAndMarkRead();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(AppL10n.t('chn_history_restored'))),
+          SnackBar(content: Text(AppL10n.t('chn_history_restored'))),
         );
       } else {
         // Key not yet in the Drive keys-file. Re-broadcast our subscription
@@ -2768,8 +2801,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             duration: Duration(seconds: 6),
-            content: Text(
-                AppL10n.t('Ключ запрошен от автора. Когда автор будет в сети, попробуйте снова.')),
+            content: Text(AppL10n.t(
+                'Ключ запрошен от автора. Когда автор будет в сети, попробуйте снова.')),
           ),
         );
       }
@@ -2817,8 +2850,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
           child: Row(
             children: [
               AvatarWidget(
-                initials:
-                    _channel.name.isNotEmpty ? _channel.name[0].toUpperCase() : '?',
+                initials: _channel.name.isNotEmpty
+                    ? _channel.name[0].toUpperCase()
+                    : '?',
                 color: _channel.avatarColor,
                 emoji: _channel.avatarEmoji,
                 imagePath: _channel.avatarImagePath,
@@ -2839,11 +2873,14 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                                 overflow: TextOverflow.ellipsis)),
                         if (_channel.verified) ...[
                           const SizedBox(width: 4),
-                          const Icon(Icons.verified, size: 16, color: Colors.blue),
+                          const Icon(Icons.verified,
+                              size: 16, color: Colors.blue),
                         ],
                       ],
                     ),
-                    Text(AppL10n.f('{0} подписчиков', [_channel.subscriberIds.length]),
+                    Text(
+                        AppL10n.f(
+                            '{0} подписчиков', [_channel.subscriberIds.length]),
                         style: TextStyle(
                             fontSize: 12,
                             color: cs.onSurface.withValues(alpha: 0.5))),
@@ -2858,7 +2895,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
             TextButton.icon(
               onPressed: _toggleSubscribe,
               icon: const Icon(Icons.notifications_outlined, size: 18),
-              label: Text(AppL10n.t('Подписаться'), style: TextStyle(fontSize: 13)),
+              label: Text(AppL10n.t('Подписаться'),
+                  style: TextStyle(fontSize: 13)),
             ),
           PopupMenuButton<String>(
             onSelected: (v) async {
@@ -2957,7 +2995,8 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               padding: const EdgeInsets.all(8),
               color: Colors.orange.withValues(alpha: 0.15),
               child: Text(
-                AppL10n.t('ДАННОЕ СООБЩЕНИЕ (МАТЕРИАЛ) СОЗДАНО И (ИЛИ) РАСПРОСТРАНЕНО ИНОСТРАННЫМ АГЕНТОМ'),
+                AppL10n.t(
+                    'ДАННОЕ СООБЩЕНИЕ (МАТЕРИАЛ) СОЗДАНО И (ИЛИ) РАСПРОСТРАНЕНО ИНОСТРАННЫМ АГЕНТОМ'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 10,
@@ -2988,14 +3027,27 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               ),
             ),
           if (_channel.description != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-              child: Text(_channel.description!,
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: cs.onSurface.withValues(alpha: 0.6))),
+            // Pinned-bar look (Telegram): rounded card with an accent edge, in the
+            // same centred column as the feed.
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh.withValues(alpha: 0.75),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border(
+                        left: BorderSide(color: cs.primary, width: 3)),
+                  ),
+                  child: Text(_channel.description!,
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: cs.onSurface.withValues(alpha: 0.75))),
+                ),
+              ),
             ),
           Expanded(
             child: _visiblePosts.isEmpty
@@ -3009,33 +3061,33 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 680),
                           child: ListView.builder(
-                        controller: _feedScrollController,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        cacheExtent: 1200,
-                        addRepaintBoundaries: false,
-                        itemCount: _visiblePosts.length,
-                        itemBuilder: (_, i) {
-                          final post = _visiblePosts[i];
-                          final showComments = _channel.commentsEnabled ||
-                              (post.authorId == _myId &&
-                                  _channel.canPost(_myId));
-                          return RepaintBoundary(
-                            key: ValueKey('post_${post.id}'),
-                            child: _PostCard(
-                              key: ValueKey('postcard_${post.id}'),
-                              post: post,
-                              isAdmin: _isAdmin,
-                              commentsEnabled: showComments,
-                              nickFor: _nickFor,
-                              onDelete: _channel.canPost(_myId)
-                                  ? () => _deletePost(post.id)
-                                  : null,
-                              channelId: _channel.id,
-                              channelName: _channel.name,
-                              channelAdminId: _channel.adminId,
-                            ),
-                          );
-                        },
+                            controller: _feedScrollController,
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            cacheExtent: 1200,
+                            addRepaintBoundaries: false,
+                            itemCount: _visiblePosts.length,
+                            itemBuilder: (_, i) {
+                              final post = _visiblePosts[i];
+                              final showComments = _channel.commentsEnabled ||
+                                  (post.authorId == _myId &&
+                                      _channel.canPost(_myId));
+                              return RepaintBoundary(
+                                key: ValueKey('post_${post.id}'),
+                                child: _PostCard(
+                                  key: ValueKey('postcard_${post.id}'),
+                                  post: post,
+                                  isAdmin: _isAdmin,
+                                  commentsEnabled: showComments,
+                                  nickFor: _nickFor,
+                                  onDelete: _channel.canPost(_myId)
+                                      ? () => _deletePost(post.id)
+                                      : null,
+                                  channelId: _channel.id,
+                                  channelName: _channel.name,
+                                  channelAdminId: _channel.adminId,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -3076,12 +3128,11 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               color: Colors.orange.withValues(alpha: 0.1),
               child: InkWell(
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => const SettingsScreen()),
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Row(
                     children: [
                       const Icon(Icons.drive_eta_outlined,
@@ -3089,9 +3140,9 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          AppL10n.t('История канала не сохраняется — подключите Google Drive в Настройках'),
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.orange),
+                          AppL10n.t(
+                              'История канала не сохраняется — подключите Google Drive в Настройках'),
+                          style: TextStyle(fontSize: 12, color: Colors.orange),
                         ),
                       ),
                       const Icon(Icons.chevron_right,
@@ -3312,242 +3363,265 @@ class _PostCardState extends State<_PostCard> {
         // Telegram-style: the bubble hugs its content and sits to the left
         // instead of a full-width centred card. Cap the width so long text
         // stays readable while short posts stay compact.
+        final wide = box.maxWidth >= 560;
         final maxW = box.maxWidth.isFinite
-            ? (box.maxWidth * 0.86).clamp(240.0, 560.0)
-            : 560.0;
+            ? (box.maxWidth * 0.86).clamp(240.0, wide ? 480.0 : 560.0)
+            : 480.0;
+        // Media/poll posts fill the bubble width (like Telegram); text posts hug
+        // their text but never get narrower than the footer needs, so every
+        // bubble in the feed shares one consistent shape.
+        final rich = missing ||
+            post.imagePath != null ||
+            post.videoPath != null ||
+            post.voicePath != null ||
+            post.filePath != null ||
+            (post.pollJson ?? '').isNotEmpty;
+        final minW = math.min(maxW, 300.0);
+        Widget sized(Widget col) => rich
+            ? SizedBox(width: maxW, child: col)
+            : ConstrainedBox(
+                constraints: BoxConstraints(minWidth: minW, maxWidth: maxW),
+                child: IntrinsicWidth(child: col),
+              );
         return Align(
           alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxW),
-            child: GestureDetector(
-              onLongPress: () => _showPostActions(context),
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(10, 5, 10, 5),
-                clipBehavior: Clip.antiAlias,
-                decoration: RlinkDesign.on
-                    ? RlinkDesign.floatCard(cs)
-                    : BoxDecoration(
-                        color: cs.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-              // Header — channel name as the author (Telegram-style). Compact,
-              // just the name; time + forwards moved to the muted footer.
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                Flexible(
-                  child: Text(senderLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: RlinkDesign.on ? 15 : 14,
-                          fontWeight: RlinkDesign.on
-                              ? FontWeight.w800
-                              : FontWeight.w700,
-                          letterSpacing: RlinkDesign.on ? 0.2 : 0,
-                          color: cs.primary)),
-                ),
-                if (post.forwardCount > 0) ...[
-                  const SizedBox(width: 8),
-                  Icon(Icons.forward,
-                      size: 12, color: cs.onSurface.withValues(alpha: 0.45)),
-                  const SizedBox(width: 2),
-                  Text(
-                    '${post.forwardCount}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.onSurface.withValues(alpha: 0.45),
+          child: GestureDetector(
+            onLongPress: () => _showPostActions(context),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(10, 5, 10, 5),
+              clipBehavior: Clip.antiAlias,
+              decoration: RlinkDesign.on
+                  ? RlinkDesign.floatCard(cs)
+                  : BoxDecoration(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(18),
                     ),
-                  ),
-                ],
-              ]),
-              const SizedBox(height: 6),
-              if (post.staffLabel != null && post.staffLabel!.trim().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    post.staffLabel!.trim(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                      color: cs.tertiary,
-                    ),
-                  ),
-                ),
-              if (missing)
-                ClearedMediaPlaceholder(
-                  isOutgoing: false,
-                  isDirectChat: false,
-                  colorScheme: cs,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          AppL10n.t('Откройте канал при подключении к сети — запросится история и вложения.'),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              // Image
-              if (!missing && post.imagePath != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Builder(builder: (context) {
-                    final p = ImageService.instance
-                        .resolveStoredPath(post.imagePath);
-                    if (p == null) return const SizedBox.shrink();
-                    return ChannelFeedImage(
-                      resolvedPath: p,
-                      isSticker: post.isSticker,
-                      borderRadius: 14,
-                    );
-                  }),
-                ),
-              if (!missing && post.videoPath != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: _ChannelInlineVideo(storedPath: post.videoPath!),
-                ),
-              if (!missing && post.voicePath != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: _ChannelVoiceRow(storedPath: post.voicePath!),
-                ),
-              if (!missing && post.filePath != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _ChannelFileAttachRow(
-                    storedPath: post.filePath!,
-                    fileName: post.fileName ?? AppL10n.t('Файл'),
-                    fileSize: post.fileSize,
-                  ),
-                ),
-              // Text
-              if (post.text.isNotEmpty &&
-                  !(missing && isSyntheticMediaCaption(post.text)))
-                ValueListenableBuilder<List<Contact>>(
-                  valueListenable: ChatStorageService.instance.contactsNotifier,
-                  builder: (ctx, contacts, __) {
-                    return RichMessageText(
-                      text: post.text,
-                      textColor: cs.onSurface,
-                      isOut: false,
-                      mentionLabelFor: (hex) => resolveChannelMentionDisplay(
-                        hex,
-                        contacts,
-                        ProfileService.instance.profile,
-                      ),
-                      onMentionTap: (hex) => openDmFromMentionKey(ctx, hex),
-                    );
-                  },
-                ),
-              if (MessagePoll.tryDecode(post.pollJson) case final poll?)
-                PollMessageCard(
-                  targetId: post.id,
-                  kind: 'channel_post',
-                  poll: poll,
-                  cs: cs,
-                  isOutgoing: false,
-                  compact: true,
-                ),
-              if (post.reactions.isNotEmpty) ...[
-                ReactionsBar(
-                  reactions: post.reactions,
-                  myId: myId,
-                  onTap: (e) => _togglePostReaction(context, e),
-                  compact: true,
-                ),
-                const SizedBox(height: 6),
-              ],
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                // Muted timestamp at the foot of the bubble (Telegram-style).
-                Text(
-                  '${dt.day}.${dt.month.toString().padLeft(2, '0')} '
-                  '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(
-                      fontSize: 11, color: cs.onSurface.withValues(alpha: 0.4)),
-                ),
-                const SizedBox(width: 12),
-                // React button
-                InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => _openReactionPicker(context),
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.add_reaction_outlined,
-                          size: 14,
-                          color: cs.onSurface.withValues(alpha: 0.55)),
-                      const SizedBox(width: 4),
-                      Text(AppL10n.t('cm_reaction'),
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurface.withValues(alpha: 0.5))),
-                    ]),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Icon(Icons.visibility_outlined,
-                    size: 14, color: cs.onSurface.withValues(alpha: 0.4)),
-                const SizedBox(width: 4),
-                Text(
-                  '${post.viewCount}',
-                  style: TextStyle(
-                      fontSize: 12, color: cs.onSurface.withValues(alpha: 0.5)),
-                ),
-                const SizedBox(width: 12),
-                // Comments button — navigates to PostCommentsScreen
-                if (widget.commentsEnabled)
-                  Flexible(
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PostCommentsScreen(
-                              post: post,
-                              channelId: widget.channelId,
-                              channelName: widget.channelName,
-                              channelAdminId: widget.channelAdminId,
-                              nickFor: widget.nickFor,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.comment_outlined,
-                            size: 14,
-                            color: cs.onSurface.withValues(alpha: 0.4)),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            post.comments.isEmpty
-                                ? AppL10n.t('Комментировать')
-                                : AppL10n.f('{0} комментариев', [post.comments.length]),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                child: sized(Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header — channel name as the author (Telegram-style). Compact,
+                    // just the name; time + forwards moved to the muted footer.
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      Flexible(
+                        child: Text(senderLabel,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurface.withValues(alpha: 0.5)),
+                                fontSize: RlinkDesign.on ? 15 : 14,
+                                fontWeight: RlinkDesign.on
+                                    ? FontWeight.w800
+                                    : FontWeight.w700,
+                                letterSpacing: RlinkDesign.on ? 0.2 : 0,
+                                color: cs.primary)),
+                      ),
+                      if (post.forwardCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.forward,
+                            size: 12,
+                            color: cs.onSurface.withValues(alpha: 0.45)),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${post.forwardCount}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: cs.onSurface.withValues(alpha: 0.45),
                           ),
                         ),
-                        const SizedBox(width: 4),
-                        Icon(Icons.chevron_right,
-                            size: 14,
-                            color: cs.onSurface.withValues(alpha: 0.3)),
-                      ]),
-                    ),
-                  ),
-              ]),
+                      ],
+                    ]),
+                    const SizedBox(height: 6),
+                    if (post.staffLabel != null &&
+                        post.staffLabel!.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          post.staffLabel!.trim(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: cs.tertiary,
+                          ),
+                        ),
+                      ),
+                    if (missing)
+                      ClearedMediaPlaceholder(
+                        isOutgoing: false,
+                        isDirectChat: false,
+                        colorScheme: cs,
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                AppL10n.t(
+                                    'Откройте канал при подключении к сети — запросится история и вложения.'),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    // Image
+                    if (!missing && post.imagePath != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Builder(builder: (context) {
+                          final p = ImageService.instance
+                              .resolveStoredPath(post.imagePath);
+                          if (p == null) return const SizedBox.shrink();
+                          return ChannelFeedImage(
+                            resolvedPath: p,
+                            isSticker: post.isSticker,
+                            borderRadius: 14,
+                          );
+                        }),
+                      ),
+                    if (!missing && post.videoPath != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: _ChannelInlineVideo(storedPath: post.videoPath!),
+                      ),
+                    if (!missing && post.voicePath != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: _ChannelVoiceRow(storedPath: post.voicePath!),
+                      ),
+                    if (!missing && post.filePath != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _ChannelFileAttachRow(
+                          storedPath: post.filePath!,
+                          fileName: post.fileName ?? AppL10n.t('Файл'),
+                          fileSize: post.fileSize,
+                        ),
+                      ),
+                    // Text
+                    if (post.text.isNotEmpty &&
+                        !(missing && isSyntheticMediaCaption(post.text)))
+                      ValueListenableBuilder<List<Contact>>(
+                        valueListenable:
+                            ChatStorageService.instance.contactsNotifier,
+                        builder: (ctx, contacts, __) {
+                          return RichMessageText(
+                            text: post.text,
+                            textColor: cs.onSurface,
+                            isOut: false,
+                            mentionLabelFor: (hex) =>
+                                resolveChannelMentionDisplay(
+                              hex,
+                              contacts,
+                              ProfileService.instance.profile,
+                            ),
+                            onMentionTap: (hex) =>
+                                openDmFromMentionKey(ctx, hex),
+                          );
+                        },
+                      ),
+                    if (MessagePoll.tryDecode(post.pollJson) case final poll?)
+                      PollMessageCard(
+                        targetId: post.id,
+                        kind: 'channel_post',
+                        poll: poll,
+                        cs: cs,
+                        isOutgoing: false,
+                        compact: true,
+                      ),
+                    if (post.reactions.isNotEmpty) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ReactionsBar(
+                          reactions: post.reactions,
+                          myId: myId,
+                          onTap: (e) => _togglePostReaction(context, e),
+                          compact: true,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                     ],
-                  ),
-                ),
+                    // Meta row (Telegram): react on the left, views + date bottom-right.
+                    Row(children: [
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => _openReactionPicker(context),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 2),
+                          child: Icon(Icons.add_reaction_outlined,
+                              size: 16,
+                              color: cs.onSurface.withValues(alpha: 0.45)),
+                        ),
+                      ),
+                      const Spacer(),
+                      Icon(Icons.visibility_outlined,
+                          size: 13, color: cs.onSurface.withValues(alpha: 0.4)),
+                      const SizedBox(width: 3),
+                      Text('${post.viewCount}',
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              color: cs.onSurface.withValues(alpha: 0.5))),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')} '
+                        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            color: cs.onSurface.withValues(alpha: 0.45)),
+                      ),
+                    ]),
+                    // Comments: full-width footer row under a hairline, in the accent.
+                    if (widget.commentsEnabled) ...[
+                      Divider(
+                          height: 9,
+                          thickness: 0.6,
+                          color: cs.outlineVariant.withValues(alpha: 0.5)),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PostCommentsScreen(
+                                post: post,
+                                channelId: widget.channelId,
+                                channelName: widget.channelName,
+                                channelAdminId: widget.channelAdminId,
+                                nickFor: widget.nickFor,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 7, horizontal: 2),
+                          child: Row(children: [
+                            Icon(Icons.chat_bubble_outline_rounded,
+                                size: 17, color: cs.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                post.comments.isEmpty
+                                    ? AppL10n.t('Комментировать')
+                                    : AppL10n.f('{0} комментариев',
+                                        [post.comments.length]),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: cs.primary),
+                              ),
+                            ),
+                            Icon(Icons.chevron_right_rounded,
+                                size: 20,
+                                color: cs.primary.withValues(alpha: 0.7)),
+                          ]),
+                        ),
+                      ),
+                    ] else
+                      const SizedBox(height: 6),
+                  ],
+                )),
               ),
             ),
           ),
@@ -3767,7 +3841,8 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(AppL10n.f('Ошибка фото: {0}', [e])), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка фото: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -3828,7 +3903,9 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppL10n.f('Квадратик: {0}', [e])), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(AppL10n.f('Квадратик: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -3891,7 +3968,8 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(AppL10n.f('Ошибка видео: {0}', [e])), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка видео: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -3925,7 +4003,9 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
         builder: (ctx) => AlertDialog(
           title: Text(AppL10n.t('cm_large_file')),
           content: Text(
-            AppL10n.f('Файл {0} КБ — передача по Bluetooth займёт несколько минут. Продолжить?', [(fileBytes.length / 1024).toStringAsFixed(0)]),
+            AppL10n.f(
+                'Файл {0} КБ — передача по Bluetooth займёт несколько минут. Продолжить?',
+                [(fileBytes.length / 1024).toStringAsFixed(0)]),
           ),
           actions: [
             TextButton(
@@ -3990,7 +4070,8 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(AppL10n.f('Ошибка файла: {0}', [e])), backgroundColor: Colors.red),
+              content: Text(AppL10n.f('Ошибка файла: {0}', [e])),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -4243,7 +4324,8 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            AppL10n.t('Откройте канал при подключении к сети — запросится история и вложения.'),
+                            AppL10n.t(
+                                'Откройте канал при подключении к сети — запросится история и вложения.'),
                           ),
                         ),
                       );
@@ -4425,7 +4507,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
             voicePausedListenable: _commentVoicePaused,
             onHoldRecordingLockChanged: (_) {},
             onHoldVideoLockedPauseToggle: () async {},
-              mentionCandidates: _contactMentionCandidates,
+            mentionCandidates: _contactMentionCandidates,
           ),
         ],
       ),
@@ -4561,7 +4643,8 @@ class _ChannelFileAttachRow extends StatelessWidget {
   String _fmtSize(int? bytes) {
     if (bytes == null) return '';
     if (bytes < 1024) return AppL10n.f('{0} Б', [bytes]);
-    if (bytes < 1024 * 1024) return AppL10n.f('{0} КБ', [(bytes / 1024).toStringAsFixed(1)]);
+    if (bytes < 1024 * 1024)
+      return AppL10n.f('{0} КБ', [(bytes / 1024).toStringAsFixed(1)]);
     return AppL10n.f('{0} МБ', [(bytes / (1024 * 1024)).toStringAsFixed(1)]);
   }
 
@@ -5007,7 +5090,8 @@ class _CommentBubble extends StatelessWidget {
                   if (canDelete)
                     ListTile(
                       leading: Icon(Icons.delete_outline, color: cs.error),
-                      title: Text(AppL10n.t('common_delete'), style: TextStyle(color: cs.error)),
+                      title: Text(AppL10n.t('common_delete'),
+                          style: TextStyle(color: cs.error)),
                       onTap: () => Navigator.pop(ctx, 'del'),
                     ),
                 ],
@@ -5021,7 +5105,8 @@ class _CommentBubble extends StatelessWidget {
             final msg = _channelCommentToForwardMessage(comment, channelId);
             final authorNick = nickFor(comment.authorId);
             final label = channelName.isNotEmpty
-                ? AppL10n.f('{0} · комментарий — {1}', [channelName, authorNick])
+                ? AppL10n.f(
+                    '{0} · комментарий — {1}', [channelName, authorNick])
                 : AppL10n.f('Канал · комментарий — {0}', [authorNick]);
             await _pickForwardChannelContent(
               context,
@@ -5096,7 +5181,8 @@ class _CommentBubble extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          AppL10n.t('Откройте канал при подключении к сети — запросится история и вложения.'),
+                          AppL10n.t(
+                              'Откройте канал при подключении к сети — запросится история и вложения.'),
                         ),
                       ),
                     );

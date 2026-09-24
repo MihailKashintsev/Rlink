@@ -2007,4 +2007,7 @@ const Map<String, String> trEn = <String, String>{
   '😀 Набор эмодзи': '😀 Emoji pack',
   'Канал «{0}» в Rlink\n{1}': 'The channel “{0}” in Rlink\n{1}',
   'Не удалось открыть «Поделиться». Нажмите «Копировать ссылку» и вставьте в нужное приложение.': 'Could not open “Share”. Tap “Copy link” and paste it into the app you need.',
+  'Владение можно передать только администратору канала. Сначала назначьте администратора в разделе «Команда и подписи».': 'Ownership can only be transferred to a channel administrator. First appoint an administrator in “Team and signatures”.',
+  'Резерв на Google Диск…': 'Backing up to Google Drive…',
+  'Владельцем станет один из администраторов канала': 'One of the channel administrators will become the owner',
 };

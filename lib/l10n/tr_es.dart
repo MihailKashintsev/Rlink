@@ -2007,4 +2007,7 @@ const Map<String, String> trEs = <String, String>{
   '😀 Набор эмодзи': '😀 Paquete de emojis',
   'Канал «{0}» в Rlink\n{1}': 'El canal «{0}» en Rlink\n{1}',
   'Не удалось открыть «Поделиться». Нажмите «Копировать ссылку» и вставьте в нужное приложение.': 'No se pudo abrir «Compartir». Pulsa «Copiar enlace» y pégalo en la app que necesites.',
+  'Владение можно передать только администратору канала. Сначала назначьте администратора в разделе «Команда и подписи».': 'La propiedad solo se puede transferir a un administrador del canal. Primero nombra un administrador en «Equipo y firmas».',
+  'Резерв на Google Диск…': 'Copia de seguridad en Google Drive…',
+  'Владельцем станет один из администраторов канала': 'Uno de los administradores del canal será el propietario',
 };

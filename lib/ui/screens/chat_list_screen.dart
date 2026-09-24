@@ -1409,55 +1409,64 @@ class _MeTabState extends State<_MeTab> with SingleTickerProviderStateMixin {
       onPointerSignal: _onPointerSignal,
       child: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
-        child: ListView(
-          controller: _listCtrl,
-          // Overscroll at the top is what opens the profile header.
-          physics: const AlwaysScrollableScrollPhysics(
-              parent: ClampingScrollPhysics()),
-          // Bottom clearance so the last settings item scrolls clear of the floating
-          // nav pill (extendBody makes this tab fill behind it in the new design).
-          padding: EdgeInsets.fromLTRB(
-            8,
-            12,
-            8,
-            settings.newDesign ? MediaQuery.paddingOf(context).bottom + 84 : 12,
-          ),
-          children: [
-            SettingsProfileHeader(pull: _pull),
-            if (profile != null)
-              Card(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: Icon(Icons.mood_rounded, color: cs.primary),
-                      title: Text(AppL10n.t('Эмодзи-статус')),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => quickChangeStatusEmoji(context),
-                    ),
-                    const Divider(height: 1, indent: 56),
-                    ListTile(
-                      leading: Icon(Icons.image_outlined, color: cs.primary),
-                      title: Text(AppL10n.t('Изменить баннер')),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => quickChangeBanner(context),
-                    ),
-                    const Divider(height: 1, indent: 56),
-                    ListTile(
-                      leading:
-                          Icon(Icons.photo_camera_outlined, color: cs.primary),
-                      title: Text(AppL10n.t('Изменить фото профиля')),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _showOwnAvatarMenu(context, profile),
-                    ),
-                  ],
-                ),
-              ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(4, 4, 4, 28),
-              child: SettingsCategoryCards(),
+        // The Android stretch/glow overscroll indicator re-rasterises the whole
+        // list every frame of an overscroll and fights our own header pull — the
+        // pull IS the overscroll feedback here, so switch the indicator off.
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(overscroll: false),
+          child: ListView(
+            controller: _listCtrl,
+            // Overscroll at the top is what opens the profile header.
+            physics: const AlwaysScrollableScrollPhysics(
+                parent: ClampingScrollPhysics()),
+            // Bottom clearance so the last settings item scrolls clear of the floating
+            // nav pill (extendBody makes this tab fill behind it in the new design).
+            padding: EdgeInsets.fromLTRB(
+              8,
+              12,
+              8,
+              settings.newDesign
+                  ? MediaQuery.paddingOf(context).bottom + 84
+                  : 12,
             ),
-          ],
+            children: [
+              SettingsProfileHeader(pull: _pull),
+              if (profile != null)
+                Card(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: Icon(Icons.mood_rounded, color: cs.primary),
+                        title: Text(AppL10n.t('Эмодзи-статус')),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => quickChangeStatusEmoji(context),
+                      ),
+                      const Divider(height: 1, indent: 56),
+                      ListTile(
+                        leading: Icon(Icons.image_outlined, color: cs.primary),
+                        title: Text(AppL10n.t('Изменить баннер')),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => quickChangeBanner(context),
+                      ),
+                      const Divider(height: 1, indent: 56),
+                      ListTile(
+                        leading: Icon(Icons.photo_camera_outlined,
+                            color: cs.primary),
+                        title: Text(AppL10n.t('Изменить фото профиля')),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _showOwnAvatarMenu(context, profile),
+                      ),
+                    ],
+                  ),
+                ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(4, 4, 4, 28),
+                child: SettingsCategoryCards(),
+              ),
+            ],
+          ),
         ),
       ),
     );

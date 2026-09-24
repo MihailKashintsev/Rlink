@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -384,6 +385,32 @@ class GoogleDriveChannelBackup {
     }
   }
 
+  /// Run once after startup: restores the native Google session silently and
+  /// pre-fetches relay tokens, so backups / uploads work without visiting
+  /// Settings first. Retries once — on iOS the keychain restore can lag.
+  static Future<void> warmUp() async {
+    try {
+      if (hasRelayAccount) {
+        for (final a in relayAccounts) {
+          final p = a['pairing'];
+          if (p != null) unawaited(_relayAuthClient(p).then((c) => c?.close()));
+        }
+      }
+      if (hasValidManualCreds) return;
+      for (var i = 0; i < 2; i++) {
+        final u = await ensureUserSignedIn(interactive: false);
+        if (u != null) {
+          await _ensureDriveScopes(interactive: false);
+          return;
+        }
+        if (hasRelayAccount) return;
+        await Future<void>.delayed(const Duration(seconds: 4));
+      }
+    } catch (e) {
+      debugPrint('[RLINK][Drive] warmUp failed: $e');
+    }
+  }
+
   static Future<void> restoreRelayAccount() async {
     try {
       final p = await SharedPreferences.getInstance();
@@ -477,7 +504,13 @@ class GoogleDriveChannelBackup {
 
   /// После выбора аккаунта без этого часто нет access token для Drive (особенно на новых GMS).
   static Future<bool> _ensureDriveScopes({required bool interactive}) async {
-    if (_signIn.currentUser == null) return false;
+    // The native session is only restored by a (silent) sign-in. Previously that
+    // happened solely when Settings was opened, so a linked account looked
+    // "not linked" until the user went there — restore it on demand.
+    if (_signIn.currentUser == null) {
+      final u = await ensureUserSignedIn(interactive: false);
+      if (u == null) return false;
+    }
     try {
       if (await _signIn.canAccessScopes(_driveScopes)) return true;
     } catch (e, st) {

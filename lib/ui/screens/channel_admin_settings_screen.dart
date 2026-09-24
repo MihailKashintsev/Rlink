@@ -81,11 +81,17 @@ class _ChannelAdminSettingsScreenState
     }
   }
 
-  bool get _canTransferOwnership {
+  /// Ownership can only be handed to another administrator of the channel
+  /// (moderator or link admin) — not to an arbitrary subscriber.
+  List<String> get _transferCandidates {
     final ch = _channel;
-    if (ch == null) return false;
-    return ch.subscriberIds.any((id) => id != ch.adminId);
+    if (ch == null) return const [];
+    return {...ch.moderatorIds, ...ch.linkAdminIds}
+        .where((id) => id != ch.adminId)
+        .toList();
   }
+
+  bool get _canTransferOwnership => _channel?.adminId == _myId;
 
   Future<void> _toggleComments() async {
     final ch = _channel;
@@ -404,13 +410,56 @@ class _ChannelAdminSettingsScreenState
     );
   }
 
+  /// Non-dismissible spinner dialog; returns a function that closes it.
+  VoidCallback _showBlockingProgress(String text) {
+    var open = true;
+    final nav = Navigator.of(context, rootNavigator: true);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(children: [
+            const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2.5)),
+            const SizedBox(width: 16),
+            Expanded(child: Text(text)),
+          ]),
+        ),
+      ),
+    );
+    return () {
+      if (!open) return;
+      open = false;
+      if (nav.mounted) nav.pop();
+    };
+  }
+
   Future<void> _showTransferOwnershipDialog() async {
     final ch = _channel;
     if (ch == null || !_canTransferOwnership) return;
 
-    final candidates =
-        ch.subscriberIds.where((id) => id != ch.adminId).toList();
-    if (candidates.isEmpty) return;
+    final candidates = _transferCandidates;
+    if (candidates.isEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(AppL10n.t('Передать владение')),
+          content: Text(AppL10n.t(
+              'Владение можно передать только администратору канала. Сначала назначьте администратора в разделе «Команда и подписи».')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(AppL10n.t('OK')),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     final contacts = ChatStorageService.instance.contactsNotifier.value;
     String nickFor(String id) {
@@ -484,8 +533,15 @@ class _ChannelAdminSettingsScreenState
     final newAdminId = picked!;
 
     if (backupFirst) {
+      // Visible progress + timeout: a stuck Drive upload used to leave the UI
+      // silent after tapping "Передать" (looked like nothing happened).
+      final progress = _showBlockingProgress(
+          AppL10n.t('Резерв на Google Диск…'));
       try {
-        await ChannelBackupService.instance.publishBackup(ch);
+        await ChannelBackupService.instance
+            .publishBackup(ch)
+            .timeout(const Duration(seconds: 60));
+        progress();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -494,6 +550,7 @@ class _ChannelAdminSettingsScreenState
           );
         }
       } catch (e) {
+        progress();
         if (mounted) {
           final go = await showDialog<bool>(
             context: context,
@@ -711,7 +768,7 @@ class _ChannelAdminSettingsScreenState
                 leading: const Icon(Icons.swap_horiz_outlined),
                 title: Text(AppL10n.t('Передать владение')),
                 subtitle: Text(
-                  AppL10n.t('Другой подписчик станет администратором'),
+                  AppL10n.t('Владельцем станет один из администраторов канала'),
                   style: TextStyle(fontSize: 12),
                 ),
                 onTap: _showTransferOwnershipDialog,

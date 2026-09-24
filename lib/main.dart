@@ -785,6 +785,9 @@ Future<void> initServices() async {
     if (RuntimePlatform.isWeb) {
       unawaited(GoogleDriveChannelBackup.restoreManualToken());
     }
+    // Restore the Google session in the background so linked accounts work
+    // immediately (not only after opening Settings).
+    unawaited(GoogleDriveChannelBackup.warmUp());
     unawaited(OneDriveBackup.instance.init());
     unawaited(DropboxBackup.instance.init());
     await _restoreAdminPasswordFromSealedIfNeeded();
