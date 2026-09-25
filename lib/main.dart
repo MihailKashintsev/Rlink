@@ -685,6 +685,19 @@ class IncomingMessage {
   });
 }
 
+/// Opens the sealed plaintext of an edit/delete packet: `{"m": messageId,
+/// "t": text}`. Returns the text ("" for a delete) only if the bound id matches
+/// the id the packet claims — null on anything else.
+String? _openEditDelete(String plain, String messageId) {
+  try {
+    final j = jsonDecode(plain);
+    if (j is! Map || j['m'] != messageId) return null;
+    return (j['t'] as String?) ?? '';
+  } catch (_) {
+    return null;
+  }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Старт не должен умирать в чёрный экран: логируем ошибки фреймворка и
@@ -1193,22 +1206,52 @@ Future<void> initServices() async {
         unawaited(DeviceLinkSyncService.instance.mirrorAckDelivered(messageId));
       },
       onForward: (packet) async => packetTransport.forward(packet),
-      onEdit: (fromId, messageId, newText) async {
+      onEdit: (fromId, messageId, encrypted) async {
+        // `fromId` is the Ed25519-verified envelope signer (see the gossip
+        // router). Also require the message to live in THAT peer's chat: a
+        // valid signature from contact A must not be able to rewrite a
+        // message in the chat with contact B just by knowing its id.
         final existing =
             await ChatStorageService.instance.getMessageById(messageId);
+        if (existing == null ||
+            ChatStorageService.normalizeDmPeerId(existing.peerId) !=
+                ChatStorageService.normalizeDmPeerId(fromId)) {
+          return;
+        }
+        final plain = await CryptoService.instance.decryptMessage(
+          encrypted,
+          senderX25519KeyBase64: PeerKeyDirectory.instance.getX25519(fromId),
+        );
+        if (plain == null) return;
+        // The sealed plaintext binds the message id ({"m":id,"t":text}): the
+        // signature covers only the envelope, so without this a captured
+        // valid envelope could be re-sent paired with a different messageId.
+        final newText = _openEditDelete(plain, messageId);
+        if (newText == null) return;
         var merged = newText;
-        if (existing != null) {
-          if (SharedTodoPayload.tryDecode(existing.text) != null &&
-              SharedTodoPayload.tryDecode(newText) != null) {
-            merged = SharedTodoPayload.mergeRemote(existing.text, newText);
-          } else if (SharedCalendarPayload.tryDecode(existing.text) != null &&
-              SharedCalendarPayload.tryDecode(newText) != null) {
-            merged = SharedCalendarPayload.mergeRemote(existing.text, newText);
-          }
+        if (SharedTodoPayload.tryDecode(existing.text) != null &&
+            SharedTodoPayload.tryDecode(newText) != null) {
+          merged = SharedTodoPayload.mergeRemote(existing.text, newText);
+        } else if (SharedCalendarPayload.tryDecode(existing.text) != null &&
+            SharedCalendarPayload.tryDecode(newText) != null) {
+          merged = SharedCalendarPayload.mergeRemote(existing.text, newText);
         }
         await ChatStorageService.instance.editMessage(messageId, merged);
       },
-      onDelete: (fromId, messageId) async {
+      onDelete: (fromId, messageId, encrypted) async {
+        // Same rule as onEdit: only the verified signer, only inside their chat.
+        final existing =
+            await ChatStorageService.instance.getMessageById(messageId);
+        if (existing == null ||
+            ChatStorageService.normalizeDmPeerId(existing.peerId) !=
+                ChatStorageService.normalizeDmPeerId(fromId)) {
+          return;
+        }
+        final plain = await CryptoService.instance.decryptMessage(
+          encrypted,
+          senderX25519KeyBase64: PeerKeyDirectory.instance.getX25519(fromId),
+        );
+        if (plain == null || _openEditDelete(plain, messageId) == null) return;
         await ChatStorageService.instance.deleteMessage(messageId);
       },
       onReact: (fromId, messageId, emoji) async {

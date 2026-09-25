@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:archive/archive.dart';
+import '../utils/bounded_gzip.dart';
 
 /// Telegram sticker interop: **.tgs** — playback/import only, never editable
 /// in Rlink's own vector studio (converting arbitrary Lottie/Bodymovin JSON
@@ -30,7 +30,8 @@ bool looksLikeTgsRef(String ref) {
 /// sticker reads as "missing", never a crash.
 Uint8List? gunzipTgsToLottieJson(Uint8List tgsBytes) {
   try {
-    final jsonBytes = Uint8List.fromList(GZipDecoder().decodeBytes(tgsBytes));
+    final jsonBytes = boundedGunzip(tgsBytes);
+    if (jsonBytes == null) return null;
     final decoded = jsonDecode(utf8.decode(jsonBytes));
     if (decoded is! Map) return null;
     return jsonBytes;

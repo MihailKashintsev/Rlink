@@ -129,6 +129,22 @@ class ImageService {
     } catch (_) {}
   }
 
+  /// A remote peer (or the channel/group directory) chooses `msgId`/file
+  /// names that end up as a local file path (voice/video/file assembly, story
+  /// ids…) — verified exploitable: `fname: "../../evil"` or an absolute path
+  /// wrote OUTSIDE the target directory (`p.join` doesn't stop either). This
+  /// collapses the input to one safe path segment: strips directory
+  /// components (also handles an absolute path, which `p.basename` reduces to
+  /// its last segment), removes characters invalid on Windows, and never
+  /// returns empty/dot-only.
+  static String sanitizeStoredName(String raw, {String fallback = 'file'}) {
+    var name = p.basename(raw.trim());
+    name = name.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1f]'), '_');
+    name = name.replaceAll(RegExp(r'^\.+'), '_');
+    if (name.length > 200) name = name.substring(name.length - 200);
+    return name.isEmpty ? fallback : name;
+  }
+
   // ── Сохранение и сжатие ──────────────────────────────────────
 
   /// Сжимает изображение и сохраняет в <documents>/images/.
@@ -403,7 +419,7 @@ class ImageService {
     final docsDir = await getApplicationDocumentsDirectory();
     final dir = Directory(p.join(docsDir.path, 'story_videos'))
       ..createSync(recursive: true);
-    final path = p.join(dir.path, '$storyId.mp4');
+    final path = p.join(dir.path, '${sanitizeStoredName(storyId)}.mp4');
     await File(path).writeAsBytes(bytes);
     return path;
   }
@@ -639,15 +655,17 @@ class ImageService {
       // breaking voice replay after a page refresh.
       final mime = _audioMimeFromMagic(data);
       final ext = _audioExtFromMagic(data);
+      final safeId = sanitizeStoredName(msgId);
       final stored = await writeWebStoredFile(
-        fileName: '${msgId}_voice.$ext',
+        fileName: '${safeId}_voice.$ext',
         bytes: data,
         mimeType: mime,
       );
       return stored ?? _webMediaRef(data, mime);
     }
     final dir = await _voicesDir();
-    final path = p.join(dir.path, '$msgId.${_audioExtFromMagic(data)}');
+    final path = p.join(
+        dir.path, '${sanitizeStoredName(msgId)}.${_audioExtFromMagic(data)}');
     await File(path).writeAsBytes(data);
     return path;
   }
@@ -955,8 +973,9 @@ class ImageService {
           : mime == 'video/quicktime'
               ? 'mov'
               : 'mp4';
+      final safeId = sanitizeStoredName(msgId);
       final stored = await writeWebStoredFile(
-        fileName: '$msgId.${isSquare ? 'sq.' : ''}$ext',
+        fileName: '$safeId.${isSquare ? 'sq.' : ''}$ext',
         bytes: data,
         mimeType: mime,
       );
@@ -965,7 +984,7 @@ class ImageService {
     }
     final dir = await _videosDir();
     final suffix = isSquare ? '_sq' : '';
-    final path = p.join(dir.path, '$msgId$suffix.mp4');
+    final path = p.join(dir.path, '${sanitizeStoredName(msgId)}$suffix.mp4');
     await File(path).writeAsBytes(data);
     return path;
   }
@@ -982,8 +1001,11 @@ class ImageService {
         'decompressed=${data.length} bytes');
     if (kIsWeb) {
       final mime = _mimeFromFileName(assembly.fileName);
+      final safeOriginal = assembly.fileName != null
+          ? sanitizeStoredName(assembly.fileName!)
+          : 'file.bin';
       final stored = await writeWebStoredFile(
-        fileName: '${msgId}_${assembly.fileName ?? 'file.bin'}',
+        fileName: '${sanitizeStoredName(msgId)}_$safeOriginal',
         bytes: data,
         mimeType: mime,
       );
@@ -995,7 +1017,9 @@ class ImageService {
     final ext = (originalName != null && originalName.contains('.'))
         ? originalName.split('.').last
         : 'bin';
-    final safeName = originalName ?? '$msgId.$ext';
+    final safeName = originalName != null
+        ? sanitizeStoredName(originalName)
+        : sanitizeStoredName('$msgId.$ext');
     final path = p.join(dir.path, safeName);
     await File(path).writeAsBytes(data);
     return path;

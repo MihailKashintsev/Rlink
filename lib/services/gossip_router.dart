@@ -220,10 +220,10 @@ String _profileSensitiveFieldsCanonical(
 typedef OnEditReceived = Future<void> Function(
   String fromId,
   String messageId,
-  String newText,
+  EncryptedMessage encrypted,
 );
 typedef OnDeleteReceived = Future<void> Function(
-    String fromId, String messageId);
+    String fromId, String messageId, EncryptedMessage encrypted);
 typedef OnReactReceived = Future<void> Function(
     String fromId, String messageId, String emoji);
 
@@ -898,10 +898,20 @@ class GossipRouter {
     }
   }
 
+  /// [encrypted] is the new text sealed + Ed25519-signed exactly like a
+  /// regular DM (`CryptoService.encryptMessage`, caller-side, same as
+  /// [sendEncryptedMessage]). Edit/delete used to travel as a PLAIN
+  /// `{messageId, text}` — readable by the relay and forgeable by anyone who
+  /// could reach the recipient, since nothing tied `from` to a signature (see
+  /// `applyChannelMetaFromPayload`-style checks for the analogous channel/group
+  /// issue, not fixed here). Verified exploitable: any relay-connected client
+  /// could edit or delete a stranger's message in a chat it was never part of,
+  /// knowing only the messageId. This closes it for direct messages by
+  /// requiring the same signed envelope `msg` already uses — the receiver only
+  /// applies it after [CryptoService.verifyEncryptedEnvelope] passes.
   Future<void> sendEditMessage({
     required String messageId,
-    required String newText,
-    required String senderId,
+    required EncryptedMessage encrypted,
     required String recipientId,
   }) async {
     final rid8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : null;
@@ -913,20 +923,23 @@ class GossipRouter {
       recipientId: recipientId,
       payload: {
         'messageId': messageId,
-        'text': newText,
+        ...encrypted.toJson(),
         if (rid8 != null) 'r': rid8,
       },
     );
     _markSeen(packet.id);
     for (var i = 0; i < 2; i++) {
-      await _forward(packet);
+      await _forwardEncrypted(packet);
       if (i < 1) await Future.delayed(const Duration(milliseconds: 300));
     }
   }
 
+  /// [encrypted] carries no meaningful plaintext (delete has nothing to say) —
+  /// it exists purely so the Ed25519 signature authenticates who is asking.
+  /// See [sendEditMessage] for why this used to be forgeable.
   Future<void> sendDeleteMessage({
     required String messageId,
-    required String senderId,
+    required EncryptedMessage encrypted,
     required String recipientId,
   }) async {
     final rid8 = recipientId.length >= 8 ? recipientId.substring(0, 8) : null;
@@ -938,12 +951,13 @@ class GossipRouter {
       recipientId: recipientId,
       payload: {
         'messageId': messageId,
+        ...encrypted.toJson(),
         if (rid8 != null) 'r': rid8,
       },
     );
     _markSeen(packet.id);
     for (var i = 0; i < 2; i++) {
-      await _forward(packet);
+      await _forwardEncrypted(packet);
       if (i < 1) await Future.delayed(const Duration(milliseconds: 300));
     }
   }
@@ -1980,25 +1994,42 @@ class GossipRouter {
 
       if (packet.type == 'edit') {
         final messageId = packet.payload['messageId'] as String?;
-        final from = packet.payload['from'] as String? ?? 'unknown';
-        final text = packet.payload['text'] as String?;
-        if (messageId != null && text != null) {
-          final handler = onEditReceived;
-          if (handler != null) {
-            await handler(from, messageId, text);
-          }
+        if (messageId == null) return;
+        final encrypted = EncryptedMessage.fromJson(packet.payload);
+        // Old wire format was plaintext `{messageId, text}` with an
+        // unauthenticated `from` — fail closed on anything that isn't the
+        // signed envelope rather than falling back to trusting it (that
+        // fallback is exactly the hole this closes; see [sendEditMessage]).
+        if (encrypted.ephemeralPublicKey.isEmpty ||
+            encrypted.nonce.isEmpty ||
+            encrypted.cipherText.isEmpty ||
+            encrypted.mac.isEmpty ||
+            !await CryptoService.instance.verifyEncryptedEnvelope(encrypted)) {
+          debugPrint('[RLINK][Gossip] Dropping unsigned/forged edit packet');
+          return;
+        }
+        final handler = onEditReceived;
+        if (handler != null) {
+          await handler(encrypted.senderPublicKey, messageId, encrypted);
         }
         return;
       }
 
       if (packet.type == 'delete') {
         final messageId = packet.payload['messageId'] as String?;
-        final from = packet.payload['from'] as String? ?? 'unknown';
-        if (messageId != null) {
-          final handler = onDeleteReceived;
-          if (handler != null) {
-            await handler(from, messageId);
-          }
+        if (messageId == null) return;
+        final encrypted = EncryptedMessage.fromJson(packet.payload);
+        if (encrypted.ephemeralPublicKey.isEmpty ||
+            encrypted.nonce.isEmpty ||
+            encrypted.cipherText.isEmpty ||
+            encrypted.mac.isEmpty ||
+            !await CryptoService.instance.verifyEncryptedEnvelope(encrypted)) {
+          debugPrint('[RLINK][Gossip] Dropping unsigned/forged delete packet');
+          return;
+        }
+        final handler = onDeleteReceived;
+        if (handler != null) {
+          await handler(encrypted.senderPublicKey, messageId, encrypted);
         }
         return;
       }

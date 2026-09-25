@@ -10,6 +10,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/app_l10n.dart';
+
 /// Обновления берём со СВОЕГО сервера (relay), а не с GitHub — в РФ GitHub
 /// часто режется/тормозит. Relay отдаёт манифест + сами бинарники:
 ///   https://rlinkrelay.duckdns.org/updates/manifest.json
@@ -73,6 +75,12 @@ class UpdateService {
   /// а затем вызывает [install]. Загрузка при этом идёт в фоне — не мешает
   /// пользоваться мессенджером.
   final ValueNotifier<UpdateInfo?> readyToInstall = ValueNotifier(null);
+
+  /// Set by [_installMacOS] when it detects up front that it cannot replace
+  /// itself (see there for why) instead of silently reopening the OLD
+  /// version and letting the user think the update worked. The UI checks
+  /// this right after [install] returns.
+  String? lastInstallError;
 
   String? _readyFilePath;
   UpdateInfo? _readyInfo;
@@ -486,13 +494,49 @@ try { Start-Process -FilePath $exe -WorkingDirectory $app; Log 'started' } catch
     exit(0);
   }
 
+  Future<void> _macLog(String dir, String line) async {
+    try {
+      await File('$dir/rlink_update.log').writeAsString(
+          '[${DateTime.now().toIso8601String()}] $line\n',
+          mode: FileMode.append);
+    } catch (_) {}
+  }
+
+  /// `cp -R` over the app bundle used to run unconditionally and the app then
+  /// exited — under App Sandbox (every released build is sandboxed) it always
+  /// fails with "Operation not permitted" (verified directly: same entitlements,
+  /// same command), the exit code was never checked, and the detached script's
+  /// fallback `open "$appBundle"` just relaunched the UNCHANGED old build. The
+  /// user saw "restarting…" and got the same version back, with nothing telling
+  /// them why. This probes the same operation the real copy needs BEFORE
+  /// committing to it: if writing inside the bundle fails, self-update is
+  /// impossible here — log why, open the manual-download page (same fallback
+  /// already used on iOS) instead, and leave the running app alone so this
+  /// message can actually reach the user.
   Future<void> _installMacOS(String zipPath) async {
     final dir = await getTemporaryDirectory();
     final appBundle =
         File(Platform.resolvedExecutable).parent.parent.parent.path;
+    final probe = File('$appBundle/.rlink_update_probe');
+    try {
+      await probe.writeAsString('x');
+      await probe.delete();
+    } catch (e) {
+      await _macLog(dir.path,
+          'self-update not possible (cannot write into the app bundle — '
+          'App Sandbox blocks it): $e');
+      lastInstallError = AppL10n.t(
+          'Автоматическое обновление на macOS пока не работает. Скачайте новую версию вручную.');
+      final info = _readyInfo;
+      if (info != null) unawaited(openDownloadPage(info));
+      return;
+    }
     await Process.run('unzip', ['-o', zipPath, '-d', dir.path]);
     final script =
-        'sleep 2\ncp -R "${dir.path}/Rlink.app/." "$appBundle/"\nopen "$appBundle"';
+        'sleep 2\ncp -R "${dir.path}/Rlink.app/." "$appBundle/" 2>>"${dir.path}/rlink_update.log" '
+        '&& echo "[\$(date)] copy ok" >> "${dir.path}/rlink_update.log" '
+        '|| echo "[\$(date)] copy FAILED" >> "${dir.path}/rlink_update.log"\n'
+        'open "$appBundle"';
     final f = File('${dir.path}/update.sh')..writeAsStringSync(script);
     await Process.run('chmod', ['+x', f.path]);
     await Process.start('bash', [f.path], mode: ProcessStartMode.detached);

@@ -42,10 +42,33 @@ class _UpdateRestartDialogState extends State<UpdateRestartDialog> {
     if (_installing) return;
     _timer?.cancel();
     setState(() => _installing = true);
-    // Android: системный установщик открывается поверх; desktop: приложение
-    // распаковывает обновление и перезапускается (внутри exit(0)).
+    // Android: системный установщик открывается поверх; Windows/Linux:
+    // приложение распаковывает обновление и перезапускается (внутри exit(0)).
+    // macOS: может решить, что само заменить себя не может — тогда install()
+    // просто возвращается (никакого exit) и оставляет причину здесь.
     await UpdateService.instance.install();
-    if (mounted) Navigator.of(context).maybePop();
+    final error = UpdateService.instance.lastInstallError;
+    if (!mounted) return;
+    if (error != null) {
+      UpdateService.instance.lastInstallError = null;
+      Navigator.of(context).maybePop();
+      final ctx = context;
+      unawaited(showDialog<void>(
+        context: ctx,
+        builder: (_) => AlertDialog(
+          title: Text(AppL10n.t('Не удалось обновить')),
+          content: Text(error),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).maybePop(),
+              child: Text(AppL10n.t('Понятно')),
+            ),
+          ],
+        ),
+      ));
+      return;
+    }
+    Navigator.of(context).maybePop();
   }
 
   void _later() {

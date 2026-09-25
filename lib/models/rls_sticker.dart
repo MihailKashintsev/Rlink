@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import '../utils/bounded_gzip.dart';
 
 /// Rlink's own animated-sticker container: **.rls**.
 ///
@@ -286,7 +287,8 @@ class RlsSticker {
   /// sticker as "missing", never a crash.
   static RlsSticker? decodeBytes(Uint8List bytes) {
     try {
-      final jsonBytes = GZipDecoder().decodeBytes(bytes);
+      final jsonBytes = boundedGunzip(bytes);
+      if (jsonBytes == null) return null;
       final decoded = jsonDecode(utf8.decode(jsonBytes));
       if (decoded is! Map || decoded['fmt'] != rlsFormatId) return null;
       final s = _fromSchema(Map<String, dynamic>.from(decoded));

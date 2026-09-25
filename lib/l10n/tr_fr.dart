@@ -2036,4 +2036,8 @@ const Map<String, String> trFr = <String, String>{
   'Соединение с сервером в порядке': 'La connexion au serveur est correcte',
   'Не удалось отправить: нет связи с сервером. Повторите позже.': 'Échec de l\'envoi : pas de connexion au serveur. Réessayez plus tard.',
   'Не удалось переключить камеру': 'Impossible de changer de caméra',
+  'Добавить контакт?': 'Ajouter ce contact ?',
+  '{0} ({1}…) хочет добавить вас в контакты и получит ваш профиль.': '{0} ({1}…) souhaite vous ajouter comme contact et recevra votre profil.',
+  'Автоматическое обновление на macOS пока не работает. Скачайте новую версию вручную.': 'Les mises à jour automatiques sur macOS ne fonctionnent pas encore. Téléchargez la nouvelle version manuellement.',
+  'Не удалось обновить': 'Échec de la mise à jour',
 };

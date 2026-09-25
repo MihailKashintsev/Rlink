@@ -141,8 +141,41 @@ class RlinkDeepLinkService {
     return contact;
   }
 
-  /// Deep-link entry: add the contact, then open the chat with a snackbar.
+  /// Deep-link entry: confirm, then add the contact and open the chat.
+  ///
+  /// Unlike the QR scanner or the "paste a link" dialog — where the user just
+  /// deliberately pointed a camera at, or typed in, a specific code — this
+  /// fires for a `rlink://user…` link opened from ANYWHERE outside the app
+  /// (a browser, another app, a message). It used to add the contact and
+  /// send them your profile with zero confirmation: a link crafted to look
+  /// like "Rlink Support" or a real contact's name added itself and got your
+  /// nick/avatar/X25519 key back, from a single tap and no other action.
   Future<void> openUserLinkInApp(RlinkUserLink u) async {
+    final ctxBefore = _navigatorKey?.currentContext;
+    if (ctxBefore != null && ctxBefore.mounted) {
+      final nick = u.nickname.isNotEmpty ? u.nickname : AppL10n.t('Пользователь');
+      final shortKey = u.publicKeyHex.length >= 8
+          ? u.publicKeyHex.substring(0, 8)
+          : u.publicKeyHex;
+      final confirmed = await showDialog<bool>(
+        context: ctxBefore,
+        builder: (dctx) => AlertDialog(
+          title: Text(AppL10n.t('Добавить контакт?')),
+          content: Text(AppL10n.f('{0} ({1}…) хочет добавить вас в контакты и получит ваш профиль.', [nick, shortKey])),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dctx, false),
+              child: Text(AppL10n.t('Отмена')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dctx, true),
+              child: Text(AppL10n.t('Добавить')),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
     final contact = await applyUserLink(u);
     final nav = _navigatorKey?.currentState;
     final ctx = _navigatorKey?.currentContext;

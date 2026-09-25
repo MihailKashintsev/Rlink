@@ -3315,12 +3315,14 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_editingMessageId != null) {
         final targetId = _editingMessageId!;
         if (!_savedMessagesLocalOnly && !_isBuiltinAiBot) {
-          await GossipRouter.instance.sendEditMessage(
-            messageId: targetId,
-            newText: text,
-            senderId: myId,
-            recipientId: _resolvedPeerId,
-          );
+          final enc = await _sealForPeer(jsonEncode({'m': targetId, 't': text}));
+          if (enc != null) {
+            await GossipRouter.instance.sendEditMessage(
+              messageId: targetId,
+              encrypted: enc,
+              recipientId: _resolvedPeerId,
+            );
+          }
         }
         await ChatStorageService.instance.editMessage(targetId, text);
         if (_tearingDown || !mounted) return;
@@ -3752,15 +3754,36 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Seals [plaintext] for this chat's peer exactly like a normal DM (signed
+  /// envelope) — edit/delete packets now travel this way so they can't be
+  /// forged. Null when the peer's X25519 key isn't known yet.
+  Future<EncryptedMessage?> _sealForPeer(String plaintext) async {
+    final target = ChatStorageService.normalizeDmPeerId(_resolvedPeerId);
+    final key = BleService.instance.getPeerX25519Key(target) ??
+        RelayService.instance.getPeerX25519Key(target);
+    if (key == null || key.isEmpty) {
+      debugPrint('[Chat] no X25519 key for ${target.length >= 8 ? target.substring(0, 8) : target}: edit/delete not sent');
+      return null;
+    }
+    return CryptoService.instance.encryptMessage(
+      plaintext: plaintext,
+      recipientX25519KeyBase64: key,
+      recipientPeerId: target,
+      recipientSupportsRatchet: PeerKeyDirectory.instance.supportsRatchet(target),
+    );
+  }
+
   Future<void> _patchSharedCollab(ChatMessage msg, String newEncoded) async {
     await ChatStorageService.instance.editMessage(msg.id, newEncoded);
     if (!_savedMessagesLocalOnly && !_isDmBot) {
-      await GossipRouter.instance.sendEditMessage(
-        messageId: msg.id,
-        newText: newEncoded,
-        senderId: CryptoService.instance.publicKeyHex,
-        recipientId: _resolvedPeerId,
-      );
+      final enc = await _sealForPeer(jsonEncode({'m': msg.id, 't': newEncoded}));
+      if (enc != null) {
+        await GossipRouter.instance.sendEditMessage(
+          messageId: msg.id,
+          encrypted: enc,
+          recipientId: _resolvedPeerId,
+        );
+      }
     }
   }
 
@@ -5876,11 +5899,14 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       await ChatStorageService.instance.deleteMessage(msg.id);
       if (!_savedMessagesLocalOnly) {
-        await GossipRouter.instance.sendDeleteMessage(
-          messageId: msg.id,
-          senderId: CryptoService.instance.publicKeyHex,
-          recipientId: _resolvedPeerId,
-        );
+        final enc = await _sealForPeer(jsonEncode({'m': msg.id}));
+        if (enc != null) {
+          await GossipRouter.instance.sendDeleteMessage(
+            messageId: msg.id,
+            encrypted: enc,
+            recipientId: _resolvedPeerId,
+          );
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -6040,7 +6066,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (ok != true || !mounted) return;
 
-    final myId = CryptoService.instance.publicKeyHex;
     for (final m in outgoing) {
       if (_replyToMessageId == m.id) {
         _replyToMessageId = null;
@@ -6054,11 +6079,14 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         await ChatStorageService.instance.deleteMessage(m.id);
         if (!_savedMessagesLocalOnly) {
-          await GossipRouter.instance.sendDeleteMessage(
-            messageId: m.id,
-            senderId: myId,
-            recipientId: _resolvedPeerId,
-          );
+          final enc = await _sealForPeer(jsonEncode({'m': m.id}));
+          if (enc != null) {
+            await GossipRouter.instance.sendDeleteMessage(
+              messageId: m.id,
+              encrypted: enc,
+              recipientId: _resolvedPeerId,
+            );
+          }
         }
       } catch (e) {
         if (mounted) {
@@ -10522,6 +10550,13 @@ class _DocumentPreviewScreenState extends State<_DocumentPreviewScreen> {
     }
   }
 
+  /// A document preview's declared uncompressed size comes straight from the
+  /// zip's own header, before anything decompresses it — a crafted attachment
+  /// can claim (and deliver) gigabytes for one small entry. Checked before
+  /// `.content` is ever touched, so the decompression itself never runs.
+  static const _kMaxPreviewEntryBytes = 20 * 1024 * 1024;
+  bool _previewEntryTooBig(ArchiveFile f) => f.size > _kMaxPreviewEntryBytes;
+
   String _stripXml(String raw) {
     var s = raw
         .replaceAll(RegExp(r'<[^>]+>'), ' ')
@@ -10538,7 +10573,9 @@ class _DocumentPreviewScreenState extends State<_DocumentPreviewScreen> {
     final bytes = await File(widget.filePath).readAsBytes();
     final z = ZipDecoder().decodeBytes(bytes, verify: false);
     final doc = z.findFile('word/document.xml');
-    if (doc == null) return AppL10n.t('Не удалось прочитать содержимое DOCX.');
+    if (doc == null || _previewEntryTooBig(doc)) {
+      return AppL10n.t('Не удалось прочитать содержимое DOCX.');
+    }
     final txt = utf8.decode(doc.content as List<int>, allowMalformed: true);
     final clean = _stripXml(txt);
     return clean.isEmpty ? AppL10n.t('Документ пуст.') : clean;
@@ -10554,6 +10591,7 @@ class _DocumentPreviewScreenState extends State<_DocumentPreviewScreen> {
     if (slides.isEmpty) return AppL10n.t('Слайды не найдены.');
     final out = <String>[];
     for (var i = 0; i < slides.length; i++) {
+      if (_previewEntryTooBig(slides[i])) continue;
       final xml =
           utf8.decode(slides[i].content as List<int>, allowMalformed: true);
       final clean = _stripXml(xml);
@@ -10570,8 +10608,9 @@ class _DocumentPreviewScreenState extends State<_DocumentPreviewScreen> {
     final bytes = await File(widget.filePath).readAsBytes();
     final z = ZipDecoder().decodeBytes(bytes, verify: false);
     final shared = z.findFile('xl/sharedStrings.xml');
-    if (shared == null)
+    if (shared == null || _previewEntryTooBig(shared)) {
       return AppL10n.t('Предпросмотр XLSX: текстовые ячейки не найдены.');
+    }
     final xml = utf8.decode(shared.content as List<int>, allowMalformed: true);
     final matches = RegExp(r'<t[^>]*>([\s\S]*?)</t>').allMatches(xml);
     final values = <String>[];

@@ -38,6 +38,16 @@ class DoubleRatchet {
   static final _chacha = Chacha20.poly1305Aead();
   static const maxSkippedKeys = 1000;
 
+  /// [maxSkippedKeys] bounds a single ratchet step; nothing bounded the
+  /// TOTAL kept across a session's lifetime — a contact who staggers sends
+  /// (always under the per-step cap) can grow it forever. Verified: 40
+  /// rounds of 1000 ordinary short messages left ~40k skipped keys and a
+  /// ~3.9 MB session blob, re-serialized to disk/secure storage on every
+  /// single message. Once the total exceeds this, the OLDEST skipped keys
+  /// are dropped (a message that arrives that late was already unrecoverable
+  /// in practice; this only changes when we give up waiting for it).
+  static const maxTotalSkippedKeys = 2000;
+
   /// Bootstraps the session for whichever party sends the first message.
   /// [rootKeySeed] must be identical on both sides — e.g. an X25519 ECDH
   /// between the two parties' long-term identity keys, computed the same
@@ -196,6 +206,9 @@ class DoubleRatchet {
       session._recvN = recvN + 1;
       session._prevSendN = prevSendN;
       session._skipped.addAll(newSkipped);
+      while (session._skipped.length > maxTotalSkippedKeys) {
+        session._skipped.remove(session._skipped.keys.first);
+      }
       return plain;
     } catch (_) {
       // A forged header (garbage bytes as a "public key", an absurd n/pn)

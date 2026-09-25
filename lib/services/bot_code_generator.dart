@@ -20,10 +20,21 @@ class BotCodeGenerator {
   /// Человекочитаемый rules-JSON (для повторного импорта в конструктор).
   static String rulesJson(BotBlueprint bp) => bp.toJsonString();
 
+  /// Escapes free text for embedding in a Python string literal — both a
+  /// plain quoted line and a docstring accept a backslash-escaped quote, so
+  /// this is safe in either. Verified exploitable otherwise: a bot name
+  /// crafted to close the quote early and append `; __import__('os').system(...)`
+  /// ran as code the moment the generated file executed.
+  static String _pyStr(String s) => s
+      .replaceAll('\\', '\\\\')
+      .replaceAll('"', '\\"')
+      .replaceAll('\n', ' ')
+      .replaceAll('\r', ' ');
+
   /// Полный текст Python-файла бота.
   static String python(BotBlueprint bp) {
     final rulesB64 = base64Encode(utf8.encode(jsonEncode(bp.toJson())));
-    final display = bp.name.isEmpty ? 'Rlink bot' : bp.name;
+    final display = _pyStr(bp.name.isEmpty ? 'Rlink bot' : bp.name);
     final handle = bp.sanitizedHandle.isEmpty ? 'bot' : bp.sanitizedHandle;
 
     return '''#!/usr/bin/env python3
