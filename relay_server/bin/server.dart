@@ -124,11 +124,38 @@ final Map<String, String> _accountBlobs = {};
 /// fanout, it isn't a value passed through to another client.
 final Map<String, Set<String>> _blockedByUser = {};
 
+/// True if [recipientKey] has blocked [senderKey]. `set_blocked` only ever
+/// filtered PRESENCE broadcasts — search and direct packet/blob delivery
+/// ignored the block list entirely (verified: a blocked sender still found
+/// and messaged their target). Silent like real blocking UX: the sender sees
+/// nothing different, so blocking never escalates into "why aren't you
+/// answering".
+bool _isBlockedByRecipient(String recipientKey, String senderKey) =>
+    _blockedByUser[recipientKey.toLowerCase()]
+        ?.contains(senderKey.toLowerCase()) ==
+    true;
+
 /// Offline mailbox: recipientPublicKey -> relayMsgId -> envelope.
 final Map<String, Map<String, Map<String, dynamic>>> _mailbox = {};
 const _mailboxFile = 'relay_mailbox.json';
 const _mailboxMaxPerRecipient = 600;
+// A `blob` message (or its chunks) can be tens of MB; the count cap alone
+// doesn't bound memory. A handful of never-registered "recipient" keys fed a
+// stream of blobs otherwise grows the mailbox without limit (verified: 224 MB
+// in ~2 s from one unauthenticated connection) — cap bytes too, per recipient
+// AND in total, evicting the OLDEST envelope across the whole mailbox once the
+// total is exceeded (a single attacker flooding many fake recipients can't
+// starve real ones out of their per-recipient budget otherwise).
+const _mailboxMaxBytesPerRecipient = 20 * 1024 * 1024;
+const _mailboxMaxTotalBytes = 150 * 1024 * 1024;
+int _mailboxTotalBytes = 0;
 Timer? _mailboxPersistTimer;
+
+int _envelopeApproxBytes(Map<String, dynamic> envelope) =>
+    (envelope['data'] as String?)?.length ?? 64;
+
+int _bucketBytes(Map<String, Map<String, dynamic>> bucket) =>
+    bucket.values.fold(0, (a, e) => a + _envelopeApproxBytes(e));
 
 /// Stored Web Push subscriptions by recipient public key.
 final Map<String, List<Map<String, dynamic>>> _pushSubscriptions = {};
@@ -926,6 +953,23 @@ bool _isAdminHashValid(String hash) {
   return h.isNotEmpty && h == _relayAdminHash;
 }
 
+/// Brute-forcing the admin hash (a fixed shared secret) has no other
+/// throttle — general WS flood limits allow thousands of messages per
+/// window, i.e. thousands of guesses/s (measured). Every admin_* handler
+/// calls this before checking the hash.
+const _adminAuthWindow = Duration(minutes: 1);
+const _adminAuthMax = 10;
+final Map<String, List<DateTime>> _adminAuthAttempts = {};
+
+bool _checkAdminAuthRate(String key) {
+  final now = DateTime.now();
+  final times = _adminAuthAttempts.putIfAbsent(key, () => []);
+  times.removeWhere((t) => now.difference(t) > _adminAuthWindow);
+  if (times.length >= _adminAuthMax) return false;
+  times.add(now);
+  return true;
+}
+
 bool _handleTakenByActiveBot(String handleLower) {
   for (final m in _botDirectory.values) {
     if (m['revoked'] == true) continue;
@@ -1577,7 +1621,8 @@ void _handleAdminChannelVerify(_User user, Map<String, dynamic> msg) {
     } catch (_) {}
   }
 
-  if (!_isAdminHashValid(_jsonString(msg['adminHash']))) {
+  if (!_checkAdminAuthRate(user.publicKey) ||
+      !_isAdminHashValid(_jsonString(msg['adminHash']))) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
   }
@@ -1623,7 +1668,8 @@ void _handleAdminPremium(_User user, Map<String, dynamic> msg) {
     } catch (_) {}
   }
 
-  if (!_isAdminHashValid(_jsonString(msg['adminHash']))) {
+  if (!_checkAdminAuthRate(user.publicKey) ||
+      !_isAdminHashValid(_jsonString(msg['adminHash']))) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
   }
@@ -1881,8 +1927,9 @@ void _loadMailbox() {
       });
       if (byId.isNotEmpty) _mailbox[recipient.toLowerCase()] = byId;
     });
-    stdout.writeln(
-        '[RLINK][Relay] Loaded mailbox for ${_mailbox.length} recipients');
+    _mailboxTotalBytes = _mailbox.values.fold(0, (a, b) => a + _bucketBytes(b));
+    stdout.writeln('[RLINK][Relay] Loaded mailbox for ${_mailbox.length} '
+        'recipients (~${_mailboxTotalBytes ~/ 1024} KB)');
   } catch (e) {
     stdout.writeln('[RLINK][Relay] mailbox load: $e');
   }
@@ -1908,8 +1955,21 @@ void _queueForRecipient(
   final bucket =
       _mailbox.putIfAbsent(key, () => <String, Map<String, dynamic>>{});
   bucket[relayMsgId] = envelope;
-  while (bucket.length > _mailboxMaxPerRecipient) {
-    bucket.remove(bucket.keys.first);
+  _mailboxTotalBytes += _envelopeApproxBytes(envelope);
+  while (bucket.length > _mailboxMaxPerRecipient ||
+      _bucketBytes(bucket) > _mailboxMaxBytesPerRecipient) {
+    final oldestId = bucket.keys.first;
+    _mailboxTotalBytes -= _envelopeApproxBytes(bucket.remove(oldestId)!);
+  }
+  while (_mailboxTotalBytes > _mailboxMaxTotalBytes && _mailbox.isNotEmpty) {
+    // Evict the globally oldest envelope: recipient buckets are insertion
+    // ordered, so the first key of the first non-empty bucket is oldest.
+    final k = _mailbox.keys
+        .firstWhere((k) => _mailbox[k]!.isNotEmpty, orElse: () => '');
+    if (k.isEmpty) break;
+    final b = _mailbox[k]!;
+    _mailboxTotalBytes -= _envelopeApproxBytes(b.remove(b.keys.first)!);
+    if (b.isEmpty) _mailbox.remove(k);
   }
   _persistMailbox();
 }
@@ -1917,12 +1977,24 @@ void _queueForRecipient(
 void _ackRecipientMessage(String recipientKey, String relayMsgId) {
   final bucket = _mailbox[recipientKey.toLowerCase()];
   if (bucket == null) return;
-  bucket.remove(relayMsgId);
+  final removed = bucket.remove(relayMsgId);
+  if (removed != null) _mailboxTotalBytes -= _envelopeApproxBytes(removed);
   if (bucket.isEmpty) _mailbox.remove(recipientKey.toLowerCase());
   _persistMailbox();
 }
 
 void _sendMailboxSnapshot(_User user) {
+  // Registering under someone else's key needs no proof at all when that key
+  // has no LIVE verified session right now (an ordinary offline user) — only
+  // eviction of an already-online verified session is guarded. Demonstrated:
+  // register unverified as a victim, receive their queued mail, ack it away —
+  // gone for the real owner, without a single byte of their private key.
+  // Content stays E2E-opaque either way; this closes the delivery/ack hijack.
+  // Safe for existing users: every client since the 2026-08-27 proof-of-
+  // possession fix already sends `proof` and registers verified. Only a
+  // client old enough to predate that fix would see queued mail wait
+  // (nothing is lost — it stays capped in the mailbox) until it updates.
+  if (!user.verified) return;
   final bucket = _mailbox[user.publicKey];
   if (bucket == null || bucket.isEmpty) return;
   var sent = 0;
@@ -2105,6 +2177,74 @@ String _queuedKindFromPacketData(String dataB64) {
   return 'message';
 }
 
+/// One subscribe attempt per IP per window — this is an unauthenticated HTTP
+/// endpoint (no publicKey ownership proof exists yet), so it is the only
+/// throttle against abuse/flooding today.
+const _pushSubscribeWindow = Duration(minutes: 1);
+const _pushSubscribeMax = 20;
+final Map<String, List<DateTime>> _pushSubscribeRateLimits = {};
+
+bool _checkPushSubscribeRate(String ip) {
+  final now = DateTime.now();
+  final times = _pushSubscribeRateLimits.putIfAbsent(ip, () => []);
+  times.removeWhere((t) => now.difference(t) > _pushSubscribeWindow);
+  if (times.length >= _pushSubscribeMax) return false;
+  times.add(now);
+  return true;
+}
+
+String _clientIp(shelf.Request request) {
+  final fwd = request.headers['x-forwarded-for'];
+  if (fwd != null && fwd.isNotEmpty) return fwd.split(',').first.trim();
+  final ci = request.context['shelf.io.connection_info'];
+  if (ci is HttpConnectionInfo) return ci.remoteAddress.address;
+  return 'unknown';
+}
+
+bool _isPrivateOrLocalAddress(InternetAddress a) {
+  if (a.isLoopback || a.isLinkLocal || a.isMulticast) return true;
+  final h = a.address;
+  if (a.type == InternetAddressType.IPv4) {
+    if (h.startsWith('10.') ||
+        h.startsWith('192.168.') ||
+        h == '169.254.169.254') {
+      return true;
+    }
+    if (h.startsWith('172.')) {
+      final second = int.tryParse(h.split('.').elementAtOrNull(1) ?? '') ?? 0;
+      if (second >= 16 && second <= 31) return true;
+    }
+    if (h == '0.0.0.0') return true;
+  } else {
+    // IPv6 unique-local (fc00::/7) and IPv4-mapped internal addresses.
+    if (h.startsWith('fc') || h.startsWith('fd')) return true;
+    if (h == '::1' || h == '::') return true;
+  }
+  return false;
+}
+
+/// A push subscription's `endpoint` is a URL the relay itself later POSTs to
+/// (with a signed VAPID auth header) — reject anything that isn't a real
+/// public HTTPS host, so a subscribe request can't be used as SSRF against
+/// the relay's own network (verified exploitable: internal/loopback POST).
+Future<bool> _isSafePushEndpoint(String endpoint) async {
+  Uri uri;
+  try {
+    uri = Uri.parse(endpoint);
+  } catch (_) {
+    return false;
+  }
+  if (uri.scheme != 'https' || uri.host.isEmpty) return false;
+  try {
+    final addrs = await InternetAddress.lookup(uri.host)
+        .timeout(const Duration(seconds: 3));
+    if (addrs.isEmpty) return false;
+    return addrs.every((a) => !_isPrivateOrLocalAddress(a));
+  } catch (_) {
+    return false;
+  }
+}
+
 void _upsertPushSubscription(String recipientKey, Map<String, dynamic> sub) {
   final key = recipientKey.toLowerCase();
   final endpoint = (sub['endpoint'] as String?)?.trim() ?? '';
@@ -2191,6 +2331,26 @@ bool _checkRate(String publicKey) {
   return true;
 }
 
+/// `blob` is excluded from [_checkRate] (a real transfer is legitimately many
+/// small messages) but was therefore not rate-limited AT ALL — a single
+/// unauthenticated connection could flood the mailbox of any number of
+/// never-registered "recipients" (verified: 224 MB in ~2 s). This caps total
+/// blob BYTES per sender per window instead of message count.
+const _blobByteWindow = Duration(seconds: 10);
+const _blobByteMax = 30 * 1024 * 1024; // ~3 MB/s sustained — well above one
+// real chunked transfer's pace (client paces chunks 20-120ms apart).
+final Map<String, List<(DateTime, int)>> _blobByteLimits = {};
+
+bool _checkBlobByteRate(String publicKey, int bytes) {
+  final now = DateTime.now();
+  final entries = _blobByteLimits.putIfAbsent(publicKey, () => []);
+  entries.removeWhere((e) => now.difference(e.$1) > _blobByteWindow);
+  final total = entries.fold(0, (a, e) => a + e.$2) + bytes;
+  if (total > _blobByteMax) return false;
+  entries.add((now, bytes));
+  return true;
+}
+
 // ── Handlers ────────────────────────────────────────────────────
 
 void _handleMessage(_User user, dynamic raw) {
@@ -2208,6 +2368,11 @@ void _handleMessage(_User user, dynamic raw) {
 
   final type = msg['type'] as String?;
   if (type == null) return;
+
+  if (type == 'blob' && !_checkBlobByteRate(user.publicKey, raw.length)) {
+    user.ws.sink.add(jsonEncode({'type': 'error', 'msg': 'rate_limited'}));
+    return;
+  }
 
   if (_isBotBlockedOrRevoked(user.publicKey) && type != 'ping') {
     try {
@@ -2330,7 +2495,7 @@ void _handleAdminPasswordUpdate(_User user, Map<String, dynamic> msg) {
     ack({'ok': false, 'error': 'admin_not_configured'});
     return;
   }
-  if (!_isAdminHashValid(oldHash)) {
+  if (!_checkAdminAuthRate(user.publicKey) || !_isAdminHashValid(oldHash)) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
   }
@@ -2341,6 +2506,9 @@ void _handleAdminPasswordUpdate(_User user, Map<String, dynamic> msg) {
 }
 
 void _handleRelayAck(_User user, Map<String, dynamic> msg) {
+  // Same identity-hijack concern as _sendMailboxSnapshot: don't let an
+  // unverified registration delete mail out of the real owner's queue.
+  if (!user.verified) return;
   final relayMsgId = msg['msgId'] as String?;
   if (relayMsgId == null || relayMsgId.isEmpty) return;
   _ackRecipientMessage(user.publicKey, relayMsgId);
@@ -2359,7 +2527,7 @@ void _handleAdminBotList(_User user, Map<String, dynamic> msg) {
   }
 
   final adminHash = _jsonString(msg['adminHash']);
-  if (!_isAdminHashValid(adminHash)) {
+  if (!_checkAdminAuthRate(user.publicKey) || !_isAdminHashValid(adminHash)) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
   }
@@ -2440,7 +2608,7 @@ void _handleAdminBotUpdate(_User user, Map<String, dynamic> msg) {
   }
 
   final adminHash = _jsonString(msg['adminHash']);
-  if (!_isAdminHashValid(adminHash)) {
+  if (!_checkAdminAuthRate(user.publicKey) || !_isAdminHashValid(adminHash)) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
   }
@@ -2511,6 +2679,7 @@ void _handlePacket(_User sender, Map<String, dynamic> msg) {
     return; // 256 KB max (blob chunks double-base64 ~90 KB each)
   }
   final to = toRaw.toLowerCase();
+  if (_isBlockedByRecipient(to, sender.publicKey)) return;
   final relayMsgId = (msg['msgId'] as String?) ??
       'pkt_${DateTime.now().microsecondsSinceEpoch}';
   final senderIsBot = _isKnownBot(sender.publicKey);
@@ -2623,6 +2792,7 @@ void _handleBlob(_User sender, Map<String, dynamic> msg) {
     }));
     return;
   }
+  if (_isBlockedByRecipient(routeKey, sender.publicKey)) return;
   final relayMsgId = msg['msgId'] as String?;
   if (relayMsgId == null || relayMsgId.isEmpty) return;
   final data = msg['data'] as String?;
@@ -2730,6 +2900,9 @@ void _handleSearch(_User requester, Map<String, dynamic> msg) {
     if (results.length >= 20) break;
     if (user.publicKey == requester.publicKey) continue;
     if (_isBotBlockedOrRevoked(user.publicKey)) continue;
+    // A blocked-by-them contact shouldn't be findable by the person they
+    // blocked either — search ignored the block list entirely before this.
+    if (_isBlockedByRecipient(user.publicKey, requester.publicKey)) continue;
     if (seenKeys.contains(user.publicKey)) continue;
     final nickLower = user.nick.toLowerCase();
     final shortLower = user.shortId.toLowerCase();
@@ -3138,6 +3311,9 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
       return _jsonResponse({'ok': false, 'error': 'push_not_configured'},
           status: 503);
     }
+    if (!_checkPushSubscribeRate(_clientIp(request))) {
+      return _jsonResponse({'ok': false, 'error': 'rate_limited'}, status: 429);
+    }
     try {
       final raw = await request.readAsString();
       final decoded = jsonDecode(raw);
@@ -3155,6 +3331,14 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
       final keysRaw = subRaw['keys'];
       if (endpoint.isEmpty || keysRaw is! Map) {
         return _jsonResponse({'ok': false, 'error': 'bad_subscription'},
+            status: 400);
+      }
+      if (!await _isSafePushEndpoint(endpoint)) {
+        // The relay later POSTs to this URL itself (_sendWebPush) with the
+        // VAPID auth header attached — an unchecked endpoint is SSRF (proven:
+        // made the server call 127.0.0.1). Only a real push service's public
+        // HTTPS host is a legitimate endpoint; nothing internal ever is.
+        return _jsonResponse({'ok': false, 'error': 'unsafe_endpoint'},
             status: 400);
       }
       final p256dh = _normalizeB64Url((keysRaw['p256dh'] as String?) ?? '');
@@ -3318,22 +3502,34 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
     }
   }
   if (request.url.path == 'health') {
-    final peers = _users.values
-        .map((u) => {
-              'shortId': u.shortId,
-              'nick': u.nick,
-              'connectedAt': u.connectedAt.toIso8601String(),
-            })
-        .toList();
-    return _jsonResponse({
+    // Nick + short key + connect time of every online user used to be public
+    // to anyone who requested this URL — real metadata leakage (verified: no
+    // auth needed). The detailed peer list is now opt-in for the operator:
+    // set HEALTH_DETAIL_TOKEN in the relay's .env and pass it as the
+    // `X-Health-Token` header (e.g. for the diagnostics you've been running
+    // over SSH this session) to get it back; the bare endpoint stays useful
+    // (online count, config flags) without exposing who is online.
+    final detailToken = Platform.environment['HEALTH_DETAIL_TOKEN'] ?? '';
+    final wantsDetail = detailToken.isNotEmpty &&
+        request.headers['x-health-token'] == detailToken;
+    final body = {
       'status': 'ok',
       'online': _users.length,
-      'peers': peers,
       'uptime': DateTime.now().toIso8601String(),
       'pushConfigured': _webPushConfigured,
       'pushRecipients': _pushSubscriptions.length,
       'adminEnabled': _relayAdminHash.isNotEmpty,
-    });
+    };
+    if (wantsDetail) {
+      body['peers'] = _users.values
+          .map((u) => {
+                'shortId': u.shortId,
+                'nick': u.nick,
+                'connectedAt': u.connectedAt.toIso8601String(),
+              })
+          .toList();
+    }
+    return _jsonResponse(body);
   }
 
   // ── HTTP Bot API (метаданные; сообщения только WS + E2E) ─────────

@@ -123,8 +123,8 @@ Map<String, dynamic> _load() {
   } catch (_) {}
   try {
     if (_legacyGoogleStore.existsSync()) {
-      final legacy =
-          jsonDecode(_legacyGoogleStore.readAsStringSync()) as Map<String, dynamic>;
+      final legacy = jsonDecode(_legacyGoogleStore.readAsStringSync())
+          as Map<String, dynamic>;
       for (final entry in legacy.entries) {
         final key = _key('google', entry.key);
         data.putIfAbsent(key, () => entry.value);
@@ -144,18 +144,29 @@ void _save(Map<String, dynamic> m) {
 // google/onedrive/dropbox without colliding.
 String _key(String providerId, String pairing) => '$providerId:$pairing';
 
+const _oauthTokenRateWindow = Duration(minutes: 1);
+const _oauthTokenRateMax = 30;
+final Map<String, List<DateTime>> _oauthTokenRateLimits = {};
+
+bool _checkOauthTokenRate(String pairing) {
+  final now = DateTime.now();
+  final times = _oauthTokenRateLimits.putIfAbsent(pairing, () => []);
+  times.removeWhere((t) => now.difference(t) > _oauthTokenRateWindow);
+  if (times.length >= _oauthTokenRateMax) return false;
+  times.add(now);
+  return true;
+}
+
 String _esc(String s) => const HtmlEscape().convert(s);
 
 shelf.Response _html(String body, {int status = 200}) => shelf.Response(status,
     body: body, headers: {'content-type': 'text/html; charset=utf-8'});
 
 shelf.Response _json(Map<String, dynamic> m, {int status = 200}) =>
-    shelf.Response(status,
-        body: jsonEncode(m),
-        headers: {
-          'content-type': 'application/json',
-          'access-control-allow-origin': '*',
-        });
+    shelf.Response(status, body: jsonEncode(m), headers: {
+      'content-type': 'application/json',
+      'access-control-allow-origin': '*',
+    });
 
 Future<Map<String, dynamic>?> _postForm(String url, Map<String, String> form,
     {Map<String, String>? headers}) async {
@@ -224,8 +235,9 @@ Future<Map<String, dynamic>?> _postJsonAuthed(
 /// path so the caller continues its normal dispatch.
 Future<shelf.Response?> handleCloudOauth(shelf.Request request) async {
   final path = request.url.path; // shelf paths have no leading slash
-  final match = RegExp(r'^oauth/(google|onedrive|dropbox)/(start|callback|token)$')
-      .firstMatch(path);
+  final match =
+      RegExp(r'^oauth/(google|onedrive|dropbox)/(start|callback|token)$')
+          .firstMatch(path);
   if (match == null) return null;
   final provider = _providers[match.group(1)]!;
   final step = match.group(2);
@@ -310,7 +322,14 @@ Future<shelf.Response?> handleCloudOauth(shelf.Request request) async {
   // 3) token -> return a fresh access token (refresh server-side if needed)
   if (step == 'token') {
     final p = request.url.queryParameters['p'] ?? '';
-    if (p.isEmpty) return _json({'ok': false, 'error': 'no_pairing'}, status: 400);
+    if (p.isEmpty)
+      return _json({'ok': false, 'error': 'no_pairing'}, status: 400);
+    // `p` itself has 160 bits of secure randomness (unguessable), but nothing
+    // stopped hammering this endpoint (measured ~930 req/s, 0 throttling) —
+    // basic defense-in-depth against resource exhaustion / token scanning.
+    if (!_checkOauthTokenRate(p)) {
+      return _json({'ok': false, 'error': 'rate_limited'}, status: 429);
+    }
     final store = _load();
     final key = _key(provider.id, p);
     final rec = store[key] as Map<String, dynamic>?;
