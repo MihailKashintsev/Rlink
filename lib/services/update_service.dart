@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' as hashlib;
+import 'package:cryptography/cryptography.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +23,43 @@ const _kUpdateManifestUrls = <String>[
   'https://rlinkrelay.duckdns.org/updates/manifest.json',
   'https://185.244.172.90.nip.io/updates/manifest.json',
 ];
+
+/// Ed25519 public key the release manifest is signed with (CI secret
+/// UPDATE_SIGNING_KEY signs `manifest.json` → `manifest.json.sig`; the private
+/// key never ships). Without this the update channel was pure trust in whoever
+/// answers for the relay's DNS name: anyone who could serve a manifest — a
+/// compromised server, a hijacked name, a MITM — could point desktop clients at
+/// an arbitrary zip that gets unpacked over the install and run. Now a manifest
+/// without a valid signature is ignored, and the file it names must match the
+/// signed sha256 before anything is executed.
+const _kUpdateSigningPublicKeyHex =
+    '61889e1053601ae088f810bdd7ff5f292d450e44d56c6ec56ac1cde105026097';
+
+List<int> _hexBytes(String hex) => [
+      for (var i = 0; i + 1 < hex.length; i += 2)
+        int.parse(hex.substring(i, i + 2), radix: 16),
+    ];
+
+/// True only if [sigBase64] is a valid Ed25519 signature of exactly
+/// [manifestBytes] under the pinned key.
+Future<bool> verifyUpdateManifestSignature(
+    List<int> manifestBytes, String sigBase64,
+    {String publicKeyHex = _kUpdateSigningPublicKeyHex}) async {
+  try {
+    final sig = base64.decode(sigBase64.trim());
+    if (sig.length != 64) return false;
+    return await Ed25519().verify(
+      manifestBytes,
+      signature: Signature(
+        sig,
+        publicKey: SimplePublicKey(_hexBytes(publicKeyHex),
+            type: KeyPairType.ed25519),
+      ),
+    );
+  } catch (_) {
+    return false;
+  }
+}
 
 /// Уведомление UI о доступном обновлении (после фоновой проверки).
 final ValueNotifier<UpdateInfo?> pendingUpdateNotifier =
@@ -48,12 +87,17 @@ class UpdateInfo {
   /// false = скачать ассет и установить (десктоп/Android).
   final bool openExternalDownloadPage;
 
+  /// Hex sha256 of the asset, from the SIGNED manifest. Nothing is installed
+  /// unless the downloaded file hashes to this.
+  final String sha256;
+
   const UpdateInfo({
     required this.version,
     required this.body,
     required this.downloadUrl,
     required this.assetName,
     this.openExternalDownloadPage = false,
+    this.sha256 = '',
   });
 }
 
@@ -97,28 +141,32 @@ class UpdateService {
       final info = await PackageInfo.fromPlatform();
       final current = _normalizeVersionTag(info.version);
 
-      Response<dynamic>? response;
+      Map<String, dynamic>? manifestOrNull;
       Object? lastError;
       for (final u in _kUpdateManifestUrls) {
         try {
-          response = await _dio.getUri(
-            Uri.parse(u),
-            options: Options(
-              responseType: ResponseType.plain,
-              receiveTimeout: const Duration(seconds: 12),
-              sendTimeout: const Duration(seconds: 12),
-            ),
+          final opts = Options(
+            receiveTimeout: const Duration(seconds: 12),
+            sendTimeout: const Duration(seconds: 12),
           );
+          final m = await _dio.getUri<List<int>>(Uri.parse(u),
+              options: opts.copyWith(responseType: ResponseType.bytes));
+          final sig = await _dio.getUri<String>(Uri.parse('$u.sig'),
+              options: opts.copyWith(responseType: ResponseType.plain));
+          final bytes = m.data ?? const <int>[];
+          if (!await verifyUpdateManifestSignature(bytes, sig.data ?? '')) {
+            lastError = StateError('manifest signature invalid ($u)');
+            continue;
+          }
+          manifestOrNull =
+              jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
           break;
         } catch (e) {
           lastError = e;
         }
       }
-      if (response == null) throw lastError ?? StateError('no manifest');
-      final data = response.data;
-      final Map<String, dynamic> manifest = data is String
-          ? jsonDecode(data) as Map<String, dynamic>
-          : Map<String, dynamic>.from(data as Map);
+      final manifest = manifestOrNull;
+      if (manifest == null) throw lastError ?? StateError('no manifest');
 
       final rawVersion = manifest['version'] as String? ?? '';
       final latest = _normalizeVersionTag(rawVersion);
@@ -135,12 +183,16 @@ class UpdateService {
       // страница загрузки (assets.ios). Иначе не тревожим.
       if (url == null || url.isEmpty) return null;
 
+      final assetName = _fileNameFromUrl(url);
+      final hashes = manifest['sha256'];
+      final sha = hashes is Map ? (hashes[assetName] as String? ?? '') : '';
       return UpdateInfo(
         version: rawVersion.isNotEmpty ? rawVersion : latest,
         body: manifest['notes'] as String? ?? '',
         downloadUrl: url,
-        assetName: _fileNameFromUrl(url),
+        assetName: assetName,
         openExternalDownloadPage: Platform.isIOS,
+        sha256: sha,
       );
     } catch (e) {
       debugPrint('[UpdateService] check failed: $e');
@@ -197,6 +249,19 @@ class UpdateService {
     readyToInstall.value = info;
   }
 
+  /// Streaming sha256 of [path] (a 160 MB APK must not be held in memory) vs
+  /// the hex hash carried by [info]; an empty/short expected hash never passes.
+  Future<bool> _matchesSignedHash(UpdateInfo info, String path) async {
+    final want = info.sha256.trim().toLowerCase();
+    if (want.length != 64) return false;
+    try {
+      final digest = await hashlib.sha256.bind(File(path).openRead()).first;
+      return digest.toString() == want;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Запускает установку уже скачанного обновления. Android — системный
   /// установщик (приложение закроется и перезапустится после установки);
   /// десктоп — распаковка поверх + перезапуск (внутри `exit(0)`).
@@ -204,6 +269,21 @@ class UpdateService {
     final info = _readyInfo;
     final path = _readyFilePath;
     if (info == null) return;
+    // Every download route (desktop dio, Android DownloadManager, fallbacks,
+    // resume-after-restart) ends here, so this is the one place the file is
+    // checked against the hash from the signed manifest before it runs.
+    if (path != null && path.isNotEmpty && !await _matchesSignedHash(info, path)) {
+      debugPrint('[UpdateService] downloaded file does not match the signed sha256 — not installing');
+      lastInstallError = AppL10n.t(
+          'Файл обновления не прошёл проверку подлинности. Установка отменена.');
+      try {
+        await File(path).delete();
+      } catch (_) {}
+      _readyInfo = null;
+      _readyFilePath = null;
+      readyToInstall.value = null;
+      return;
+    }
     try {
       if (Platform.isAndroid) {
         if (path != null && path.isNotEmpty) await _installAndroid(path);
@@ -228,6 +308,7 @@ class UpdateService {
   static const _prefsPendingVer = 'rlink_update_dl_ver';
   static const _prefsPendingUrl = 'rlink_update_dl_url';
   static const _prefsPendingAsset = 'rlink_update_dl_asset';
+  static const _prefsPendingSha = 'rlink_update_dl_sha';
 
   bool _pollingAndroid = false;
 
@@ -343,6 +424,7 @@ class UpdateService {
       body: '',
       downloadUrl: prefs.getString(_prefsPendingUrl) ?? '',
       assetName: prefs.getString(_prefsPendingAsset) ?? '',
+      sha256: prefs.getString(_prefsPendingSha) ?? '',
     );
     if (status == 'successful') {
       final path = st!['path'] as String?;
@@ -367,6 +449,7 @@ class UpdateService {
     await prefs.setString(_prefsPendingVer, info.version);
     await prefs.setString(_prefsPendingUrl, info.downloadUrl);
     await prefs.setString(_prefsPendingAsset, info.assetName);
+    await prefs.setString(_prefsPendingSha, info.sha256);
   }
 
   Future<void> _clearPending() async {
@@ -375,6 +458,7 @@ class UpdateService {
     await prefs.remove(_prefsPendingVer);
     await prefs.remove(_prefsPendingUrl);
     await prefs.remove(_prefsPendingAsset);
+    await prefs.remove(_prefsPendingSha);
   }
 
   /// Скачивает обновление устойчиво: relay — одиночный VPS, и большой APK на

@@ -23,6 +23,7 @@ import 'channel_backup_service.dart';
 import 'channel_directory_relay.dart';
 // google_drive_channel_backup is reached via ChannelBackupService.channelDownloadUrl.
 import 'crypto_service.dart';
+import 'signed_action.dart';
 import 'web_identity_portable.dart';
 
 Map<String, String> _staffLabelsFromDb(String? raw) {
@@ -1079,7 +1080,15 @@ class ChannelService {
   }
 
   /// Слияние `channel_meta` gossip: отсутствующие в пакете поля не затираются.
-  Future<void> applyChannelMetaFromPayload(Map<String, dynamic> p) async {
+  ///
+  /// [signer] is the verified signer of a gossip `channel_meta` (set by the
+  /// router, never read from the packet). [trusted] = the relay directory
+  /// snapshot, whose entries the SERVER already verified against the owner's
+  /// signature. Anything else is applied only if the accepted owner signed it:
+  /// before this, any peer could send a meta naming the (public) owner and
+  /// rewrite moderators, staff labels, name, flags of any channel it knew.
+  Future<void> applyChannelMetaFromPayload(Map<String, dynamic> p,
+      {String? signer, bool trusted = false}) async {
     if (_db == null) return;
     final channelId = p['channelId'] as String?;
     final name = p['name'] as String?;
@@ -1102,6 +1111,24 @@ class ChannelService {
         ownerTrusted = false;
         adminId = existing.adminId;
       }
+    }
+
+    if (!trusted) {
+      final sts = p['sts'];
+      // The (accepted) owner signs — or, in a hand-over whose signed chain we
+      // just validated, the PREVIOUS owner who is giving the channel away.
+      final okSigner = signer != null &&
+          (signer == adminId.toLowerCase() ||
+              (ownerChanged &&
+                  existing != null &&
+                  signer == existing.adminId.toLowerCase()));
+      if (!okSigner || sts is! num) {
+        debugPrint(
+            '[RLINK][Channel] channel_meta for $channelId ignored: not signed by its owner');
+        return;
+      }
+      if (!await SignedAction.acceptNewer('meta:$channelId', sts)) return;
+      unawaited(SignedAction.remember('meta:$channelId', p));
     }
 
     List<String> subs() {
@@ -1182,16 +1209,19 @@ class ChannelService {
       createdAt: p.containsKey('createdAt')
           ? (p['createdAt'] as int? ?? DateTime.now().millisecondsSinceEpoch)
           : (existing?.createdAt ?? DateTime.now().millisecondsSinceEpoch),
-      verified: p.containsKey('verified')
+      // The checkmark / foreign-agent / blocked flags are app-admin decisions
+      // (relay directory + signed admin actions) — never taken from a channel
+      // owner's own gossip, or a channel could verify itself.
+      verified: (trusted && p.containsKey('verified'))
           ? (p['verified'] as bool? ?? false)
           : (existing?.verified ?? false),
-      verifiedBy: p.containsKey('verifiedBy')
+      verifiedBy: (trusted && p.containsKey('verifiedBy'))
           ? p['verifiedBy'] as String?
           : existing?.verifiedBy,
-      foreignAgent: p.containsKey('foreignAgent')
+      foreignAgent: (trusted && p.containsKey('foreignAgent'))
           ? (p['foreignAgent'] as bool? ?? false)
           : (existing?.foreignAgent ?? false),
-      blocked: p.containsKey('blocked')
+      blocked: (trusted && p.containsKey('blocked'))
           ? (p['blocked'] as bool? ?? false)
           : (existing?.blocked ?? false),
       username: p.containsKey('username')
@@ -1288,7 +1318,7 @@ class ChannelService {
         continue;
       }
 
-      await applyChannelMetaFromPayload(p);
+      await applyChannelMetaFromPayload(p, trusted: true);
       revs[channelId] = updatedAt;
       changed = true;
     }

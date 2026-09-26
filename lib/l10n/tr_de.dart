@@ -2040,4 +2040,5 @@ const Map<String, String> trDe = <String, String>{
   '{0} ({1}…) хочет добавить вас в контакты и получит ваш профиль.': '{0} ({1}…) möchte dich als Kontakt hinzufügen und erhält dein Profil.',
   'Автоматическое обновление на macOS пока не работает. Скачайте новую версию вручную.': 'Automatische Updates unter macOS funktionieren noch nicht. Bitte lade die neue Version manuell herunter.',
   'Не удалось обновить': 'Update fehlgeschlagen',
+  'Файл обновления не прошёл проверку подлинности. Установка отменена.': "Die Update-Datei hat die Echtheitsprüfung nicht bestanden. Installation abgebrochen.",
 };

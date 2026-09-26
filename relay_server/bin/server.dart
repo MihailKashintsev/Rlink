@@ -3333,6 +3333,24 @@ Future<shelf.Response> _infoHandler(shelf.Request request) async {
         return _jsonResponse({'ok': false, 'error': 'bad_subscription'},
             status: 400);
       }
+      final tsRaw = decoded['ts'];
+      final sigHex = (decoded['sig'] as String?)?.trim() ?? '';
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final signedOk = tsRaw is num &&
+          (nowMs - tsRaw.toInt()).abs() <= 10 * 60 * 1000 &&
+          sigHex.isNotEmpty &&
+          await _verifyEd25519SignatureOnUtf8(
+              'rlink-push1|$publicKey|$endpoint|${tsRaw.toInt()}',
+              sigHex,
+              publicKey);
+      // Emergency switch only (env PUSH_ALLOW_UNSIGNED=1) if a client build
+      // turns out unable to sign; the default is to require the proof.
+      if (!signedOk && Platform.environment['PUSH_ALLOW_UNSIGNED'] != '1') {
+        stdout.writeln('[RLINK][Relay] push/subscribe refused: bad/missing '
+            'ownership signature for ${publicKey.substring(0, 8)}');
+        return _jsonResponse({'ok': false, 'error': 'bad_signature'},
+            status: 401);
+      }
       if (!await _isSafePushEndpoint(endpoint)) {
         // The relay later POSTs to this URL itself (_sendWebPush) with the
         // VAPID auth header attached — an unchecked endpoint is SSRF (proven:

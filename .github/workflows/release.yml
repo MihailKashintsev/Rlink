@@ -268,10 +268,16 @@ jobs:
       - name: Mirror to relay + regenerate manifest
         env:
           RELAY_SSH_KEY: ${{ secrets.RELAY_SSH_KEY }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
           V: ${{ github.ref_name }}
         run: |
           if [ -z "$RELAY_SSH_KEY" ]; then
             echo "RELAY_SSH_KEY not set — skipping relay publish"; exit 0
+          fi
+          # Clients (2.5.0+) refuse an unsigned manifest. Fail HERE rather than
+          # replace the live signed manifest with one they would all reject.
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then
+            echo "UPDATE_SIGNING_KEY not set — refusing to publish an unsigned manifest"; exit 1
           fi
           mkdir -p ~/.ssh
           printf '%s\n' "$RELAY_SSH_KEY" > ~/.ssh/relay && chmod 600 ~/.ssh/relay
@@ -287,10 +293,27 @@ jobs:
           a32=""; [ -f "artifacts/Rlink-${V}-arm32.apk" ]  && a32="$B/Rlink-${V}-arm32.apk"
           wu=""; [ -f "artifacts/rlink_${V}_windows.zip" ] && wu="$B/rlink_${V}_windows.zip"
           mu=""; [ -f "artifacts/rlink_${V}_macos.zip" ]   && mu="$B/rlink_${V}_macos.zip"
-          jq -n --arg v "$V" --arg au "$au" --arg a32 "$a32" --arg wu "$wu" --arg mu "$mu" '{
+          # sha256 of every published file, keyed by file name — the client hashes
+          # what it downloaded and installs nothing that doesn't match, so a
+          # swapped file (compromised relay/DNS/mirror) can't be executed.
+          sha='{}'
+          for f in "Rlink-${V}-arm64.apk" "Rlink-${V}-arm32.apk" "rlink_${V}_windows.zip" "rlink_${V}_macos.zip"; do
+            [ -f "artifacts/$f" ] || continue
+            sha=$(printf '%s' "$sha" | jq -c --arg k "$f" --arg h "$(sha256sum "artifacts/$f" | cut -d' ' -f1)" '.[$k]=$h')
+          done
+          jq -n --arg v "$V" --arg au "$au" --arg a32 "$a32" --arg wu "$wu" --arg mu "$mu" --argjson sha "$sha" '{
             version:$v, notes:("Обновление "+$v), publishedAt:(now|todate),
-            assets:{android:$au, android_arm32:$a32, windows:$wu, macos:$mu, linux:"", web:$v}
+            assets:{android:$au, android_arm32:$a32, windows:$wu, macos:$mu, linux:"", web:$v},
+            sha256:$sha
           }' > manifest.json
+          # Ed25519 signature over the exact bytes of manifest.json (raw, no
+          # hashing layer) — the matching public key is pinned in the app
+          # (update_service.dart). The private key never leaves this secret.
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > sign.pem && chmod 600 sign.pem
+          openssl pkeyutl -sign -inkey sign.pem -rawin -in manifest.json -out manifest.sig.bin
+          rm -f sign.pem
+          base64 -w0 manifest.sig.bin > manifest.json.sig
+          echo "manifest signed ($(wc -c < manifest.sig.bin) byte signature)"
           $SSH $HOST "mkdir -p $DIR"
           # Was "Rlink-${V}.apk" -- a file that never existed once builds
           # split into arm64/arm32 (the actual output is Rlink-${V}-arm64.apk
@@ -301,7 +324,11 @@ jobs:
           for f in "Rlink-${V}-arm64.apk" "Rlink-${V}-arm32.apk" "rlink_${V}_windows.zip" "rlink_${V}_macos.zip"; do
             if [ -f "artifacts/$f" ]; then $SCP "artifacts/$f" "$HOST:$DIR/$f"; else echo "skip missing $f"; fi
           done
-          $SCP manifest.json "$HOST:$DIR/manifest.json"
+          # Signature first, manifest second, each swapped in atomically: a client
+          # reading in between sees a mismatch and (fail-closed) just retries.
+          $SCP manifest.json.sig "$HOST:$DIR/manifest.json.sig.new"
+          $SCP manifest.json "$HOST:$DIR/manifest.json.new"
+          $SSH $HOST "cd $DIR && mv -f manifest.json.sig.new manifest.json.sig && mv -f manifest.json.new manifest.json"
           # Keep ONLY the current version on the relay (GitHub keeps full history).
           $SSH $HOST "cd $DIR && for f in Rlink-*.apk rlink_*_windows.zip rlink_*_macos.zip rlink_*_linux.tar.gz; do [ -e \"\$f\" ] || continue; case \"\$f\" in Rlink-${V}-arm64.apk|Rlink-${V}-arm32.apk|rlink_${V}_windows.zip|rlink_${V}_macos.zip|rlink_${V}_linux.tar.gz) : ;; *) rm -f \"\$f\" && echo \"removed old \$f\" ;; esac; done && chmod -R 755 $DIR && ls -lah $DIR"
           # Stable download URLs (/updates/latest/Rlink-arm64.apk …) that always

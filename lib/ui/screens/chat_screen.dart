@@ -150,6 +150,7 @@ import '../widgets/settings_profile_header.dart' show ProfileCard;
 import '../widgets/composer_input_bar.dart';
 import '../widgets/quick_video_recording_overlay.dart';
 import '../../services/quick_video_seen_service.dart';
+import '../../utils/edit_delete_seal.dart';
 import '../../models/quick_video.dart';
 import '../widgets/message_actions_overlay.dart';
 import '../mention_nav.dart';
@@ -3315,7 +3316,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_editingMessageId != null) {
         final targetId = _editingMessageId!;
         if (!_savedMessagesLocalOnly && !_isBuiltinAiBot) {
-          final enc = await _sealForPeer(jsonEncode({'m': targetId, 't': text}));
+          final enc = await _sealForPeer(sealEditDeletePlain(targetId, text));
           if (enc != null) {
             await GossipRouter.instance.sendEditMessage(
               messageId: targetId,
@@ -3776,7 +3777,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _patchSharedCollab(ChatMessage msg, String newEncoded) async {
     await ChatStorageService.instance.editMessage(msg.id, newEncoded);
     if (!_savedMessagesLocalOnly && !_isDmBot) {
-      final enc = await _sealForPeer(jsonEncode({'m': msg.id, 't': newEncoded}));
+      final enc = await _sealForPeer(sealEditDeletePlain(msg.id, newEncoded));
       if (enc != null) {
         await GossipRouter.instance.sendEditMessage(
           messageId: msg.id,
@@ -5899,7 +5900,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       await ChatStorageService.instance.deleteMessage(msg.id);
       if (!_savedMessagesLocalOnly) {
-        final enc = await _sealForPeer(jsonEncode({'m': msg.id}));
+        final enc = await _sealForPeer(sealEditDeletePlain(msg.id));
         if (enc != null) {
           await GossipRouter.instance.sendDeleteMessage(
             messageId: msg.id,
@@ -6079,7 +6080,7 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         await ChatStorageService.instance.deleteMessage(m.id);
         if (!_savedMessagesLocalOnly) {
-          final enc = await _sealForPeer(jsonEncode({'m': m.id}));
+          final enc = await _sealForPeer(sealEditDeletePlain(m.id));
           if (enc != null) {
             await GossipRouter.instance.sendDeleteMessage(
               messageId: m.id,

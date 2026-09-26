@@ -2040,4 +2040,5 @@ const Map<String, String> trEn = <String, String>{
   '{0} ({1}…) хочет добавить вас в контакты и получит ваш профиль.': '{0} ({1}…) wants to add you as a contact and will receive your profile.',
   'Автоматическое обновление на macOS пока не работает. Скачайте новую версию вручную.': 'Automatic updates on macOS do not work yet. Please download the new version manually.',
   'Не удалось обновить': 'Update failed',
+  'Файл обновления не прошёл проверку подлинности. Установка отменена.': "The update file failed the authenticity check. Installation cancelled.",
 };

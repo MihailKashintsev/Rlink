@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js' as js;
 import '../l10n/app_l10n.dart';
+import 'crypto_service.dart';
 
 bool _hasGlobal(String name) {
   try {
@@ -212,12 +213,38 @@ Future<String> webMediaPermissionStatus(String name) async {
   }
 }
 
+/// Exposes `window.rlinkSignPush(pub, endpoint, ts, cb)` to the page's JS: the
+/// identity key never leaves Dart, JS asks for a signature over the exact
+/// subscription endpoint it is about to register (see web/index.html).
+bool _pushSignerRegistered = false;
+void _ensurePushSigner() {
+  if (_pushSignerRegistered) return;
+  _pushSignerRegistered = true;
+  // dart:js wraps a plain Dart closure into a JS function on assignment.
+  js.context['rlinkSignPush'] =
+      (String pub, String endpoint, num ts, dynamic cb) {
+    unawaited(() async {
+      String sig = '';
+      try {
+        if (pub.toLowerCase() == CryptoService.instance.publicKeyHex) {
+          sig = await CryptoService.instance
+              .signUtf8Message('rlink-push1|$pub|$endpoint|${ts.toInt()}');
+        }
+      } catch (_) {}
+      try {
+        (cb as js.JsFunction).apply([sig]);
+      } catch (_) {}
+    }());
+  };
+}
+
 Future<void> syncWebPushSubscription({
   required String relayServerUrl,
   required String publicKey,
   required String nick,
 }) async {
   try {
+    _ensurePushSigner();
     js.context.callMethod('rlinkSyncPushSubscription', [
       relayServerUrl,
       publicKey,
@@ -275,6 +302,7 @@ Future<Map<String, Object?>> enableWebPush({
   required String nick,
 }) async {
   try {
+    _ensurePushSigner();
     final res = js.context.callMethod(
       'rlinkEnablePush',
       [relayServerUrl, publicKey, nick],

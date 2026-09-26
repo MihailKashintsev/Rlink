@@ -2040,4 +2040,5 @@ const Map<String, String> trFr = <String, String>{
   '{0} ({1}…) хочет добавить вас в контакты и получит ваш профиль.': '{0} ({1}…) souhaite vous ajouter comme contact et recevra votre profil.',
   'Автоматическое обновление на macOS пока не работает. Скачайте новую версию вручную.': 'Les mises à jour automatiques sur macOS ne fonctionnent pas encore. Téléchargez la nouvelle version manuellement.',
   'Не удалось обновить': 'Échec de la mise à jour',
+  'Файл обновления не прошёл проверку подлинности. Установка отменена.': "Le fichier de mise à jour a échoué à la vérification d'authenticité. Installation annulée.",
 };

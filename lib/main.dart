@@ -33,6 +33,8 @@ import 'app_version.dart';
 import 'services/app_settings.dart';
 import 'services/vpn_status_service.dart';
 import 'services/quick_video_seen_service.dart';
+import 'services/signed_action.dart';
+import 'utils/edit_delete_seal.dart';
 import 'services/delivery_health_service.dart';
 import 'services/premium_service.dart';
 import 'services/app_lock_service.dart';
@@ -685,19 +687,6 @@ class IncomingMessage {
   });
 }
 
-/// Opens the sealed plaintext of an edit/delete packet: `{"m": messageId,
-/// "t": text}`. Returns the text ("" for a delete) only if the bound id matches
-/// the id the packet claims — null on anything else.
-String? _openEditDelete(String plain, String messageId) {
-  try {
-    final j = jsonDecode(plain);
-    if (j is! Map || j['m'] != messageId) return null;
-    return (j['t'] as String?) ?? '';
-  } catch (_) {
-    return null;
-  }
-}
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Старт не должен умирать в чёрный экран: логируем ошибки фреймворка и
@@ -1226,7 +1215,7 @@ Future<void> initServices() async {
         // The sealed plaintext binds the message id ({"m":id,"t":text}): the
         // signature covers only the envelope, so without this a captured
         // valid envelope could be re-sent paired with a different messageId.
-        final newText = _openEditDelete(plain, messageId);
+        final newText = openEditDeletePlain(plain, messageId);
         if (newText == null) return;
         var merged = newText;
         if (SharedTodoPayload.tryDecode(existing.text) != null &&
@@ -1251,7 +1240,7 @@ Future<void> initServices() async {
           encrypted,
           senderX25519KeyBase64: PeerKeyDirectory.instance.getX25519(fromId),
         );
-        if (plain == null || _openEditDelete(plain, messageId) == null) return;
+        if (plain == null || openEditDeletePlain(plain, messageId) == null) return;
         await ChatStorageService.instance.deleteMessage(messageId);
       },
       onReact: (fromId, messageId, emoji) async {
@@ -2286,7 +2275,8 @@ Future<void> initServices() async {
             : null;
         final wasMod = before?.moderatorIds.contains(myId) ?? false;
         final wasAdmin = before?.adminId == myId;
-        await ChannelService.instance.applyChannelMetaFromPayload(payload);
+        await ChannelService.instance.applyChannelMetaFromPayload(payload,
+            signer: payload['_signer'] as String?);
         final after = channelId != null
             ? await ChannelService.instance.getChannel(channelId)
             : null;
@@ -2430,17 +2420,40 @@ Future<void> initServices() async {
       unawaited(ChannelService.instance
           .recordPostView(postId, viewerId, rebroadcast: false));
     };
-    GossipRouter.instance.onChannelDeletePost = (payload) {
+    GossipRouter.instance.onChannelDeletePost = (payload) async {
       final postId = payload['postId'] as String?;
-      if (postId != null) {
-        ChannelService.instance.deletePost(postId);
-      }
+      final signer = payload['_signer'] as String?;
+      if (postId == null || signer == null) return;
+      // Verified signer must be the post's author or the channel's staff — the
+      // packet's own `authorId`/`channelId` are just claims.
+      final post = await ChannelService.instance.getPost(postId);
+      if (post == null) return;
+      final ch = await ChannelService.instance.getChannel(post.channelId);
+      final ok = signer == post.authorId.toLowerCase() ||
+          (ch != null &&
+              (signer == ch.adminId.toLowerCase() ||
+                  ch.moderatorIds.any((m) => m.toLowerCase() == signer)));
+      if (!ok) return;
+      await ChannelService.instance.deletePost(postId);
     };
     GossipRouter.instance.onChannelSubscribe = (payload) {
       final channelId = payload['channelId'] as String?;
       final userId = payload['userId'] as String?;
       final unsub = payload['unsubscribe'] as bool? ?? false;
-      if (channelId == null || userId == null) return;
+      final signer = payload['_signer'] as String?;
+      if (channelId == null || userId == null || signer == null) return;
+      // You can (un)subscribe yourself; only the channel's owner may remove
+      // someone else. `userId` used to be believed as sent, so anyone could
+      // unsubscribe anyone.
+      if (signer != userId.toLowerCase()) {
+        unawaited(() async {
+          final ch = await ChannelService.instance.getChannel(channelId);
+          if (ch != null && signer == ch.adminId.toLowerCase() && unsub) {
+            await ChannelService.instance.removeSubscriber(channelId, userId);
+          }
+        }());
+        return;
+      }
       if (unsub) {
         ChannelService.instance.removeSubscriber(channelId, userId);
       } else {
@@ -2667,13 +2680,15 @@ Future<void> initServices() async {
     GossipRouter.instance.onChannelCommentDelete = (payload) async {
       final channelId = payload['channelId'] as String?;
       final commentId = payload['commentId'] as String?;
-      final byUserId = payload['by'] as String?;
+      final byUserId = payload['_signer'] as String?; // verified, not `by`
       if (channelId == null || commentId == null || byUserId == null) return;
       final comment = await ChannelService.instance.getComment(commentId);
       if (comment == null) return;
       final ch = await ChannelService.instance.getChannel(channelId);
       if (ch == null) return;
-      if (byUserId != comment.authorId && byUserId != ch.adminId) return;
+      final isStaff = byUserId == ch.adminId.toLowerCase() ||
+          ch.moderatorIds.any((m) => m.toLowerCase() == byUserId);
+      if (byUserId != comment.authorId.toLowerCase() && !isStaff) return;
       await ChannelService.instance.deleteCommentById(commentId);
     };
     // Универсальный обработчик реакций для историй/постов/комментов/групп.
@@ -3073,11 +3088,19 @@ Future<void> initServices() async {
       );
     };
 
-    GossipRouter.instance.onGroupMessageDelete = (payload) {
+    GossipRouter.instance.onGroupMessageDelete = (payload) async {
       final messageId = payload['messageId'] as String?;
-      if (messageId != null) {
-        GroupService.instance.deleteMessage(messageId);
-      }
+      final signer = payload['_signer'] as String?;
+      if (messageId == null || signer == null) return;
+      final msg = await GroupService.instance.getMessage(messageId);
+      if (msg == null) return;
+      final g = await GroupService.instance.getGroup(msg.groupId);
+      final ok = signer == msg.senderId.toLowerCase() ||
+          (g != null &&
+              (signer == g.creatorId.toLowerCase() ||
+                  g.moderatorIds.any((m) => m.toLowerCase() == signer)));
+      if (!ok) return;
+      await GroupService.instance.deleteMessage(messageId);
     };
 
     GossipRouter.instance.onGroupInvite = (payload) {
@@ -3113,6 +3136,9 @@ Future<void> initServices() async {
       final groupId = payload['groupId'] as String?;
       final accepterId = payload['accepterId'] as String?;
       if (groupId == null || accepterId == null) return;
+      // Only the person joining can say they join — `accepterId` alone let
+      // anyone put any key into a group's roster.
+      if (payload['_signer'] != accepterId.toLowerCase()) return;
       unawaited(() async {
         await GroupService.instance.addMember(groupId, accepterId);
         // История в Drive включена → перепубликовать: keys.json должен получить
@@ -3128,20 +3154,51 @@ Future<void> initServices() async {
     // member's copy in sync and notifies you when you're made a moderator.
     GossipRouter.instance.onGroupUpdate = (payload) {
       final groupId = payload['groupId'] as String?;
-      if (groupId == null) return;
+      final signer = payload['_signer'] as String?;
+      if (groupId == null || signer == null) return;
       unawaited(() async {
         final existing = await GroupService.instance.getGroup(groupId);
         if (existing == null) return; // not a group I'm in
-        final myId = CryptoService.instance.publicKeyHex;
+        // Only the group's creator or one of its moderators may change it, and
+        // only the creator may change WHO the moderators are. `updaterId` in the
+        // packet used to be ignored, so any member (or outsider who could reach
+        // a member) could promote themselves or evict others.
+        final isCreator = signer == existing.creatorId.toLowerCase();
+        final isMod =
+            existing.moderatorIds.any((m) => m.toLowerCase() == signer);
+        final privileged = isCreator || isMod;
         final memberIds =
             (payload['memberIds'] as List<dynamic>?)?.cast<String>() ??
                 existing.memberIds;
-        final mods =
-            (payload['moderatorIds'] as List<dynamic>?)?.cast<String>() ??
-                existing.moderatorIds;
-        final readOnly =
-            (payload['readOnlyIds'] as List<dynamic>?)?.cast<String>() ??
-                existing.readOnlyIds;
+        if (!privileged) {
+          // An ordinary member may only announce that THEY are leaving: the
+          // roster must be exactly today's minus the signer, nothing else.
+          final expected = existing.memberIds
+              .where((m) => m.toLowerCase() != signer)
+              .toSet();
+          final wasMember =
+              existing.memberIds.any((m) => m.toLowerCase() == signer);
+          if (!wasMember ||
+              memberIds.any((m) => m.toLowerCase() == signer) ||
+              memberIds.toSet().length != expected.length ||
+              !memberIds.toSet().containsAll(expected)) {
+            return;
+          }
+        }
+        final sts = payload['sts'];
+        if (sts is! num ||
+            !await SignedAction.acceptNewer('grp:$groupId', sts)) {
+          return;
+        }
+        final myId = CryptoService.instance.publicKeyHex;
+        final mods = isCreator
+            ? ((payload['moderatorIds'] as List<dynamic>?)?.cast<String>() ??
+                existing.moderatorIds)
+            : existing.moderatorIds;
+        final readOnly = privileged
+            ? ((payload['readOnlyIds'] as List<dynamic>?)?.cast<String>() ??
+                existing.readOnlyIds)
+            : existing.readOnlyIds;
         // I was kicked → leave locally.
         if (myId.isNotEmpty &&
             existing.memberIds.contains(myId) &&
@@ -3151,18 +3208,22 @@ Future<void> initServices() async {
         }
         final wasMod = existing.moderatorIds.contains(myId);
         final nowMod = mods.contains(myId);
+        // Profile/drive fields only from creator/moderators; a leaving member's
+        // packet contributes the roster change alone.
         final updated = existing.copyWith(
-          name: payload['name'] as String?,
+          name: privileged ? payload['name'] as String? : null,
           memberIds: memberIds,
           moderatorIds: mods,
           readOnlyIds: readOnly,
-          avatarColor: payload['avatarColor'] as int?,
-          avatarEmoji: payload['avatarEmoji'] as String?,
-          driveBackupEnabled:
-              payload['drv'] == true ? true : existing.driveBackupEnabled,
-          driveBackupRev: (payload['drvRev'] as num?)?.toInt(),
-          driveHistoryUrl: payload['drvUrl'] as String?,
-          driveKeysUrl: payload['drvKeys'] as String?,
+          avatarColor: privileged ? payload['avatarColor'] as int? : null,
+          avatarEmoji: privileged ? payload['avatarEmoji'] as String? : null,
+          driveBackupEnabled: privileged && payload['drv'] == true
+              ? true
+              : existing.driveBackupEnabled,
+          driveBackupRev:
+              privileged ? (payload['drvRev'] as num?)?.toInt() : null,
+          driveHistoryUrl: privileged ? payload['drvUrl'] as String? : null,
+          driveKeysUrl: privileged ? payload['drvKeys'] as String? : null,
         );
         await GroupService.instance.updateGroup(updated); // no re-broadcast
         // История в Drive: если опубликован новый rev — фоново подтянуть.
@@ -3183,10 +3244,17 @@ Future<void> initServices() async {
       final groupId = payload['groupId'] as String?;
       final topicId = payload['topicId'] as String?;
       final action = payload['action'] as String?;
-      if (groupId == null || topicId == null || action == null) return;
+      final signer = payload['_signer'] as String?;
+      if (groupId == null || topicId == null || action == null || signer == null) {
+        return;
+      }
       unawaited(() async {
         final existing = await GroupService.instance.getGroup(groupId);
         if (existing == null) return; // not a group I'm in
+        if (signer != existing.creatorId.toLowerCase() &&
+            !existing.moderatorIds.any((m) => m.toLowerCase() == signer)) {
+          return;
+        }
         await GroupService.instance.applyIncomingTopicUpdate(
           groupId: groupId,
           topicId: topicId,
@@ -3216,12 +3284,15 @@ Future<void> initServices() async {
       final channelId = payload['channelId'] as String?;
       final verifiedBy = payload['verifiedBy'] as String?;
       if (channelId == null || verifiedBy == null) return;
+      // App-level moderation: only the pinned app-admin identities.
+      if (!isAppAdminKey(payload['_signer'] as String?)) return;
       debugPrint('[RLINK] Channel verified: $channelId by $verifiedBy');
       ChannelService.instance.verifyChannel(channelId, verifiedBy);
     };
     GossipRouter.instance.onVerifyRevoke = (payload) {
       final channelId = payload['channelId'] as String?;
       if (channelId == null) return;
+      if (!isAppAdminKey(payload['_signer'] as String?)) return;
       debugPrint('[RLINK] Channel verification revoked: $channelId');
       ChannelService.instance.unverifyChannel(channelId);
     };
@@ -3229,6 +3300,7 @@ Future<void> initServices() async {
       final channelId = payload['channelId'] as String?;
       final value = payload['value'] as bool? ?? true;
       if (channelId == null) return;
+      if (!isAppAdminKey(payload['_signer'] as String?)) return;
       debugPrint('[RLINK] Channel $channelId foreign agent = $value');
       ChannelService.instance
           .applyAdminAction(channelId: channelId, foreignAgent: value);
@@ -3237,16 +3309,23 @@ Future<void> initServices() async {
       final channelId = payload['channelId'] as String?;
       final value = payload['value'] as bool? ?? true;
       if (channelId == null) return;
+      if (!isAppAdminKey(payload['_signer'] as String?)) return;
       debugPrint('[RLINK] Channel $channelId blocked = $value');
       ChannelService.instance
           .applyAdminAction(channelId: channelId, blocked: value);
     };
-    GossipRouter.instance.onChannelAdminDelete = (payload) {
+    GossipRouter.instance.onChannelAdminDelete = (payload) async {
       final channelId = payload['channelId'] as String?;
-      if (channelId == null) return;
+      final signer = payload['_signer'] as String?;
+      if (channelId == null || signer == null) return;
+      // The app admin, or the channel's own owner deleting their channel.
+      if (!isAppAdminKey(signer)) {
+        final ch = await ChannelService.instance.getChannel(channelId);
+        if (ch == null || signer != ch.adminId.toLowerCase()) return;
+      }
       final uc = payload['uc'] as String?;
       debugPrint('[RLINK] Channel $channelId deleted by admin');
-      ChannelService.instance.applyAdminAction(
+      await ChannelService.instance.applyAdminAction(
         channelId: channelId,
         delete: true,
         universalCode: uc,

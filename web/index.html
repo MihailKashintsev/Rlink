@@ -90,7 +90,7 @@
 
     // Bump on every deploy that changes Dart code — busts the cached bootstrap
     // AND main.dart.js (see web/flutter_bootstrap.js).
-    window.__rlinkBuildV = 'v2.4.1f';
+    window.__rlinkBuildV = 'v2.5.0';
     function _rlinkLoadFlutter() {
       const script = document.createElement('script');
       script.src = 'flutter_bootstrap.js?v=' + window.__rlinkBuildV;
@@ -146,6 +146,26 @@
       return sub;
     }
 
+    // The relay only stores a push endpoint for a public key whose owner signs
+    // it (otherwise anyone could subscribe THEIR endpoint under your key and
+    // read your notification metadata). The private key lives in the Dart
+    // side, which registers window.rlinkSignPush(pub, endpoint, ts, cb).
+    function _rlinkSignPush(me, endpoint, ts) {
+      return new Promise((resolve) => {
+        if (typeof window.rlinkSignPush !== 'function') return resolve('');
+        const t = setTimeout(() => resolve(''), 8000);
+        try {
+          window.rlinkSignPush(me, endpoint, ts, (s) => {
+            clearTimeout(t);
+            resolve(String(s || ''));
+          });
+        } catch (_) {
+          clearTimeout(t);
+          resolve('');
+        }
+      });
+    }
+
     window.rlinkSyncPushSubscription = async function(relayUrl, publicKey, nick) {
       try {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -188,12 +208,16 @@
         const p256 = sub.getKey('p256dh');
         const auth = sub.getKey('auth');
         if (!p256 || !auth) return;
+        const ts = Date.now();
+        const sig = await _rlinkSignPush(me, sub.endpoint, ts);
         const subscribeResp = await fetch(`${relayBase}/push/subscribe`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             publicKey: me,
             nick: nick || '',
+            ts,
+            sig,
             subscription: {
               endpoint: sub.endpoint,
               keys: {
@@ -254,12 +278,16 @@
         const auth = sub.getKey('auth');
         if (!p256 || !auth) return { ok: false, reason: 'no_keys' };
 
+        const ts = Date.now();
+        const sig = await _rlinkSignPush(me, sub.endpoint, ts);
         const resp = await fetch(`${relayBase}/push/subscribe`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             publicKey: me,
             nick: nick || '',
+            ts,
+            sig,
             subscription: {
               endpoint: sub.endpoint,
               keys: {

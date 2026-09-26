@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import 'crypto_service.dart';
+import 'signed_action.dart';
 import 'diagnostics_log_service.dart';
 import 'profile_privacy_service.dart';
 import '../utils/reaction_emoji_key.dart';
@@ -42,6 +43,7 @@ int get _encCap => kIsWeb ? _kMaxCallSigBytes : _kMaxEncPayloadBytes;
 ///   left the device — an ownership transfer, a new moderator or a new member
 ///   simply didn't propagate in any channel/group of real size.
 bool _isLargePacketType(String type) =>
+    SignedAction.kinds.contains(type) ||
     type == 'call_sig' ||
     type == 'group_call_sig' ||
     type == 'channel_post' ||
@@ -2753,6 +2755,21 @@ class GossipRouter {
         return;
       }
 
+      // ── Signed channel / group / admin actions ────────────────
+      // Verified HERE, once, for every path: a handler only ever sees
+      // `_signer` if the signature over the whole payload checked out (any
+      // `_signer` an attacker put in the packet is stripped first).
+      if (SignedAction.kinds.contains(packet.type)) {
+        packet.payload.remove('_signer');
+        final signer = await SignedAction.verify(packet.type, packet.payload);
+        if (signer == null) {
+          debugPrint(
+              '[RLINK][Gossip] Dropping unsigned/forged ${packet.type} packet');
+          return;
+        }
+        packet.payload['_signer'] = signer;
+      }
+
       // ── Channel packets ────────────────────────────────────────
       if (packet.type == 'ch_bak_key') {
         final h = onChannelBackupKey;
@@ -3022,13 +3039,20 @@ class GossipRouter {
     // Скрытые каналы не рассылаются широковещательно — только прямые invite и
     // адресные пакеты (recipientId) вроде назначения модератора.
     if (isPublic == false && recipientId == null) return;
-    final packet = GossipPacket(
-      id: const Uuid().v4(),
-      type: 'channel_meta',
-      ttl: _kDefaultTtl,
-      timestamp: DateTime.now().millisecondsSinceEpoch,
-      recipientId: recipientId,
-      payload: {
+    // Only the owner can sign a channel's meta. Anyone else (a subscriber
+    // answering a "send me the channel" request, a moderator's device…) can
+    // only pass on the owner's last signed packet unchanged — or send nothing.
+    final me = CryptoService.instance.publicKeyHex.toLowerCase();
+    // The owner signs; so does the PREVIOUS owner when handing the channel over
+    // (the meta then names the new admin and carries the signed hand-over
+    // chain whose last link is from me).
+    final handedOverByMe = ownerChain != null &&
+        ownerChain.any((c) =>
+            c['f']?.toString().toLowerCase() == me &&
+            c['t']?.toString().toLowerCase() == adminId.toLowerCase());
+    final Map<String, dynamic> payload;
+    if (me.isNotEmpty && (me == adminId.toLowerCase() || handedOverByMe)) {
+      payload = await SignedAction.sign('channel_meta', {
         'channelId': channelId,
         'name': name,
         'adminId': adminId,
@@ -3055,7 +3079,21 @@ class GossipRouter {
           'allowModeratorsManageDriveAccount':
               allowModeratorsManageDriveAccount,
         if (ownerChain != null && ownerChain.isNotEmpty) 'oc': ownerChain,
-      },
+      });
+      // Kept so a non-owner can pass on this exact signed packet later.
+      unawaited(SignedAction.remember('meta:$channelId', payload));
+    } else {
+      final stored = await SignedAction.stored('meta:$channelId');
+      if (stored == null) return;
+      payload = stored;
+    }
+    final packet = GossipPacket(
+      id: const Uuid().v4(),
+      type: 'channel_meta',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      recipientId: recipientId,
+      payload: payload,
     );
     await _forward(packet);
   }
@@ -3230,11 +3268,11 @@ class GossipRouter {
       type: 'channel_delete_post',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('channel_delete_post', {
         'postId': postId,
         if (channelId != null) 'channelId': channelId,
         if (authorId != null) 'authorId': authorId,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3307,11 +3345,11 @@ class GossipRouter {
       type: 'group_message_delete',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('group_message_delete', {
         'messageId': messageId,
         if (groupId != null) 'groupId': groupId,
         if (byUserId != null) 'by': byUserId,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3327,7 +3365,7 @@ class GossipRouter {
       type: 'channel_subscribe',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('channel_subscribe', {
         'channelId': channelId,
         'userId': userId,
         'unsubscribe': unsubscribe,
@@ -3335,7 +3373,7 @@ class GossipRouter {
         // never open the channel while the admin is online.
         if (!unsubscribe && x25519 != null && x25519.isNotEmpty)
           'x25519': x25519,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3423,12 +3461,12 @@ class GossipRouter {
       type: 'channel_comment_del',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('channel_comment_del', {
         'channelId': channelId,
         'postId': postId,
         'commentId': commentId,
         'by': byUserId,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3586,7 +3624,7 @@ class GossipRouter {
       type: 'group_update',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('group_update', {
         'groupId': groupId,
         'name': name,
         'creatorId': creatorId,
@@ -3602,7 +3640,7 @@ class GossipRouter {
           'drvUrl': driveHistoryUrl,
         if (driveKeysUrl != null && driveKeysUrl.isNotEmpty)
           'drvKeys': driveKeysUrl,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3622,14 +3660,14 @@ class GossipRouter {
       type: 'group_topic_update',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('group_topic_update', {
         'groupId': groupId,
         'topicId': topicId,
         'action': action,
         'by': by,
         if (name != null) 'name': name,
         if (emoji != null) 'emoji': emoji,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3677,11 +3715,11 @@ class GossipRouter {
       type: 'group_accept',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('group_accept', {
         'groupId': groupId,
         'accepterId': accepterId,
         'accepterNick': accepterNick,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3726,10 +3764,10 @@ class GossipRouter {
       type: 'verify_ok',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('verify_ok', {
         'channelId': channelId,
         'verifiedBy': verifiedBy,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3743,10 +3781,10 @@ class GossipRouter {
       type: 'verify_revoke',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('verify_revoke', {
         'channelId': channelId,
         'byAdmin': byAdmin,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3771,11 +3809,11 @@ class GossipRouter {
       type: 'channel_foreign_agent',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('channel_foreign_agent', {
         'channelId': channelId,
         'value': value,
         'by': byAdmin,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3791,11 +3829,11 @@ class GossipRouter {
       type: 'channel_block',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('channel_block', {
         'channelId': channelId,
         'value': value,
         'by': byAdmin,
-      },
+      }),
     );
     await _forward(packet);
   }
@@ -3811,12 +3849,12 @@ class GossipRouter {
       type: 'channel_admin_delete',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      payload: {
+      payload: await SignedAction.sign('channel_admin_delete', {
         'channelId': channelId,
         'by': byAdmin,
         if (universalCode != null && universalCode.isNotEmpty)
           'uc': universalCode,
-      },
+      }),
     );
     await _forward(packet);
   }
