@@ -82,6 +82,12 @@ class _User {
   String nick;
   String x25519Key;
   bool away = false; // true = backgrounded (don't show as online to others)
+  /// TCP remote address at handshake time (see `_clientIp`) — used to throttle
+  /// admin-hash brute force, which is otherwise trivially reset by
+  /// reconnecting under a fresh, unverified publicKey (verified: identity #1
+  /// hit the 10/min cap, identity #2 succeeded on the same connection slot
+  /// with zero cooldown).
+  final String remoteIp;
   // True once this connection proved possession of publicKey's private key
   // by signing the server's per-connection challenge nonce (see `register`
   // handling). A verified connection can only be evicted by another
@@ -98,7 +104,8 @@ class _User {
       required this.publicKey,
       required this.nick,
       this.x25519Key = '',
-      this.verified = false});
+      this.verified = false,
+      this.remoteIp = 'unknown'});
 }
 
 // ── Server state ────────────────────────────────────────────────
@@ -114,6 +121,22 @@ const _rateMax =
 // не получали полный набор chunks для фото/стикеров/видео (типичный пост
 // ≈ сотни–тысячи 90-байтовых кусков). Каждый пакет очень маленький, поэтому
 // поднятие лимита безопасно (≈5 кб/с per user в худшем случае).
+
+/// Every per-sender rate-limit map keyed by an attacker-chosen publicKey (not
+/// an authenticated identity — anyone can claim any key at registration) grows
+/// forever if never cleaned: only `_rateLimits` had a `.remove` on disconnect;
+/// `_blobByteLimits`/`_botRegisterStartLimits`/`_botOwnerListRateLimits`/
+/// `_botOwnerPatchRateLimits`/`_channelDirPutLimits` did not — a slow memory
+/// leak from repeated connect/reconnect under fresh keys. One place, called
+/// from both `onDone` and `onError`.
+void _forgetRateLimitKey(String publicKey) {
+  _rateLimits.remove(publicKey);
+  _blobByteLimits.remove(publicKey);
+  _botRegisterStartLimits.remove(publicKey);
+  _botOwnerListRateLimits.remove(publicKey);
+  _botOwnerPatchRateLimits.remove(publicKey);
+  _channelDirPutLimits.remove(publicKey);
+}
 
 /// Opaque encrypted blobs per Ed25519 identity (список каналов + метаданные синхронизации
 /// аккаунта — клиент шифрует, relay не читает содержимое).
@@ -1621,7 +1644,7 @@ void _handleAdminChannelVerify(_User user, Map<String, dynamic> msg) {
     } catch (_) {}
   }
 
-  if (!_checkAdminAuthRate(user.publicKey) ||
+  if (!_checkAdminAuthRate(user.remoteIp) ||
       !_isAdminHashValid(_jsonString(msg['adminHash']))) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
@@ -1668,7 +1691,7 @@ void _handleAdminPremium(_User user, Map<String, dynamic> msg) {
     } catch (_) {}
   }
 
-  if (!_checkAdminAuthRate(user.publicKey) ||
+  if (!_checkAdminAuthRate(user.remoteIp) ||
       !_isAdminHashValid(_jsonString(msg['adminHash']))) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
@@ -1954,6 +1977,15 @@ void _queueForRecipient(
   final key = recipientKey.toLowerCase();
   final bucket =
       _mailbox.putIfAbsent(key, () => <String, Map<String, dynamic>>{});
+  // Re-sending the same relayMsgId (a sender can pick any msgId) replaces the
+  // entry in place — bucket.length never grows — but the byte counter was
+  // still adding the NEW size on every overwrite without first subtracting
+  // the old one. Verified exploitable: one connection resending 5 MB under a
+  // single id, well under every real limit, inflated _mailboxTotalBytes past
+  // 150 MB in under 90 s and triggered the global eviction, which wiped OTHER
+  // users' real queued mail (confirmed: relay_mailbox.json went to `{}`).
+  final old = bucket[relayMsgId];
+  if (old != null) _mailboxTotalBytes -= _envelopeApproxBytes(old);
   bucket[relayMsgId] = envelope;
   _mailboxTotalBytes += _envelopeApproxBytes(envelope);
   while (bucket.length > _mailboxMaxPerRecipient ||
@@ -2026,6 +2058,19 @@ String _vapidAuthHeader(String endpoint) {
 Future<int> _sendWebPush(
     HttpClient client, Map<String, dynamic> sub, List<int>? payload) async {
   final endpoint = (sub['endpoint'] as String?)?.trim() ?? '';
+  // `_isSafePushEndpoint` only ran once, at /subscribe time. A subscription
+  // lives indefinitely (push_subscriptions.json, no expiry) — an attacker
+  // whose domain resolved to a public IP when they subscribed can repoint its
+  // DNS record at an internal address afterward (classic DNS rebinding), and
+  // the next push to them would connect wherever the name resolves to NOW.
+  // Re-checking here closes that window: the actual TCP connect below re-
+  // resolves too, so this and the connect must agree the endpoint is safe.
+  if (!await _isSafePushEndpoint(endpoint)) {
+    stdout.writeln(
+        '[RLINK][Push] refusing send: endpoint no longer resolves safely '
+        '(${Uri.tryParse(endpoint)?.host ?? "?"})');
+    return 400;
+  }
   final req = await client.postUrl(Uri.parse(endpoint));
   req.headers.set('TTL', '60');
   req.headers.set('Authorization', _vapidAuthHeader(endpoint));
@@ -2193,9 +2238,24 @@ bool _checkPushSubscribeRate(String ip) {
   return true;
 }
 
+/// `X-Forwarded-For` is a plain client-supplied header — nothing in front of
+/// this relay currently overwrites it (verified: the nginx configs in
+/// deploy/ set no `proxy_set_header X-Forwarded-For`), so trusting it made
+/// every IP-keyed limiter (`push/subscribe`) defeatable by sending a fresh
+/// random value on each request (verified: request #21 got 429, the same
+/// request with a new header value didn't). Only read it when the operator
+/// has confirmed a real reverse proxy sets it correctly (env
+/// TRUST_FORWARDED_FOR=1) — and then take the LAST hop, the one closest to
+/// this process, which a proxy appends rather than the client-controlled
+/// first entry.
 String _clientIp(shelf.Request request) {
-  final fwd = request.headers['x-forwarded-for'];
-  if (fwd != null && fwd.isNotEmpty) return fwd.split(',').first.trim();
+  if (Platform.environment['TRUST_FORWARDED_FOR'] == '1') {
+    final fwd = request.headers['x-forwarded-for'];
+    if (fwd != null && fwd.isNotEmpty) {
+      final parts = fwd.split(',');
+      return parts.last.trim();
+    }
+  }
   final ci = request.context['shelf.io.connection_info'];
   if (ci is HttpConnectionInfo) return ci.remoteAddress.address;
   return 'unknown';
@@ -2495,7 +2555,7 @@ void _handleAdminPasswordUpdate(_User user, Map<String, dynamic> msg) {
     ack({'ok': false, 'error': 'admin_not_configured'});
     return;
   }
-  if (!_checkAdminAuthRate(user.publicKey) || !_isAdminHashValid(oldHash)) {
+  if (!_checkAdminAuthRate(user.remoteIp) || !_isAdminHashValid(oldHash)) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
   }
@@ -2527,7 +2587,7 @@ void _handleAdminBotList(_User user, Map<String, dynamic> msg) {
   }
 
   final adminHash = _jsonString(msg['adminHash']);
-  if (!_checkAdminAuthRate(user.publicKey) || !_isAdminHashValid(adminHash)) {
+  if (!_checkAdminAuthRate(user.remoteIp) || !_isAdminHashValid(adminHash)) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
   }
@@ -2608,7 +2668,7 @@ void _handleAdminBotUpdate(_User user, Map<String, dynamic> msg) {
   }
 
   final adminHash = _jsonString(msg['adminHash']);
-  if (!_checkAdminAuthRate(user.publicKey) || !_isAdminHashValid(adminHash)) {
+  if (!_checkAdminAuthRate(user.remoteIp) || !_isAdminHashValid(adminHash)) {
     ack({'ok': false, 'error': 'forbidden'});
     return;
   }
@@ -2759,10 +2819,14 @@ void _handleBroadcast(_User sender, Map<String, dynamic> msg) {
     'data': data,
   });
 
-  // Forward to ALL online users except sender
+  // Forward to ALL online users except sender. `packet`/`blob`/search already
+  // respect a recipient's block list — this flood path didn't, so a blocked
+  // sender could still reach a victim through it (verified: still delivered
+  // after the direct `packet` path was already refused).
   var sent = 0;
   for (final user in _users.values) {
     if (user.publicKey == sender.publicKey) continue;
+    if (_isBlockedByRecipient(user.publicKey, sender.publicKey)) continue;
     try {
       user.ws.sink.add(encoded);
       sent++;
@@ -2931,11 +2995,14 @@ void _handleSearch(_User requester, Map<String, dynamic> msg) {
 // ── WebSocket handler ───────────────────────────────────────────
 
 shelf.Handler _wsHandler() {
-  // pingInterval=25s включает native WebSocket control-pings (RFC 6455 ping/pong
-  // на уровне протокола, не application-level). Браузер отвечает автоматически
-  // без JS-таймеров — не подвержен throttling неактивных табов. Это держит WS
-  // живым через tuna и другие прокси (обычный idle-timeout 60-120 сек).
-  return webSocketHandler((WebSocketChannel ws) {
+  // A fresh WebSocketHandler per HTTP upgrade request (cheap — handshakes are
+  // rare compared to messages) so the connecting IP can be captured from the
+  // HTTP request BEFORE the upgrade, in a variable the callback below closes
+  // over directly — no shared mutable state, so no race between concurrent
+  // handshakes.
+  return (shelf.Request request) {
+    final remoteIp = _clientIp(request);
+    final inner = webSocketHandler((WebSocketChannel ws) {
     _User? user;
     // Guards the register step across the `await` below — without it, a
     // second message arriving while the first register is still verifying
@@ -3014,7 +3081,8 @@ shelf.Handler _wsHandler() {
                 publicKey: publicKey,
                 nick: nick,
                 x25519Key: x25519Key,
-                verified: isVerified);
+                verified: isVerified,
+                remoteIp: remoteIp);
             _users[publicKey] = user!;
             if (_isBotBlockedOrRevoked(publicKey)) {
               try {
@@ -3094,7 +3162,7 @@ shelf.Handler _wsHandler() {
                     : '$cc${cr == null || cr.isEmpty ? '' : ' $cr'}');
           }
           _users.remove(publicKey);
-          _rateLimits.remove(publicKey); // free rate-limit memory on disconnect
+          _forgetRateLimitKey(publicKey);
           _broadcastPresence(publicKey, false);
           final id = user!.nick.isEmpty ? user!.shortId : user!.nick;
           final detail = cc == null
@@ -3111,11 +3179,14 @@ shelf.Handler _wsHandler() {
             _recordBotActivity(publicKey, 'disconnect', detail: 'ws_error');
           }
           _users.remove(publicKey);
+          _forgetRateLimitKey(publicKey);
           stdout.writeln('[-] ${user!.shortId} ws error: $e');
         }
       },
     );
-  }, pingInterval: const Duration(seconds: 25));
+    }, pingInterval: const Duration(seconds: 25));
+    return inner(request);
+  };
 }
 
 void _broadcastPresence(String publicKey, bool online) {

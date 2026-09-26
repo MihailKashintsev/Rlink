@@ -148,12 +148,25 @@ const _oauthTokenRateWindow = Duration(minutes: 1);
 const _oauthTokenRateMax = 30;
 final Map<String, List<DateTime>> _oauthTokenRateLimits = {};
 
+/// This HTTP endpoint has no per-connection lifecycle to clean up on, unlike
+/// the WebSocket rate-limit maps — and [pairing] is caller-supplied, so a
+/// flood of distinct random `p` values (verified: request #31 on one `p` gets
+/// 429, a brand new `p` sails through) grows this map forever. Bound it: drop
+/// the oldest entries once it gets large rather than track every `p` ever seen.
+const _oauthTokenRateMaxEntries = 5000;
+
 bool _checkOauthTokenRate(String pairing) {
   final now = DateTime.now();
   final times = _oauthTokenRateLimits.putIfAbsent(pairing, () => []);
   times.removeWhere((t) => now.difference(t) > _oauthTokenRateWindow);
   if (times.length >= _oauthTokenRateMax) return false;
   times.add(now);
+  if (_oauthTokenRateLimits.length > _oauthTokenRateMaxEntries) {
+    final keys = _oauthTokenRateLimits.keys.take(1000).toList();
+    for (final k in keys) {
+      _oauthTokenRateLimits.remove(k);
+    }
+  }
   return true;
 }
 
