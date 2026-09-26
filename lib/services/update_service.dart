@@ -597,6 +597,15 @@ try { Start-Process -FilePath $exe -WorkingDirectory $app; Log 'started' } catch
   /// impossible here — log why, open the manual-download page (same fallback
   /// already used on iOS) instead, and leave the running app alone so this
   /// message can actually reach the user.
+
+  /// Single-quotes [path] for bash (the only quoting bash never re-interprets
+  /// anything inside — double quotes still expand `$`/`` ` ``/`$(...)`).
+  /// `_installMacOS`/`_installLinux` interpolate real filesystem paths
+  /// (`Platform.resolvedExecutable`'s install location) into a generated
+  /// script; double-quoted, a bundle path containing e.g. a backtick would
+  /// have run as a command (verified: `` `touch x` `` in the path executed).
+  static String _bashQ(String path) => "'${path.replaceAll("'", "'\\''")}'";
+
   Future<void> _installMacOS(String zipPath) async {
     final dir = await getTemporaryDirectory();
     final appBundle =
@@ -616,11 +625,13 @@ try { Start-Process -FilePath $exe -WorkingDirectory $app; Log 'started' } catch
       return;
     }
     await Process.run('unzip', ['-o', zipPath, '-d', dir.path]);
-    final script =
-        'sleep 2\ncp -R "${dir.path}/Rlink.app/." "$appBundle/" 2>>"${dir.path}/rlink_update.log" '
-        '&& echo "[\$(date)] copy ok" >> "${dir.path}/rlink_update.log" '
-        '|| echo "[\$(date)] copy FAILED" >> "${dir.path}/rlink_update.log"\n'
-        'open "$appBundle"';
+    final qBundle = _bashQ(appBundle);
+    final qLog = _bashQ('${dir.path}/rlink_update.log');
+    final qApp = _bashQ('${dir.path}/Rlink.app/.');
+    final script = 'sleep 2\ncp -R $qApp $qBundle/ 2>>$qLog '
+        '&& echo "[\$(date)] copy ok" >> $qLog '
+        '|| echo "[\$(date)] copy FAILED" >> $qLog\n'
+        'open $qBundle';
     final f = File('${dir.path}/update.sh')..writeAsStringSync(script);
     await Process.run('chmod', ['+x', f.path]);
     await Process.start('bash', [f.path], mode: ProcessStartMode.detached);
@@ -631,8 +642,12 @@ try { Start-Process -FilePath $exe -WorkingDirectory $app; Log 'started' } catch
     final dir = await getTemporaryDirectory();
     final appDir = File(Platform.resolvedExecutable).parent.path;
     final exePath = Platform.resolvedExecutable;
-    final script =
-        'sleep 2\nmkdir -p "${dir.path}/upd"\ntar -xzf "$tarPath" -C "${dir.path}/upd"\ncp -r "${dir.path}/upd/." "$appDir/"\n"$exePath" &';
+    final qUpd = _bashQ('${dir.path}/upd');
+    final qTar = _bashQ(tarPath);
+    final qAppDir = _bashQ(appDir);
+    final qExe = _bashQ(exePath);
+    final script = 'sleep 2\nmkdir -p $qUpd\ntar -xzf $qTar -C $qUpd\n'
+        'cp -r $qUpd/. $qAppDir/\n$qExe &';
     final f = File('${dir.path}/update.sh')..writeAsStringSync(script);
     await Process.run('chmod', ['+x', f.path]);
     await Process.start('bash', [f.path], mode: ProcessStartMode.detached);

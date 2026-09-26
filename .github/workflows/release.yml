@@ -225,7 +225,14 @@ jobs:
       - name: ZIP
         run: |
           cd build/macos/Build/Products/Release
-          zip -r "$GITHUB_WORKSPACE/rlink_${{ github.ref_name }}_macos.zip" Rlink.app
+          # -y: store symlinks as symlinks. Frameworks are full of them
+          # (Versions/Current -> A, etc.) — without -y, `zip -r` dereferences
+          # each one into a real copy, which both bloats the archive (~2.85x,
+          # measured) and breaks the bundle's code signature (each framework's
+          # own signature covers its real on-disk layout, symlinks included;
+          # `codesign --verify --deep --strict` fails with "bundle format is
+          # ambiguous" on the flattened result).
+          zip -ry "$GITHUB_WORKSPACE/rlink_${{ github.ref_name }}_macos.zip" Rlink.app
       - name: Upload to Rlink-releases
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
