@@ -37,6 +37,21 @@ void main() {
     test('an ordinary name is kept', () {
       expect(ImageService.sanitizeStoredName('report Q3.pdf'), 'report Q3.pdf');
     });
+
+    test('the sticker-pack download path (missed in the first sweep) stays put',
+        () {
+      const dir = '/Users/victim/Documents/images';
+      // Mirrors StickerPackDmService.receiveFromRelay's destName construction.
+      for (final msgId in [
+        '../../../../Library/LaunchAgents/evil',
+        'stickerpack_../../../../etc/passwd',
+      ]) {
+        final destName =
+            ImageService.sanitizeStoredName('stk_downloaded_${msgId}_0.png');
+        expect(p.isWithin(dir, p.join(dir, destName)), isTrue,
+            reason: 'joined path escaped: ${p.join(dir, destName)}');
+      }
+    });
   });
 
   group('boundedGunzip', () {

@@ -45,6 +45,15 @@ class ImageService {
   final Set<String> _completedMsgIds = {};
   static const _kMaxCompletedTracked = 500;
 
+  /// img_meta/img_chunk aren't authenticated (filtered only by an 8-char
+  /// recipient prefix, not a proof) and had no cap on the `totalChunks` a
+  /// sender announces — anyone who knows my public key could open unlimited
+  /// assemblies each claiming an arbitrary chunk count, holding memory for
+  /// each until it (never) completes. Chunks on this path are tiny
+  /// (tens–hundreds of bytes each, unlike the ~90 KB relay `blob` chunks), so
+  /// even a legitimate multi-MB photo/avatar needs nowhere near this many.
+  static const _kMaxImgChunks = 20000;
+
   /// Cached documents directory path — set during init().
   /// Used by resolveStoredPath() to fix stale iOS sandbox paths after rebuild.
   String? _docsPath;
@@ -596,6 +605,7 @@ class ImageService {
       String? forwardFromChannelId}) {
     // Skip if this msgId was already fully assembled via another delivery path
     if (_completedMsgIds.contains(msgId)) return;
+    if (totalChunks <= 0 || totalChunks > _kMaxImgChunks) return;
     _assemblies.putIfAbsent(
       msgId,
       () => _ImageAssembly(

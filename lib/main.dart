@@ -1212,26 +1212,44 @@ Future<void> initServices() async {
           senderX25519KeyBase64: PeerKeyDirectory.instance.getX25519(fromId),
         );
         if (plain == null) return;
-        // The sealed plaintext binds the message id ({"m":id,"t":text}): the
-        // signature covers only the envelope, so without this a captured
-        // valid envelope could be re-sent paired with a different messageId.
-        final newText = openEditDeletePlain(plain, messageId);
-        if (newText == null) return;
+        // The sealed plaintext binds the message id AND a timestamp: the
+        // signature covers only the envelope, so without `m` a captured valid
+        // envelope could be re-sent paired with a different messageId, and
+        // without `ts` an old, validly-signed edit could be replayed later to
+        // roll the text back (verified: a captured edit applied any time
+        // after a newer one, reverting it — the ciphertext must cross the
+        // relay to be routed, so it's not secret from that path).
+        final opened = openEditDeletePlain(plain, messageId);
+        if (opened == null) return;
+        final (newText, ts) = opened;
+        if (!await SignedAction.acceptNewer('edit:$messageId', ts)) return;
         var merged = newText;
-        if (SharedTodoPayload.tryDecode(existing.text) != null &&
-            SharedTodoPayload.tryDecode(newText) != null) {
+        final asSharedTodo = SharedTodoPayload.tryDecode(existing.text) !=
+                null &&
+            SharedTodoPayload.tryDecode(newText) != null;
+        final asSharedCalendar = SharedCalendarPayload.tryDecode(
+                    existing.text) !=
+                null &&
+            SharedCalendarPayload.tryDecode(newText) != null;
+        if (!editDeleteAllowedForMessage(
+            existingIsOutgoing: existing.isOutgoing,
+            isMerge: asSharedTodo || asSharedCalendar)) {
+          return;
+        }
+        if (asSharedTodo) {
           merged = SharedTodoPayload.mergeRemote(existing.text, newText);
-        } else if (SharedCalendarPayload.tryDecode(existing.text) != null &&
-            SharedCalendarPayload.tryDecode(newText) != null) {
+        } else if (asSharedCalendar) {
           merged = SharedCalendarPayload.mergeRemote(existing.text, newText);
         }
         await ChatStorageService.instance.editMessage(messageId, merged);
       },
       onDelete: (fromId, messageId, encrypted) async {
-        // Same rule as onEdit: only the verified signer, only inside their chat.
+        // Same rule as onEdit: only the verified signer, only inside their
+        // chat, and never a message I (not they) actually sent.
         final existing =
             await ChatStorageService.instance.getMessageById(messageId);
         if (existing == null ||
+            existing.isOutgoing ||
             ChatStorageService.normalizeDmPeerId(existing.peerId) !=
                 ChatStorageService.normalizeDmPeerId(fromId)) {
           return;
@@ -1240,7 +1258,14 @@ Future<void> initServices() async {
           encrypted,
           senderX25519KeyBase64: PeerKeyDirectory.instance.getX25519(fromId),
         );
-        if (plain == null || openEditDeletePlain(plain, messageId) == null) return;
+        if (plain == null) return;
+        final opened = openEditDeletePlain(plain, messageId);
+        if (opened == null) return;
+        // Shares the 'edit:' timeline with onEdit so a stale, captured delete
+        // can't arrive after (and undo) a legitimate later edit.
+        if (!await SignedAction.acceptNewer('edit:$messageId', opened.$2)) {
+          return;
+        }
         await ChatStorageService.instance.deleteMessage(messageId);
       },
       onReact: (fromId, messageId, emoji) async {
@@ -2441,22 +2466,35 @@ Future<void> initServices() async {
       final userId = payload['userId'] as String?;
       final unsub = payload['unsubscribe'] as bool? ?? false;
       final signer = payload['_signer'] as String?;
-      if (channelId == null || userId == null || signer == null) return;
+      final sts = payload['sts'];
+      if (channelId == null || userId == null || signer == null || sts is! num) {
+        return;
+      }
+      // Subscribe/unsubscribe for the same user share one timeline, so an old
+      // captured unsubscribe can't be replayed after they resubscribed (and
+      // vice versa).
+      final replayKey = 'sub:$channelId:${userId.toLowerCase()}';
       // You can (un)subscribe yourself; only the channel's owner may remove
       // someone else. `userId` used to be believed as sent, so anyone could
       // unsubscribe anyone.
       if (signer != userId.toLowerCase()) {
         unawaited(() async {
           final ch = await ChannelService.instance.getChannel(channelId);
-          if (ch != null && signer == ch.adminId.toLowerCase() && unsub) {
+          if (ch != null &&
+              signer == ch.adminId.toLowerCase() &&
+              unsub &&
+              await SignedAction.acceptNewer(replayKey, sts)) {
             await ChannelService.instance.removeSubscriber(channelId, userId);
           }
         }());
         return;
       }
-      if (unsub) {
-        ChannelService.instance.removeSubscriber(channelId, userId);
-      } else {
+      unawaited(() async {
+        if (!await SignedAction.acceptNewer(replayKey, sts)) return;
+        if (unsub) {
+          ChannelService.instance.removeSubscriber(channelId, userId);
+          return;
+        }
         final x25519 = payload['x25519'] as String?;
         if (x25519 != null && x25519.isNotEmpty) {
           BleService.instance.registerPeerX25519Key(userId, x25519);
@@ -2478,7 +2516,7 @@ Future<void> initServices() async {
             }
           }
         }());
-      }
+      }());
     };
     GossipRouter.instance.onChannelInvite = (payload) {
       final channelId = payload['channelId'] as String?;
@@ -3186,8 +3224,16 @@ Future<void> initServices() async {
           }
         }
         final sts = payload['sts'];
-        if (sts is! num ||
-            !await SignedAction.acceptNewer('grp:$groupId', sts)) {
+        // Separate timelines for a creator/mod update vs. an ordinary
+        // member's self-leave: sharing one 'grp:$groupId' key meant any
+        // member could pick a `sts` far in the future for their own leave
+        // (a legitimate action) and freeze it — every later, genuinely newer
+        // creator/mod update would then look "older" and be dropped for up
+        // to that long. A self-leave is scoped per signer so it can't
+        // collide with privileged changes or with another member's leave.
+        final replayKey =
+            privileged ? 'grp:$groupId' : 'grp:$groupId:leave:$signer';
+        if (sts is! num || !await SignedAction.acceptNewer(replayKey, sts)) {
           return;
         }
         final myId = CryptoService.instance.publicKeyHex;
@@ -3280,48 +3326,81 @@ Future<void> initServices() async {
         requestedAt: DateTime.now().millisecondsSinceEpoch,
       ));
     };
+    // These five carry a SignedAction envelope (checked in the gossip router)
+    // but, unlike channel_meta/group_update, had no freshness check at all —
+    // a validly-signed OLD packet (e.g. a stale verify_revoke) could be
+    // replayed at any time to undo a newer admin decision. Each shares one
+    // `acceptNewer` timeline per channel with its counterpart action.
     GossipRouter.instance.onVerifyApproval = (payload) {
-      final channelId = payload['channelId'] as String?;
-      final verifiedBy = payload['verifiedBy'] as String?;
-      if (channelId == null || verifiedBy == null) return;
-      // App-level moderation: only the pinned app-admin identities.
-      if (!isAppAdminKey(payload['_signer'] as String?)) return;
-      debugPrint('[RLINK] Channel verified: $channelId by $verifiedBy');
-      ChannelService.instance.verifyChannel(channelId, verifiedBy);
+      unawaited(() async {
+        final channelId = payload['channelId'] as String?;
+        final verifiedBy = payload['verifiedBy'] as String?;
+        final sts = payload['sts'];
+        if (channelId == null || verifiedBy == null || sts is! num) return;
+        // App-level moderation: only the pinned app-admin identities.
+        if (!isAppAdminKey(payload['_signer'] as String?)) return;
+        if (!await SignedAction.acceptNewer('admin:verify:$channelId', sts)) {
+          return;
+        }
+        debugPrint('[RLINK] Channel verified: $channelId by $verifiedBy');
+        ChannelService.instance.verifyChannel(channelId, verifiedBy);
+      }());
     };
     GossipRouter.instance.onVerifyRevoke = (payload) {
-      final channelId = payload['channelId'] as String?;
-      if (channelId == null) return;
-      if (!isAppAdminKey(payload['_signer'] as String?)) return;
-      debugPrint('[RLINK] Channel verification revoked: $channelId');
-      ChannelService.instance.unverifyChannel(channelId);
+      unawaited(() async {
+        final channelId = payload['channelId'] as String?;
+        final sts = payload['sts'];
+        if (channelId == null || sts is! num) return;
+        if (!isAppAdminKey(payload['_signer'] as String?)) return;
+        if (!await SignedAction.acceptNewer('admin:verify:$channelId', sts)) {
+          return;
+        }
+        debugPrint('[RLINK] Channel verification revoked: $channelId');
+        ChannelService.instance.unverifyChannel(channelId);
+      }());
     };
     GossipRouter.instance.onChannelForeignAgent = (payload) {
-      final channelId = payload['channelId'] as String?;
-      final value = payload['value'] as bool? ?? true;
-      if (channelId == null) return;
-      if (!isAppAdminKey(payload['_signer'] as String?)) return;
-      debugPrint('[RLINK] Channel $channelId foreign agent = $value');
-      ChannelService.instance
-          .applyAdminAction(channelId: channelId, foreignAgent: value);
+      unawaited(() async {
+        final channelId = payload['channelId'] as String?;
+        final value = payload['value'] as bool? ?? true;
+        final sts = payload['sts'];
+        if (channelId == null || sts is! num) return;
+        if (!isAppAdminKey(payload['_signer'] as String?)) return;
+        if (!await SignedAction.acceptNewer('admin:foreign:$channelId', sts)) {
+          return;
+        }
+        debugPrint('[RLINK] Channel $channelId foreign agent = $value');
+        ChannelService.instance
+            .applyAdminAction(channelId: channelId, foreignAgent: value);
+      }());
     };
     GossipRouter.instance.onChannelBlock = (payload) {
-      final channelId = payload['channelId'] as String?;
-      final value = payload['value'] as bool? ?? true;
-      if (channelId == null) return;
-      if (!isAppAdminKey(payload['_signer'] as String?)) return;
-      debugPrint('[RLINK] Channel $channelId blocked = $value');
-      ChannelService.instance
-          .applyAdminAction(channelId: channelId, blocked: value);
+      unawaited(() async {
+        final channelId = payload['channelId'] as String?;
+        final value = payload['value'] as bool? ?? true;
+        final sts = payload['sts'];
+        if (channelId == null || sts is! num) return;
+        if (!isAppAdminKey(payload['_signer'] as String?)) return;
+        if (!await SignedAction.acceptNewer('admin:block:$channelId', sts)) {
+          return;
+        }
+        debugPrint('[RLINK] Channel $channelId blocked = $value');
+        ChannelService.instance
+            .applyAdminAction(channelId: channelId, blocked: value);
+      }());
     };
     GossipRouter.instance.onChannelAdminDelete = (payload) async {
       final channelId = payload['channelId'] as String?;
       final signer = payload['_signer'] as String?;
-      if (channelId == null || signer == null) return;
+      final sts = payload['sts'];
+      if (channelId == null || signer == null || sts is! num) return;
       // The app admin, or the channel's own owner deleting their channel.
       if (!isAppAdminKey(signer)) {
         final ch = await ChannelService.instance.getChannel(channelId);
         if (ch == null || signer != ch.adminId.toLowerCase()) return;
+      }
+      if (!await SignedAction.acceptNewer('admin:delete:$channelId', sts)) {
+        return;
       }
       final uc = payload['uc'] as String?;
       debugPrint('[RLINK] Channel $channelId deleted by admin');

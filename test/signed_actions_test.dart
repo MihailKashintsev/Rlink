@@ -123,7 +123,7 @@ void main() {
       final rxXPub = base64Encode((await rxX.extractPublicKey()).bytes);
 
       final env = await CryptoService.instance.encryptMessage(
-        plaintext: sealEditDeletePlain('msg-1', 'new text'),
+        plaintext: sealEditDeletePlain('msg-1', 1000, 'new text'),
         recipientX25519KeyBase64: rxXPub,
       );
       expect(env.senderPublicKey, sender);
@@ -138,7 +138,7 @@ void main() {
       );
       final plain = await CryptoService.instance.decryptMessage(env);
       expect(plain, isNotNull);
-      expect(openEditDeletePlain(plain!, 'msg-1'), 'new text');
+      expect(openEditDeletePlain(plain!, 'msg-1'), ('new text', 1000));
       // The same valid envelope re-sent for another message id is refused.
       expect(openEditDeletePlain(plain, 'msg-2'), isNull);
     });
@@ -149,11 +149,12 @@ void main() {
       final rx = await X25519().newKeyPair();
       final rxXPub = base64Encode((await rx.extractPublicKey()).bytes);
       final env = await CryptoService.instance.encryptMessage(
-        plaintext: sealEditDeletePlain('msg-9'),
+        plaintext: sealEditDeletePlain('msg-9', 2000),
         recipientX25519KeyBase64: rxXPub,
       );
       expect(await CryptoService.instance.verifyEncryptedEnvelope(env), isTrue);
-      expect(openEditDeletePlain(sealEditDeletePlain('msg-9'), 'msg-9'), '');
+      expect(openEditDeletePlain(sealEditDeletePlain('msg-9', 2000), 'msg-9'),
+          ('', 2000));
 
       // Attacker claims to be the victim: swap in another sender key.
       final victim = await Ed25519().newKeyPair();
@@ -164,6 +165,58 @@ void main() {
       final forged = EncryptedMessage.fromJson({...env.toJson(), 'from': victimHex});
       expect(
           await CryptoService.instance.verifyEncryptedEnvelope(forged), isFalse);
+    });
+  });
+
+  group('DM edit/delete authorization (main.dart onEdit/onDelete logic)', () {
+    test('a contact cannot edit or delete a message I actually sent', () {
+      // existing.isOutgoing == true: I sent it. Ordinary text is not exempt.
+      expect(
+          editDeleteAllowedForMessage(
+              existingIsOutgoing: true, isMerge: false),
+          isFalse,
+          reason: 'this was the bug: onEdit never checked isOutgoing at all');
+      // onDelete never has a merge exception, even hypothetically.
+      expect(
+          editDeleteAllowedForMessage(existingIsOutgoing: true, isMerge: true),
+          isTrue,
+          reason: 'isMerge:true is only ever passed by onEdit for a shared '
+              'todo/calendar payload, never by onDelete');
+    });
+
+    test('a contact can edit/delete a message THEY sent', () {
+      expect(
+          editDeleteAllowedForMessage(
+              existingIsOutgoing: false, isMerge: false),
+          isTrue);
+    });
+
+    test('shared todo/calendar state is the one deliberate exception', () {
+      expect(
+          editDeleteAllowedForMessage(existingIsOutgoing: true, isMerge: true),
+          isTrue);
+    });
+
+    test('replaying an old, validly-signed edit cannot roll a message back '
+        'to an earlier text', () async {
+      const key = 'edit:msg-rollback';
+      // The newer edit (ts=200) lands first...
+      expect(await SignedAction.acceptNewer(key, 200), isTrue);
+      // ...then an OLDER captured envelope (ts=150, e.g. relayed late or
+      // replayed by whoever could see the ciphertext in transit) must not
+      // be able to revert it.
+      expect(await SignedAction.acceptNewer(key, 150), isFalse);
+      // The exact same edit replayed again is also rejected (not just older).
+      expect(await SignedAction.acceptNewer(key, 200), isFalse);
+      // A genuinely newer edit still goes through.
+      expect(await SignedAction.acceptNewer(key, 201), isTrue);
+    });
+
+    test('a captured delete cannot undo an edit that happened after it', () async {
+      // onEdit and onDelete share the 'edit:$messageId' timeline on purpose.
+      const key = 'edit:msg-shared-timeline';
+      expect(await SignedAction.acceptNewer(key, 500), isTrue); // an edit
+      expect(await SignedAction.acceptNewer(key, 300), isFalse); // stale delete
     });
   });
 

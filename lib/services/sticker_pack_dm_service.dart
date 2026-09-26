@@ -365,7 +365,11 @@ class StickerPackDmService {
           if (kIsWeb) {
             downloadedPaths.add('data:${_mimeForExt(ext)};base64,$b64');
           } else {
-            final destName = 'stk_downloaded_${msgId}_$i$ext';
+            // msgId is the relay blob id — attacker-controlled like any other
+            // received name (see ImageService.sanitizeStoredName; this one
+            // call site was missed when that class of bug was fixed).
+            final destName =
+                ImageService.sanitizeStoredName('stk_downloaded_${msgId}_$i$ext');
             final dest = File(p.join(imgDir!.path, destName));
             await dest.writeAsBytes(bytes);
             downloadedPaths.add(p.join('images', destName));

@@ -3316,7 +3316,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_editingMessageId != null) {
         final targetId = _editingMessageId!;
         if (!_savedMessagesLocalOnly && !_isBuiltinAiBot) {
-          final enc = await _sealForPeer(sealEditDeletePlain(targetId, text));
+          final enc = await _sealForPeer(sealEditDeletePlain(targetId, DateTime.now().millisecondsSinceEpoch, text));
           if (enc != null) {
             await GossipRouter.instance.sendEditMessage(
               messageId: targetId,
@@ -3777,7 +3777,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _patchSharedCollab(ChatMessage msg, String newEncoded) async {
     await ChatStorageService.instance.editMessage(msg.id, newEncoded);
     if (!_savedMessagesLocalOnly && !_isDmBot) {
-      final enc = await _sealForPeer(sealEditDeletePlain(msg.id, newEncoded));
+      final enc = await _sealForPeer(sealEditDeletePlain(msg.id, DateTime.now().millisecondsSinceEpoch, newEncoded));
       if (enc != null) {
         await GossipRouter.instance.sendEditMessage(
           messageId: msg.id,
@@ -5900,7 +5900,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       await ChatStorageService.instance.deleteMessage(msg.id);
       if (!_savedMessagesLocalOnly) {
-        final enc = await _sealForPeer(sealEditDeletePlain(msg.id));
+        final enc = await _sealForPeer(sealEditDeletePlain(msg.id, DateTime.now().millisecondsSinceEpoch));
         if (enc != null) {
           await GossipRouter.instance.sendDeleteMessage(
             messageId: msg.id,
@@ -6080,7 +6080,7 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         await ChatStorageService.instance.deleteMessage(m.id);
         if (!_savedMessagesLocalOnly) {
-          final enc = await _sealForPeer(sealEditDeletePlain(m.id));
+          final enc = await _sealForPeer(sealEditDeletePlain(m.id, DateTime.now().millisecondsSinceEpoch));
           if (enc != null) {
             await GossipRouter.instance.sendDeleteMessage(
               messageId: m.id,
