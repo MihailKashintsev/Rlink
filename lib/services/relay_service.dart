@@ -248,6 +248,8 @@ class RelayService with WidgetsBindingObserver {
       {};
   final Map<String, Completer<Map<String, dynamic>>>
       _adminPasswordAckCompleters = {};
+  final Map<String, Completer<Map<String, dynamic>>>
+      _backupRedeemedAckCompleters = {};
   final Map<String, Completer<Map<String, dynamic>>> _botInfoAckCompleters = {};
   final Map<String, Completer<Map<String, dynamic>>>
       _botCommandsSetAckCompleters = {};
@@ -472,6 +474,36 @@ class RelayService with WidgetsBindingObserver {
     final bn = (info['bannerUrl'] as String?)?.trim() ?? '';
     _applyRelayBotVisualFromSnapshot(id, av, bn);
     botDirectoryVersion.value++;
+  }
+
+  /// Advisory-only: tells the relay this device just restored an identity
+  /// from a downloaded backup file, so it can say whether THAT backupId was
+  /// ever redeemed before ({ok:true, alreadyUsed, firstAt}) — a hint the file
+  /// may have leaked, not a security boundary (see the relay-side comment on
+  /// `_redeemedBackups`). Requires a verified (proof-of-possession) connection
+  /// server-side; `ok:false` if unreachable/unverified/timed out.
+  Future<Map<String, dynamic>> reportBackupRedeemed(String backupId) async {
+    if (!isConnected) return {'ok': false, 'error': 'offline'};
+    final reqId = _newBotOwnerReqId();
+    final c = Completer<Map<String, dynamic>>();
+    _backupRedeemedAckCompleters[reqId] = c;
+    try {
+      await _safeSend({
+        'type': 'backup_redeemed',
+        'backupId': backupId,
+        'reqId': reqId,
+      }, context: 'backup_redeemed');
+      return await c.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          _backupRedeemedAckCompleters.remove(reqId);
+          return <String, dynamic>{'ok': false, 'error': 'timeout'};
+        },
+      );
+    } catch (e) {
+      _backupRedeemedAckCompleters.remove(reqId);
+      return {'ok': false, 'error': e.toString()};
+    }
   }
 
   /// Публичная информация о боте по @handle (кэш 60 с). `null` — офлайн / не найден.
@@ -995,6 +1027,12 @@ class RelayService with WidgetsBindingObserver {
       }
     }
     _adminPasswordAckCompleters.clear();
+    for (final c in _backupRedeemedAckCompleters.values) {
+      if (!c.isCompleted) {
+        c.complete(<String, dynamic>{'ok': false, 'error': 'disconnected'});
+      }
+    }
+    _backupRedeemedAckCompleters.clear();
     if (!_intentionalClose && !_disposed) {
       _scheduleReconnect();
     }
@@ -1533,6 +1571,18 @@ class RelayService with WidgetsBindingObserver {
           final pwdRid = msg['reqId']?.toString() ?? '';
           if (pwdRid.isNotEmpty) {
             final c = _adminPasswordAckCompleters.remove(pwdRid);
+            if (c != null && !c.isCompleted) {
+              final copy = Map<String, dynamic>.from(msg);
+              scheduleMicrotask(() {
+                if (!c.isCompleted) c.complete(copy);
+              });
+            }
+          }
+          break;
+        case 'backup_redeemed_ack':
+          final backupRid = msg['reqId']?.toString() ?? '';
+          if (backupRid.isNotEmpty) {
+            final c = _backupRedeemedAckCompleters.remove(backupRid);
             if (c != null && !c.isCompleted) {
               final copy = Map<String, dynamic>.from(msg);
               scheduleMicrotask(() {

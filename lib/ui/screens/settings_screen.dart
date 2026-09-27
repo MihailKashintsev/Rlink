@@ -72,6 +72,7 @@ import '../rlink_nav_routes.dart';
 import 'qr_contact_screen.dart' show QrScanScreen;
 import 'help_center_screen.dart';
 import 'quick_video_settings_screen.dart';
+import 'account_backup_screen.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../models/quick_video.dart';
 
@@ -2765,6 +2766,16 @@ class _PrivacyPageState extends State<_PrivacyPage> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context)
                 .push(rlinkOpaquePushRoute(const DeviceSecurityScreen())),
+          ),
+          ListTile(
+            leading: Icon(Icons.file_download_outlined, color: cs.primary),
+            title: Text(AppL10n.t('Резервная копия аккаунта')),
+            subtitle: Text(
+                AppL10n.t('Файл переноса на новое устройство, под паролем'),
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context)
+                .push(rlinkOpaquePushRoute(const AccountBackupExportScreen())),
           ),
           ListTile(
             leading: Icon(Icons.visibility_off_outlined, color: cs.primary),

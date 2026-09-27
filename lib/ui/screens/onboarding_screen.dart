@@ -24,6 +24,7 @@ import '../widgets/avatar_widget.dart';
 import '../../main.dart' show navigatorKey;
 import '../../services/rlink_deep_link_service.dart';
 import 'chat_list_screen.dart';
+import 'account_backup_screen.dart';
 import '../../l10n/app_l10n.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -496,6 +497,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                   child: Text(
                     AppL10n.t('Это дополнительное устройство'),
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _loading
+                      ? null
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const AccountBackupImportScreen(),
+                            ),
+                          ),
+                  child: Text(
+                    AppL10n.t('У меня есть файл переноса'),
                     style: TextStyle(color: cs.onSurfaceVariant),
                   ),
                 ),

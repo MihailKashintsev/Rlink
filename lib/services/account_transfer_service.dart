@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_message.dart';
@@ -18,6 +20,7 @@ import 'emoji_pack_service.dart';
 import 'gossip_router.dart';
 import 'group_service.dart';
 import 'profile_service.dart';
+import 'relay_service.dart';
 import 'sticker_collection_service.dart';
 import '../l10n/app_l10n.dart';
 
@@ -933,4 +936,312 @@ class AccountTransferService {
     } catch (_) {}
     return null;
   }
+
+  // ───────────────────────── file-based backup ─────────────────────────
+  // A cold, offline sibling of the live device-to-device transfer above: the
+  // account (keys + selected local data) as a single password-encrypted file
+  // the person downloads or saves to their own cloud storage, and loads back
+  // in from the login screen. Deliberately reuses this class's existing
+  // per-category encode/apply helpers (`_encodeContact`, `_applyReceivedItem`,
+  // …) rather than the live transfer's networking — everything below is pure
+  // local read/write, no `xfer_*` packet ever involved.
+  //
+  // What the file format does and doesn't protect against:
+  // - Tampering: the whole payload is one AEAD-sealed blob (ChaCha20-
+  //   Poly1305) — flip a single bit anywhere and it fails to decrypt, full
+  //   stop. There's also nothing IN the payload worth tampering with: Premium
+  //   is a server-side record keyed by the public key, never carried in this
+  //   file, and "who you are" is the private key itself — there's no separate
+  //   mutable field that grants anything on its own.
+  // - Confidentiality: the key material is encrypted with a password-derived
+  //   key (Argon2id, OWASP-recommended parameters) — a copy of the file
+  //   sitting in a cloud drive is useless without that password.
+  // - Reuse of a leaked file: NOT preventable for an offline file — once
+  //   decrypted, the raw keys work regardless of anything a server
+  //   remembers. `RelayService.reportBackupRedeemed` is an advisory signal
+  //   only ("this backupId was already imported once, at <time>"), useful as
+  //   a hint that the file may have leaked, never a hard guarantee.
+  static const _kBackupFormatVersion = 1;
+  static const _kBackupArgon2Memory = 19456; // ~19 MiB, OWASP minimum
+  static const _kBackupArgon2Parallelism = 1;
+  static const _kBackupArgon2Iterations = 2;
+
+  static Uint8List _randomBytes(int n) =>
+      Uint8List.fromList(List<int>.generate(n, (_) => Random.secure().nextInt(256)));
+
+  static Future<Uint8List> _deriveBackupKey(String password, Uint8List salt) async {
+    final algorithm = Argon2id(
+      parallelism: _kBackupArgon2Parallelism,
+      memory: _kBackupArgon2Memory,
+      iterations: _kBackupArgon2Iterations,
+      hashLength: 32,
+    );
+    final key = await algorithm.deriveKey(
+      secretKey: SecretKey(utf8.encode(password)),
+      nonce: salt,
+    );
+    return Uint8List.fromList(await key.extractBytes());
+  }
+
+  /// Gathers every item for the selected categories as plain JSON maps
+  /// (no network transport involved) — the file-export counterpart of the
+  /// per-category blocks in [approveAndSend], reusing the same private
+  /// encode helpers so the two paths can never disagree on wire shape.
+  Future<Map<String, List<Map<String, dynamic>>>> _collectAllCategoryItems(
+      TransferCategories categories) async {
+    final out = <String, List<Map<String, dynamic>>>{};
+    if (categories.contacts) {
+      final contacts = await ChatStorageService.instance.getContacts();
+      out['contact'] = contacts
+          .where((c) => !isDmBotPeerId(c.publicKeyHex))
+          .map(_encodeContact)
+          .toList();
+    }
+    if (categories.channels) {
+      final channels = (await ChannelService.instance.getChannels())
+          .where((c) => c.isPublic && !c.blocked)
+          .toList();
+      out['channel'] = channels
+          .map((ch) => <String, dynamic>{
+                'id': ch.id,
+                'n': ch.name,
+                'col': ch.avatarColor,
+                'em': ch.avatarEmoji,
+                'adm': ch.adminId,
+                'ca': ch.createdAt,
+                'un': ch.username,
+                'drvUrl': ch.driveFileUrl,
+                'drvKeys': ch.driveKeysUrl,
+                'drvRev': ch.driveBackupRev,
+                'drvOn': ch.driveBackupEnabled,
+              })
+          .toList();
+    }
+    if (categories.groups) {
+      final groups = await GroupService.instance.getGroups();
+      out['group'] = groups
+          .map((g) => <String, dynamic>{
+                'id': g.id,
+                'n': g.name,
+                'cr': g.creatorId,
+                'mem': g.memberIds,
+                'mod': g.moderatorIds,
+                'col': g.avatarColor,
+                'em': g.avatarEmoji,
+                'ca': g.createdAt,
+              })
+          .toList();
+    }
+    if (categories.emojiPacks) {
+      out['emoji_pack'] = await EmojiPackService.instance.exportAllPacksAsPayloads();
+    }
+    if (categories.dmHistory) {
+      final peerIds = await ChatStorageService.instance.getChatPeerIds();
+      final messages = <ChatMessage>[];
+      for (final peerId in peerIds) {
+        if (isDmBotPeerId(peerId)) continue;
+        messages.addAll(await ChatStorageService.instance.getAllMessages(peerId));
+      }
+      out['dm'] = messages.map(_encodeMessage).toList();
+    }
+    if (categories.settings) {
+      out['settings'] = [_encodeSettings()];
+    }
+    if (categories.stickers) {
+      final packs = await StickerCollectionService.instance.loadPacks();
+      final packItems = <Map<String, dynamic>>[];
+      for (final pack in packs) {
+        final stickers = <Map<String, dynamic>>[];
+        for (final rel in pack.stickerRelPaths) {
+          final bytes = await _readStickerBytesWebSafe(rel);
+          if (bytes == null || bytes.isEmpty || bytes.length > 400 * 1024) {
+            continue;
+          }
+          stickers.add({'ext': _extForRel(rel), 'bytes': base64Encode(bytes)});
+        }
+        packItems.add({'title': pack.title, 'stickers': stickers});
+      }
+      out['sticker_pack'] = packItems;
+    }
+    return out;
+  }
+
+  /// Builds the encrypted backup file's bytes. [password] is chosen by the
+  /// person right before this call and must be re-entered on restore — there
+  /// is no recovery for a forgotten one, the same trade-off as any
+  /// password-protected export.
+  Future<Uint8List> exportAccountToFile({
+    required String password,
+    TransferCategories categories = const TransferCategories(),
+  }) async {
+    final keys = await CryptoService.instance.exportRawKeyMaterialForTransfer();
+    final myProfile = ProfileService.instance.profile;
+    final backupId =
+        '${DateTime.now().microsecondsSinceEpoch}-${_bytesToHex(_randomBytes(8))}';
+    final items = await _collectAllCategoryItems(categories);
+    final payload = <String, dynamic>{
+      'v': _kBackupFormatVersion,
+      'backupId': backupId,
+      'createdAt': DateTime.now().toIso8601String(),
+      'keys': keys,
+      if (myProfile != null)
+        'profile': {
+          'nickname': myProfile.nickname,
+          'username': myProfile.username,
+          'avatarColor': myProfile.avatarColor,
+          'avatarEmoji': myProfile.avatarEmoji,
+          'tags': myProfile.tags,
+          'statusEmoji': myProfile.statusEmoji,
+        },
+      'items': items,
+    };
+    final salt = _randomBytes(16);
+    final key = await _deriveBackupKey(password, salt);
+    final sealed = await CryptoService.instance
+        .sealSymmetric(Uint8List.fromList(utf8.encode(jsonEncode(payload))), key);
+    final envelope = <String, dynamic>{
+      'rlinkBackup': 1,
+      'kdf': 'argon2id',
+      'mem': _kBackupArgon2Memory,
+      'par': _kBackupArgon2Parallelism,
+      'it': _kBackupArgon2Iterations,
+      'salt': base64Encode(salt),
+      'sealed': base64Encode(sealed),
+    };
+    return Uint8List.fromList(utf8.encode(jsonEncode(envelope)));
+  }
+
+  static String _bytesToHex(List<int> bytes) =>
+      bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+  /// Restores an identity + selected local data from [fileBytes] produced by
+  /// [exportAccountToFile]. Never partially applies: identity and every item
+  /// are only touched after the whole payload decrypts and parses cleanly.
+  Future<AccountFileRestoreResult> importAccountFromFile({
+    required Uint8List fileBytes,
+    required String password,
+  }) async {
+    Map<String, dynamic> envelope;
+    try {
+      envelope = jsonDecode(utf8.decode(fileBytes)) as Map<String, dynamic>;
+    } catch (_) {
+      return const AccountFileRestoreResult(error: AccountFileRestoreError.badFile);
+    }
+    if (envelope['rlinkBackup'] != 1 || envelope['kdf'] != 'argon2id') {
+      return const AccountFileRestoreResult(error: AccountFileRestoreError.badFile);
+    }
+    Uint8List salt, sealed;
+    try {
+      salt = base64Decode(envelope['salt'] as String);
+      sealed = base64Decode(envelope['sealed'] as String);
+    } catch (_) {
+      return const AccountFileRestoreResult(error: AccountFileRestoreError.badFile);
+    }
+    final algorithm = Argon2id(
+      parallelism: (envelope['par'] as num?)?.toInt() ?? _kBackupArgon2Parallelism,
+      memory: (envelope['mem'] as num?)?.toInt() ?? _kBackupArgon2Memory,
+      iterations: (envelope['it'] as num?)?.toInt() ?? _kBackupArgon2Iterations,
+      hashLength: 32,
+    );
+    final key = Uint8List.fromList(await (await algorithm.deriveKey(
+      secretKey: SecretKey(utf8.encode(password)),
+      nonce: salt,
+    ))
+        .extractBytes());
+    final plainBytes = await CryptoService.instance.openSymmetric(sealed, key);
+    if (plainBytes == null) {
+      // AEAD auth failure covers both a wrong password and a tampered/
+      // corrupted file — there's no way to tell those apart, which is
+      // correct: neither should reveal anything about the real content.
+      return const AccountFileRestoreResult(
+          error: AccountFileRestoreError.wrongPasswordOrCorrupt);
+    }
+    Map<String, dynamic> payload;
+    try {
+      payload = jsonDecode(utf8.decode(plainBytes)) as Map<String, dynamic>;
+    } catch (_) {
+      return const AccountFileRestoreResult(error: AccountFileRestoreError.badFile);
+    }
+    final keys = payload['keys'] as Map<String, dynamic>?;
+    if (keys == null) {
+      return const AccountFileRestoreResult(error: AccountFileRestoreError.badFile);
+    }
+    try {
+      await CryptoService.instance.restoreIdentity(
+        edPrivB64: keys['edPriv'] as String,
+        edPubB64: keys['edPub'] as String,
+        xPrivB64: keys['xPriv'] as String,
+        xPubB64: keys['xPub'] as String,
+      );
+    } catch (_) {
+      return const AccountFileRestoreResult(error: AccountFileRestoreError.badFile);
+    }
+    final profile = payload['profile'] as Map<String, dynamic>?;
+    final nickname = (profile?['nickname'] as String?)?.trim();
+    if (profile != null && nickname != null && nickname.isNotEmpty) {
+      if (!ProfileService.instance.hasProfile) {
+        await ProfileService.instance.createProfile(
+          publicKeyHex: CryptoService.instance.publicKeyHex,
+          nickname: nickname,
+        );
+      }
+      await ProfileService.instance.updateProfile(
+        nickname: nickname,
+        username: profile['username'] as String?,
+        avatarColor: (profile['avatarColor'] as num?)?.toInt(),
+        avatarEmoji: profile['avatarEmoji'] as String?,
+        tags: (profile['tags'] as List?)?.map((e) => e.toString()).toList(),
+        statusEmoji: profile['statusEmoji'] as String?,
+      );
+    }
+    final items = payload['items'] as Map<String, dynamic>?;
+    if (items != null) {
+      for (final entry in items.entries) {
+        final list = entry.value;
+        if (list is! List) continue;
+        for (final item in list) {
+          if (item is! Map) continue;
+          await _applyReceivedItem(entry.key, jsonEncode(item));
+        }
+      }
+    }
+    // Best-effort, advisory only — never blocks the restore on network
+    // trouble (the identity + local data are already safely applied above).
+    var alreadyUsed = false;
+    String? firstUsedAt;
+    final backupId = payload['backupId'] as String?;
+    if (backupId != null && backupId.isNotEmpty) {
+      try {
+        final ack = await RelayService.instance
+            .reportBackupRedeemed(backupId)
+            .timeout(const Duration(seconds: 12));
+        if (ack['ok'] == true && ack['alreadyUsed'] == true) {
+          alreadyUsed = true;
+          firstUsedAt = ack['firstAt'] as String?;
+        }
+      } catch (_) {}
+    }
+    return AccountFileRestoreResult(
+      alreadyUsedBefore: alreadyUsed,
+      alreadyUsedAt: firstUsedAt,
+    );
+  }
+}
+
+enum AccountFileRestoreError { badFile, wrongPasswordOrCorrupt }
+
+class AccountFileRestoreResult {
+  /// Null on success.
+  final AccountFileRestoreError? error;
+  bool get ok => error == null;
+  /// True if the relay had already seen this exact backupId redeemed before
+  /// (advisory — see the file-format doc comment above `exportAccountToFile`).
+  final bool alreadyUsedBefore;
+  final String? alreadyUsedAt;
+
+  const AccountFileRestoreResult({
+    this.error,
+    this.alreadyUsedBefore = false,
+    this.alreadyUsedAt,
+  });
 }

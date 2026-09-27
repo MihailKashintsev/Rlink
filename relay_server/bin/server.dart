@@ -2516,6 +2516,9 @@ void _handleMessage(_User user, dynamic raw) {
     case 'admin_password_update':
       _handleAdminPasswordUpdate(user, msg);
       break;
+    case 'backup_redeemed':
+      _handleBackupRedeemed(user, msg);
+      break;
     case 'relay_ack':
       _handleRelayAck(user, msg);
       break;
@@ -2530,6 +2533,55 @@ void _handleMessage(_User user, dynamic raw) {
         _broadcastPresence(user.publicKey, !reqAway);
       }
       break;
+  }
+}
+
+/// Advisory-only tracking for the file-based account backup: which backupId
+/// was ever redeemed (imported), and when. This can NEVER be a hard security
+/// boundary — a copied file's key material has full account power the moment
+/// it's decrypted locally, regardless of anything the server remembers — it
+/// only lets the app tell the person "this backup was already opened before,
+/// at <time>", which is either them remembering their own earlier restore or
+/// a sign someone else got hold of the file. In-memory only (resets on a
+/// relay restart) — losing this occasionally is an acceptable trade for a
+/// feature that is a hint, not a guarantee.
+final Map<String, Map<String, String>> _redeemedBackups = {};
+const _maxRedeemedBackupsTracked = 20000;
+
+void _handleBackupRedeemed(_User user, Map<String, dynamic> msg) {
+  final reqId = _jsonString(msg['reqId']).trim();
+  void ack(Map<String, dynamic> body) {
+    try {
+      user.ws.sink.add(jsonEncode({
+        'type': 'backup_redeemed_ack',
+        if (reqId.isNotEmpty) 'reqId': reqId,
+        ...body,
+      }));
+    } catch (_) {}
+  }
+  final backupId = _jsonString(msg['backupId']).trim();
+  if (backupId.isEmpty || backupId.length > 100) {
+    ack({'ok': false, 'error': 'bad_backup_id'});
+    return;
+  }
+  // Only a connection that proved possession of the (restored) identity's
+  // private key gets to report/query this — otherwise anyone could probe
+  // arbitrary backupId guesses for free.
+  if (!user.verified) {
+    ack({'ok': false, 'error': 'unverified'});
+    return;
+  }
+  final existing = _redeemedBackups[backupId];
+  if (existing == null) {
+    _redeemedBackups[backupId] = {
+      'at': DateTime.now().toIso8601String(),
+    };
+    if (_redeemedBackups.length > _maxRedeemedBackupsTracked) {
+      _redeemedBackups.remove(_redeemedBackups.keys.first);
+    }
+    ack({'ok': true, 'alreadyUsed': false});
+  } else {
+    ack({'ok': true, 'alreadyUsed': true, 'firstAt': existing['at']});
   }
 }
 

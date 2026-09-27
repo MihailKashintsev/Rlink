@@ -6,15 +6,25 @@ import 'package:archive/archive.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:flutter/foundation.dart';
 import 'package:rlink/models/bot_blueprint.dart';
 import 'package:rlink/services/bot_code_generator.dart';
+import 'package:rlink/services/crypto_service.dart';
 import 'package:rlink/services/double_ratchet.dart';
 import 'package:rlink/services/image_service.dart';
 import 'package:rlink/utils/bounded_gzip.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Regression tests for the 2026-09 red-team findings that are pure logic
 /// (each one reproduced the attack before the fix).
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
+  // CryptoService picks a storage backend by platform; force desktop so it
+  // takes the SharedPreferences path instead of needing a real secure-storage
+  // plugin (see test/signed_actions_test.dart for the same setup).
+  debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+
   group('received file names can never leave their folder', () {
     const dir = '/Users/victim/Documents/files';
     for (final attack in [
@@ -121,5 +131,66 @@ void main() {
           lessThanOrEqualTo(DoubleRatchet.maxTotalSkippedKeys));
     }
     expect(victim.skippedKeyCount, DoubleRatchet.maxTotalSkippedKeys);
+  });
+
+  group('account backup file encryption (same primitives as AccountTransferService)',
+      () {
+    // Mirrors exactly what exportAccountToFile/importAccountFromFile do:
+    // Argon2id(password, salt) -> 32-byte key -> ChaCha20-Poly1305 AEAD via
+    // CryptoService.sealSymmetric/openSymmetric. The methods themselves are
+    // instance methods entangled with the whole app's storage services, so
+    // this exercises the actual security-critical primitive directly rather
+    // than standing up that whole stack.
+    Future<Uint8List> deriveKey(String password, Uint8List salt) async {
+      final algo = Argon2id(
+          parallelism: 1, memory: 19456, iterations: 2, hashLength: 32);
+      final key =
+          await algo.deriveKey(secretKey: SecretKey(utf8.encode(password)), nonce: salt);
+      return Uint8List.fromList(await key.extractBytes());
+    }
+
+    test('the right password round-trips the plaintext', () async {
+      final salt = Uint8List.fromList(List.generate(16, (i) => i));
+      final key = await deriveKey('correct horse battery staple', salt);
+      final plain = utf8.encode(jsonEncode({'keys': 'super-secret'}));
+      final sealed =
+          await CryptoService.instance.sealSymmetric(Uint8List.fromList(plain), key);
+      final opened = await CryptoService.instance.openSymmetric(sealed, key);
+      expect(opened, isNotNull);
+      expect(utf8.decode(opened!), jsonEncode({'keys': 'super-secret'}));
+    });
+
+    test('a wrong password fails closed instead of returning garbage',
+        () async {
+      final salt = Uint8List.fromList(List.generate(16, (i) => i));
+      final rightKey = await deriveKey('correct horse battery staple', salt);
+      final wrongKey = await deriveKey('a guess', salt);
+      final sealed = await CryptoService.instance
+          .sealSymmetric(Uint8List.fromList(utf8.encode('identity keys')), rightKey);
+      expect(await CryptoService.instance.openSymmetric(sealed, wrongKey), isNull);
+      // Same password, different salt (as a fresh export would use) also fails
+      // — the salt must travel with the file and be used verbatim.
+      final otherSalt = Uint8List.fromList(List.generate(16, (i) => i + 1));
+      final keyWithOtherSalt =
+          await deriveKey('correct horse battery staple', otherSalt);
+      expect(
+          await CryptoService.instance.openSymmetric(sealed, keyWithOtherSalt),
+          isNull);
+    });
+
+    test('a single flipped byte anywhere in the sealed file is rejected',
+        () async {
+      final salt = Uint8List.fromList(List.generate(16, (i) => i));
+      final key = await deriveKey('correct horse battery staple', salt);
+      final sealed = await CryptoService.instance.sealSymmetric(
+          Uint8List.fromList(utf8.encode('a fairly long identity payload')),
+          key);
+      for (final i in [0, sealed.length ~/ 2, sealed.length - 1]) {
+        final tampered = Uint8List.fromList(sealed);
+        tampered[i] ^= 0xFF;
+        expect(await CryptoService.instance.openSymmetric(tampered, key), isNull,
+            reason: 'flipping byte $i must invalidate the AEAD tag');
+      }
+    });
   });
 }
