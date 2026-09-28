@@ -2838,7 +2838,16 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
     }
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return Theme(
+      // A default SnackBar docks at this Scaffold's own bottom edge and
+      // paints over the post composer below.
+      data: Theme.of(context).copyWith(
+        snackBarTheme: const SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.fromLTRB(12, 0, 12, 132),
+        ),
+      ),
+      child: Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
         title: InkWell(
@@ -3199,6 +3208,7 @@ class _ChannelViewScreenState extends State<ChannelViewScreen>
               mentionCandidates: _contactMentionCandidates,
             ),
         ],
+      ),
       ),
     );
   }
@@ -4269,7 +4279,16 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
     final headerBare =
         _channelPostMediaOnlyVoiceOrSquare(widget.post, missing: postMissing);
 
-    return Scaffold(
+    return Theme(
+      // A default SnackBar docks at this Scaffold's own bottom edge and
+      // paints over the comment composer below.
+      data: Theme.of(context).copyWith(
+        snackBarTheme: const SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.fromLTRB(12, 0, 12, 132),
+        ),
+      ),
+      child: Scaffold(
       appBar: AppBar(
         title: Text(AppL10n.t('chn_discussion')),
       ),
@@ -4504,6 +4523,7 @@ class _PostCommentsScreenState extends State<PostCommentsScreen> {
             mentionCandidates: _contactMentionCandidates,
           ),
         ],
+      ),
       ),
     );
   }

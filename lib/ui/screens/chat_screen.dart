@@ -7414,7 +7414,18 @@ class _ChatScreenState extends State<ChatScreen> {
             });
           }
         },
-        child: Scaffold(
+        child: Theme(
+          // A default SnackBar docks at this Scaffold's own bottom edge and
+          // paints over the composer. Floating + a bottom margin clears its
+          // usual height (row + one preview strip); a much taller composer
+          // state (voice bar stacked on a reply preview) can still brush it.
+          data: Theme.of(context).copyWith(
+            snackBarTheme: const SnackBarThemeData(
+              behavior: SnackBarBehavior.floating,
+              margin: EdgeInsets.fromLTRB(12, 0, 12, 132),
+            ),
+          ),
+          child: Scaffold(
           appBar: _bulkSelectMode
               ? AppBar(
                   leading: IconButton(
@@ -8761,6 +8772,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ]),
             ],
           ),
+        ),
         ),
       ),
     );
