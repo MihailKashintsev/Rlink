@@ -14,6 +14,15 @@
 #   Fix: hide file_picker's Package.swift so Flutter integrates it via CocoaPods
 #   instead; SDWebImage then resolves to a single shared pod (deduped with
 #   flutter_image_compress) and the link succeeds.
+#   * Same story for google_sign_in_ios: its Package.swift pulls GoogleSignIn-iOS
+#     via SPM, which drags in Promises/FBLPromises as an SPM package. Meanwhile
+#     google_maps_flutter_ios/google_mlkit_* pull PromisesObjC via CocoaPods —
+#     two copies of the same symbols, ~88 duplicate-symbol link errors. Same
+#     fix: hide its Package.swift so it integrates via its own CocoaPods podspec
+#     instead. That resolves GoogleSignIn to 8.x, which needs AppCheckCore
+#     ~> 11.0 -> GoogleUtilities ~> 8.0 — bumped mobile_scanner/google_mlkit_*
+#     (pubspec.yaml) to versions that allow GoogleUtilities 8.x so this no
+#     longer conflicts with the MLKit family.
 set -euo pipefail
 
 # Only relevant on macOS hosts (iOS builds).
@@ -24,6 +33,15 @@ PUB_CACHE="${PUB_CACHE:-$PUB_CACHE_DEFAULT}"
 
 # Force file_picker to CocoaPods by hiding its Swift package manifest(s).
 for f in "$PUB_CACHE"/hosted/pub.dev/file_picker-*/ios/file_picker/Package.swift; do
+  if [ -f "$f" ]; then
+    mv "$f" "$f.disabled"
+    echo "[ios_prebuild] hid $f (force CocoaPods integration)"
+  fi
+done
+
+# Force google_sign_in_ios to CocoaPods by hiding its Swift package manifest —
+# dedupes Promises/FBLPromises against the CocoaPods copy other Google plugins pull in.
+for f in "$PUB_CACHE"/hosted/pub.dev/google_sign_in_ios-*/darwin/google_sign_in_ios/Package.swift; do
   if [ -f "$f" ]; then
     mv "$f" "$f.disabled"
     echo "[ios_prebuild] hid $f (force CocoaPods integration)"

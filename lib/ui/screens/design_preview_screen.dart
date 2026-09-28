@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 
@@ -7,6 +8,7 @@ import '../../models/group.dart';
 import '../../models/group_goal.dart';
 import '../../services/chat_storage_service.dart';
 import '../../services/group_service.dart';
+import '../design/rlink_design.dart';
 import '../widgets/forward_target_sheet.dart';
 import '../widgets/goal_message_card.dart';
 import '../widgets/invites_tray.dart';
@@ -371,6 +373,76 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
                   },
                 );
               },
+            ),
+          ),
+          _section(
+            context,
+            title: 'RlinkDesign.frosted() — настоящий iOS Liquid Glass',
+            subtitle: Platform.isIOS
+                ? 'Это уже реальный путь, которым теперь рендерится нижняя '
+                    'навигация и другой "стеклянный" хром — не отдельный '
+                    'спайк. На iOS 26+ RlinkDesign.frosted() сам подставляет '
+                    'нативную UIGlassEffect-вьюху вместо BackdropFilter '
+                    '(на более старых iOS — системный блюр); контент внутри '
+                    'остаётся обычным Flutter-виджетом.'
+                : 'Нативное стекло — только iOS; здесь используется обычный '
+                    'BackdropFilter-фолбэк.',
+            child: SizedBox(
+              height: 260,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  children: [
+                    ListView(
+                      padding: const EdgeInsets.all(12),
+                      children: List.generate(10, (i) {
+                        final hue = (i * 36).toDouble();
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: HSVColor.fromAHSV(1, hue, 0.6, 0.9)
+                                .toColor(),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: Text(
+                            'Контент за стеклом #$i',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    Positioned(
+                      left: 20,
+                      right: 20,
+                      bottom: 16,
+                      child: RlinkDesign.frosted(
+                        context: context,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.25)),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 14),
+                          child: Text(
+                            'RlinkDesign.frosted()',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

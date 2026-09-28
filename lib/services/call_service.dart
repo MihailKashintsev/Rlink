@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 
 import 'block_service.dart';
 import 'call_history_service.dart';
+import 'callkit_service.dart';
 import 'crypto_service.dart';
 import 'gossip_router.dart';
 import 'chat_storage_service.dart';
@@ -74,6 +75,12 @@ class CallService {
   final _uuid = const Uuid();
   final ValueNotifier<CallSessionInfo?> incomingCall = ValueNotifier(null);
   final ValueNotifier<CallPhase> phase = ValueNotifier(CallPhase.idle);
+
+  /// True while [CallScreen] is the visible route for the active call —
+  /// mirrors [GroupCallService.screenOpen]. False while the call keeps
+  /// running but the user minimized it to do something else (e.g. write in
+  /// another chat); [CallReturnPill] uses this to know when to show.
+  final ValueNotifier<bool> screenOpen = ValueNotifier(false);
 
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
@@ -171,6 +178,21 @@ class CallService {
       phase.value == CallPhase.ringing ||
       phase.value == CallPhase.connecting ||
       phase.value == CallPhase.connected;
+
+  /// The call currently in progress (or null when idle) — lets [CallReturnPill]
+  /// reconstruct a [CallSessionInfo] to reopen [CallScreen] after a minimize.
+  CallSessionInfo? get activeSession {
+    final peer = _activePeerId;
+    final callId = _activeCallId;
+    if (!isBusy || peer == null || callId == null) return null;
+    return CallSessionInfo(
+      callId: callId,
+      peerId: peer,
+      incoming: _historyWasIncoming,
+      videoEnabled: _videoEnabled,
+      audioEnabled: true,
+    );
+  }
 
   void _setPhase(CallPhase next) {
     final prev = phase.value;
@@ -495,6 +517,29 @@ class CallService {
 
   void bindSignaling() {
     GossipRouter.instance.onCallSignal = _onSignal;
+    RelayService.instance.presenceVersion.addListener(_onPresenceChanged);
+  }
+
+  /// A force-quit/killed peer never gets to send 'end' — nothing runs on
+  /// their side once the process is gone. ICE eventually notices (12s
+  /// reconnect-grace after RTCPeerConnectionStateDisconnected fires), but
+  /// that can lag well behind the relay itself noticing the peer's socket
+  /// dropped. Ending the call the moment relay presence explicitly reports
+  /// them offline is faster and, unlike ICE, doesn't depend on media-path
+  /// timing at all.
+  void _onPresenceChanged() {
+    final peer = _activePeerId;
+    if (peer == null) return;
+    if (phase.value != CallPhase.ringing &&
+        phase.value != CallPhase.connecting &&
+        phase.value != CallPhase.connected) {
+      return;
+    }
+    if (RelayService.instance.isPeerKnownOffline(peer)) {
+      debugPrint('[RLINK][Call] peer went offline via relay presence — ending');
+      if (phase.value == CallPhase.ringing) _pendingMissedOutcome = true;
+      unawaited(_cleanup(CallPhase.ended));
+    }
   }
 
   Future<CallSessionInfo> startOutgoing({
@@ -520,6 +565,11 @@ class CallService {
     _activeCallId = callId;
     _activePeerId = recipientKey;
     _videoEnabled = video;
+    // NOTE: deliberately NOT reporting outgoing calls to CallKit — doing so
+    // (reportOutgoingCall + the didActivate bridge) caused the caller's own
+    // mic to stop being sent (callee heard silence) while the caller's own
+    // audio still worked fine. The callee-side CallKit path (reportIncomingCall)
+    // is unaffected and stays as-is.
     await SoundEffectsService.instance.stopIncomingRingtone();
     unawaited(SoundEffectsService.instance.startOutgoingCallTone());
     // Show "ringing" while waiting for callee to accept.
@@ -1161,27 +1211,25 @@ class CallService {
         incomingCall.value = info;
         _setPhase(CallPhase.ringing);
         _armIncomingRingingTimeout(fromId, callId);
-        // Only when backgrounded — while the app is open, the dedicated
-        // incoming-call overlay/banner already covers this; also firing the
-        // generic in-app message banner would double up on the same call.
-        if (NotificationService.instance.isInBackground.value) {
-          unawaited(
-            NotificationService.instance.showPersonalMessage(
-              peerId: fromId,
-              title: displayName,
-              body: isVideo ? AppL10n.t('Видеозвонок') : AppL10n.t('Аудиозвонок'),
-            ),
-          );
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+          // Native CallKit is the sole incoming-call surface on iOS — a real
+          // system ring screen + ringtone, never a message-style notification.
+          unawaited(CallKitService.instance.reportIncomingCall(
+            callId: callId,
+            handle: displayName,
+            hasVideo: isVideo,
+          ));
+        } else {
+          // Android: arm show-over-lock-screen first, then the full-screen
+          // notification — order matters if the phone is currently locked.
+          unawaited(_ringLockScreen());
+          unawaited(NotificationService.instance.showIncomingCallNotification(
+            peerId: fromId,
+            title: displayName,
+            isVideo: isVideo,
+          ));
+          unawaited(SoundEffectsService.instance.startIncomingRingtone());
         }
-        // Android: arm show-over-lock-screen first, then the full-screen
-        // notification — order matters if the phone is currently locked.
-        unawaited(_ringLockScreen());
-        unawaited(NotificationService.instance.showIncomingCallNotification(
-          peerId: fromId,
-          title: displayName,
-          isVideo: isVideo,
-        ));
-        unawaited(SoundEffectsService.instance.startIncomingRingtone());
         break;
       case 'offer':
         if (payload['reneg'] == true) {
@@ -1375,6 +1423,9 @@ class CallService {
     await SoundEffectsService.instance.stopOutgoingCallTone();
     unawaited(setSpeakerphone(false));
     final callIdForRecent = _activeCallId;
+    if (callIdForRecent != null) {
+      unawaited(CallKitService.instance.endCall(callIdForRecent));
+    }
     final peerForHistory = _activePeerId;
     final durationSnapshot =
         _callDurationSw != null ? _callDurationSw!.elapsed : Duration.zero;

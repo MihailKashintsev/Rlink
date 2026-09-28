@@ -50,6 +50,12 @@ struct RlinkActivityAttributes: ActivityAttributes {
     ) -> Bool {
         GeneratedPluginRegistrant.register(with: self)
         let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+        if let registrar = self.registrar(forPlugin: "LiquidGlassSpike") {
+            registrar.register(
+                LiquidGlassPlatformViewFactory(messenger: registrar.messenger()),
+                withId: "rlink/liquid_glass_view"
+            )
+        }
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
         // Запрашиваем разрешение на уведомления
         UNUserNotificationCenter.current().delegate = self
@@ -136,6 +142,35 @@ struct RlinkActivityAttributes: ActivityAttributes {
                 } else {
                     result(nil)
                 }
+            }
+        }
+
+        let callKitChannel = FlutterMethodChannel(name: "com.rendergames.rlink/callkit", binaryMessenger: m)
+        CallKitManager.shared.attach(channel: callKitChannel)
+        callKitChannel.setMethodCallHandler { call, result in
+            let args = call.arguments as? [String: Any] ?? [:]
+            switch call.method {
+            case "reportIncomingCall":
+                let callId = args["callId"] as? String ?? ""
+                let handle = args["handle"] as? String ?? "Rlink"
+                let hasVideo = args["hasVideo"] as? Bool ?? false
+                CallKitManager.shared.reportIncomingCall(callId: callId, handle: handle, hasVideo: hasVideo)
+                result(nil)
+            case "endCall":
+                let callId = args["callId"] as? String ?? ""
+                CallKitManager.shared.endCall(callId: callId)
+                result(nil)
+            case "reportOutgoingCall":
+                let callId = args["callId"] as? String ?? ""
+                let handle = args["handle"] as? String ?? "Rlink"
+                CallKitManager.shared.reportOutgoingCall(callId: callId, handle: handle)
+                result(nil)
+            case "reportOutgoingCallConnected":
+                let callId = args["callId"] as? String ?? ""
+                CallKitManager.shared.reportOutgoingCallConnected(callId: callId)
+                result(nil)
+            default:
+                result(FlutterMethodNotImplemented)
             }
         }
 

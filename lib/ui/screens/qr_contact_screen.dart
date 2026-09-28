@@ -491,7 +491,7 @@ class _QrScanScreenState extends State<QrScanScreen>
           MobileScanner(
             controller: _controller,
             onDetect: _onDetect,
-            errorBuilder: (context, error, child) => _CameraError(error),
+            errorBuilder: (context, error) => _CameraError(error),
           ),
           // Dim surround + clear window + animated frame.
           IgnorePointer(

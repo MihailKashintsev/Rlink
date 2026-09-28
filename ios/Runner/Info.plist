@@ -141,6 +141,7 @@
 		<string>audio</string>
 		<string>bluetooth-central</string>
 		<string>bluetooth-peripheral</string>
+		<string>voip</string>
 	</array>
 </dict>
 </plist>

@@ -14,6 +14,8 @@
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		7884E8692EC3CD0000C636F2 /* VideoCropPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E86A2EC3CD0000C636F2 /* VideoCropPlugin.swift */; };
+		188DA0C5D238448294ED7E00 /* LiquidGlassPlatformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 585C77E812309B1A7FA7EA93 /* LiquidGlassPlatformView.swift */; };
+		8AA1F7294569DEB0C7E68C7F /* CallKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CBE3CCAED5C08930A9918B0 /* CallKitManager.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		82611972F15B527AF8605C14 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F666D519213C6783EB3395CD /* Pods_RunnerTests.framework */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
@@ -58,6 +60,8 @@
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		7884E86A2EC3CD0000C636F2 /* VideoCropPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCropPlugin.swift; sourceTree = "<group>"; };
+		585C77E812309B1A7FA7EA93 /* LiquidGlassPlatformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassPlatformView.swift; sourceTree = "<group>"; };
+		6CBE3CCAED5C08930A9918B0 /* CallKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallKitManager.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
@@ -156,6 +160,8 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				7884E86A2EC3CD0000C636F2 /* VideoCropPlugin.swift */,
+				585C77E812309B1A7FA7EA93 /* LiquidGlassPlatformView.swift */,
+				6CBE3CCAED5C08930A9918B0 /* CallKitManager.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -414,6 +420,8 @@
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				7884E8692EC3CD0000C636F2 /* VideoCropPlugin.swift in Sources */,
+				188DA0C5D238448294ED7E00 /* LiquidGlassPlatformView.swift in Sources */,
+				8AA1F7294569DEB0C7E68C7F /* CallKitManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

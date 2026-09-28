@@ -83,6 +83,7 @@ class _CallScreenState extends State<CallScreen>
   @override
   void initState() {
     super.initState();
+    CallService.instance.screenOpen.value = true;
     _fxListener = _onFxSignal;
     CallService.instance.fxSignal.addListener(_fxListener!);
     _init();
@@ -110,7 +111,12 @@ class _CallScreenState extends State<CallScreen>
     if (!mounted) return;
 
     try {
-      if (widget.session.incoming) {
+      // Only accept if genuinely still ringing — reopening after a minimize
+      // (call already connecting/connected) must not re-run accept, which
+      // would resend the 'accept' signal and regress the phase back to
+      // connecting mid-conversation.
+      if (widget.session.incoming &&
+          CallService.instance.phase.value == CallPhase.ringing) {
         await CallService.instance.acceptIncoming(widget.session);
         if (!mounted) return;
       }
@@ -327,6 +333,7 @@ class _CallScreenState extends State<CallScreen>
 
   @override
   void dispose() {
+    CallService.instance.screenOpen.value = false;
     if (_phaseListener != null) {
       CallService.instance.phase.removeListener(_phaseListener!);
       _phaseListener = null;
@@ -363,6 +370,24 @@ class _CallScreenState extends State<CallScreen>
     _localRenderer.dispose();
     _remoteRenderer.dispose();
     super.dispose();
+  }
+
+  /// Pops the route without ending the call — [CallService] keeps running,
+  /// [CallReturnPill] picks up showing the "back to call" pill.
+  Widget _minimizeButton() {
+    return Positioned(
+      top: 6,
+      left: 4,
+      child: SafeArea(
+        bottom: false,
+        child: IconButton(
+          icon: const Icon(Icons.keyboard_arrow_down,
+              color: Colors.white, size: 30),
+          tooltip: AppL10n.t('Свернуть'),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+    );
   }
 
   void _screenShareFailedSnack() {
@@ -409,6 +434,7 @@ class _CallScreenState extends State<CallScreen>
                 ),
               ),
               Positioned.fill(child: _ambientBackground()),
+              _minimizeButton(),
               SafeArea(
                 child: Column(
                   children: [
@@ -812,6 +838,7 @@ class _CallScreenState extends State<CallScreen>
                 child: surface(mainRenderer, mirror: !mainRemote),
               ),
             ),
+            _minimizeButton(),
             // Self/other preview — tap to swap which feed is fullscreen, drag to
             // move it to another corner.
             _CallThumbnail(

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:audio_session/audio_session.dart';
+import 'package:audioplayers/audioplayers.dart' hide AVAudioSessionCategory;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -46,6 +48,7 @@ import 'services/chat_inbox_service.dart';
 import 'services/channel_service.dart';
 import 'services/channel_backup_service.dart';
 import 'services/call_service.dart';
+import 'services/callkit_service.dart';
 import 'services/group_call_service.dart';
 import 'services/channel_directory_relay.dart';
 import 'services/ether_service.dart';
@@ -110,6 +113,7 @@ import 'ui/screens/onboarding_screen.dart';
 import 'ui/widgets/incoming_call_fullscreen_banner.dart';
 import 'ui/screens/group_call_screen.dart';
 import 'ui/widgets/group_call_banner.dart';
+import 'ui/widgets/call_return_pill.dart';
 
 final incomingMessageController = StreamController<IncomingMessage>.broadcast();
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -212,6 +216,9 @@ void _bindIncomingCallOverlay() {
   void tryShow() {
     final session = CallService.instance.incomingCall.value;
     if (session == null || _incomingCallOverlayOpen) return;
+    // iOS: native CallKit is the sole ring/accept/decline surface (real
+    // system call screen + ringtone) — our own banner would double up.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) return;
     // Web: only surface the banner while the tab is genuinely foregrounded —
     // a call arriving while hidden/backgrounded is covered by the OS/browser
     // notification path instead (NotificationService), not by popping this
@@ -228,6 +235,32 @@ void _bindIncomingCallOverlay() {
 
   CallService.instance.incomingCall.addListener(tryShow);
   NotificationService.instance.isInBackground.addListener(tryShow);
+}
+
+/// Wires native CallKit's Answer/Decline actions (iOS) to the same accept/
+/// reject logic used by the Android call notification's own buttons.
+void _bindCallKitActions() {
+  CallKitService.instance.init();
+  // Swift's UUID.uuidString always serializes upper-case, while Dart's uuid
+  // package generates lower-case — compare case-insensitively or every
+  // round-tripped callId "mismatches" and Accept/Decline silently no-ops.
+  CallKitService.instance.onAnswered = (callId) {
+    final session = CallService.instance.incomingCall.value;
+    if (session == null ||
+        session.callId.toLowerCase() != callId.toLowerCase()) {
+      return;
+    }
+    unawaited(_acceptCallFromNotification(session));
+  };
+  CallKitService.instance.onEnded = (callId) {
+    final incoming = CallService.instance.incomingCall.value;
+    if (incoming != null &&
+        incoming.callId.toLowerCase() == callId.toLowerCase()) {
+      unawaited(CallService.instance.rejectIncoming(incoming));
+    } else if (CallService.instance.phase.value != CallPhase.idle) {
+      unawaited(CallService.instance.endCall());
+    }
+  };
 }
 
 bool _groupCallInviteDialogOpen = false;
@@ -306,6 +339,27 @@ Future<void> _acceptCallFromNotification(CallSessionInfo session) async {
   } catch (_) {
     return;
   }
+  final nav = navigatorKey.currentState;
+  if (nav == null) return;
+  final peerName = await _peerDisplayName(session.peerId);
+  final contact = await ChatStorageService.instance.getContact(session.peerId);
+  nav.push(MaterialPageRoute(
+    builder: (_) => CallScreen(
+      session: session,
+      peerName: peerName,
+      peerAvatarColor: contact?.avatarColor ?? 0xFF5C6BC0,
+      peerAvatarEmoji: contact?.avatarEmoji ?? '',
+      peerAvatarImagePath: contact?.avatarImagePath,
+    ),
+  ));
+}
+
+/// Reopens [CallScreen] for the call already running in [CallService] after
+/// it was minimized via [CallReturnPill] — does not re-accept/re-negotiate
+/// anything, just rebuilds the UI around the existing session.
+Future<void> _reopenCallScreen() async {
+  final session = CallService.instance.activeSession;
+  if (session == null) return;
   final nav = navigatorKey.currentState;
   if (nav == null) return;
   final peerName = await _peerDisplayName(session.peerId);
@@ -2109,6 +2163,7 @@ Future<void> initServices() async {
     CallService.instance.bindSignaling();
     _bindGroupCallInvites();
     _bindIncomingCallOverlay();
+    _bindCallKitActions();
     NotificationService.instance.onNotificationResponse =
         _handleNotificationResponse;
     InAppNotificationService.instance.onOpen = _openChatFromNotif;
@@ -4974,12 +5029,61 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
   bool _ready = false;
   bool _hasProfile = false;
   DateTime? _backgroundedAt;
+  AudioPlayer? _bgKeepaliveLoop;
+
+  /// iOS has no push entitlement (free Apple ID — paid Developer Program
+  /// required for that), so a merely-backgrounded app gets its network
+  /// frozen within seconds and never sees an incoming call/message. Playing
+  /// an inaudible looping track keeps the process — and thus the relay
+  /// WebSocket — alive via the declared `audio` background mode, the same
+  /// technique VoIP apps used before PushKit existed. Skipped while a call
+  /// is active: WebRTC already owns the audio session then, and fighting it
+  /// for the category would risk the actual call audio.
+  Future<void> _startBgKeepaliveLoop() async {
+    if (!Platform.isIOS || _bgKeepaliveLoop != null) return;
+    if (CallService.instance.phase.value != CallPhase.idle) return;
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration(
+        avAudioSessionCategory: AVAudioSessionCategory.playback,
+        avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.mixWithOthers,
+        avAudioSessionMode: AVAudioSessionMode.defaultMode,
+      ));
+      final player = AudioPlayer(playerId: 'rlink_bg_keepalive');
+      await player.setReleaseMode(ReleaseMode.loop);
+      await player.setVolume(0);
+      await player.play(AssetSource('sounds/silence_loop.wav'));
+      _bgKeepaliveLoop = player;
+    } catch (_) {}
+  }
+
+  Future<void> _stopBgKeepaliveLoop() async {
+    final player = _bgKeepaliveLoop;
+    _bgKeepaliveLoop = null;
+    if (player == null) return;
+    try {
+      await player.stop();
+      await player.dispose();
+    } catch (_) {}
+  }
+
+  /// A call starting while the keepalive loop is running would fight WebRTC
+  /// for the audio session; a call ending while still backgrounded should
+  /// resume it so the connection keeps surviving.
+  void _onCallPhaseChangedForKeepalive() {
+    if (CallService.instance.phase.value != CallPhase.idle) {
+      unawaited(_stopBgKeepaliveLoop());
+    } else if (NotificationService.instance.isInBackground.value) {
+      unawaited(_startBgKeepaliveLoop());
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     AppSettings.instance.addListener(_onSettingsChanged);
+    CallService.instance.phase.addListener(_onCallPhaseChangedForKeepalive);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (RuntimePlatform.isDesktop) {
         await DesktopTrayService.instance.init();
@@ -5015,6 +5119,8 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     AppSettings.instance.removeListener(_onSettingsChanged);
+    CallService.instance.phase.removeListener(_onCallPhaseChangedForKeepalive);
+    unawaited(_stopBgKeepaliveLoop());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -5037,6 +5143,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       if (state != AppLifecycleState.inactive) {
         RelayService.instance.sendPresenceAway(true);
         _backgroundedAt ??= DateTime.now();
+        unawaited(_startBgKeepaliveLoop());
       }
     } else if (state == AppLifecycleState.detached) {
       NotificationService.instance.isInBackground.value = true;
@@ -5046,6 +5153,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
       NotificationService.instance.isInBackground.value = false;
       AppLockService.instance.onResume();
       RelayService.instance.sendPresenceAway(false);
+      unawaited(_stopBgKeepaliveLoop());
       _notifyPeersOnline();
       final backgroundedAt = _backgroundedAt;
       _backgroundedAt = null;
@@ -5157,6 +5265,7 @@ class _RlinkAppState extends State<RlinkApp> with WidgetsBindingObserver {
                       ctx, GroupCallService.instance.roomTitle.value);
                 }
               }),
+              CallReturnPill(onTap: () => unawaited(_reopenCallScreen())),
               ValueListenableBuilder<double?>(
                 valueListenable: AudioQueueMiniPlayerLayout.instance.barTop,
                 builder: (ctx, top, _) {

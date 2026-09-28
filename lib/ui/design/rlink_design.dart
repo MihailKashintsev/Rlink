@@ -1,6 +1,8 @@
+import 'dart:io' show Platform;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show StandardMessageCodec;
 
 import '../../services/app_settings.dart';
 import '../app_palettes.dart';
@@ -114,6 +116,18 @@ class RlinkDesign {
     // роняет FPS на Android. Когда стекло выключено — рисуем ту же панель более
     // плотной заливкой БЕЗ BackdropFilter (визуально почти то же, но дёшево).
     final glass = AppSettings.instance.liquidGlass;
+    // Real iOS 26+ Liquid Glass (falls back to UIBlurEffect on older iOS,
+    // natively) instead of our own BackdropFilter approximation. The native
+    // view is only the material — content stays Flutter, drawn on top, so
+    // localisation/badges/taps all keep working normally.
+    if (glass && Platform.isIOS) {
+      return _nativeGlass(
+        borderRadius: borderRadius,
+        border: border,
+        shadows: shadows,
+        child: child,
+      );
+    }
     final panel = DecoratedBox(
       decoration: BoxDecoration(
         color: cs.surface.withValues(alpha: glass ? fill : (fill + 0.4).clamp(0.0, 1.0)),
@@ -131,6 +145,39 @@ class RlinkDesign {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
         child: panel,
+      ),
+    );
+  }
+
+  static Widget _nativeGlass({
+    required BorderRadius borderRadius,
+    Border? border,
+    List<BoxShadow>? shadows,
+    Widget? child,
+  }) {
+    // The native corner-radius API takes one value — every call site here
+    // uses a uniform radius (pill/circle/rounded-rect), so topLeft stands in.
+    final radius = borderRadius.topLeft.x;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        border: border,
+        boxShadow: shadows,
+      ),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: UiKitView(
+                viewType: 'rlink/liquid_glass_view',
+                creationParams: {'radius': radius},
+                creationParamsCodec: const StandardMessageCodec(),
+              ),
+            ),
+            if (child != null) child,
+          ],
+        ),
       ),
     );
   }
