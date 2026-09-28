@@ -23,6 +23,7 @@ class EmojiPackDetailScreen extends StatefulWidget {
 class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
   EmojiPack? _pack;
   bool _loading = true;
+  final _shareBtnKey = GlobalKey();
 
   @override
   void initState() {
@@ -55,7 +56,11 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
           .showSnackBar(SnackBar(content: Text(AppL10n.t('В наборе нет эмодзи'))));
       return;
     }
-    final picked = await showForwardDmTargetSheet(context);
+    final anchorCtx = _shareBtnKey.currentContext;
+    final picked = await showForwardDmTargetSheet(
+      context,
+      anchorRect: anchorCtx == null ? null : forwardAnchorRectOf(anchorCtx),
+    );
     if (picked == null || !mounted) return;
     await EmojiPackDmService.sendPackToPeer(
       context: context,
@@ -182,6 +187,7 @@ class _EmojiPackDetailScreenState extends State<EmojiPackDetailScreen> {
         title: Text(pack.name),
         actions: [
           IconButton(
+            key: _shareBtnKey,
             icon: const Icon(Icons.ios_share_rounded),
             tooltip: AppL10n.t('Поделиться'),
             onPressed: _sharePack,

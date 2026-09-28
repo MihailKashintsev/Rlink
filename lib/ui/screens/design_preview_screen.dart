@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/forward_target_sheet.dart';
 import '../widgets/spring_menu_button.dart';
 import '../widgets/spring_search_palette.dart';
 import '../widgets/spring_value_text.dart';
@@ -155,6 +156,27 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
                     const SnackBar(content: Text('Удалено (демо)')),
                   );
                 },
+              ),
+            ),
+          ),
+          _section(
+            context,
+            title: 'Пересылка (ForwardDmTargetSheet)',
+            subtitle:
+                'Настоящая функция пересылки — список реальный, но '
+                'единственная строка "Избранное" не исключена, так что '
+                'есть куда переслать. Панель растёт из самой кнопки.',
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Builder(
+                builder: (btnCtx) => FilledButton.tonalIcon(
+                  onPressed: () => showForwardDmTargetSheet(
+                    btnCtx,
+                    anchorRect: forwardAnchorRectOf(btnCtx),
+                  ),
+                  icon: const Icon(Icons.forward_rounded),
+                  label: const Text('Переслать...'),
+                ),
               ),
             ),
           ),

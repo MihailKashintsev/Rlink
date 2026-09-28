@@ -24,6 +24,7 @@ class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
   StickerPack? _pack;
   List<String> _files = [];
   bool _loading = true;
+  final _shareBtnKey = GlobalKey();
 
   @override
   void initState() {
@@ -52,7 +53,11 @@ class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
   }
 
   Future<void> _sharePack(BuildContext context, StickerPack pack) async {
-    final picked = await showForwardDmTargetSheet(context);
+    final anchorCtx = _shareBtnKey.currentContext;
+    final picked = await showForwardDmTargetSheet(
+      context,
+      anchorRect: anchorCtx == null ? null : forwardAnchorRectOf(anchorCtx),
+    );
     if (picked == null || !context.mounted) return;
     await StickerPackDmService.sendPackToPeer(
       context: context,
@@ -108,6 +113,7 @@ class _StickerPackDetailScreenState extends State<StickerPackDetailScreen> {
         title: Text(pack.title),
         actions: [
           IconButton(
+            key: _shareBtnKey,
             icon: const Icon(Icons.share_outlined),
             tooltip: AppL10n.t('Поделиться паком'),
             onPressed: () => unawaited(_sharePack(context, pack)),
