@@ -43,6 +43,8 @@ import '../widgets/animated_transitions.dart';
 import '../widgets/mesh_radar_widget.dart';
 import '../widgets/birthday_banner.dart';
 import '../widgets/premium_suggestion_banner.dart';
+import '../widgets/spring_menu_button.dart';
+import '../widgets/spring_value_text.dart';
 import '../../services/premium_service.dart';
 import '../widgets/nav_glyph.dart';
 import '../widgets/premium_gate.dart';
@@ -596,54 +598,30 @@ class _ChatListScreenState extends State<ChatListScreen>
             : null,
         actions: [
           if (_currentTab == 0 && !_searchActive && !childLinked)
-            PopupMenuButton<String>(
+            SpringMenuButton(
               tooltip: AppL10n.t('main_menu_tooltip'),
-              onSelected: (v) {
-                if (v == 'channel') _createChannel();
-                if (v == 'group') _createGroup();
-                if (v == 'bots') _openBotsCatalog();
-                if (v == 'addons') {
-                  Navigator.push(
-                      context, rlinkOpaquePushRoute(const AddonsScreen()));
-                }
-              },
-              itemBuilder: (ctx) => [
-                PopupMenuItem(
-                  value: 'bots',
-                  child: Row(children: [
-                    Icon(Icons.smart_toy_outlined,
-                        size: 20, color: Theme.of(ctx).colorScheme.primary),
-                    const SizedBox(width: 10),
-                    Text(AppL10n.t('Боты')),
-                  ]),
+              actions: [
+                SpringMenuAction(
+                  icon: Icons.smart_toy_outlined,
+                  label: AppL10n.t('Боты'),
+                  onTap: _openBotsCatalog,
                 ),
-                PopupMenuItem(
-                  value: 'addons',
-                  child: Row(children: [
-                    Icon(Icons.extension_outlined,
-                        size: 20, color: Theme.of(ctx).colorScheme.primary),
-                    const SizedBox(width: 10),
-                    Text(AppL10n.t('Дополнения')),
-                  ]),
+                SpringMenuAction(
+                  icon: Icons.extension_outlined,
+                  label: AppL10n.t('Дополнения'),
+                  onTap: () => Navigator.push(
+                      context, rlinkOpaquePushRoute(const AddonsScreen())),
                 ),
                 if (channelsEnabled)
-                  PopupMenuItem(
-                    value: 'channel',
-                    child: Row(children: [
-                      Icon(Icons.campaign_outlined,
-                          size: 20, color: Theme.of(ctx).colorScheme.primary),
-                      const SizedBox(width: 10),
-                      Text(AppL10n.t('cm_new_channel')),
-                    ]),
+                  SpringMenuAction(
+                    icon: Icons.campaign_outlined,
+                    label: AppL10n.t('cm_new_channel'),
+                    onTap: _createChannel,
                   ),
-                PopupMenuItem(
-                  value: 'group',
-                  child: Row(children: [
-                    Icon(Icons.group_add_outlined,
-                        size: 20, color: Theme.of(ctx).colorScheme.primary),
-                    const SizedBox(width: 10),
-                    Text(AppL10n.t('cm_new_group')),
-                  ]),
+                SpringMenuAction(
+                  icon: Icons.group_add_outlined,
+                  label: AppL10n.t('cm_new_group'),
+                  onTap: _createGroup,
                 ),
               ],
             ),
@@ -2866,8 +2844,8 @@ class _TelegramChatRow extends StatelessWidget {
                               color: cs.primary,
                               borderRadius: BorderRadius.circular(11),
                             ),
-                            child: Text(
-                              item.unreadCount > 99
+                            child: SpringValueText(
+                              value: item.unreadCount > 99
                                   ? '99+'
                                   : '${item.unreadCount}',
                               style: TextStyle(

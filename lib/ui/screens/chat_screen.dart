@@ -7422,7 +7422,7 @@ class _ChatScreenState extends State<ChatScreen> {
           data: Theme.of(context).copyWith(
             snackBarTheme: const SnackBarThemeData(
               behavior: SnackBarBehavior.floating,
-              margin: EdgeInsets.fromLTRB(12, 0, 12, 132),
+              insetPadding: EdgeInsets.fromLTRB(12, 0, 12, 132),
             ),
           ),
           child: Scaffold(
