@@ -13,11 +13,18 @@ class SpringValueText extends StatelessWidget {
   final TextStyle? style;
   final Duration duration;
 
+  /// Fraction of the transition (0-1) each successive character's own start
+  /// is pushed back by, via an [Interval] curve — 0 swaps every character
+  /// at once (a counter), >0 gives a typewriter-like cascade (a full label
+  /// swap), matching the two `AnimatedText`-style uses in skiper-ui.
+  final double staggerStep;
+
   const SpringValueText({
     super.key,
     required this.value,
     this.style,
     this.duration = const Duration(milliseconds: 260),
+    this.staggerStep = 0,
   });
 
   static const _easeOut = Cubic(0.23, 1, 0.32, 1);
@@ -30,8 +37,14 @@ class SpringValueText extends StatelessWidget {
         for (var i = 0; i < value.length; i++)
           AnimatedSwitcher(
             duration: duration,
-            switchInCurve: _easeOut,
-            switchOutCurve: _easeOut,
+            switchInCurve: staggerStep <= 0
+                ? _easeOut
+                : Interval((i * staggerStep).clamp(0.0, 0.9), 1.0,
+                    curve: _easeOut),
+            switchOutCurve: staggerStep <= 0
+                ? _easeOut
+                : Interval((i * staggerStep).clamp(0.0, 0.9), 1.0,
+                    curve: _easeOut),
             transitionBuilder: (child, anim) => FadeTransition(
               opacity: anim,
               child: AnimatedBuilder(

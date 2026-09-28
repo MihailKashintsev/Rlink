@@ -66,6 +66,7 @@ import 'image_editor_screen.dart';
 import '../widgets/forward_target_sheet.dart';
 import '../widgets/media_gallery_send_sheet.dart';
 import '../widgets/chat_emoji_insert_sheet.dart';
+import '../widgets/timed_undo_button.dart';
 import 'square_video_recorder_screen.dart';
 import 'text_selection_view_screen.dart';
 
@@ -2239,10 +2240,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: Text(AppL10n.t('common_cancel'))),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(AppL10n.t('Покинуть')),
+          TimedUndoButton(
+            actionLabel: AppL10n.t('Покинуть'),
+            undoLabel: AppL10n.t('common_cancel'),
+            seconds: 3,
+            onConfirmed: () => Navigator.pop(ctx, true),
           ),
         ],
       ),

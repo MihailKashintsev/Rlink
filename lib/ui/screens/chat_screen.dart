@@ -128,6 +128,7 @@ import '../widgets/dm_video_fullscreen_page.dart';
 import '../widgets/hold_square_video_review_screen.dart';
 import '../widgets/square_video_recording_widgets.dart';
 import '../widgets/forward_target_sheet.dart';
+import '../widgets/timed_undo_button.dart';
 import '../widgets/sticker_pack_card_bubble.dart';
 import '../widgets/emoji_pack_card_bubble.dart';
 import '../widgets/chat_emoji_insert_sheet.dart';
@@ -5867,9 +5868,11 @@ class _ChatScreenState extends State<ChatScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(AppL10n.t('common_cancel')),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppL10n.t('common_delete')),
+          TimedUndoButton(
+            actionLabel: AppL10n.t('common_delete'),
+            undoLabel: AppL10n.t('common_cancel'),
+            seconds: 3,
+            onConfirmed: () => Navigator.pop(ctx, true),
           ),
         ],
       ),
@@ -6058,9 +6061,11 @@ class _ChatScreenState extends State<ChatScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(AppL10n.t('common_cancel')),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppL10n.t('common_delete')),
+          TimedUndoButton(
+            actionLabel: AppL10n.t('common_delete'),
+            undoLabel: AppL10n.t('common_cancel'),
+            seconds: 3,
+            onConfirmed: () => Navigator.pop(ctx, true),
           ),
         ],
       ),
@@ -7893,10 +7898,12 @@ class _ChatScreenState extends State<ChatScreen> {
                                       onPressed: () =>
                                           Navigator.pop(ctx, false),
                                       child: Text(AppL10n.t('common_cancel'))),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: Text(AppL10n.t('common_delete'),
-                                        style: TextStyle(color: Colors.red)),
+                                  TimedUndoButton(
+                                    actionLabel: AppL10n.t('common_delete'),
+                                    undoLabel: AppL10n.t('common_cancel'),
+                                    seconds: 4,
+                                    onConfirmed: () =>
+                                        Navigator.pop(ctx, true),
                                   ),
                                 ],
                               ),

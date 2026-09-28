@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../widgets/spring_menu_button.dart';
 import '../widgets/spring_search_palette.dart';
 import '../widgets/spring_value_text.dart';
+import '../widgets/timed_undo_button.dart';
 
 /// Debug-only gallery for the skiper-ui-inspired components being built up
 /// this batch — lets them be checked with fake data instead of needing real
@@ -132,6 +133,26 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
                           title: Text(n),
                         ),
                     ],
+                  );
+                },
+              ),
+            ),
+          ),
+          _section(
+            context,
+            title: 'Кнопка-с-таймером (TimedUndoButton)',
+            subtitle:
+                'На удалении сообщения/чата/канала и выходе из группы — тап '
+                'вооружает обратный отсчёт, повторный тап отменяет его.',
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TimedUndoButton(
+                actionLabel: 'Удалить',
+                undoLabel: 'Отмена',
+                seconds: 4,
+                onConfirmed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Удалено (демо)')),
                   );
                 },
               ),

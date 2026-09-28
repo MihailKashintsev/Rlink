@@ -12,6 +12,7 @@ import '../../services/crypto_service.dart';
 import '../../services/google_drive_channel_backup.dart';
 import '../../services/gossip_router.dart';
 import '../widgets/channel_staff_links_sheet.dart';
+import '../widgets/timed_undo_button.dart';
 import 'channel_profile_edit_dialog.dart';
 
 /// Настройки канала для владельца (пункты бывшего меню «⋯» в ленте).
@@ -148,10 +149,11 @@ class _ChannelAdminSettingsScreenState
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: Text(AppL10n.t('common_cancel'))),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(AppL10n.t('common_delete')),
+          TimedUndoButton(
+            actionLabel: AppL10n.t('common_delete'),
+            undoLabel: AppL10n.t('common_cancel'),
+            seconds: 4,
+            onConfirmed: () => Navigator.pop(ctx, true),
           ),
         ],
       ),
