@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../models/contact.dart';
+import '../../services/chat_storage_service.dart';
 import '../../services/group_service.dart';
 import '../widgets/forward_target_sheet.dart';
 import '../widgets/invites_tray.dart';
+import '../widgets/markdown_editing_controller.dart';
 import '../widgets/spring_menu_button.dart';
 import '../widgets/spring_search_palette.dart';
 import '../widgets/spring_value_text.dart';
@@ -20,14 +23,38 @@ class DesignPreviewScreen extends StatefulWidget {
   State<DesignPreviewScreen> createState() => _DesignPreviewScreenState();
 }
 
+const _demoMentionId =
+    'ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12';
+
 class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
   int _counter = 3;
   bool _searchOpen = false;
   final _searchController = TextEditingController();
+  late final _mentionDemoController =
+      MarkdownEditingController(text: 'Привет, &$_demoMentionId как дела?');
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = ChatStorageService.instance.contactsNotifier.value;
+    if (!existing.any((c) => c.publicKeyHex == _demoMentionId)) {
+      ChatStorageService.instance.contactsNotifier.value = [
+        ...existing,
+        Contact(
+          publicKeyHex: _demoMentionId,
+          nickname: 'Алиса',
+          avatarColor: 0xFF8E24AA,
+          avatarEmoji: '',
+          addedAt: DateTime.now(),
+        ),
+      ];
+    }
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _mentionDemoController.dispose();
     super.dispose();
   }
 
@@ -209,6 +236,20 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
                 const SizedBox(height: 10),
                 const InvitesTray(),
               ],
+            ),
+          ),
+          _section(
+            context,
+            title: 'Упоминания в поле ввода (MarkdownEditingController)',
+            subtitle:
+                'Поле уже содержит "&<id>" — реальный токен из @-пикера. '
+                'Известный контакт показывается как "@Алиса"; наберите '
+                '"&что-то-ещё" вручную, чтобы увидеть нераспознанный вид '
+                '(просто "@").',
+            child: TextField(
+              controller: _mentionDemoController,
+              maxLines: 2,
+              decoration: const InputDecoration(border: OutlineInputBorder()),
             ),
           ),
         ],
