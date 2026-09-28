@@ -86,11 +86,30 @@ class SpringSearchPaletteState extends State<SpringSearchPalette>
     super.dispose();
   }
 
+  /// The focus node's own `.context` resolves to the `Focus` widget's
+  /// element, not `EditableText` itself — checking its exact type is always
+  /// false, so the "F" hotkey guard below never actually caught anything.
+  /// Walk up from there instead.
+  bool _isEditingText() {
+    final focusCtx = FocusManager.instance.primaryFocus?.context;
+    if (focusCtx == null) return false;
+    if (focusCtx.widget is EditableText) return true;
+    var found = false;
+    focusCtx.visitAncestorElements((el) {
+      if (el.widget is EditableText) {
+        found = true;
+        return false;
+      }
+      return true;
+    });
+    return found;
+  }
+
   bool _handleKey(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
-    if (!widget.open && event.logicalKey == LogicalKeyboardKey.keyF) {
-      final focusCtx = FocusManager.instance.primaryFocus?.context;
-      if (focusCtx != null && focusCtx.widget is EditableText) return false;
+    if (!widget.open &&
+        event.logicalKey == LogicalKeyboardKey.keyF &&
+        !_isEditingText()) {
       widget.onToggle();
       return true;
     }

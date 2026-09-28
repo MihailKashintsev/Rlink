@@ -45,6 +45,7 @@ import '../widgets/mesh_radar_widget.dart';
 import '../widgets/birthday_banner.dart';
 import '../widgets/premium_suggestion_banner.dart';
 import '../widgets/spring_menu_button.dart';
+import '../widgets/invites_tray.dart';
 import '../widgets/spring_search_palette.dart';
 import '../widgets/spring_value_text.dart';
 import '../../services/premium_service.dart';
@@ -2364,72 +2365,36 @@ class _UnifiedChatsTabState extends State<_UnifiedChatsTab> {
     return ValueListenableBuilder<Map<String, Map<String, dynamic>>>(
       valueListenable: BleService.instance.incomingPairRequests,
       builder: (_, pairRequests, __) {
-        return ValueListenableBuilder<List<ChannelInvite>>(
-          valueListenable: ChannelService.instance.pendingChannelInvites,
-          builder: (_, channelInvites, __) {
-            return ValueListenableBuilder<List<GroupInvite>>(
-              valueListenable: GroupService.instance.pendingInvites,
-              builder: (_, groupInvites, __) {
-                final hasAnything = pairRequests.isNotEmpty ||
-                    channelInvites.isNotEmpty ||
-                    groupInvites.isNotEmpty;
-                if (!hasAnything) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
-                  child: Column(
-                    children: [
-                      for (final e in pairRequests.entries)
-                        _buildPendingBannerTile(
-                          context,
-                          icon: Icons.person_add_alt_1_rounded,
-                          iconColor: Theme.of(context).colorScheme.primary,
-                          title:
-                              (e.value['nick'] as String?)?.trim().isNotEmpty ==
-                                      true
-                                  ? AppL10n.f('{0} хочет обменяться профилем',
-                                      [e.value['nick']])
-                                  : AppL10n.t('Новый запрос на обмен профилем'),
-                          subtitle: AppL10n.t('Нажмите, чтобы открыть запрос'),
-                          onTap: () => showPairRequestScreen(
-                            context,
-                            e.key,
-                            e.value,
-                          ),
-                        ),
-                      for (final inv in channelInvites)
-                        _buildPendingBannerTile(
-                          context,
-                          icon: Icons.campaign_outlined,
-                          iconColor: const Color(0xFF42A5F5),
-                          title: AppL10n.f(
-                              'Приглашение в канал: {0}', [inv.channelName]),
-                          subtitle: AppL10n.f(
-                              '{0} приглашает вас', [inv.inviterNick]),
-                          onTap: () => Navigator.push(
-                            context,
-                            rlinkPushRoute(const ChannelsScreen()),
-                          ),
-                        ),
-                      for (final inv in groupInvites)
-                        _buildPendingBannerTile(
-                          context,
-                          icon: Icons.group_outlined,
-                          iconColor: const Color(0xFF5C6BC0),
-                          title: AppL10n.f(
-                              'Приглашение в группу: {0}', [inv.groupName]),
-                          subtitle: AppL10n.f(
-                              '{0} приглашает вас', [inv.inviterNick]),
-                          onTap: () => Navigator.push(
-                            context,
-                            rlinkPushRoute(const GroupsScreen()),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
+        if (pairRequests.isEmpty) return const InvitesTray();
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
+              child: Column(
+                children: [
+                  for (final e in pairRequests.entries)
+                    _buildPendingBannerTile(
+                      context,
+                      icon: Icons.person_add_alt_1_rounded,
+                      iconColor: Theme.of(context).colorScheme.primary,
+                      title:
+                          (e.value['nick'] as String?)?.trim().isNotEmpty ==
+                                  true
+                              ? AppL10n.f('{0} хочет обменяться профилем',
+                                  [e.value['nick']])
+                              : AppL10n.t('Новый запрос на обмен профилем'),
+                      subtitle: AppL10n.t('Нажмите, чтобы открыть запрос'),
+                      onTap: () => showPairRequestScreen(
+                        context,
+                        e.key,
+                        e.value,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const InvitesTray(),
+          ],
         );
       },
     );

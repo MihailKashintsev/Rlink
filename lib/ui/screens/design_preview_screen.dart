@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../services/group_service.dart';
 import '../widgets/forward_target_sheet.dart';
+import '../widgets/invites_tray.dart';
 import '../widgets/spring_menu_button.dart';
 import '../widgets/spring_search_palette.dart';
 import '../widgets/spring_value_text.dart';
@@ -178,6 +180,35 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
                   label: const Text('Переслать...'),
                 ),
               ),
+            ),
+          ),
+          _section(
+            context,
+            title: 'Приглашения (InvitesTray)',
+            subtitle:
+                'Реальный виджет — жмите "Добавить тестовое", появится '
+                'сворачиваемый блок ниже.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FilledButton.tonal(
+                  onPressed: () {
+                    final n = GroupService.instance.pendingInvites.value.length;
+                    GroupService.instance.addInvite(GroupInvite(
+                      groupId: 'demo-group-$n',
+                      groupName: 'Тестовая группа $n',
+                      inviterId: 'demo-inviter',
+                      inviterNick: 'Другдругов',
+                      creatorId: 'demo-inviter',
+                      memberIds: const ['demo-inviter'],
+                      createdAt: DateTime.now().millisecondsSinceEpoch,
+                    ));
+                  },
+                  child: const Text('Добавить тестовое приглашение'),
+                ),
+                const SizedBox(height: 10),
+                const InvitesTray(),
+              ],
             ),
           ),
         ],
