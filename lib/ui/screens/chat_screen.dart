@@ -10287,7 +10287,7 @@ class _ReactionsWidget extends StatelessWidget {
 
 // ── Геолокация ───────────────────────────────────────────────────
 
-class _LocationChip extends StatelessWidget {
+class _LocationChip extends StatefulWidget {
   final double lat;
   final double lng;
   final bool isOut;
@@ -10299,40 +10299,66 @@ class _LocationChip extends StatelessWidget {
   });
 
   @override
+  State<_LocationChip> createState() => _LocationChipState();
+}
+
+class _LocationChipState extends State<_LocationChip> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final lat = widget.lat;
+    final lng = widget.lng;
+    final isOut = widget.isOut;
     final cs = Theme.of(context).colorScheme;
     final incomingColor = cs.primary;
     return Padding(
       padding: const EdgeInsets.only(top: 6),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              unawaited(
-                showLocationActionsSheet(
-                  context,
-                  latitude: lat,
-                  longitude: lng,
-                ),
-              );
-            },
-            child: SizedBox(
-              width: 220,
-              height: 124,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    'https://static-maps.yandex.ru/1.x/?lang=ru_RU&ll=$lng,$lat&z=14&size=440,248&l=map&pt=$lng,$lat,pm2rdm',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: isOut
-                          ? Colors.black.withValues(alpha: 0.2)
-                          : Colors.white.withValues(alpha: 0.08),
-                    ),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTapDown: (_) => setState(() => _pressed = true),
+              onTapCancel: () => setState(() => _pressed = false),
+              onTap: () {
+                setState(() => _pressed = false);
+                unawaited(
+                  showLocationActionsSheet(
+                    context,
+                    latitude: lat,
+                    longitude: lng,
                   ),
+                );
+              },
+              child: SizedBox(
+                width: 220,
+                height: 124,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      'https://static-maps.yandex.ru/1.x/?lang=ru_RU&ll=$lng,$lat&z=14&size=440,248&l=map&pt=$lng,$lat,pm2rdm',
+                      fit: BoxFit.cover,
+                      frameBuilder: (ctx, child, frame, wasSyncLoaded) {
+                        if (wasSyncLoaded) return child;
+                        return AnimatedOpacity(
+                          opacity: frame == null ? 0 : 1,
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOut,
+                          child: child,
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => Container(
+                        color: isOut
+                            ? Colors.black.withValues(alpha: 0.2)
+                            : Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -10377,6 +10403,7 @@ class _LocationChip extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }
