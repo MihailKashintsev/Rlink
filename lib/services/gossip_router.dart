@@ -504,6 +504,9 @@ class GossipRouter {
   /// poll_vote: { k: kind, t: targetId, v: voterId, c: [int] }
   void Function(Map<String, dynamic> payload)? onPollVote;
 
+  /// goal_action: { t: targetId, a: actorId, act: 'join'|'leave'|'toggle_item', i?: itemIndex, c?: completed }
+  void Function(Map<String, dynamic> payload)? onGoalAction;
+
   // Universal reaction callback (story / channel_post / channel_comment / group_message)
   // Payload: { kind, targetId, emoji, from }
   void Function(Map<String, dynamic> payload)? onReactionExt;
@@ -2868,6 +2871,10 @@ class GossipRouter {
         onPollVote?.call(packet.payload);
         return;
       }
+      if (packet.type == 'goal_action') {
+        onGoalAction?.call(packet.payload);
+        return;
+      }
 
       // ── Verification packets ───────────────────────────────────
       if (packet.type == 'verify_req') {
@@ -3258,6 +3265,29 @@ class GossipRouter {
     await _forward(packet);
   }
 
+  Future<void> sendGoalAction({
+    required String targetId,
+    required String actorId,
+    required String action, // 'join' | 'leave' | 'toggle_item'
+    int? itemIndex,
+    bool? completed,
+  }) async {
+    final packet = GossipPacket(
+      id: const Uuid().v4(),
+      type: 'goal_action',
+      ttl: _kDefaultTtl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      payload: {
+        't': targetId,
+        'a': actorId,
+        'act': action,
+        if (itemIndex != null) 'i': itemIndex,
+        if (completed != null) 'c': completed,
+      },
+    );
+    await _forward(packet);
+  }
+
   Future<void> sendChannelDeletePost({
     required String postId,
     String? channelId,
@@ -3519,6 +3549,7 @@ class GossipRouter {
     bool hasFile = false,
     String? fileName,
     String? pollJson,
+    String? goalJson,
     String? forwardFromId,
     String? forwardFromNick,
     String? topicId,
@@ -3550,6 +3581,7 @@ class GossipRouter {
           if (topicId != null && topicId.isNotEmpty) 'topicId': topicId,
           if (fileName != null && fileName.isNotEmpty) 'fname': fileName,
           if (pollJson != null && pollJson.isNotEmpty) 'pj': pollJson,
+          if (goalJson != null && goalJson.isNotEmpty) 'gj': goalJson,
           if (ffid != null) 'ffid': ffid,
           if (ffn != null) 'ffn': ffn,
         };

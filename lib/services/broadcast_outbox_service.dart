@@ -206,6 +206,7 @@ class BroadcastOutboxService {
     bool hasFile = false,
     String? fileName,
     String? pollJson,
+    String? goalJson,
     String? forwardFromId,
     String? forwardFromNick,
     String? topicId,
@@ -224,6 +225,7 @@ class BroadcastOutboxService {
       if (hasFile) 'hasFile': true,
       if (fileName != null) 'fileName': fileName,
       if (pollJson != null && pollJson.isNotEmpty) 'pollJson': pollJson,
+      if (goalJson != null && goalJson.isNotEmpty) 'goalJson': goalJson,
       if (forwardFromId != null && forwardFromId.isNotEmpty)
         'ffid': forwardFromId,
       if (forwardFromNick != null && forwardFromNick.isNotEmpty)
@@ -258,6 +260,23 @@ class BroadcastOutboxService {
       'targetId': targetId,
       'voterId': voterId,
       'choiceIndices': choiceIndices,
+    });
+    unawaited(_pump());
+  }
+
+  Future<void> enqueueGoalAction({
+    required String targetId,
+    required String actorId,
+    required String action,
+    int? itemIndex,
+    bool? completed,
+  }) async {
+    await _enqueue('goal_action', {
+      'targetId': targetId,
+      'actorId': actorId,
+      'action': action,
+      if (itemIndex != null) 'itemIndex': itemIndex,
+      if (completed != null) 'completed': completed,
     });
     unawaited(_pump());
   }
@@ -409,6 +428,7 @@ class BroadcastOutboxService {
             hasFile: payload['hasFile'] as bool? ?? false,
             fileName: payload['fileName'] as String?,
             pollJson: payload['pollJson'] as String?,
+            goalJson: payload['goalJson'] as String?,
             forwardFromId: payload['ffid'] as String?,
             forwardFromNick: payload['ffn'] as String?,
             topicId: payload['topicId'] as String?,
@@ -422,6 +442,15 @@ class BroadcastOutboxService {
             targetId: payload['targetId'] as String,
             voterId: payload['voterId'] as String,
             choiceIndices: choices,
+          );
+          break;
+        case 'goal_action':
+          await GossipRouter.instance.sendGoalAction(
+            targetId: payload['targetId'] as String,
+            actorId: payload['actorId'] as String,
+            action: payload['action'] as String,
+            itemIndex: (payload['itemIndex'] as num?)?.toInt(),
+            completed: payload['completed'] as bool?,
           );
           break;
         case 'react_ext':

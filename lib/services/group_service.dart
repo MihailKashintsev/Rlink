@@ -9,6 +9,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/group.dart';
+import '../models/group_goal.dart';
 import '../models/group_topic.dart';
 import '../models/message_poll.dart';
 import '../utils/reaction_emoji_key.dart';
@@ -117,7 +118,7 @@ class GroupService {
     final path = await _dbPath('groups.db');
     _db = await openDatabase(
       path,
-      version: 11,
+      version: 12,
       onCreate: (db, v) async {
         await _createPendingInvitesTable(db);
         await db.execute('''
@@ -153,6 +154,7 @@ class GroupService {
             timestamp INTEGER NOT NULL,
             reactions TEXT,
             poll_json TEXT,
+            goal_json TEXT,
             forward_from_id TEXT,
             forward_from_nick TEXT
           )
@@ -170,6 +172,12 @@ class GroupService {
         await _createGroupTopicsTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 12) {
+          try {
+            await db
+                .execute('ALTER TABLE group_messages ADD COLUMN goal_json TEXT');
+          } catch (_) {}
+        }
         if (oldVersion < 11) {
           await _createPendingInvitesTable(db);
         }
@@ -1127,6 +1135,7 @@ class GroupService {
       timestamp: msg.timestamp,
       reactions: updated,
       pollJson: msg.pollJson,
+      goalJson: msg.goalJson,
       forwardFromId: msg.forwardFromId,
       forwardFromNick: msg.forwardFromNick,
     );
@@ -1198,6 +1207,39 @@ class GroupService {
     if (poll == null) return;
     final next = poll.withVote(voterId, choices);
     await updateMessagePollJson(messageId, next.encode());
+  }
+
+  Future<void> updateMessageGoalJson(String messageId, String? goalJson) async {
+    if (_db == null) return;
+    await _db!.update(
+      'group_messages',
+      {'goal_json': goalJson},
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+    _bump();
+  }
+
+  Future<void> mergeIncomingGroupGoal(String messageId, String? incomingGj) async {
+    if (incomingGj == null || incomingGj.isEmpty) return;
+    final inc = GroupGoal.tryDecode(incomingGj);
+    if (inc == null) return;
+    final msg = await getMessage(messageId);
+    if (msg == null) return;
+    final cur = GroupGoal.tryDecode(msg.goalJson);
+    final merged = (cur ?? inc).mergeFrom(inc);
+    await updateMessageGoalJson(messageId, merged.encode());
+  }
+
+  Future<void> applyGoalAction(String messageId, String actorId, String action,
+      {int? itemIndex, bool? completed}) async {
+    final msg = await getMessage(messageId);
+    if (msg == null) return;
+    final goal = GroupGoal.tryDecode(msg.goalJson);
+    if (goal == null) return;
+    final next = goal.applyAction(actorId, action,
+        itemIndex: itemIndex, completed: completed);
+    await updateMessageGoalJson(messageId, next.encode());
   }
 
   Future<GroupMessage?> getLastMessage(String groupId) async {

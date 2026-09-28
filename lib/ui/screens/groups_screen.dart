@@ -16,6 +16,7 @@ import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../models/group.dart';
+import '../../models/group_goal.dart';
 import '../../models/group_topic.dart';
 import '../../models/chat_message.dart';
 import '../../models/contact.dart';
@@ -51,6 +52,7 @@ import '../widgets/profile_photo_actions.dart';
 import '../widgets/reactions.dart';
 import '../widgets/rich_message_text.dart';
 import '../widgets/poll_message_card.dart';
+import '../widgets/goal_message_card.dart';
 import '../widgets/shared_todo_message_card.dart';
 import '../widgets/shared_calendar_message_card.dart';
 import '../widgets/missing_local_media.dart';
@@ -1197,6 +1199,132 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
+  Future<GroupGoal?> _showGoalEditor() async {
+    final titleCtrl = TextEditingController();
+    final itemCtrls = <TextEditingController>[
+      TextEditingController(),
+      TextEditingController(),
+      TextEditingController(),
+    ];
+    DateTime? deadline;
+
+    return showDialog<GroupGoal>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) {
+          return AlertDialog(
+            title: Text(AppL10n.t('Новая цель')),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: InputDecoration(
+                      labelText: AppL10n.t('Название'),
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  for (var i = 0; i < itemCtrls.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: TextField(
+                        controller: itemCtrls[i],
+                        decoration: InputDecoration(
+                          labelText:
+                              AppL10n.f('Пункт {0} (необязательно)', [i + 1]),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(deadline == null
+                        ? AppL10n.t('Без срока')
+                        : '${deadline!.day.toString().padLeft(2, '0')}.${deadline!.month.toString().padLeft(2, '0')}.${deadline!.year}'),
+                    trailing: const Icon(Icons.calendar_today_outlined),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 3650)),
+                      );
+                      if (picked != null) setSt(() => deadline = picked);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(AppL10n.t('common_cancel'))),
+              FilledButton(
+                onPressed: () {
+                  final title = titleCtrl.text.trim();
+                  if (title.isEmpty) return;
+                  final items = itemCtrls
+                      .map((c) => c.text.trim())
+                      .where((s) => s.isNotEmpty)
+                      .map((t) => GoalItem(title: t))
+                      .toList();
+                  Navigator.pop(
+                    ctx,
+                    GroupGoal(
+                      title: title,
+                      deadlineMs: deadline?.millisecondsSinceEpoch ?? 0,
+                      creatorId: _myId,
+                      items: items,
+                      joinedIds: [_myId],
+                    ),
+                  );
+                },
+                child: Text(AppL10n.t('common_send')),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _sendGoal() async {
+    if (_isSending) return;
+    final goal = await _showGoalEditor();
+    if (goal == null || !mounted) return;
+    setState(() => _isSending = true);
+    try {
+      final msgId = const Uuid().v4();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final gj = goal.encode();
+      final msg = GroupMessage(
+        id: msgId,
+        groupId: widget.group.id,
+        senderId: _myId,
+        text: '',
+        isOutgoing: true,
+        timestamp: now,
+        goalJson: gj,
+        topicId: _currentTopicId,
+      );
+      await GroupService.instance.saveMessage(msg);
+      await BroadcastOutboxService.instance.enqueueGroupMessage(
+        groupId: widget.group.id,
+        senderId: _myId,
+        text: '',
+        messageId: msgId,
+        timestamp: now,
+        goalJson: gj,
+        topicId: _currentTopicId,
+      );
+      _scrollToBottom();
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
   // ignore: unused_element
   Future<void> _sendFile() async {
     if (_isSending) return;
@@ -1377,6 +1505,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           label: AppL10n.t('cm_event'),
           value: 'calendar',
         ),
+        if (_isCreator || _group.canModerate(_myId))
+          WebPickerItem(
+            icon: Icons.flag_outlined,
+            label: AppL10n.t('Цель'),
+            value: 'goal',
+          ),
       ],
     );
     if (!mounted || choice == null) return;
@@ -1393,6 +1527,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         return;
       case 'calendar':
         await _composeAndSendCalendar();
+        return;
+      case 'goal':
+        await _sendGoal();
         return;
     }
 
@@ -3501,6 +3638,13 @@ class _GroupBubble extends StatelessWidget {
                   cs: cs,
                   isOutgoing: msg.isOutgoing,
                   compact: false,
+                ),
+              if (GroupGoal.tryDecode(msg.goalJson) case final goal?)
+                GoalMessageCard(
+                  messageId: msg.id,
+                  goal: goal,
+                  cs: cs,
+                  isOutgoing: msg.isOutgoing,
                 ),
               if (SharedTodoPayload.tryDecode(msg.text) != null &&
                   onCollabPersist != null)

@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/contact.dart';
+import '../../models/group.dart';
+import '../../models/group_goal.dart';
 import '../../services/chat_storage_service.dart';
 import '../../services/group_service.dart';
 import '../widgets/forward_target_sheet.dart';
+import '../widgets/goal_message_card.dart';
 import '../widgets/invites_tray.dart';
 import '../widgets/markdown_editing_controller.dart';
 import '../widgets/smooth_caret_field.dart';
@@ -38,6 +43,7 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
   final _plainCaretController = TextEditingController(text: 'normal caret');
   int _scrubberPosMs = 40000;
   static const _scrubberDurationMs = 180000;
+  static const _demoGoalMessageId = 'demo-goal-message-1';
 
   @override
   void initState() {
@@ -55,6 +61,30 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
         ),
       ];
     }
+    unawaited(_ensureDemoGoal());
+  }
+
+  Future<void> _ensureDemoGoal() async {
+    final existingMsg = await GroupService.instance.getMessage(_demoGoalMessageId);
+    if (existingMsg != null) return;
+    final goal = GroupGoal(
+      title: 'Прочитать 3 книги в этом месяце',
+      deadlineMs: DateTime.now().add(const Duration(days: 20)).millisecondsSinceEpoch,
+      creatorId: 'demo-creator',
+      items: const [
+        GoalItem(title: 'Книга 1'),
+        GoalItem(title: 'Книга 2'),
+        GoalItem(title: 'Книга 3'),
+      ],
+    );
+    await GroupService.instance.saveMessage(GroupMessage(
+      id: _demoGoalMessageId,
+      groupId: 'demo-group',
+      senderId: 'demo-creator',
+      isOutgoing: false,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      goalJson: goal.encode(),
+    ));
   }
 
   @override
@@ -310,6 +340,37 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
                     '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}',
                 onChanged: (v) => setState(() => _scrubberPosMs = v),
               ),
+            ),
+          ),
+          _section(
+            context,
+            title: 'Цель темы (GoalMessageCard)',
+            subtitle:
+                'Реальная карточка на реальном сообщении в локальной БД — '
+                '"Присоединиться" и чек-лист действительно пишут через '
+                'GroupService.applyGoalAction, как в настоящем чате.',
+            child: ValueListenableBuilder<int>(
+              valueListenable: GroupService.instance.version,
+              builder: (context, _, __) {
+                return FutureBuilder(
+                  future:
+                      GroupService.instance.getMessage(_demoGoalMessageId),
+                  builder: (context, snap) {
+                    final goal = GroupGoal.tryDecode(snap.data?.goalJson);
+                    if (goal == null) {
+                      return const SizedBox(
+                        height: 40,
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    return GoalMessageCard(
+                      messageId: _demoGoalMessageId,
+                      goal: goal,
+                      cs: cs,
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],

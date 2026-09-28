@@ -150,6 +150,7 @@ class GroupMessage {
   final int timestamp;
   final Map<String, List<String>> reactions;
   final String? pollJson;
+  final String? goalJson;
   final String? forwardFromId;
   final String? forwardFromNick;
   /// null = the (always-present) General thread — see [GroupTopic].
@@ -169,6 +170,7 @@ class GroupMessage {
     required this.timestamp,
     this.reactions = const {},
     this.pollJson,
+    this.goalJson,
     this.forwardFromId,
     this.forwardFromNick,
     this.topicId,
@@ -196,6 +198,7 @@ class GroupMessage {
         'timestamp': timestamp,
         'reactions': reactions.isEmpty ? null : jsonEncode(reactions),
         'poll_json': pollJson,
+        'goal_json': goalJson,
         'forward_from_id': forwardFromId,
         'forward_from_nick': forwardFromNick,
         'topic_id': topicId,
@@ -225,6 +228,7 @@ class GroupMessage {
       timestamp: m['timestamp'] as int,
       reactions: reactions,
       pollJson: m['poll_json'] as String?,
+      goalJson: m['goal_json'] as String?,
       forwardFromId: m['forward_from_id'] as String?,
       forwardFromNick: m['forward_from_nick'] as String?,
       topicId: m['topic_id'] as String?,

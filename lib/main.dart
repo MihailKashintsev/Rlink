@@ -2904,6 +2904,19 @@ Future<void> initServices() async {
         await GroupService.instance.applyPollVote(tid, voter, choices);
       }
     };
+    GossipRouter.instance.onGoalAction = (payload) async {
+      final targetId = payload['t'] as String?;
+      final actorId = payload['a'] as String?;
+      final action = payload['act'] as String?;
+      if (targetId == null || actorId == null || action == null) return;
+      await GroupService.instance.applyGoalAction(
+        targetId,
+        actorId,
+        action,
+        itemIndex: (payload['i'] as num?)?.toInt(),
+        completed: payload['c'] as bool?,
+      );
+    };
 
     GossipRouter.instance.onGroupMessage = (payload) async {
       final groupId = payload['groupId'] as String?;
@@ -2913,6 +2926,7 @@ Future<void> initServices() async {
       final lat = (payload['lat'] as num?)?.toDouble();
       final lng = (payload['lng'] as num?)?.toDouble();
       final pj = payload['pj'] as String?;
+      final gj = payload['gj'] as String?;
       if (groupId == null || senderId == null || messageId == null) return;
       // A member muted via readOnlyIds (typically a bot given read access
       // without post rights) can still be present and receive — but every
@@ -2923,7 +2937,10 @@ Future<void> initServices() async {
       final hasMedia = payload['img'] == true ||
           payload['vid'] == true ||
           payload['file'] == true;
-      if (text.isEmpty && (pj == null || pj.isEmpty) && !hasMedia) return;
+      if (text.isEmpty &&
+          (pj == null || pj.isEmpty) &&
+          (gj == null || gj.isEmpty) &&
+          !hasMedia) return;
       final myKey = CryptoService.instance.publicKeyHex;
       final tsOriginal = payload['ts'] as int?;
       final rxJson = payload['rx'] as String?;
@@ -2965,6 +2982,9 @@ Future<void> initServices() async {
         if (pj != null && pj.isNotEmpty) {
           await GroupService.instance.mergeIncomingMessagePoll(messageId, pj);
         }
+        if (gj != null && gj.isNotEmpty) {
+          await GroupService.instance.mergeIncomingGroupGoal(messageId, gj);
+        }
         if (text.isNotEmpty) {
           final exTodo = SharedTodoPayload.tryDecode(existing.text);
           final nwTodo = SharedTodoPayload.tryDecode(text);
@@ -2995,6 +3015,7 @@ Future<void> initServices() async {
         timestamp: tsOriginal ?? DateTime.now().millisecondsSinceEpoch,
         reactions: clampReactionsMapPerUser(reactions),
         pollJson: (pj != null && pj.isNotEmpty) ? pj : null,
+        goalJson: (gj != null && gj.isNotEmpty) ? gj : null,
         forwardFromId: payload['ffid'] as String?,
         forwardFromNick: payload['ffn'] as String?,
         topicId: topicId,
@@ -3054,6 +3075,7 @@ Future<void> initServices() async {
           hasImage: m.imagePath != null,
           hasVideo: m.videoPath != null,
           pollJson: m.pollJson,
+          goalJson: m.goalJson,
           forwardFromId: m.forwardFromId,
           forwardFromNick: m.forwardFromNick,
         );
