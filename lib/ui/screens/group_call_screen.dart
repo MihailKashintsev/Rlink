@@ -15,14 +15,14 @@ import '../../l10n/app_l10n.dart';
 
 const _kReactionEmojis = ['👍', '❤️', '😂', '😮', '👏', '🔥'];
 
-Contact? _contactOf(String id) => ChatStorageService.instance
+Contact? callContactOf(String id) => ChatStorageService.instance
     .contactsNotifier.value
     .where((c) => c.publicKeyHex == id)
     .firstOrNull;
 
-String _nameOf(String id) {
+String callNameOf(String id) {
   if (id == CryptoService.instance.publicKeyHex) return AppL10n.t('Вы');
-  return _contactOf(id)?.nickname ??
+  return callContactOf(id)?.nickname ??
       '${id.substring(0, id.length.clamp(0, 8))}…';
 }
 
@@ -117,7 +117,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   void _onReaction(CallReaction r) {
     if (!mounted) return;
-    final item = _FloatingReaction(r.emoji, _nameOf(r.from), UniqueKey());
+    final item = _FloatingReaction(r.emoji, callNameOf(r.from), UniqueKey());
     setState(() => _floating.add(item));
     Timer(const Duration(milliseconds: 2600), () {
       if (mounted) setState(() => _floating.remove(item));
@@ -194,8 +194,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   }
 
   Widget _avatar(String id, double size) {
-    final c = _contactOf(id);
-    final name = _nameOf(id);
+    final c = callContactOf(id);
+    final name = callNameOf(id);
     return AvatarWidget(
       initials: name.isNotEmpty ? name[0].toUpperCase() : '?',
       color: c?.avatarColor ?? 0xFF5C6BC0,
@@ -267,7 +267,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    p.screenSharing ? AppL10n.f('{0} · экран', [_nameOf(id)]) : _nameOf(id),
+                    p.screenSharing ? AppL10n.f('{0} · экран', [callNameOf(id)]) : callNameOf(id),
                     style: const TextStyle(color: Colors.white, fontSize: 13),
                   ),
                 ),
@@ -323,7 +323,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                 child: Container(
                   color: Colors.black54,
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  child: Text(_nameOf(id),
+                  child: Text(callNameOf(id),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
@@ -354,7 +354,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                 for (final id in ids)
                   _AudioCard(
                     avatar: _avatar(id, 84),
-                    name: _nameOf(id),
+                    name: callNameOf(id),
                     part: _svc.participants.value[id]!,
                     badge: _micBadge(_svc.participants.value[id]!, size: 18),
                   ),
@@ -400,7 +400,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.grey.shade900,
-      builder: (ctx) => _ParticipantsSheet(nameOf: _nameOf, avatar: _avatar),
+      builder: (ctx) => _ParticipantsSheet(nameOf: callNameOf, avatar: _avatar),
     );
   }
 
@@ -816,7 +816,7 @@ class _InviteSheetState extends State<_InviteSheet> {
                   ),
                 for (final id in c)
                   ListTile(
-                    title: Text(_nameOf(id),
+                    title: Text(callNameOf(id),
                         style: const TextStyle(color: Colors.white)),
                     trailing: _sent.contains(id)
                         ? const Icon(Icons.check, color: Colors.green)
@@ -907,7 +907,7 @@ Future<void> showGroupCallInviteDialog(
     builder: (ctx) => AlertDialog(
       title: Text(title),
       content: Text(
-          AppL10n.f('{0} зовёт вас в {1}звонок', [_nameOf(invite.fromId), invite.room.video ? AppL10n.t('видео') : AppL10n.t('аудио')])),
+          AppL10n.f('{0} зовёт вас в {1}звонок', [callNameOf(invite.fromId), invite.room.video ? AppL10n.t('видео') : AppL10n.t('аудио')])),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(ctx, false),
