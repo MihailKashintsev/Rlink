@@ -112,26 +112,35 @@ class _SpringMenuButtonState extends State<SpringMenuButton>
                     child: ImageFiltered(
                       imageFilter:
                           ImageFilter.blur(sigmaX: (1 - t) * 6, sigmaY: (1 - t) * 6),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                          child: Container(
-                            width: 232,
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            decoration: BoxDecoration(
-                              color:
-                                  cs.surfaceContainerHigh.withValues(alpha: 0.82),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                  color: cs.outlineVariant.withValues(alpha: 0.3)),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                for (var i = 0; i < widget.actions.length; i++)
-                                  _rowFor(i, t, cs),
-                              ],
+                      child: Material(
+                        // The overlay sits on the root Overlay, outside this
+                        // screen's Scaffold/Material — without one here,
+                        // Flutter flags every Text below with its "no
+                        // Material ancestor" debug marker (double yellow
+                        // underline).
+                        color: Colors.transparent,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                            child: Container(
+                              width: 232,
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              decoration: BoxDecoration(
+                                color: cs.surfaceContainerHigh
+                                    .withValues(alpha: 0.82),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color:
+                                        cs.outlineVariant.withValues(alpha: 0.3)),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (var i = 0; i < widget.actions.length; i++)
+                                    _rowFor(i, t, cs),
+                                ],
+                              ),
                             ),
                           ),
                         ),
