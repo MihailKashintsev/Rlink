@@ -54,6 +54,7 @@ import '../screens/music_screen.dart';
 import '../screens/premium_status_screen.dart';
 import '../../services/premium_service.dart';
 import '../screens/chat_screen.dart';
+import '../screens/design_preview_screen.dart';
 import '../screens/diagnostics_screen.dart';
 import '../screens/mesh_radar_screen.dart';
 import '../screens/mesh_status_screen.dart';
@@ -3991,6 +3992,18 @@ class _NetworkPageState extends State<_NetworkPage> {
               onTap: () => Navigator.push(
                 context,
                 rlinkOpaquePushRoute(const DiagnosticsScreen()),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.auto_awesome_outlined, color: cs.primary),
+              title: const Text('Витрина новых анимаций'),
+              subtitle: const Text(
+                'Временный экран для ревью skiper-ui батча',
+                style: TextStyle(fontSize: 12),
+              ),
+              onTap: () => Navigator.push(
+                context,
+                rlinkOpaquePushRoute(const DesignPreviewScreen()),
               ),
             ),
             ListTile(

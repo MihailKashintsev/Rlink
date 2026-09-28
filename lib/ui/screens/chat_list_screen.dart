@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart'
@@ -44,6 +45,7 @@ import '../widgets/mesh_radar_widget.dart';
 import '../widgets/birthday_banner.dart';
 import '../widgets/premium_suggestion_banner.dart';
 import '../widgets/spring_menu_button.dart';
+import '../widgets/spring_search_palette.dart';
 import '../widgets/spring_value_text.dart';
 import '../../services/premium_service.dart';
 import '../widgets/nav_glyph.dart';
@@ -84,6 +86,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     with UpdateAvailableBannerMixin {
   /// 0=Чаты, 1=Рядом, 2=Эфир, 3=Я
   int _currentTab = 0;
+  static const _titleEase = Cubic(0.23, 1, 0.32, 1);
+  final GlobalKey<_UnifiedChatsTabState> _unifiedChatsTabKey = GlobalKey();
   bool _homeMiniPlayerLayoutCallbackPending = false;
   bool _searchActive = false;
   final _searchController = TextEditingController();
@@ -548,48 +552,42 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
               )
             : null,
-        title: _searchActive
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                style: const TextStyle(fontSize: 16),
-                decoration: InputDecoration(
-                  hintText: AppL10n.t('Поиск контактов, каналов, людей...'),
-                  hintStyle: TextStyle(color: Colors.grey.shade500),
-                  border: InputBorder.none,
+        title: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          switchInCurve: _titleEase,
+          switchOutCurve: _titleEase,
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: AnimatedBuilder(
+              animation: anim,
+              child: child,
+              builder: (ctx, child) => ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: (1 - anim.value) * 4,
+                  sigmaY: (1 - anim.value) * 4,
                 ),
-                onChanged: (_) {
-                  setState(() {});
-                  _triggerGlobalSearch(_searchController.text);
-                },
-              )
-            : AnimatedSwitcher(
-                duration: const Duration(milliseconds: 320),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeOutCubic,
-                transitionBuilder: (child, anim) => FadeTransition(
-                  opacity: anim,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.06),
-                      end: Offset.zero,
-                    ).animate(anim),
-                    child: child,
-                  ),
-                ),
-                child: Text(
-                  _currentTab == 0
-                      ? 'Rlink'
-                      : _currentTab == 1
-                          ? AppL10n.t('nav_nearby')
-                          : _currentTab == 2
-                              ? AppL10n.t('nav_ether')
-                              : AppL10n.t('settings'),
-                  key: ValueKey<int>(_currentTab),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 22),
+                child: Transform.translate(
+                  offset: Offset(0, (1 - anim.value) * 8),
+                  child: child,
                 ),
               ),
+            ),
+          ),
+          // Search now lives in the floating SpringSearchPalette (its own
+          // header field), not swapped into the title — this always just
+          // shows the current tab's name.
+          child: Text(
+            _currentTab == 0
+                ? 'Rlink'
+                : _currentTab == 1
+                    ? AppL10n.t('nav_nearby')
+                    : _currentTab == 2
+                        ? AppL10n.t('nav_ether')
+                        : AppL10n.t('settings'),
+            key: ValueKey<int>(_currentTab),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 22),
+          ),
+        ),
         leading: _searchActive
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -599,6 +597,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         actions: [
           if (_currentTab == 0 && !_searchActive && !childLinked)
             SpringMenuButton(
+              key: const ValueKey('main-menu'),
               tooltip: AppL10n.t('main_menu_tooltip'),
               actions: [
                 SpringMenuAction(
@@ -627,6 +626,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             ),
           if (_currentTab == 1 && !_searchActive)
             ValueListenableBuilder<bool>(
+              key: const ValueKey('nearby-menu'),
               valueListenable: _nearbyShowRadar,
               builder: (ctx, radar, _) {
                 final cs = Theme.of(ctx).colorScheme;
@@ -679,6 +679,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             ),
           if (_currentTab == 0 && !_searchActive)
             ListenableBuilder(
+              key: const ValueKey('archive-toggle'),
               listenable: ChatInboxService.instance,
               builder: (ctx, _) {
                 final inbox = ChatInboxService.instance;
@@ -696,14 +697,22 @@ class _ChatListScreenState extends State<ChatListScreen>
               },
             ),
           if (_currentTab == 0)
-            IconButton(
-              icon: Icon(_searchActive ? Icons.close : Icons.search),
+            SpringSearchPalette(
+              key: const ValueKey('search-palette'),
+              open: _searchActive,
+              onToggle: _toggleSearch,
+              controller: _searchController,
+              onQueryChanged: (q) {
+                _triggerGlobalSearch(q);
+              },
+              resultsBuilder: _buildSearchPaletteResults,
+              hintText: AppL10n.t('Поиск контактов, каналов, людей...'),
               tooltip:
                   _searchActive ? AppL10n.t('Закрыть') : AppL10n.t('Поиск'),
-              onPressed: _toggleSearch,
             ),
           if (_currentTab == 2 && !_searchActive)
             IconButton(
+              key: const ValueKey('ether-tune'),
               tooltip: AppL10n.t('nav_ether'),
               onPressed: () => _showEtherBroadcastOptions(context),
               icon: const Icon(Icons.tune_rounded),
@@ -751,6 +760,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 index: _currentTab,
                 children: [
                   _UnifiedChatsTab(
+                    key: _unifiedChatsTabKey,
                     scrollSink: _storiesScroll,
                     areaKey: _storiesAreaKey,
                     listController: _chatsScroll,
@@ -827,6 +837,26 @@ class _ChatListScreenState extends State<ChatListScreen>
         RelayService.instance.searchUsers(raw);
       }
     });
+  }
+
+  // Reaches into _UnifiedChatsTab's already-loaded item list (same file,
+  // so its private state is visible here) rather than recomputing the same
+  // expensive DM/group/channel aggregation a second time for the palette.
+  Widget _buildSearchPaletteResults(BuildContext ctx) {
+    final tabState = _unifiedChatsTabKey.currentState;
+    if (tabState == null) return const SizedBox.shrink();
+    final inbox = ChatInboxService.instance;
+    final forSearch = tabState._items
+        .where((it) => !inbox.isArchived(_chatItemInboxKey(it)))
+        .toList();
+    return _UnifiedSearchResults(
+      query: _searchController.text.trim().toLowerCase(),
+      localItems: forSearch,
+      onOpenItem: (item) {
+        _toggleSearch();
+        tabState._navigate(ctx, item);
+      },
+    );
   }
 }
 
@@ -1550,6 +1580,7 @@ class _UnifiedChatsTab extends StatefulWidget {
   /// Owned by the parent so the story overlay can scroll the list to the top.
   final ScrollController listController;
   const _UnifiedChatsTab({
+    super.key,
     required this.scrollSink,
     required this.areaKey,
     required this.listController,

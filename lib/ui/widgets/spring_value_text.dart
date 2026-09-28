@@ -32,11 +32,15 @@ class SpringValueText extends StatelessWidget {
             duration: duration,
             switchInCurve: _easeOut,
             switchOutCurve: _easeOut,
-            transitionBuilder: (child, anim) => Opacity(
-              opacity: anim.value,
-              child: Transform.translate(
-                offset: Offset(0, (1 - anim.value) * 10),
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: AnimatedBuilder(
+                animation: anim,
                 child: child,
+                builder: (ctx, child) => Transform.translate(
+                  offset: Offset(0, (1 - anim.value) * 10),
+                  child: child,
+                ),
               ),
             ),
             child: Text(
