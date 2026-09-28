@@ -12,6 +12,7 @@ import '../../services/voice_service.dart';
 import '../../utils/web_file_store.dart';
 import '../../utils/web_object_url.dart';
 import '../../l10n/app_l10n.dart';
+import 'video_scrubber.dart';
 
 /// Полноэкранное воспроизведение DM-видео (в т.ч. квадратиков) с [VideoPlayer] в дереве.
 class DmVideoFullscreenPage extends StatefulWidget {
@@ -596,6 +597,20 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                         valueListenable: ctrl,
                         builder: (_, v, __) => IconButton(
                           icon: Icon(
+                            v.volume <= 0
+                                ? Icons.volume_off_rounded
+                                : Icons.volume_up_rounded,
+                            color: Colors.white,
+                          ),
+                          tooltip: AppL10n.t('Звук'),
+                          onPressed: () =>
+                              ctrl.setVolume(v.volume <= 0 ? 1.0 : 0.0),
+                        ),
+                      ),
+                      ValueListenableBuilder<VideoPlayerValue>(
+                        valueListenable: ctrl,
+                        builder: (_, v, __) => IconButton(
+                          icon: Icon(
                             v.isPlaying ? Icons.pause : Icons.play_arrow,
                             color: Colors.white,
                           ),
@@ -621,31 +636,30 @@ class _DmVideoFullscreenPageState extends State<DmVideoFullscreenPage>
                       final posMs = totalMs > 0
                           ? val.position.inMilliseconds.clamp(0, totalMs)
                           : 0;
+                      final bufferedMs = val.buffered.isEmpty
+                          ? null
+                          : val.buffered
+                              .map((r) => r.end.inMilliseconds)
+                              .reduce((a, b) => a > b ? a : b);
                       return Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              trackHeight: 3,
-                              thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 6),
-                              overlayShape: SliderComponentShape.noOverlay,
-                            ),
-                            child: Slider(
-                              value: totalMs > 0 ? posMs.toDouble() : 0,
-                              max: totalMs > 0 ? totalMs.toDouble() : 1,
-                              onChangeStart: (_) {
-                                ctrl.pause();
-                                setState(() => _showTopBar = true);
-                              },
-                              onChangeEnd: (_) {
-                                ctrl.play();
-                                _armHideTopBar();
-                              },
-                              onChanged: (v) {
-                                ctrl.seekTo(Duration(milliseconds: v.round()));
-                              },
-                            ),
+                          RlinkVideoScrubber(
+                            positionMs: posMs,
+                            durationMs: totalMs,
+                            bufferedMs: bufferedMs,
+                            formatTime: _fmtDur,
+                            onChangeStart: (_) {
+                              ctrl.pause();
+                              setState(() => _showTopBar = true);
+                            },
+                            onChangeEnd: (_) {
+                              ctrl.play();
+                              _armHideTopBar();
+                            },
+                            onChanged: (v) {
+                              ctrl.seekTo(Duration(milliseconds: v));
+                            },
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 4),

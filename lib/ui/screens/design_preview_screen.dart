@@ -11,6 +11,7 @@ import '../widgets/spring_menu_button.dart';
 import '../widgets/spring_search_palette.dart';
 import '../widgets/spring_value_text.dart';
 import '../widgets/timed_undo_button.dart';
+import '../widgets/video_scrubber.dart';
 
 /// Debug-only gallery for the skiper-ui-inspired components being built up
 /// this batch — lets them be checked with fake data instead of needing real
@@ -35,6 +36,8 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
       MarkdownEditingController(text: 'Привет, &$_demoMentionId как дела?');
   final _smoothCaretController = TextEditingController(text: 'smooth caret');
   final _plainCaretController = TextEditingController(text: 'normal caret');
+  int _scrubberPosMs = 40000;
+  static const _scrubberDurationMs = 180000;
 
   @override
   void initState() {
@@ -285,6 +288,28 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
                   decoration: const InputDecoration(border: OutlineInputBorder()),
                 ),
               ],
+            ),
+          ),
+          _section(
+            context,
+            title: 'Видео-скраббер (RlinkVideoScrubber)',
+            subtitle:
+                'Наведите/зажмите на полосе — она растёт и сверху всплывает '
+                'таймер перемотки, следующий за курсором/пальцем.',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: RlinkVideoScrubber(
+                positionMs: _scrubberPosMs,
+                durationMs: _scrubberDurationMs,
+                bufferedMs: (_scrubberPosMs + 30000).clamp(0, _scrubberDurationMs),
+                formatTime: (d) =>
+                    '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}',
+                onChanged: (v) => setState(() => _scrubberPosMs = v),
+              ),
             ),
           ),
         ],
