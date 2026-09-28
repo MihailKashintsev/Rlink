@@ -2077,6 +2077,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   Future<void> _sendInvite(String targetPublicKey, String targetNick) async {
     final myProfile = ProfileService.instance.profile;
     final group = _group;
+    await GroupService.instance.recordInviteSent(group.id, targetPublicKey);
     await GossipRouter.instance.sendGroupInvite(
       groupId: group.id,
       groupName: group.name,
@@ -3736,6 +3737,7 @@ class _GroupInviteCard extends StatelessWidget {
                   groupId: invite.groupId,
                   accepterId: myId,
                   accepterNick: myProfile?.nickname ?? '',
+                  inviterId: invite.inviterId,
                 );
               },
               child: Text(AppL10n.t('common_accept')),

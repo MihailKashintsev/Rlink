@@ -8,6 +8,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:rlink/services/channel_service.dart';
 import 'package:rlink/services/crypto_service.dart';
+import 'package:rlink/services/group_service.dart';
 import 'package:rlink/services/signed_action.dart';
 import 'package:rlink/utils/edit_delete_seal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -338,6 +339,58 @@ void main() {
       }, trusted: true);
       final ch = await ChannelService.instance.getChannel('chan-3');
       expect(ch!.verified, isTrue);
+    });
+  });
+
+  group('group_accept requires a real invite (GroupService)', () {
+    late Directory tmp;
+
+    setUpAll(() async {
+      tmp = await Directory.systemTemp.createTemp('rlink_invite_test_');
+      PathProviderPlatform.instance = _FakePathProvider(tmp.path);
+      await GroupService.instance.init();
+    });
+
+    tearDownAll(() async {
+      try {
+        await tmp.delete(recursive: true);
+      } catch (_) {}
+    });
+
+    test('an accept with no matching sent invite is refused', () async {
+      expect(
+          await GroupService.instance
+              .consumePendingInvite('grp-x', 'never-invited-key'),
+          isFalse);
+    });
+
+    test('a real invite is consumed exactly once', () async {
+      await GroupService.instance.recordInviteSent('grp-y', 'target-key');
+      expect(
+          await GroupService.instance
+              .consumePendingInvite('grp-y', 'target-key'),
+          isTrue);
+      // Replaying the same accept a second time (e.g. a captured packet)
+      // finds nothing left to consume.
+      expect(
+          await GroupService.instance
+              .consumePendingInvite('grp-y', 'target-key'),
+          isFalse);
+    });
+
+    test('an invite for one group does not cover a different group',
+        () async {
+      await GroupService.instance.recordInviteSent('grp-a', 'shared-target');
+      expect(
+          await GroupService.instance
+              .consumePendingInvite('grp-b', 'shared-target'),
+          isFalse,
+          reason: 'knowing the target was invited SOMEWHERE must not let '
+              'them self-join an unrelated group');
+      expect(
+          await GroupService.instance
+              .consumePendingInvite('grp-a', 'shared-target'),
+          isTrue);
     });
   });
 }

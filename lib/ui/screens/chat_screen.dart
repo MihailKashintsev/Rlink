@@ -9081,6 +9081,8 @@ class _DmInviteBubbleActions extends StatelessWidget {
     final rawMembers = data['memberIds'];
     if (groupId == null || creatorId == null || rawMembers is! List) return;
     final memberIds = rawMembers.cast<String>();
+    final inviterId = data['inviterId'] as String?;
+    if (inviterId == null || inviterId.isEmpty) return;
     final myProfile = ProfileService.instance.profile;
     final group = Group(
       id: groupId,
@@ -9098,6 +9100,7 @@ class _DmInviteBubbleActions extends StatelessWidget {
       groupId: groupId,
       accepterId: myId,
       accepterNick: myProfile?.nickname ?? '',
+      inviterId: inviterId,
     );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

@@ -3705,16 +3705,22 @@ class GossipRouter {
     await _forward(packet);
   }
 
+  /// Directed at [inviterId] specifically — only the device that actually
+  /// sent the matching invite has a local record to check this against (see
+  /// `GroupService.consumePendingInvite`), so this must reach exactly them,
+  /// not every group member.
   Future<void> sendGroupAccept({
     required String groupId,
     required String accepterId,
     required String accepterNick,
+    required String inviterId,
   }) async {
     final packet = GossipPacket(
       id: const Uuid().v4(),
       type: 'group_accept',
       ttl: _kDefaultTtl,
       timestamp: DateTime.now().millisecondsSinceEpoch,
+      recipientId: inviterId,
       payload: await SignedAction.sign('group_accept', {
         'groupId': groupId,
         'accepterId': accepterId,

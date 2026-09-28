@@ -3178,6 +3178,18 @@ Future<void> initServices() async {
       // anyone put any key into a group's roster.
       if (payload['_signer'] != accepterId.toLowerCase()) return;
       unawaited(() async {
+        // A valid self-signature only proves the accepter holds a key — not
+        // that anyone invited it. Verified exploitable: knowing a group's id
+        // was enough to self-join. Only the device that actually sent this
+        // person a real invite has a matching record (this packet is now
+        // directed at that inviter specifically); everyone else's copy of
+        // `group_accept` is a no-op here, which is correct — they'll see the
+        // new member through the inviter's own signed `group_update` below,
+        // the same already-authorized path every other roster change uses.
+        if (!await GroupService.instance
+            .consumePendingInvite(groupId, accepterId)) {
+          return;
+        }
         await GroupService.instance.addMember(groupId, accepterId);
         // История в Drive включена → перепубликовать: keys.json должен получить
         // завёрнутый ключ нового участника, иначе он не расшифрует историю.

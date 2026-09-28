@@ -58,6 +58,21 @@ Future<void> _createGroupTopicsTable(Database db) async {
       'CREATE INDEX IF NOT EXISTS idx_gt_group ON group_topics(group_id)');
 }
 
+/// Who a creator/moderator actually invited, so `group_accept` can be
+/// checked against a real invite instead of trusted as a bare claim — a
+/// signer proving they hold SOME key no longer proves anyone invited that
+/// key (see `GroupService.recordInviteSent`/`consumePendingInvite`).
+Future<void> _createPendingInvitesTable(Database db) async {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS pending_group_invites (
+      group_id  TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      sent_at   INTEGER NOT NULL,
+      PRIMARY KEY (group_id, target_id)
+    )
+  ''');
+}
+
 Future<void> _tryDeleteGroupMediaFile(String? path) async {
   if (path == null || path.isEmpty) return;
   final resolved = ImageService.instance.resolveStoredPath(path) ?? path;
@@ -102,8 +117,9 @@ class GroupService {
     final path = await _dbPath('groups.db');
     _db = await openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: (db, v) async {
+        await _createPendingInvitesTable(db);
         await db.execute('''
           CREATE TABLE groups (
             id TEXT PRIMARY KEY,
@@ -154,6 +170,9 @@ class GroupService {
         await _createGroupTopicsTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 11) {
+          await _createPendingInvitesTable(db);
+        }
         if (oldVersion < 10) {
           try {
             await db.execute(
@@ -640,6 +659,55 @@ class GroupService {
     final updated = group.copyWith(memberIds: [...group.memberIds, memberId]);
     await updateGroup(updated);
     broadcastGroupMeta(updated);
+  }
+
+  /// Called by the inviter's OWN device right when it sends `group_invite` —
+  /// the only record that a real invite for [targetId] ever went out. Kept
+  /// small (recent invites only) rather than forever.
+  Future<void> recordInviteSent(String groupId, String targetId) async {
+    if (_db == null) return;
+    await _db!.insert(
+      'pending_group_invites',
+      {
+        'group_id': groupId,
+        'target_id': targetId.toLowerCase(),
+        'sent_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    // Unbounded growth if invites are never accepted/declined — drop
+    // anything older than 30 days so this can never become the app's own
+    // slow-leak equivalent of the bugs fixed elsewhere this week.
+    final cutoff =
+        DateTime.now().subtract(const Duration(days: 30)).millisecondsSinceEpoch;
+    await _db!.delete('pending_group_invites',
+        where: 'sent_at < ?', whereArgs: [cutoff]);
+  }
+
+  /// True — and consumes the record — only if THIS device actually sent
+  /// [targetId] an invite to [groupId] itself. `group_accept` used to be
+  /// trusted as soon as its self-signature checked out, which proves only
+  /// that the accepter holds SOME key, not that anyone ever invited it —
+  /// verified exploitable: knowing a public groupId was enough to self-join
+  /// any group. Now only the device that actually extended the invite acts
+  /// on the matching accept (and does so via a normal, already-authorized
+  /// signed `group_update` — see `onGroupAccept`), so every other member
+  /// safely ignores an accept it never solicited.
+  Future<bool> consumePendingInvite(String groupId, String targetId) async {
+    if (_db == null) return false;
+    final rows = await _db!.query(
+      'pending_group_invites',
+      where: 'group_id = ? AND target_id = ?',
+      whereArgs: [groupId, targetId.toLowerCase()],
+      limit: 1,
+    );
+    if (rows.isEmpty) return false;
+    await _db!.delete(
+      'pending_group_invites',
+      where: 'group_id = ? AND target_id = ?',
+      whereArgs: [groupId, targetId.toLowerCase()],
+    );
+    return true;
   }
 
   Future<void> saveGroupFromInvite(Group group) async {
