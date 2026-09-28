@@ -6,6 +6,7 @@ import '../../services/group_service.dart';
 import '../widgets/forward_target_sheet.dart';
 import '../widgets/invites_tray.dart';
 import '../widgets/markdown_editing_controller.dart';
+import '../widgets/smooth_caret_field.dart';
 import '../widgets/spring_menu_button.dart';
 import '../widgets/spring_search_palette.dart';
 import '../widgets/spring_value_text.dart';
@@ -32,6 +33,8 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
   final _searchController = TextEditingController();
   late final _mentionDemoController =
       MarkdownEditingController(text: 'Привет, &$_demoMentionId как дела?');
+  final _smoothCaretController = TextEditingController(text: 'smooth caret');
+  final _plainCaretController = TextEditingController(text: 'normal caret');
 
   @override
   void initState() {
@@ -55,6 +58,8 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
   void dispose() {
     _searchController.dispose();
     _mentionDemoController.dispose();
+    _smoothCaretController.dispose();
+    _plainCaretController.dispose();
     super.dispose();
   }
 
@@ -250,6 +255,36 @@ class _DesignPreviewScreenState extends State<DesignPreviewScreen> {
               controller: _mentionDemoController,
               maxLines: 2,
               decoration: const InputDecoration(border: OutlineInputBorder()),
+            ),
+          ),
+          _section(
+            context,
+            title: 'Плавный курсор (SmoothCaretField)',
+            subtitle:
+                'Кликайте/печатайте в верхнем поле — курсор плавно "долетает" '
+                'до новой позиции вместо мгновенного скачка. Нижнее — обычное '
+                'поле для сравнения. Однострочный виджет — в реальный '
+                'многострочный композер пока не встраивал, см. пояснение в '
+                'чате.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: cs.outlineVariant),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: SmoothCaretField(
+                    controller: _smoothCaretController,
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _plainCaretController,
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
+                ),
+              ],
             ),
           ),
         ],
